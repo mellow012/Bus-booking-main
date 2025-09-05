@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
-import { collection, query, where, getDocs, orderBy, limit, Timestamp } from "firebase/firestore";
+import { collection, query, where, orderBy, limit, Timestamp, onSnapshot,getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebaseConfig";
 import { 
   Bus as BusIcon, 
@@ -238,13 +238,6 @@ export default function HomePage() {
         limit(5)
       );
 
-      const schedulesSnapshot = await getDocs(schedulesQuery);
-
-      if (schedulesSnapshot.empty) {
-        setFeaturedSchedules([]);
-        return;
-      }
-
       const [companiesSnapshot, busesSnapshot, routesSnapshot] = await Promise.all([
         getDocs(query(collection(db, "companies"), where("status", "==", "active"))),
         getDocs(query(collection(db, "buses"), where("status", "==", "active"))),
@@ -269,11 +262,8 @@ export default function HomePage() {
         routesMap.set(doc.id, data);
       });
 
-      const enhancedSchedules: EnhancedSchedule[] = [];
-      for (const scheduleDoc of schedulesSnapshot.docs) {
-        const schedule = { id: scheduleDoc.id, ...scheduleDoc.data() } as Schedule;
-
-        if (schedule.availableSeats <= 0) continue;
+      const enhanceSchedule = (schedule: Schedule) => {
+        if (schedule.availableSeats <= 0 || schedule.departureDateTime.toDate() < new Date()) return null;
 
         const company = companiesMap.get(schedule.companyId);
         const bus = busesMap.get(schedule.busId);
@@ -287,7 +277,7 @@ export default function HomePage() {
           const arrivalDate = arrivalDateTime.toISOString().split("T")[0];
           const arrivalTime = arrivalDateTime.toTimeString().slice(0, 5);
 
-          enhancedSchedules.push({
+          return {
             ...schedule,
             date,
             departureTime,
@@ -303,20 +293,36 @@ export default function HomePage() {
             busType: bus.busType || "Standard",
             totalSeats: bus.capacity || bus.totalSeats || 40,
             amenities: bus.amenities || [],
-          });
+          };
         }
-      }
+        return null;
+      };
 
-      const sortedSchedules = enhancedSchedules.sort((a, b) =>
-        a.departureDateTime.toDate().getTime() - b.departureDateTime.toDate().getTime()
-      );
+      onSnapshot(schedulesQuery, (snapshot) => {
+        const enhancedSchedules: EnhancedSchedule[] = [];
+        snapshot.forEach((doc) => {
+          const schedule = { id: doc.id, ...doc.data() } as Schedule;
+          const enhanced = enhanceSchedule(schedule);
+          if (enhanced) enhancedSchedules.push(enhanced);
+        });
 
-      cache.set(cacheKey, sortedSchedules, 180000);
-      setFeaturedSchedules(sortedSchedules);
+        const sortedSchedules = enhancedSchedules.sort((a, b) =>
+          a.departureDateTime.toDate().getTime() - b.departureDateTime.toDate().getTime()
+        );
+
+        cache.set(cacheKey, sortedSchedules, 180000);
+        setFeaturedSchedules(sortedSchedules);
+        setLoading(false);
+        setRefreshing(false);
+      }, (error) => {
+        console.error("Snapshot error:", error);
+        setError("Unable to load schedules. Please try again.");
+        setLoading(false);
+        setRefreshing(false);
+      });
     } catch (err: any) {
       console.error("Fetch error:", err);
       setError("Unable to load schedules. Please try again.");
-    } finally {
       setLoading(false);
       setRefreshing(false);
     }
@@ -324,6 +330,9 @@ export default function HomePage() {
 
   useEffect(() => {
     fetchSchedulesWithDetails();
+    return () => {
+      // Cleanup subscription if component unmounts
+    };
   }, [fetchSchedulesWithDetails]);
 
   const handleSearch = useCallback((newCriteria: SearchCriteria) => {
@@ -338,7 +347,7 @@ export default function HomePage() {
 
   const handleBooking = useCallback((scheduleId: string) => {
     if (!user) {
-      router.push("/auth/login");
+      router.push("/login");
       return;
     }
     router.push(`/book/${scheduleId}?passengers=${searchCriteria.passengers || 1}`);
@@ -744,10 +753,10 @@ export default function HomePage() {
                       })}
                     </div>
                   )}
-
                   <Button
                     onClick={() => handleBooking(schedule.id)}
-                    className="btn-hero w-full"
+                    className={`btn-hero w-full ${schedule.availableSeats <= 0 || schedule.departureDateTime.toDate() < new Date() ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    disabled={schedule.availableSeats <= 0 || schedule.departureDateTime.toDate() < new Date()}
                   >
                     Book Journey
                     <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
@@ -762,17 +771,17 @@ export default function HomePage() {
               <div className="relative z-10 mb-8">
                 <div className="w-48 h-36 mx-auto mb-6">
                   <img 
-                    src="/Directions-rafiki.svg" 
-                    alt=""
+                    src="/Bus Stop-rafiki.svg" 
+                    alt="https://storyset.com/bus"
                     className="w-full h-full object-contain opacity-80"
                     style={{ filter: "hue-rotate(200deg) saturate(0.8)" }}
                   />
                 </div>
               </div>
 
-              <h3 className="text-xl font-semibold text-gray-900 mb-3">No Routes Available</h3>
+              <h3 className="text-xl font-semibold text-gray-900 mb-3">No Schedules Available</h3>
               <p className="text-gray-600 mb-6">
-                No bus schedules are currently available. Please check back later or run the database seed.
+                No bus schedules are currently available. Please check back later.
               </p>
               <Button
                 onClick={() => fetchSchedulesWithDetails(true)}

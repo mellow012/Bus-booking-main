@@ -263,7 +263,7 @@ const SettingsTab = ({ company, setCompany, setError, setSuccess }) => {
           <div>
             <Label>Supported Payment Methods</Label>
             <div className="space-y-2 mt-2">
-              {["credit_card", "mobile_money", "bank_transfer"].map((method) => (
+              {["credit_card", "mobile_money"].map((method) => (
                 <Controller
                   key={method}
                   name="supportedMethods"

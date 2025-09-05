@@ -10,6 +10,16 @@ const firebaseConfig = {
   messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
+export type OperatorRole = 'operations_manager' | 'ticket_manager';
+
+export interface ActivityLog {
+  id: string;
+  userId: string;
+  action: string;
+  timestamp: Date;
+  details: Record<string, any>;
+  ipAddress: string;
+}
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);

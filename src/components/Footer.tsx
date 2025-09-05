@@ -1,3 +1,5 @@
+'use client';
+
 import React from 'react';
 import Link from 'next/link';
 import {
@@ -27,28 +29,28 @@ const Footer: React.FC = () => {
   const currentYear = new Date().getFullYear();
 
   const quickLinks = [
-    { href: '/', label: 'Home' },
-    { href: '/search', label: 'Search Buses' },
-    { href: '/schedules', label: 'Schedules' },
-    { href: '/bookings', label: 'My Bookings' },
-    { href: '/routes', label: 'Popular Routes' },
-    { href: '/offers', label: 'Special Offers' }
+    { href: '/', label: 'Home', ariaLabel: 'Go to homepage' },
+    { href: '/search', label: 'Search Buses', ariaLabel: 'Search bus schedules' },
+    { href: '/schedules', label: 'Schedules', ariaLabel: 'View bus schedules' },
+    { href: '/bookings', label: 'My Bookings', ariaLabel: 'View your bookings' },
+    { href: '/routes', label: 'Popular Routes', ariaLabel: 'Explore popular routes' },
+    { href: '/offers', label: 'Special Offers', ariaLabel: 'Check special offers' }
   ];
 
   const support = [
-    { href: '/help', label: 'Help Center' },
-    { href: '/contact', label: 'Contact Us' },
-    { href: '/faq', label: 'FAQ' },
-    { href: '/booking-guide', label: 'Booking Guide' },
-    { href: '/cancellation', label: 'Cancellation' },
-    { href: '/refund', label: 'Refunds' }
+    { href: '/help', label: 'Help Center', ariaLabel: 'Get help and support' },
+    { href: '/contact', label: 'Contact Us', ariaLabel: 'Contact customer service' },
+    { href: '/faq', label: 'FAQ', ariaLabel: 'Frequently asked questions' },
+    { href: '/booking-guide', label: 'Booking Guide', ariaLabel: 'Learn how to book' },
+    { href: '/cancellation', label: 'Cancellation', ariaLabel: 'Cancellation policy' },
+    { href: '/refund', label: 'Refunds', ariaLabel: 'Refund information' }
   ];
 
   const legal = [
-    { href: '/terms', label: 'Terms of Service' },
-    { href: '/privacy', label: 'Privacy Policy' },
-    { href: '/refund-policy', label: 'Refund Policy' },
-    { href: '/safety', label: 'Safety Guidelines' }
+    { href: '/terms', label: 'Terms of Service', ariaLabel: 'View terms of service' },
+    { href: '/privacy', label: 'Privacy Policy', ariaLabel: 'View privacy policy' },
+    { href: '/refund-policy', label: 'Refund Policy', ariaLabel: 'View refund policy' },
+    { href: '/safety', label: 'Safety Guidelines', ariaLabel: 'View safety guidelines' }
   ];
 
   const features = [
@@ -59,7 +61,11 @@ const Footer: React.FC = () => {
   ];
 
   return (
-    <footer className="relative bg-gray-900 overflow-hidden">
+    <footer
+      className="relative bg-gray-900 text-gray-300 overflow-hidden"
+      role="contentinfo"
+      aria-label="Site footer with company information, links, and subscription"
+    >
       {/* Gradient Background */}
       <div className="absolute inset-0 bg-gradient-to-br from-gray-900 via-blue-900/20 to-indigo-900/30"></div>
       <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-blue-400/50 to-transparent"></div>
@@ -75,9 +81,11 @@ const Footer: React.FC = () => {
         <div className="py-16 border-b border-gray-800/50">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
             {features.map((feature, index) => (
-              <div 
+              <div
                 key={index}
                 className="group p-6 rounded-2xl bg-white/5 backdrop-blur-sm border border-white/10 hover:bg-white/10 hover:border-blue-400/30 transition-all duration-300 hover:scale-105"
+                role="region"
+                aria-label={`${feature.title} feature`}
               >
                 <div className="flex items-start space-x-4">
                   <div className="p-3 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 group-hover:from-blue-500 group-hover:to-indigo-500 transition-all duration-300">
@@ -100,8 +108,11 @@ const Footer: React.FC = () => {
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
             {/* Company Info - Enhanced */}
             <div className="lg:col-span-5">
-              {/* Logo */}
-              <Link href="/" className="inline-flex items-center space-x-3 group mb-6">
+              <Link
+                href="/"
+                className="inline-flex items-center space-x-3 group mb-6"
+                aria-label="Go to BooknPay homepage"
+              >
                 <div className="relative">
                   <div className="w-12 h-12 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-2xl flex items-center justify-center shadow-2xl group-hover:shadow-blue-500/25 transition-all duration-300 group-hover:scale-105">
                     <BusIcon className="w-6 h-6 text-white" />
@@ -130,7 +141,7 @@ const Footer: React.FC = () => {
                   </div>
                   <div>
                     <div className="text-sm text-gray-400">24/7 Support</div>
-                    <div className="font-medium">+1 (555) 123-4567</div>
+                    <div className="font-medium">+265 99 145 74 95</div>
                   </div>
                 </div>
                 
@@ -150,7 +161,7 @@ const Footer: React.FC = () => {
                   </div>
                   <div>
                     <div className="text-sm text-gray-400">Headquarters</div>
-                    <div className="font-medium">San Francisco, CA</div>
+                    <div className="font-medium">Mzuzu, Malawi</div>
                   </div>
                 </div>
               </div>
@@ -160,15 +171,18 @@ const Footer: React.FC = () => {
                 <div className="text-white font-semibold mb-4">Follow Us</div>
                 <div className="flex space-x-3">
                   {[
-                    { icon: Facebook, href: '#', color: 'hover:bg-blue-600' },
-                    { icon: Twitter, href: '#', color: 'hover:bg-sky-500' },
-                    { icon: Instagram, href: '#', color: 'hover:bg-pink-600' },
-                    { icon: Linkedin, href: '#', color: 'hover:bg-blue-700' }
+                    { icon: Facebook, href: '#', color: 'hover:bg-blue-600', ariaLabel: 'Facebook page' },
+                    { icon: Twitter, href: '#', color: 'hover:bg-sky-500', ariaLabel: 'Twitter page' },
+                    { icon: Instagram, href: '#', color: 'hover:bg-pink-600', ariaLabel: 'Instagram page' },
+                    { icon: Linkedin, href: '#', color: 'hover:bg-blue-700', ariaLabel: 'LinkedIn page' }
                   ].map((social, index) => (
-                    <a 
+                    <a
                       key={index}
-                      href={social.href} 
+                      href={social.href}
                       className={`p-3 rounded-xl bg-white/10 text-gray-300 hover:text-white ${social.color} transition-all duration-300 hover:scale-110 hover:shadow-lg backdrop-blur-sm`}
+                      aria-label={social.ariaLabel}
+                      target="_blank"
+                      rel="noopener noreferrer"
                     >
                       <social.icon className="w-5 h-5" />
                     </a>
@@ -188,9 +202,10 @@ const Footer: React.FC = () => {
                 <ul className="space-y-3">
                   {quickLinks.map((link, index) => (
                     <li key={index}>
-                      <Link 
-                        href={link.href} 
+                      <Link
+                        href={link.href}
                         className="flex items-center space-x-2 text-gray-300 hover:text-blue-300 transition-all duration-200 group py-1"
+                        aria-label={link.ariaLabel}
                       >
                         <ChevronRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transform translate-x-1 group-hover:translate-x-0 transition-all duration-200" />
                         <span className="group-hover:translate-x-1 transition-transform duration-200">{link.label}</span>
@@ -209,9 +224,10 @@ const Footer: React.FC = () => {
                 <ul className="space-y-3">
                   {support.map((link, index) => (
                     <li key={index}>
-                      <Link 
-                        href={link.href} 
+                      <Link
+                        href={link.href}
                         className="flex items-center space-x-2 text-gray-300 hover:text-blue-300 transition-all duration-200 group py-1"
+                        aria-label={link.ariaLabel}
                       >
                         <ChevronRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transform translate-x-1 group-hover:translate-x-0 transition-all duration-200" />
                         <span className="group-hover:translate-x-1 transition-transform duration-200">{link.label}</span>
@@ -230,9 +246,10 @@ const Footer: React.FC = () => {
                 <ul className="space-y-3 mb-8">
                   {legal.map((link, index) => (
                     <li key={index}>
-                      <Link 
-                        href={link.href} 
+                      <Link
+                        href={link.href}
                         className="flex items-center space-x-2 text-gray-300 hover:text-blue-300 transition-all duration-200 group py-1"
+                        aria-label={link.ariaLabel}
                       >
                         <ChevronRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transform translate-x-1 group-hover:translate-x-0 transition-all duration-200" />
                         <span className="group-hover:translate-x-1 transition-transform duration-200">{link.label}</span>
@@ -269,19 +286,25 @@ const Footer: React.FC = () => {
               <p className="text-gray-300">Get the latest offers, routes, and travel tips delivered to your inbox.</p>
             </div>
             
-            <div className="flex flex-col sm:flex-row gap-4">
-              <div className="relative">
-                <input 
-                  type="email" 
+            <form className="flex flex-col sm:flex-row gap-4" onSubmit={(e) => e.preventDefault()}>
+              <div className="relative w-full sm:w-80">
+                <input
+                  type="email"
                   placeholder="Enter your email address"
-                  className="w-full sm:w-80 px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent backdrop-blur-sm"
+                  className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent backdrop-blur-sm"
+                  aria-label="Email address for newsletter subscription"
+                  required
                 />
               </div>
-              <button className="px-8 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-300 font-semibold flex items-center justify-center space-x-2 hover:shadow-lg hover:shadow-blue-500/25 hover:scale-105">
+              <button
+                type="submit"
+                className="px-8 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-300 font-semibold flex items-center justify-center space-x-2 hover:shadow-lg hover:shadow-blue-500/25 hover:scale-105"
+                aria-label="Subscribe to newsletter"
+              >
                 <span>Subscribe</span>
                 <ArrowRight className="w-4 h-4" />
               </button>
-            </div>
+            </form>
           </div>
         </div>
 

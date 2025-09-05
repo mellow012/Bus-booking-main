@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
+import Notifications from '@/app/notifications/page';
 import { useRouter, usePathname } from 'next/navigation';
 import { 
   Menu, 
@@ -17,6 +18,7 @@ import {
   Shield,
   ChevronDown,
   MapPin,
+  HomeIcon,
   Clock,
   Zap
 } from 'lucide-react';
@@ -53,7 +55,7 @@ const UserSkeleton = () => (
 
 // Navigation items configuration
 const navigationItems = [
-  { href: '/', label: 'Home', icon: MapPin },
+  { href: '/', label: 'Home', icon: HomeIcon },
   { href: '/search', label: 'Search Buses', icon: Search },
   { href: '/schedules', label: 'Schedules', icon: Calendar },
 ];
@@ -74,7 +76,6 @@ const Header: React.FC = () => {
   const [notifications, setNotifications] = useState(3); // Mock notifications
   const userMenuRef = useRef<HTMLDivElement>(null);
 
-  // Handle scroll effect
   useEffect(() => {
     const handleScroll = () => {
       setIsScrolled(window.scrollY > 20);
@@ -84,7 +85,6 @@ const Header: React.FC = () => {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // Close user menu when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
@@ -96,7 +96,6 @@ const Header: React.FC = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Close mobile menu on route change
   useEffect(() => {
     setIsMenuOpen(false);
   }, [pathname]);
@@ -116,7 +115,11 @@ const Header: React.FC = () => {
     return pathname.startsWith(href);
   };
 
-  const isAdmin = userProfile?.role === 'superadmin' || userProfile?.role === 'company_admin';
+  const isSuperAdmin = userProfile?.role === 'superadmin';
+  const isCompanyAdmin = userProfile?.role === 'company_admin';
+  const isCustomer = !isSuperAdmin && !isCompanyAdmin && userProfile?.role !== 'company_admin' && userProfile?.role !== 'superadmin';
+
+  const adminRoute = isSuperAdmin ? '/admin' : isCompanyAdmin ? '/company/admin' : null;
 
   return (
     <>
@@ -127,7 +130,6 @@ const Header: React.FC = () => {
       }`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-4">
-            {/* Enhanced Logo */}
             <Link href="/" className="flex items-center space-x-3 group">
               <div className="relative">
                 <div className="w-10 h-10 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg group-hover:shadow-xl transition-all duration-300 group-hover:scale-105">
@@ -143,7 +145,6 @@ const Header: React.FC = () => {
               </div>
             </Link>
 
-            {/* Desktop Navigation */}
             <nav className="hidden lg:flex items-center space-x-1">
               {navigationItems.map((item) => {
                 const isActive = isActivePage(item.href);
@@ -164,30 +165,17 @@ const Header: React.FC = () => {
               })}
             </nav>
 
-            {/* Right Side Actions */}
             <div className="flex items-center space-x-4">
-              {/* Notifications (for authenticated users) */}
-              {user && (
-                <button className="relative p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all duration-200">
-                  <Bell className="w-5 h-5" />
-                  {notifications > 0 && (
-                    <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-medium animate-pulse">
-                      {notifications}
-                    </span>
-                  )}
-                </button>
-              )}
+              {userProfile?.id && <Notifications userId={userProfile.id} />}
 
-              {/* User Authentication */}
               <div className="hidden md:flex items-center space-x-3">
                 {loading ? (
                   <UserSkeleton />
                 ) : user ? (
                   <div className="flex items-center space-x-3">
-                    {/* Admin Badge */}
-                    {isAdmin && (
+                    {(isSuperAdmin || isCompanyAdmin) && adminRoute && (
                       <Link
-                        href="/admin"
+                        href={adminRoute}
                         className="flex items-center space-x-2 px-3 py-1.5 bg-gradient-to-r from-purple-100 to-pink-100 text-purple-700 rounded-lg text-sm font-medium hover:from-purple-200 hover:to-pink-200 transition-all duration-200"
                       >
                         <Shield className="w-4 h-4" />
@@ -195,7 +183,6 @@ const Header: React.FC = () => {
                       </Link>
                     )}
 
-                    {/* User Menu */}
                     <div className="relative" ref={userMenuRef}>
                       <button
                         onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
@@ -215,7 +202,6 @@ const Header: React.FC = () => {
                         }`} />
                       </button>
 
-                      {/* User Dropdown Menu */}
                       {isUserMenuOpen && (
                         <div className="absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-xl border border-gray-200 py-2 animate-in fade-in slide-in-from-top-5 duration-200">
                           <div className="px-4 py-3 border-b border-gray-100">
@@ -231,7 +217,7 @@ const Header: React.FC = () => {
                           </div>
 
                           <div className="py-2">
-                            {userMenuItems.map((item) => (
+                            {isCustomer && userMenuItems.map((item) => (
                               <Link
                                 key={item.href}
                                 href={item.href}
@@ -275,7 +261,6 @@ const Header: React.FC = () => {
                 )}
               </div>
 
-              {/* Mobile Menu Button */}
               <button
                 className="md:hidden p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all duration-200"
                 onClick={() => setIsMenuOpen(!isMenuOpen)}
@@ -286,11 +271,9 @@ const Header: React.FC = () => {
           </div>
         </div>
 
-        {/* Mobile Menu */}
         {isMenuOpen && (
           <div className="md:hidden bg-white/95 backdrop-blur-lg border-t border-gray-200/50">
             <div className="max-w-7xl mx-auto px-4 py-4 space-y-4">
-              {/* Mobile Navigation */}
               <nav className="space-y-2">
                 {navigationItems.map((item) => {
                   const isActive = isActivePage(item.href);
@@ -311,14 +294,12 @@ const Header: React.FC = () => {
                 })}
               </nav>
 
-              {/* Mobile User Section */}
               {loading ? (
                 <div className="pt-4 border-t border-gray-200">
                   <UserSkeleton />
                 </div>
               ) : user ? (
                 <div className="pt-4 border-t border-gray-200 space-y-3">
-                  {/* User Info */}
                   <div className="flex items-center space-x-3 p-3 bg-gray-50 rounded-xl">
                     <UserAvatar user={user} userProfile={userProfile} />
                     <div>
@@ -329,10 +310,9 @@ const Header: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Admin Link */}
-                  {isAdmin && (
+                  {(isSuperAdmin || isCompanyAdmin) && adminRoute && (
                     <Link
-                      href="/admin"
+                      href={adminRoute}
                       className="flex items-center space-x-3 p-3 bg-gradient-to-r from-purple-100 to-pink-100 text-purple-700 rounded-xl font-medium"
                     >
                       <Shield className="w-5 h-5" />
@@ -340,21 +320,21 @@ const Header: React.FC = () => {
                     </Link>
                   )}
 
-                  {/* User Menu Items */}
-                  <div className="space-y-2">
-                    {userMenuItems.map((item) => (
-                      <Link
-                        key={item.href}
-                        href={item.href}
-                        className="flex items-center space-x-3 p-3 text-gray-700 hover:bg-gray-100 rounded-xl transition-colors duration-200"
-                      >
-                        <item.icon className="w-5 h-5" />
-                        <span>{item.label}</span>
-                      </Link>
-                    ))}
-                  </div>
+                  {isCustomer && (
+                    <div className="space-y-2">
+                      {userMenuItems.map((item) => (
+                        <Link
+                          key={item.href}
+                          href={item.href}
+                          className="flex items-center space-x-3 p-3 text-gray-700 hover:bg-gray-100 rounded-xl transition-colors duration-200"
+                        >
+                          <item.icon className="w-5 h-5" />
+                          <span>{item.label}</span>
+                        </Link>
+                      ))}
+                    </div>
+                  )}
 
-                  {/* Logout Button */}
                   <button
                     onClick={handleLogout}
                     className="flex items-center space-x-3 w-full p-3 text-red-600 hover:bg-red-50 rounded-xl transition-colors duration-200"
@@ -384,7 +364,6 @@ const Header: React.FC = () => {
         )}
       </header>
 
-      {/* Spacer to prevent content from going under fixed header */}
       <div className="h-20"></div>
     </>
   );

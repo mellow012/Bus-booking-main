@@ -114,7 +114,7 @@ export default function AvailableRoutes({ limit }: AvailableRoutesProps) {
   }
 
   return (
-    <section aria-label="Available Bus Routes">
+    <section aria-label="Available Bus Schedules">
       {error && <p className="text-red-500 mb-4 text-center" role="alert">{error}</p>}
       {openRoutes.length > 0 ? (
         <div className="space-y-4">
@@ -215,7 +215,7 @@ export default function AvailableRoutes({ limit }: AvailableRoutesProps) {
         <div className="bg-white rounded-lg shadow-md p-8 text-center">
           <div className="text-6xl mb-4" aria-hidden="true">🚌</div>
           <h3 className="text-xl font-semibold text-gray-900 mb-2">No buses found</h3>
-          <p className="text-gray-600">No available routes found for the next week.</p>
+          <p className="text-gray-600">No available schedules found for this week.</p>
         </div>
       )}
     </section>

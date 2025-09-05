@@ -1,9 +1,13 @@
 import { initializeApp, getApps, cert } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
-import serviceAccount from './serviceAccountKey.json'; // Ensure this path matches your service account file
 
-// Check if an app with the name 'admin' already exists, then initialize or reuse it
+const serviceAccount = {
+  projectId: process.env.FIREBASE_PROJECT_ID,
+  clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+  privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'), // Handle newlines
+};
+
 const apps = getApps();
 export const adminApp = apps.length === 0 || !apps.some(app => app.name === 'admin')
   ? initializeApp({
@@ -13,4 +17,5 @@ export const adminApp = apps.length === 0 || !apps.some(app => app.name === 'adm
 
 export const adminAuth = getAuth(adminApp);
 export const adminDb = getFirestore(adminApp);
-export { FieldValue }; // Export FieldValue for use in other files
+export const adminFieldValue = FieldValue;
+export { FieldValue };

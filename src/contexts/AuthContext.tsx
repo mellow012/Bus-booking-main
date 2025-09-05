@@ -124,12 +124,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const oobCode = searchParams?.get('oobCode');
 
     // Define public routes that don't require authentication
-    const publicRoutes = ['/login', '/register', '/company/setup', '/login', '/register', '/', '/about', '/contact'];
+    const publicRoutes = ['/login', '/register', '/company/setup', '/', '/about', '/contact'];
     const isPublicRoute = publicRoutes.includes(pathname);
 
     // Only redirect to login if user is not authenticated and not on a public route
     if (!user && !oobCode && !isPublicRoute) {
-      console.log('No user found and not on public route, redirecting to /auth/login');
+      console.log('No user found and not on public route, redirecting to /login');
       router.push('/login');
       return;
     }
@@ -359,14 +359,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setSuperAdmin,
   };
 
-  // Show loading screen only during initial load
+  // Show skeleton loader during initial load
   if (!isInitialized) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="mt-4 text-gray-600 font-medium">Loading your account...</p>
-          <p className="mt-1 text-sm text-gray-400">Please wait while we verify your credentials</p>
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 flex items-center justify-center">
+        <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid lg:grid-cols-2 gap-12 items-center mb-12">
+            <div className="text-center lg:text-left animate-pulse">
+              <div className="inline-flex items-center px-4 py-2 bg-gray-200 rounded-full text-sm font-medium mb-6 w-64 h-8"></div>
+              <div className="text-4xl sm:text-5xl lg:text-6xl font-bold text-gray-200 mb-6 leading-tight h-24"></div>
+              <div className="text-lg sm:text-xl text-gray-200 max-w-2xl mx-auto lg:mx-0 leading-relaxed mb-8 h-16"></div>
+              <div className="flex flex-wrap gap-6 justify-center lg:justify-start h-16">
+                <div className="w-40 h-6 bg-gray-200 rounded"></div>
+                <div className="w-40 h-6 bg-gray-200 rounded"></div>
+                <div className="w-40 h-6 bg-gray-200 rounded"></div>
+              </div>
+              <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start mt-6 h-12">
+                <div className="w-40 h-10 bg-gray-200 rounded"></div>
+                <div className="w-40 h-10 bg-gray-200 rounded"></div>
+              </div>
+            </div>
+            <div className="relative w-full max-w-lg mx-auto">
+              <div className="w-full h-64 bg-gray-200 rounded-2xl animate-pulse"></div>
+              <div className="absolute -top-4 -right-4 w-16 h-16 bg-gray-200 rounded-full"></div>
+              <div className="absolute -bottom-4 -left-4 w-14 h-14 bg-gray-200 rounded-full"></div>
+              <div className="absolute top-8 left-8 w-8 h-8 bg-gray-200 rounded-full"></div>
+              <div className="absolute bottom-12 right-12 w-6 h-6 bg-gray-200 rounded-full"></div>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6 mb-12">
+            {Array(4).fill(0).map((_, i) => (
+              <div key={i} className="bg-gray-200 rounded-2xl p-6 h-32 animate-pulse"></div>
+            ))}
+          </div>
+          <div className="bg-gray-200 rounded-3xl p-6 lg:p-8 h-64 animate-pulse"></div>
         </div>
       </div>
     );

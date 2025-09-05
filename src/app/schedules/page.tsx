@@ -95,6 +95,9 @@ const SchedulesPage = () => {
   const [showFilters, setShowFilters] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'timeline'>('grid');
   const [sortBy, setSortBy] = useState<'time' | 'price' | 'company'>('time');
+  const [useLocation, setUseLocation] = useState(false);
+  const [userLocation, setUserLocation] = useState<string>("");
+  const [locationError, setLocationError] = useState<string>("");
 
   // Calculate 2-week range from today (August 24, 2025, to September 7, 2025)
   const today = new Date("2025-08-24");
@@ -205,6 +208,11 @@ const filteredSchedules = useMemo(() => {
     console.log("Schedule:", { ...schedule, priceInMWK }, "Matches Search:", matchesSearch, "Matches Price:", matchesPrice);
     return matchesSearch && matchesPrice;
   });
+  let matchesLocation = true;
+  if (useLocation && userLocation) {
+    matchesLocation = schedule.origin.toLowerCase().includes(userLocation.toLowerCase()) ||
+      schedule.destination.toLowerCase().includes(userLocation.toLowerCase());
+  }
 
   filtered.sort((a, b) => {
     switch (sortBy) {
@@ -286,7 +294,51 @@ const filteredSchedules = useMemo(() => {
             </div>
           </div>
         </div>
-
+        <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center gap-2">
+    <label className="font-medium text-gray-700">Show schedules from my location:</label>
+    <input
+      type="checkbox"
+      checked={useLocation}
+      onChange={e => {
+        setUseLocation(e.target.checked);
+        setLocationError("");
+        if (e.target.checked) {
+          // Try to get browser location
+          if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+              pos => {
+                // You can use pos.coords.latitude/longitude to match to a city/region
+                setUserLocation(`${pos.coords.latitude},${pos.coords.longitude}`);
+                setLocationError("");
+              },
+              err => {
+                setLocationError("Unable to access your location. Please enter it manually.");
+              }
+            );
+          } else {
+            setLocationError("Geolocation is not supported. Please enter your location manually.");
+          }
+        } else {
+          setUserLocation("");
+        }
+      }}
+      className="ml-2"
+       />
+    </div>
+    {useLocation && (
+  <div className="flex items-center gap-2 ml-6">
+      <label className="text-sm text-gray-700">Or enter location:</label>
+      <input
+        type="text"
+        value={userLocation}
+        onChange={e => setUserLocation(e.target.value)}
+        placeholder="City, Region, or Coordinates"
+        className="px-3 py-2 rounded-xl border border-gray-200 text-sm"
+      />
+    {locationError && <span className="text-xs text-red-600 ml-2">{locationError}</span>}
+  </div>)}
+  </div>
         {/* Search and Filters */}
         <div className="bg-white rounded-3xl shadow-lg p-6 mb-8 border border-gray-100">
           {/* Date Selection with Picker */}
