@@ -1,59 +1,13 @@
 import { NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
-import admin from "firebase-admin";
-
-/**
- * Robust Firebase Admin initialization.
- * Accepts either full service account JSON in FIREBASE_PRIVATE_KEY
- * or separate env vars: FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY.
- *
- * Avoid throwing here so serverless deploys don't fail silently; log clearly instead.
- */
-if (!admin.apps.length) {
-  try {
-    const raw = process.env.FIREBASE_PRIVATE_KEY || "";
-    let serviceAccount: any | null = null;
-
-    if (raw.trim().startsWith("{")) {
-      try {
-        serviceAccount = JSON.parse(raw.replace(/\\n/g, "\n"));
-      } catch (err) {
-        console.warn("FIREBASE_PRIVATE_KEY looks like JSON but failed to parse:", err);
-      }
-    }
-
-    if (!serviceAccount) {
-      const privateKey = raw ? raw.replace(/\\n/g, "\n") : undefined;
-      if (process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_CLIENT_EMAIL && privateKey) {
-        serviceAccount = {
-          project_id: process.env.FIREBASE_PROJECT_ID,
-          client_email: process.env.FIREBASE_CLIENT_EMAIL,
-          private_key: privateKey,
-        };
-      }
-    }
-
-    if (serviceAccount) {
-      admin.initializeApp({
-        credential: admin.credential.cert(serviceAccount),
-      });
-      console.log("Firebase Admin SDK initialized");
-    } else {
-      console.warn("Firebase Admin not initialized. Missing service account configuration.");
-    }
-  } catch (err) {
-    console.error("Error initializing Firebase Admin SDK:", err);
-  }
-}
-
-const firestore = admin.firestore();
+import { adminAuth, adminDb, adminFieldValue } from '@/lib/firebaseAdmin';
 
 /**
  * GET handler
  * Query params:
- *  - provider = 'stripe' | 'paychangu'
- *  - session_id (for stripe)
- *  - tx_ref (for paychangu)
+ * - provider = 'stripe' | 'paychangu'
+ * - session_id (for stripe)
+ * - tx_ref (for paychangu)
  *
  * Requires Authorization: Bearer <firebase id token>
  */
@@ -65,14 +19,10 @@ export async function GET(request: Request) {
   }
   const idToken = authHeader.split("Bearer ")[1].trim();
 
-  if (!admin.apps.length) {
-    console.error("Admin SDK not initialized");
-    return NextResponse.json({ error: "Server misconfigured" }, { status: 500 });
-  }
-
   let decoded: any;
   try {
-    decoded = await admin.auth().verifyIdToken(idToken);
+    // Use the centralized adminAuth
+    decoded = await adminAuth.verifyIdToken(idToken);
   } catch (err: any) {
     console.error("Failed to verify id token:", err?.message || err);
     return NextResponse.json({ error: "Unauthorized: Invalid token" }, { status: 401 });
@@ -120,19 +70,19 @@ async function verifyStripePayment(sessionId: string | null, userId: string) {
     let bookingDoc: FirebaseFirestore.QueryDocumentSnapshot<FirebaseFirestore.DocumentData> | null = null;
 
     if (metadataBookingId) {
-      const docRef = await firestore.collection("bookings").doc(metadataBookingId).get();
+      const docRef = await adminDb.collection("bookings").doc(metadataBookingId).get();
       if (docRef.exists) bookingDoc = docRef;
     }
 
     // flexible fallback lookups
     if (!bookingDoc) {
       // prefer explicit stripeSessionId field
-      const bySession = await firestore.collection("bookings").where("stripeSessionId", "==", sessionId).limit(1).get();
+      const bySession = await adminDb.collection("bookings").where("stripeSessionId", "==", sessionId).limit(1).get();
       if (!bySession.empty) bookingDoc = bySession.docs[0];
     }
 
     if (!bookingDoc && clientRef) {
-      const byClientRef = await firestore.collection("bookings").where("clientReferenceId", "==", clientRef).limit(1).get();
+      const byClientRef = await adminDb.collection("bookings").where("clientReferenceId", "==", clientRef).limit(1).get();
       if (!byClientRef.empty) bookingDoc = byClientRef.docs[0];
     }
 
@@ -140,7 +90,7 @@ async function verifyStripePayment(sessionId: string | null, userId: string) {
       // final fallback: try metadata.tx_ref or transactionReference stored
       const txRef = (session.metadata as any)?.tx_ref || (session.metadata as any)?.transactionReference;
       if (txRef) {
-        const byTx = await firestore.collection("bookings").where("transactionReference", "==", txRef).limit(1).get();
+        const byTx = await adminDb.collection("bookings").where("transactionReference", "==", txRef).limit(1).get();
         if (!byTx.empty) bookingDoc = byTx.docs[0];
       }
     }
@@ -162,7 +112,7 @@ async function verifyStripePayment(sessionId: string | null, userId: string) {
     if (paid) {
       if (bookingData.paymentStatus !== "paid") {
         const paymentMethod = determineStripePaymentMethod(session);
-        await firestore.collection("bookings").doc(bookingDoc.id).update({
+        await adminDb.collection("bookings").doc(bookingDoc.id).update({
           paymentStatus: "paid",
           bookingStatus: "confirmed",
           paymentMethod,
@@ -176,12 +126,12 @@ async function verifyStripePayment(sessionId: string | null, userId: string) {
             paymentStatus: session.payment_status,
             raw: session,
           },
-          paymentConfirmedAt: admin.firestore.FieldValue.serverTimestamp(),
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          paymentConfirmedAt: adminFieldValue.serverTimestamp(),
+          updatedAt: adminFieldValue.serverTimestamp(),
         });
       }
 
-      const fresh = await firestore.collection("bookings").doc(bookingDoc.id).get();
+      const fresh = await adminDb.collection("bookings").doc(bookingDoc.id).get();
       return NextResponse.json({ success: true, status: "paid", bookingId: bookingDoc.id, booking: fresh.data() }, { status: 200 });
     }
 
@@ -239,7 +189,6 @@ async function verifyPayChanguPayment(txRef: string | null, userId: string) {
     }
 
     const payload = await res.json();
-    // paychangu wraps result in various shapes; try to find the useful object
     const paymentData = payload?.data?.data || payload?.data || payload;
 
     if (!paymentData) {
@@ -247,18 +196,14 @@ async function verifyPayChanguPayment(txRef: string | null, userId: string) {
     }
 
     // Find booking by transactionReference field
-    const byTx = await firestore.collection("bookings").where("transactionReference", "==", txRef).limit(1).get();
+    const byTx = await adminDb.collection("bookings").where("transactionReference", "==", txRef).limit(1).get();
     if (byTx.empty) {
-      // fallback: maybe txRef stored in metadata or other field
-      const byMeta = await firestore.collection("bookings").where("paymentSessionId", "==", txRef).limit(1).get();
-      if (!byMeta.empty) {
-        // use first
-      } else {
-        return NextResponse.json({ error: "Booking not found" }, { status: 404 });
-      }
+      const byMeta = await adminDb.collection("bookings").where("paymentSessionId", "==", txRef).limit(1).get();
       if (!byMeta.empty) {
         const bookingDoc = byMeta.docs[0];
         return await processPayChanguBookingUpdate(bookingDoc, paymentData, userId, txRef);
+      } else {
+        return NextResponse.json({ error: "Booking not found" }, { status: 404 });
       }
     } else {
       const bookingDoc = byTx.docs[0];
@@ -289,7 +234,7 @@ async function processPayChanguBookingUpdate(
   if (["successful", "success", "completed"].includes(status)) {
     if (bookingData.paymentStatus !== "paid") {
       const paymentMethod = determinePayChanguPaymentMethod(paymentData);
-      await firestore.collection("bookings").doc(bookingDoc.id).update({
+      await adminDb.collection("bookings").doc(bookingDoc.id).update({
         paymentStatus: "paid",
         bookingStatus: "confirmed",
         paymentMethod,
@@ -303,18 +248,18 @@ async function processPayChanguBookingUpdate(
           status: paymentData.status,
           raw: paymentData,
         },
-        paymentConfirmedAt: admin.firestore.FieldValue.serverTimestamp(),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        paymentConfirmedAt: adminFieldValue.serverTimestamp(),
+        updatedAt: adminFieldValue.serverTimestamp(),
       });
     }
 
-    const fresh = await firestore.collection("bookings").doc(bookingDoc.id).get();
+    const fresh = await adminDb.collection("bookings").doc(bookingDoc.id).get();
     return NextResponse.json({ success: true, status: "paid", bookingId: bookingDoc.id, booking: fresh.data() }, { status: 200 });
   }
 
   if (["failed", "cancelled", "canceled"].includes(status)) {
     if (bookingData.paymentStatus !== "failed") {
-      await firestore.collection("bookings").doc(bookingDoc.id).update({
+      await adminDb.collection("bookings").doc(bookingDoc.id).update({
         paymentStatus: "failed",
         paymentFailureReason: `PayChangu: ${paymentData.status} - ${paymentData.message || "failed"}`,
         paymentDetails: {
@@ -324,17 +269,15 @@ async function processPayChanguBookingUpdate(
           message: paymentData.message,
           raw: paymentData,
         },
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: adminFieldValue.serverTimestamp(),
       });
     }
     return NextResponse.json({ success: false, status: "failed", message: paymentData.message || "Payment failed", bookingId: bookingDoc.id }, { status: 200 });
   }
 
-  // pending / unknown
   return NextResponse.json({ success: false, status: status || "unknown", message: paymentData.message || "Payment pending", data: paymentData }, { status: 200 });
 }
 
-/* ---------------- Helpers ---------------- */
 function determinePayChanguPaymentMethod(data: any): string {
   const method = (data.payment_method || "").toString().toLowerCase();
   const channel = (data.channel || "").toString().toLowerCase();
