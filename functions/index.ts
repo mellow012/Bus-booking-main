@@ -4,62 +4,86 @@ import * as admin from "firebase-admin";
 admin.initializeApp();
 const db = admin.firestore();
 
-export const onBookingCreated = functions.firestore
-  .document("bookings/{bookingId}")
-  .onCreate(async (snapshot, context) => {
-    const bookingData = snapshot.data();
-    if (!bookingData || !bookingData.scheduleId || !Array.isArray(bookingData.seatNumbers) || bookingData.seatNumbers.length === 0) {
-      console.error("Invalid booking data:", bookingData);
-      await snapshot.ref.update({ bookingStatus: "failed", error: "Invalid booking data" });
-      return;
-    }
+/**
+ * A callable Cloud Function to securely create a booking and update the schedule in a single transaction.
+ */
+export const createBooking = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError(
+      "unauthenticated",
+      "You must be logged in to make a booking."
+    );
+  }
 
-    const { scheduleId, seatNumbers, companyId } = bookingData;
-    const passengerCount = seatNumbers.length;
+  const { scheduleId, passengerDetails, selectedSeats } = data;
+  const userId = context.auth.uid;
 
-    const scheduleRef = db.doc(`schedules/${scheduleId}`);
+  if (!scheduleId || !passengerDetails || !Array.isArray(selectedSeats) || selectedSeats.length === 0) {
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      "Missing or invalid required booking information: scheduleId, passengerDetails, and selectedSeats are required."
+    );
+  }
 
-    try {
-      await db.runTransaction(async (transaction) => {
-        const scheduleDoc = await transaction.get(scheduleRef);
-        if (!scheduleDoc.exists) {
-          throw new Error("Schedule document does not exist!");
-        }
+  const scheduleRef = db.doc(`schedules/${scheduleId}`);
+  const bookingRef = db.collection("bookings").doc();
 
-        const scheduleData = scheduleDoc.data() as { availableSeats: number; bookedSeats: string[] };
-        const newAvailableSeats = scheduleData.availableSeats - passengerCount;
+  try {
+    await db.runTransaction(async (transaction) => {
+      const scheduleDoc = await transaction.get(scheduleRef);
+      if (!scheduleDoc.exists) {
+        throw new functions.https.HttpsError("not-found", "The selected schedule could not be found.");
+      }
 
-        if (newAvailableSeats < 0) {
-          throw new Error("Not enough available seats to complete booking.");
-        }
+      const scheduleData = scheduleDoc.data()!;
+      const existingBookedSeats = scheduleData.bookedSeats || [];
 
-        // Verify companyId match (optional security check)
-        if (scheduleData.companyId !== companyId) {
-          throw new Error("Company ID mismatch between booking and schedule");
-        }
+      const conflictingSeats = selectedSeats.filter((seat) => existingBookedSeats.includes(seat));
+      if (conflictingSeats.length > 0) {
+        throw new functions.https.HttpsError(
+          "aborted",
+          `Sorry, the seat(s) ${conflictingSeats.join(", ")} were just booked by someone else.`
+        );
+      }
 
-        transaction.update(scheduleRef, {
-          availableSeats: newAvailableSeats,
-          bookedSeats: admin.firestore.FieldValue.arrayUnion(...seatNumbers),
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
+      if (scheduleData.availableSeats < selectedSeats.length) {
+        throw new functions.https.HttpsError(
+          "aborted",
+          "Not enough seats are available on this bus."
+        );
+      }
 
-        // Update booking status to confirmed after successful transaction
-        transaction.update(snapshot.ref, {
-          bookingStatus: "confirmed",
-          paymentStatus: "pending",
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-      });
+      const bookingData = {
+        userId,
+        scheduleId,
+        companyId: scheduleData.companyId,
+        passengerDetails,
+        seatNumbers: selectedSeats, // Ensure consistency with client
+        totalAmount: scheduleData.price * selectedSeats.length,
+        bookingStatus: "pending",
+        paymentStatus: "pending",
+        bookingReference: `BK${Date.now().toString(36)}${Math.random().toString(36).substring(2, 8)}`.toUpperCase(),
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      };
 
-      console.log(`Successfully updated schedule ${scheduleId} for booking ${context.params.bookingId}`);
-    } catch (error) {
-      console.error("Transaction failed:", error);
-      await snapshot.ref.update({
-        bookingStatus: "failed",
-        paymentStatus: "cancelled",
-        error: error.message,
+      transaction.set(bookingRef, bookingData);
+      transaction.update(scheduleRef, {
+        bookedSeats: admin.firestore.FieldValue.arrayUnion(...selectedSeats),
+        availableSeats: admin.firestore.FieldValue.increment(-selectedSeats.length),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
+    });
+
+    return { success: true, bookingId: bookingRef.id };
+  } catch (error) {
+    console.error("Booking transaction failed:", error);
+    if (error instanceof functions.https.HttpsError) {
+      throw error;
     }
-  });
+    throw new functions.https.HttpsError(
+      "internal",
+      "An unexpected error occurred while creating the booking. Please try again or contact support."
+    );
+  }
+});

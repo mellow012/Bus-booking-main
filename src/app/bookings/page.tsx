@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo, memo, ChangeEvent, FormEvent } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { sendNotification } from '@/components/Notifications'; // Adjust the import path
+import { sendNotification } from '../../contexts/NotificationContext'; // Adjust the import path
 import { 
   collection, 
   query, 
@@ -56,6 +56,7 @@ import {
 import Modal from '../../components/Modals';
 import AlertMessage from '../../components/AlertMessage';
 import { getAuth } from 'firebase/auth';
+
 
 // Lazy load heavy dependencies
 const jsPDF = React.lazy(() => import('jspdf'));
@@ -603,14 +604,20 @@ const BookingsPage: React.FC = () => {
         });
       }
 
-      const expiredBookings = bookingsWithDetails.filter(isBookingExpired);
-      if (expiredBookings.length > 0) {
-        await Promise.all(expiredBookings.map((booking) => deleteDoc(doc(db, 'bookings', booking.id))));
-      }
+      // REMOVED: Automatic deletion
+      
+      // If you want to inform users about expired bookings, you can do this:
+      
 
       const validBookings = bookingsWithDetails.filter((b) => !isBookingExpired(b));
       setBookings(validBookings);
       applyFilters(validBookings);
+      const expiredCount = bookingsWithDetails.length - validBookings.length;
+      if (expiredCount > 0) {
+        console.log(`${expiredCount} expired bookings hidden from view`);
+        // Optionally show a message to the user about expired bookings
+      }
+
 
       if (bookingsWithDetails.length === 0 && bookingsData.length > 0) {
         setError('Some bookings could not be loaded due to missing data. Please try refreshing or contact support.');
@@ -681,13 +688,15 @@ const BookingsPage: React.FC = () => {
       } else {
         bookingUpdates.cancellationRequested = true;
         bookingUpdates.cancellationReason = 'Customer requested';
-        sendNotification({
-          userId: booking.userId,
-          type: 'cancellation_requested',
-          title: 'Cancellation Requested',
-          message: `Your cancellation request for booking ${bookingId.slice(-8)} is under review.`,
-          data: { bookingId, url: `/bookings` },
-        });
+       sendNotification({
+  userId: booking.userId,
+  type: isCancellationRequest ? 'cancellation_requested' : 'booking_cancelled',
+  title: isCancellationRequest ? 'Cancellation Requested' : 'Booking Cancelled',
+  message: isCancellationRequest
+    ? `Your cancellation request for booking ${bookingId.slice(-8)} is under review.`
+    : `Your booking ${bookingId.slice(-8)} has been cancelled. Seats released.`,
+  data: { bookingId, url: `/bookings` },
+});
       }
 
       batch.update(doc(db, 'bookings', bookingId), bookingUpdates);
@@ -994,6 +1003,13 @@ const BookingsPage: React.FC = () => {
       });
 
       const result = await response.json();
+      sendNotification({
+      userId: user.uid,
+      type: 'payment_initiated',
+      title: 'Payment Initiated',
+      message: `Payment process started for booking ${selectedBooking?.id.slice(-8)}. Redirecting to ${selectedPaymentMethod === 'card' ? 'Stripe' : 'PayChangu'}.`,
+      data: { bookingId: selectedBooking?.id, url: result.checkoutUrl },
+    });
 
       if (!response.ok) {
         throw new Error(result.error || result.message || 'Failed to create payment session');

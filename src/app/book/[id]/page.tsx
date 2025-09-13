@@ -31,15 +31,15 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, useStripe, useElements, CardElement } from "@stripe/react-stripe-js";
-import { 
-  CreditCard, 
-  Smartphone, 
-  Building, 
-  CheckCircle, 
-  AlertCircle, 
-  Clock, 
-  MapPin, 
-  Users, 
+import {
+  CreditCard,
+  Smartphone,
+  Building,
+  CheckCircle,
+  AlertCircle,
+  Clock,
+  MapPin,
+  Users,
   Calendar,
   ArrowRight,
   Shield,
@@ -47,390 +47,68 @@ import {
   ArrowLeft
 } from "lucide-react";
 
+// ================================
+// CONSTANTS
+// ================================
+const BOOKING_STATUS = {
+  PENDING: "pending",
+  CONFIRMED: "confirmed",
+  CANCELLED: "cancelled",
+} as const;
 
+const SEAT_HOLD_DURATION = 10 * 60 * 1000; // 10 minutes
+
+// ================================
+// INTERFACES
+// ================================
+interface SeatHold {
+  seat: string;
+  userId: string;
+  expires: Date;
+}
+
+// ================================
+// MAIN COMPONENT
+// ================================
 export default function BookBus() {
+  // ================================
+  // HOOKS
+  // ================================
   const { id: scheduleId } = useParams() as { id: string };
   const searchParams = useSearchParams();
   const router = useRouter();
   const { user } = useAuth();
+  
+  // ================================
+  // DERIVED VALUES
+  // ================================
   const passengers = parseInt(searchParams.get("passengers") || "1", 10);
 
-  // State management
+  // ================================
+  // STATE MANAGEMENT
+  // ================================
+  // Core data state
   const [schedule, setSchedule] = useState<Schedule | null>(null);
   const [bus, setBus] = useState<Bus | null>(null);
   const [route, setRoute] = useState<Route | null>(null);
   const [company, setCompany] = useState<Company | null>(null);
+  
+  // Booking flow state
   const [selectedSeats, setSelectedSeats] = useState<string[]>([]);
   const [passengerDetails, setPassengerDetails] = useState<PassengerDetail[]>([]);
+  const [currentStep, setCurrentStep] = useState<"seats" | "passengers" | "confirm">("seats");
+  const [reservationId, setReservationId] = useState<string | null>(null);
+  
+  // UI state
   const [loading, setLoading] = useState(true);
   const [bookingLoading, setBookingLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
-  const [currentStep, setCurrentStep] = useState<"seats" | "passengers" | "confirm">("seats");
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
 
-  // Seat reservation management
-  interface SeatHold {
-    seat: string;
-    userId: string;
-    expires: Date;
-  }
-
-  const SEAT_HOLD_DURATION = 10 * 60 * 1000; // 10 minutes
-
-  const holdSeats = useCallback(async (seats: string[]) => {
-    if (!schedule || !user) return;
-    const scheduleRef = doc(db, "schedules", schedule.id);
-    const reservationRef = doc(db, "seatReservations", `${schedule.id}_${user.uid}`);
-
-    try {
-      await runTransaction(db, async (transaction) => {
-        const scheduleSnap = await transaction.get(scheduleRef);
-        if (!scheduleSnap.exists()) throw new Error("Schedule not found");
-
-        const currentHeldSeats = scheduleSnap.data().heldSeats || [];
-        const currentBookedSeats = scheduleSnap.data().bookedSeats || [];
-        const conflictingSeats = seats.filter(seat =>
-          currentBookedSeats.includes(seat) ||
-          currentHeldSeats.some((h: SeatHold) => h.seat === seat && h.expires > new Date() && h.userId !== user.uid)
-        );
-        if (conflictingSeats.length > 0) throw new Error("Some seats are no longer available");
-
-        const newHolds = seats.map(seat => ({
-          seat,
-          userId: user.uid,
-          expires: new Date(Date.now() + SEAT_HOLD_DURATION)
-        }));
-
-        transaction.update(scheduleRef, {
-          heldSeats: arrayUnion(...newHolds),
-          availableSeats: increment(-seats.length)
-        });
-
-        transaction.set(reservationRef, {
-          scheduleId: schedule.id,
-          customerId: user.uid,
-          seatNumbers: seats,
-          status: "reserved",
-          expiresAt: Timestamp.fromDate(new Date(Date.now() + SEAT_HOLD_DURATION)),
-          createdAt: serverTimestamp(),
-          sessionId: crypto.randomUUID()
-        });
-      });
-    } catch (err: any) {
-      throw new Error(err.message || "Failed to reserve seats");
-    }
-  }, [schedule, user]);
-
-  const releaseSeats = useCallback(async (seats: string[]) => {
-    if (!schedule || !user) return;
-    const scheduleRef = doc(db, "schedules", schedule.id);
-    const reservationRef = doc(db, "seatReservations", `${schedule.id}_${user.uid}`);
-
-    try {
-      await runTransaction(db, async (transaction) => {
-        const scheduleSnap = await transaction.get(scheduleRef);
-        if (!scheduleSnap.exists()) return;
-
-        const currentHeldSeats: SeatHold[] = scheduleSnap.data().heldSeats || [];
-        const updatedHeldSeats = currentHeldSeats.filter(h => !seats.includes(h.seat) || h.userId !== user.uid);
-
-        transaction.update(scheduleRef, {
-          heldSeats: updatedHeldSeats,
-          availableSeats: increment(seats.length)
-        });
-
-        transaction.update(reservationRef, {
-          status: "expired",
-          updatedAt: serverTimestamp()
-        });
-      });
-    } catch (err: any) {
-      console.error("Failed to release seats:", err);
-    }
-  }, [schedule, user]);
-
-  // Validation
-  useEffect(() => {
-    if (!user) {
-      router.push("/register");
-      return;
-    }
-    
-    // Validate passenger count
-    if (passengers < 1 || passengers > 10) {
-      setError("Invalid passenger count. Please select between 1 and 10 passengers.");
-      setTimeout(() => router.push("/search"), 2000);
-      return;
-    }
-    
-    fetchBookingData();
-  }, [scheduleId, user, passengers, router]);
-
-  // Auto-clear error and success messages
-  useEffect(() => {
-    if (error) {
-      const timer = setTimeout(() => setError(""), 5000);
-      return () => clearTimeout(timer);
-    }
-  }, [error]);
-
-  useEffect(() => {
-    if (success) {
-      const timer = setTimeout(() => setSuccess(""), 5000);
-      return () => clearTimeout(timer);
-    }
-  }, [success]);
-
-  const fetchBookingData = async () => {
-    if (!scheduleId || typeof scheduleId !== 'string') {
-      setError("Invalid schedule ID");
-      setLoading(false);
-      return;
-    }
-
-    setLoading(true);
-    setError("");
-    
-    try {
-      // Fetch schedule
-      const scheduleDoc = await getDoc(doc(db, "schedules", scheduleId));
-      if (!scheduleDoc.exists()) {
-        throw new Error("Schedule not found");
-      }
-      
-      const scheduleData = { id: scheduleDoc.id, ...scheduleDoc.data() } as Schedule;
-      
-      // Validate schedule data
-      if (!scheduleData.busId || !scheduleData.routeId || !scheduleData.companyId) {
-        throw new Error("Schedule data is incomplete");
-      }
-      
-      // Check availability
-      if ((scheduleData.availableSeats || 0) < passengers) {
-        throw new Error(`Not enough available seats. Only ${scheduleData.availableSeats || 0} seats available.`);
-      }
-      
-      // Check if schedule is in the past
-      const departureTime = scheduleData.departureDateTime?.toDate ? 
-        scheduleData.departureDateTime.toDate() : 
-        new Date(scheduleData.departureDateTime);
-      
-      if (departureTime < new Date()) {
-        throw new Error("This schedule has already departed");
-      }
-
-      setSchedule(scheduleData);
-
-      // Fetch related data in parallel
-      const [busDoc, routeDoc, companyDoc] = await Promise.all([
-        getDoc(doc(db, "buses", scheduleData.busId)),
-        getDoc(doc(db, "routes", scheduleData.routeId)),
-        getDoc(doc(db, "companies", scheduleData.companyId)),
-      ]);
-
-      // Validate and set bus data
-      if (!busDoc.exists()) {
-        throw new Error("Bus information not found");
-      }
-      const busData = { id: busDoc.id, ...busDoc.data() } as Bus;
-      setBus(busData);
-
-      // Validate and set route data
-      if (!routeDoc.exists()) {
-        throw new Error("Route information not found");
-      }
-      const routeData = { id: routeDoc.id, ...routeDoc.data() } as Route;
-      setRoute(routeData);
-
-      // Validate and set company data
-      if (!companyDoc.exists()) {
-        throw new Error("Company information not found");
-      }
-      const companyData = { id: companyDoc.id, ...companyDoc.data() } as Company;
-      setCompany(companyData);
-
-    } catch (error: any) {
-      console.error("Error fetching booking data:", error);
-      setError(error.message || "Error loading booking information");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSeatSelection = useCallback((seats: string[]) => {
-    setError(""); // Clear any previous errors
-    
-    // Client-side fallback validation
-    if (seats.length !== passengers) {
-      setError(`Please select exactly ${passengers} seat${passengers > 1 ? "s" : ""}.`);
-      return;
-    }
-    
-    if (new Set(seats).size !== seats.length) {
-      setError("Duplicate seats selected. Please choose different seats.");
-      return;
-    }
-    
-    if (schedule?.bookedSeats?.some((seat) => seats.includes(seat))) {
-      setError("One or more selected seats are already booked. Please choose different seats.");
-      return;
-    }
-    
-    // Firestore transaction for seat reservation
-    holdSeats(seats).then(() => {
-      setSelectedSeats(seats);
-      setCurrentStep("passengers");
-      
-      // Initialize passenger details with selected seats
-      const initialDetails = seats.map((seat, index) => ({
-        name: "",
-        age: 18,
-        gender: "male" as const,
-        seatNumber: seat,
-      }));
-      setPassengerDetails(initialDetails);
-    }).catch(err => {
-      setError(err.message || "Failed to reserve seats. Please try again.");
-    });
-  }, [passengers, schedule?.bookedSeats, holdSeats]);
-
-  const handlePassengerDetails = useCallback((details: PassengerDetail[]) => {
-    setError(""); // Clear any previous errors
-    
-    // Validate passenger details
-    if (details.length !== passengers) {
-      setError(`Please provide details for exactly ${passengers} passenger${passengers > 1 ? "s" : ""}.`);
-      return;
-    }
-    
-    // Check for missing required fields
-    const missingFields = details.some((p, index) => {
-      if (!p.name || !p.name.trim()) {
-        setError(`Please enter name for passenger ${index + 1}`);
-        return true;
-      }
-      if (!p.age || p.age < 1 || p.age > 120) {
-        setError(`Please enter a valid age (1-120) for passenger ${index + 1}`);
-        return true;
-      }
-      if (!p.gender) {
-        setError(`Please select gender for passenger ${index + 1}`);
-        return true;
-      }
-      if (!p.seatNumber) {
-        setError(`Seat number missing for passenger ${index + 1}`);
-        return true;
-      }
-      return false;
-    });
-    
-    if (missingFields) return;
-    
-    // Check for duplicate names (optional warning)
-    const names = details.map(p => p.name.trim().toLowerCase());
-    if (new Set(names).size !== names.length && passengers > 1) {
-      const confirmed = window.confirm("You have duplicate passenger names. Is this intentional?");
-      if (!confirmed) return;
-    }
-    
-    setPassengerDetails(details);
-    setCurrentStep("confirm");
-    setConfirmModalOpen(true);
-  }, [passengers]);
-
-  const confirmBooking = async () => {
-    setBookingLoading(true);
-    setError("");
-    
-    try {
-      // Final validations
-      if (!user?.uid) {
-        throw new Error("User authentication required");
-      }
-      
-      if (!schedule || !selectedSeats.length || !passengerDetails.length) {
-        throw new Error("Missing booking information");
-      }
-      
-      if (selectedSeats.length !== passengers || passengerDetails.length !== passengers) {
-        throw new Error("Seat and passenger count mismatch");
-      }
-
-      // Firestore transaction for booking confirmation
-      await runTransaction(db, async (transaction) => {
-        const scheduleRef = doc(db, "schedules", schedule.id);
-        const scheduleSnap = await transaction.get(scheduleRef);
-        if (!scheduleSnap.exists()) throw new Error("Schedule not found");
-
-        const currentHeldSeats: SeatHold[] = scheduleSnap.data().heldSeats || [];
-        const reservedSeats = currentHeldSeats.filter((h: SeatHold) => h.userId === user.uid && selectedSeats.includes(h.seat));
-
-        if (reservedSeats.length !== selectedSeats.length) throw new Error("Seat reservation mismatch");
-
-        // Generate unique references
-        const txRef = generateTxRef();
-        const bookingRef = generateBookingReference();
-        
-        // Prepare booking data
-        const bookingData = {
-          userId: user.uid,
-          scheduleId: schedule.id,
-          companyId: schedule.companyId,
-          bookingReference: bookingRef,
-          transactionReference: txRef,
-          passengerDetails: passengerDetails.map(p => ({
-            name: p.name.trim(),
-            age: p.age,
-            gender: p.gender,
-            seatNumber: p.seatNumber
-          })),
-          seatNumbers: selectedSeats,
-          totalAmount: schedule.price * passengers,
-          bookingStatus: "pending" as const,
-          paymentStatus: "pending" as const,
-          paymentMethod: null,
-          paymentProvider: null,
-          bookingDate: new Date(),
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        };
-
-        // Create booking document
-        transaction.set(doc(db, "bookings", txRef), bookingData);
-
-        // Update schedule: release held seats and adjust availability
-        transaction.update(scheduleRef, {
-          heldSeats: arrayRemove(...reservedSeats),
-          bookedSeats: arrayUnion(...selectedSeats),
-          availableSeats: increment(-selectedSeats.length)
-        });
-
-        // Update seat reservation
-        const reservationRef = doc(db, "seatReservations", `${schedule.id}_${user.uid}`);
-        transaction.update(reservationRef, {
-          status: "completed",
-          updatedAt: serverTimestamp()
-        });
-      });
-
-      setSuccess("Booking request submitted successfully! Redirecting to your bookings...");
-      setConfirmModalOpen(false);
-      
-      // Redirect after a short delay
-      setTimeout(() => {
-        router.push("/bookings");
-      }, 2000);
-      
-    } catch (error: any) {
-      console.error("Error creating booking:", error);
-      setError(`Failed to submit booking request: ${error.message || "Unknown error"}`);
-    } finally {
-      setBookingLoading(false);
-    }
-  };
-
-  // Utility functions
+  // ================================
+  // UTILITY FUNCTIONS
+  // ================================
   const generateTxRef = () => {
     const timestamp = Date.now().toString(36);
     const random = Math.random().toString(36).substring(2, 8);
@@ -447,10 +125,10 @@ export default function BookBus() {
     if (!timestamp) return "N/A";
     try {
       const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
-      return date.toLocaleTimeString("en-US", { 
-        hour: "numeric", 
-        minute: "2-digit", 
-        hour12: true 
+      return date.toLocaleTimeString("en-US", {
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true
       });
     } catch {
       return "N/A";
@@ -479,14 +157,309 @@ export default function BookBus() {
     return hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
   };
 
-  // Navigation handlers
+  // ================================
+  // SEAT RESERVATION FUNCTIONS
+  // ================================
+  const holdSeats = useCallback(async (seats: string[]) => {
+    if (!schedule || !user) return;
+    
+    try {
+      const newReservationId = `${schedule.id}_${user.uid}_${crypto.randomUUID()}`;
+      const reservationRef = doc(db, "seatReservations", newReservationId);
+      
+      await setDoc(reservationRef, {
+        scheduleId: schedule.id,
+        customerId: user.uid,
+        seatNumbers: seats,
+        status: "reserved",
+        expiresAt: Timestamp.fromDate(new Date(Date.now() + SEAT_HOLD_DURATION)),
+        createdAt: serverTimestamp(),
+      });
+      
+      setReservationId(newReservationId);
+      console.log("Seats reserved successfully with ID:", newReservationId);
+    } catch (err: any) {
+      console.error("Reservation error:", err);
+      throw new Error(err.message || "Failed to reserve seats");
+    }
+  }, [schedule, user]);
+
+  const releaseSeats = useCallback(async () => {
+    if (!reservationId) return;
+    
+    try {
+      const reservationRef = doc(db, "seatReservations", reservationId);
+      await updateDoc(reservationRef, {
+        status: "released",
+        updatedAt: serverTimestamp(),
+      });
+      setReservationId(null);
+      console.log("Seats released for reservation:", reservationId);
+    } catch (err: any) {
+      console.error("Failed to release seats:", err);
+      // Non-critical error, don't block user
+    }
+  }, [reservationId]);
+
+  // ================================
+  // DATA FETCHING FUNCTIONS
+  // ================================
+  const fetchBookingData = async () => {
+    if (!scheduleId || typeof scheduleId !== 'string') {
+      setError("Invalid schedule ID");
+      setLoading(false);
+      return;
+    }
+    
+    setLoading(true);
+    setError("");
+    
+    try {
+      // Fetch schedule
+      const scheduleDoc = await getDoc(doc(db, "schedules", scheduleId));
+      if (!scheduleDoc.exists()) {
+        throw new Error("Schedule not found");
+      }
+      
+      const scheduleData = { id: scheduleDoc.id, ...scheduleDoc.data() } as Schedule;
+      
+      // Validate schedule data
+      if (!scheduleData.busId || !scheduleData.routeId || !scheduleData.companyId) {
+        throw new Error("Schedule data is incomplete");
+      }
+      
+      // Check availability
+      if ((scheduleData.availableSeats || 0) < passengers) {
+        throw new Error(`Not enough available seats. Only ${scheduleData.availableSeats || 0} seats available.`);
+      }
+      
+      // Check if schedule is in the past
+      const departureTime = scheduleData.departureDateTime?.toDate ?
+        scheduleData.departureDateTime.toDate() :
+        new Date(scheduleData.departureDateTime);
+      
+      if (departureTime < new Date()) {
+        throw new Error("This schedule has already departed");
+      }
+      
+      setSchedule(scheduleData);
+      
+      // Fetch related data in parallel
+      const [busDoc, routeDoc, companyDoc] = await Promise.all([
+        getDoc(doc(db, "buses", scheduleData.busId)),
+        getDoc(doc(db, "routes", scheduleData.routeId)),
+        getDoc(doc(db, "companies", scheduleData.companyId)),
+      ]);
+      
+      // Validate and set bus data
+      if (!busDoc.exists()) {
+        throw new Error("Bus information not found");
+      }
+      setBus({ id: busDoc.id, ...busDoc.data() } as Bus);
+      
+      // Validate and set route data
+      if (!routeDoc.exists()) {
+        throw new Error("Route information not found");
+      }
+      setRoute({ id: routeDoc.id, ...routeDoc.data() } as Route);
+      
+      // Validate and set company data
+      if (!companyDoc.exists()) {
+        throw new Error("Company information not found");
+      }
+      setCompany({ id: companyDoc.id, ...companyDoc.data() } as Company);
+      
+    } catch (error: any) {
+      console.error("Error fetching booking data:", error);
+      setError(error.message || "Error loading booking information");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ================================
+  // BOOKING FLOW HANDLERS
+  // ================================
+  const handleSeatSelection = useCallback((seats: string[]) => {
+    setError("");
+    
+    // Client-side validation
+    if (seats.length !== passengers) {
+      setError(`Please select exactly ${passengers} seat${passengers > 1 ? "s" : ""}.`);
+      return;
+    }
+
+    if (new Set(seats).size !== seats.length) {
+      setError("Duplicate seats selected. Please choose different seats.");
+      return;
+    }
+    
+    if (schedule?.bookedSeats?.some((seat) => seats.includes(seat))) {
+      setError("One or more selected seats are already booked. Please choose different seats.");
+      return;
+    }
+    
+    // Reserve seats and proceed
+    holdSeats(seats).then(() => {
+      setSelectedSeats(seats);
+      setCurrentStep("passengers");
+      
+      // Initialize passenger details with selected seats
+      const initialDetails = seats.map((seat, index) => ({
+        name: "",
+        age: 18,
+        gender: "male" as const,
+        seatNumber: seat,
+      }));
+      setPassengerDetails(initialDetails);
+    }).catch(err => {
+      setError(err.message || "Failed to reserve seats. Please try again.");
+    });
+  }, [passengers, schedule?.bookedSeats, holdSeats]);
+
+  const handlePassengerDetails = useCallback((details: PassengerDetail[]) => {
+    setError("");
+    
+    // Validate passenger details
+    if (details.length !== passengers) {
+      setError(`Please provide details for exactly ${passengers} passenger${passengers > 1 ? "s" : ""}.`);
+      return;
+    }
+
+    // Check for missing required fields
+    const hasMissingFields = details.some(p => !p.name || !p.age || !p.gender || !p.seatNumber);
+    if (hasMissingFields) {
+      setError("Please fill in all required fields for every passenger.");
+      return;
+    }
+
+    // Check for duplicate names (optional warning)
+    const names = details.map(p => p.name.trim().toLowerCase());
+    if (new Set(names).size !== names.length && passengers > 1) {
+      const confirmed = window.confirm("You have duplicate passenger names. Is this intentional?");
+      if (!confirmed) return;
+    }
+    
+    setPassengerDetails(details);
+    setCurrentStep("confirm");
+    setConfirmModalOpen(true);
+  }, [passengers]);
+
+  const confirmBooking = async () => {
+    setBookingLoading(true);
+    setError("");
+    
+    try {
+      // Final validations
+      if (!user?.uid) {
+        throw new Error("User authentication required");
+      }
+
+      if (!schedule || !selectedSeats.length || !passengerDetails.length) {
+        throw new Error("Missing booking information");
+      }
+      
+      if (selectedSeats.length !== passengers || passengerDetails.length !== passengers) {
+        throw new Error("Seat and passenger count mismatch");
+      }
+
+      // Check seat availability one more time
+      const scheduleRef = doc(db, "schedules", schedule.id);
+      const scheduleSnap = await getDoc(scheduleRef);
+      
+      if (!scheduleSnap.exists()) {
+        throw new Error("Schedule not found");
+      }
+      
+      const currentScheduleData = scheduleSnap.data();
+      const bookedSeats = currentScheduleData.bookedSeats || [];
+      const conflictingSeats = selectedSeats.filter(seat => bookedSeats.includes(seat));
+
+      if (conflictingSeats.length > 0) {
+        throw new Error(`Seats ${conflictingSeats.join(', ')} are no longer available`);
+      }
+      
+      if (currentScheduleData.availableSeats < selectedSeats.length) {
+        throw new Error("Not enough available seats");
+      }
+
+      // Use transaction for atomic booking
+      await runTransaction(db, async (transaction) => {
+        // Re-check schedule in transaction
+        const scheduleSnap = await transaction.get(scheduleRef);
+        if (!scheduleSnap.exists()) throw new Error("Schedule not found");
+        
+        const latestScheduleData = scheduleSnap.data();
+        const latestBookedSeats = latestScheduleData.bookedSeats || [];
+        const stillConflicting = selectedSeats.filter(seat => latestBookedSeats.includes(seat));
+        
+        if (stillConflicting.length > 0) {
+          throw new Error(`Seats ${stillConflicting.join(', ')} were just booked by someone else`);
+        }
+
+        // Generate unique references
+        const txRef = generateTxRef();
+        const bookingRef = generateBookingReference();
+        
+        // Prepare booking data
+        const bookingData = {
+          userId: user.uid,
+          scheduleId: schedule.id,
+          companyId: schedule.companyId,
+          bookingReference: bookingRef,
+          transactionReference: txRef,
+          passengerDetails: passengerDetails.map(p => ({
+            name: p.name.trim(),
+            age: p.age,
+            gender: p.gender,
+            seatNumber: p.seatNumber
+          })),
+          seatNumbers: selectedSeats,
+          totalAmount: schedule.price * passengers,
+          bookingStatus: BOOKING_STATUS.PENDING,
+          paymentStatus: "pending",
+          bookingDate: new Date(),
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        };
+
+        // Create booking document
+        transaction.set(doc(db, "bookings", txRef), bookingData);
+        
+        // Update schedule: add to booked seats and reduce available seats
+        transaction.update(scheduleRef, {
+          bookedSeats: arrayUnion(...selectedSeats),
+          availableSeats: increment(-selectedSeats.length),
+          updatedAt: serverTimestamp()
+        });
+      });
+
+      setSuccess("Booking request submitted successfully! Redirecting to your bookings...");
+      setConfirmModalOpen(false);
+      
+      // Redirect after a short delay
+      setTimeout(() => {
+        router.push("/bookings");
+      }, 2000);
+      
+    } catch (error: any) {
+      console.error("Error creating booking:", error);
+      setError(`Failed to submit booking request: ${error.message || "Unknown error"}`);
+    } finally {
+      setBookingLoading(false);
+    }
+  };
+
+  // ================================
+  // NAVIGATION HANDLERS
+  // ================================
   const goBackToSeats = () => {
     setCurrentStep("seats");
     setError("");
+    
     if (selectedSeats.length > 0) {
-      releaseSeats(selectedSeats).catch(err => {
-        console.error("Failed to release seats:", err);
-        setError("Failed to release seats. Please try again.");
+      releaseSeats().catch(err => {
+        console.error("Failed to release seats on navigation:", err);
       });
       setSelectedSeats([]);
     }
@@ -498,6 +471,47 @@ export default function BookBus() {
     setError("");
   };
 
+  // ================================
+  // EFFECTS
+  // ================================
+  // Authentication and validation
+  useEffect(() => {
+    if (!user) {
+      router.push("/register");
+      return;
+    }
+    
+    if (passengers < 1 || passengers > 10) {
+      setError("Invalid passenger count. Please select between 1 and 10 passengers.");
+      setTimeout(() => router.push("/search"), 3000);
+    }
+  }, [user, passengers, router]);
+
+  // Data fetching
+  useEffect(() => {
+    if (user && scheduleId && passengers >= 1 && passengers <= 10) {
+      fetchBookingData();
+    }
+  }, [scheduleId, user]);
+
+  // Auto-clear messages
+  useEffect(() => {
+    if (error) {
+      const timer = setTimeout(() => setError(""), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [error]);
+
+  useEffect(() => {
+    if (success) {
+      const timer = setTimeout(() => setSuccess(""), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [success]);
+
+  // ================================
+  // RENDER CONDITIONS
+  // ================================
   // Loading state
   if (loading) {
     return (
@@ -523,7 +537,7 @@ export default function BookBus() {
                 </div>
               </CardContent>
             </Card>
-            
+
             {/* Progress skeleton */}
             <Card>
               <CardContent className="p-6">
@@ -537,7 +551,7 @@ export default function BookBus() {
                 </div>
               </CardContent>
             </Card>
-
+            
             {/* Content skeleton */}
             <Card>
               <CardContent className="p-6">
@@ -582,6 +596,9 @@ export default function BookBus() {
     );
   }
 
+  // ================================
+  // MAIN RENDER
+  // ================================
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -693,19 +710,19 @@ export default function BookBus() {
                 { step: 3, title: "Confirm & Submit", key: "confirm" },
               ].map(({ step, title, key }) => {
                 const isActive = currentStep === key;
-                const isCompleted = 
+                const isCompleted =
                   (key === "seats" && (currentStep === "passengers" || currentStep === "confirm")) ||
                   (key === "passengers" && currentStep === "confirm");
-                
+                  
                 return (
                   <div key={step} className={`flex items-center space-x-3 ${
                     isActive ? "text-blue-600" : isCompleted ? "text-green-600" : "text-gray-400"
                   }`}>
                     <div className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold transition-all duration-200 ${
-                      isActive 
-                        ? "bg-blue-600 text-white shadow-lg transform scale-110" 
-                        : isCompleted 
-                        ? "bg-green-600 text-white" 
+                      isActive
+                        ? "bg-blue-600 text-white shadow-lg transform scale-110"
+                        : isCompleted
+                        ? "bg-green-600 text-white"
                         : "bg-gray-200 text-gray-600"
                     }`}>
                       {isCompleted ? <CheckCircle className="w-5 h-5" /> : step}
@@ -745,15 +762,15 @@ export default function BookBus() {
         {/* Step Content */}
         <div className="space-y-6">
           {currentStep === "seats" && (
-            <SeatSelection 
-              bus={bus} 
-              schedule={schedule} 
-              passengers={passengers} 
+            <SeatSelection
+              bus={bus}
+              schedule={schedule}
+              passengers={passengers}
               onSeatSelection={handleSeatSelection}
               selectedSeats={selectedSeats}
             />
           )}
-
+          
           {currentStep === "passengers" && (
             <div className="space-y-6">
               <Card>
@@ -792,13 +809,13 @@ export default function BookBus() {
 
           {/* Confirmation Modal */}
           {confirmModalOpen && (
-            <Modal 
-              isOpen={confirmModalOpen} 
+            <Modal
+              isOpen={confirmModalOpen}
               onClose={() => {
                 if (!bookingLoading) {
                   setConfirmModalOpen(false);
                 }
-              }} 
+              }}
               title="Confirm Booking Details"
             >
               <div className="space-y-6">
@@ -836,7 +853,7 @@ export default function BookBus() {
                     </p>
                   </div>
                 </div>
-
+                
                 <div>
                   <p className="font-semibold text-gray-700 mb-2">Passengers</p>
                   <div className="space-y-2">
@@ -850,19 +867,19 @@ export default function BookBus() {
                     ))}
                   </div>
                 </div>
-
+                
                 <div className="flex space-x-4 pt-4 border-t">
-                  <Button 
+                  <Button
                     onClick={goBackToPassengers}
-                    variant="outline" 
+                    variant="outline"
                     className="flex-1"
                     disabled={bookingLoading}
                   >
                     Edit Details
                   </Button>
-                  <Button 
+                  <Button
                     onClick={confirmBooking}
-                    className="flex-1 bg-blue-600 text-white hover:bg-blue-700" 
+                    className="flex-1 bg-blue-600 text-white hover:bg-blue-700"
                     disabled={bookingLoading}
                   >
                     {bookingLoading ? (

@@ -23,7 +23,10 @@ import {
   ChevronDown,
   RefreshCw,
   TrendingUp,
-  Timer
+  Timer,
+  Navigation,
+  AlertCircle,
+  CheckCircle2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -82,13 +85,67 @@ interface EnhancedSchedule {
   date: string;
 }
 
+// Custom Toggle Switch Component
+const ToggleSwitch = ({ 
+  checked, 
+  onChange, 
+  disabled = false, 
+  size = "md" 
+}: { 
+  checked: boolean; 
+  onChange: (checked: boolean) => void; 
+  disabled?: boolean; 
+  size?: "sm" | "md" | "lg";
+}) => {
+  const sizeClasses = {
+    sm: "w-8 h-5",
+    md: "w-11 h-6",
+    lg: "w-14 h-8"
+  };
+  
+  const thumbSizeClasses = {
+    sm: "w-3 h-3",
+    md: "w-4 h-4", 
+    lg: "w-6 h-6"
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={() => !disabled && onChange(!checked)}
+      disabled={disabled}
+      className={`
+        ${sizeClasses[size]} 
+        ${checked ? 'bg-gradient-to-r from-blue-500 to-indigo-600' : 'bg-gray-200'} 
+        ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:shadow-md'}
+        relative inline-flex items-center rounded-full border-2 border-transparent 
+        transition-all duration-200 ease-in-out focus:outline-none focus:ring-2 
+        focus:ring-blue-500 focus:ring-offset-2 shadow-sm
+      `}
+    >
+      <span
+        className={`
+          ${thumbSizeClasses[size]} 
+          ${checked ? `translate-x-${size === 'sm' ? '3' : size === 'md' ? '5' : '6'}` : 'translate-x-0.5'}
+          bg-white rounded-full shadow-lg transform transition-transform duration-200 ease-in-out
+          flex items-center justify-center
+        `}
+      >
+        {checked && (
+          <CheckCircle2 className={`${size === 'sm' ? 'w-2 h-2' : size === 'md' ? 'w-2.5 h-2.5' : 'w-3 h-3'} text-blue-600`} />
+        )}
+      </span>
+    </button>
+  );
+};
+
 const SchedulesPage = () => {
   const router = useRouter();
   const [schedules, setSchedules] = useState<EnhancedSchedule[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedDate, setSelectedDate] = useState(new Date()); // Default to today
+  const [selectedDate, setSelectedDate] = useState(new Date());
   const [selectedOrigin, setSelectedOrigin] = useState("");
   const [selectedDestination, setSelectedDestination] = useState("");
   const [priceRange, setPriceRange] = useState<[number, number]>([0, 1000000]);
@@ -98,93 +155,118 @@ const SchedulesPage = () => {
   const [useLocation, setUseLocation] = useState(false);
   const [userLocation, setUserLocation] = useState<string>("");
   const [locationError, setLocationError] = useState<string>("");
+  const [locationLoading, setLocationLoading] = useState(false);
 
-  // Calculate 2-week range from today (August 24, 2025, to September 7, 2025)
+  // Calculate 2-week range from today
   const today = new Date("2025-08-24");
   const maxDate = new Date(today);
-  maxDate.setDate(today.getDate() + 13); // 14 days total, including today
-  
+  maxDate.setDate(today.getDate() + 13);
 
-const fetchData = useCallback(async (targetDate: Date) => {
-  setLoading(true);
-  setError("");
-
-  try {
-    const startOfDay = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate());
-    const endOfDay = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate() + 1);
-
-    const startTimestamp = Timestamp.fromDate(startOfDay);
-    const endTimestamp = Timestamp.fromDate(endOfDay);
-
-    console.log("Fetching data for date range:", { startOfDay, endOfDay });
-
-    const [companiesSnapshot, busesSnapshot, routesSnapshot, schedulesSnapshot] = await Promise.all([
-      getDocs(query(collection(db, "companies"), where("status", "==", "active"))),
-      getDocs(query(collection(db, "buses"), where("status", "==", "active"))),
-      getDocs(query(collection(db, "routes"), where("isActive", "==", true))),
-      getDocs(query(
-        collection(db, "schedules"),
-        where("status", "==", "active"),
-        where("departureDateTime", ">=", startTimestamp),
-        where("departureDateTime", "<", endTimestamp),
-        orderBy("departureDateTime")
-      )),
-    ]);
-
-    console.log("Raw schedules count:", schedulesSnapshot.size);
-    const companiesMap = new Map<string, Company>();
-    companiesSnapshot.forEach((doc) => companiesMap.set(doc.id, { id: doc.id, ...doc.data() } as Company));
-    console.log("Companies found:", companiesMap.size);
-
-    const busesMap = new Map<string, Bus>();
-    busesSnapshot.forEach((doc) => busesMap.set(doc.id, { id: doc.id, ...doc.data() } as Bus));
-    console.log("Buses found:", busesMap.size);
-
-    const routesMap = new Map<string, Route>();
-    routesSnapshot.forEach((doc) => routesMap.set(doc.id, { id: doc.id, ...doc.data() } as Route));
-    console.log("Routes found:", routesMap.size);
-
-    const enhancedSchedules: EnhancedSchedule[] = [];
-    schedulesSnapshot.forEach((doc) => {
-      const schedule = { id: doc.id, ...doc.data() } as Schedule;
-      const company = companiesMap.get(schedule.companyId);
-      const bus = busesMap.get(schedule.busId);
-      const route = routesMap.get(schedule.routeId);
-
-      if (company && bus && route) {
-        const departureDateTime = schedule.departureDateTime.toDate();
-        const arrivalDateTime = schedule.arrivalDateTime.toDate();
-        const departureTime = departureDateTime.toTimeString().slice(0, 5);
-        const arrivalTime = arrivalDateTime.toTimeString().slice(0, 5);
-
-        enhancedSchedules.push({
-          id: schedule.id,
-          companyName: company.name,
-          busNumber: bus.licensePlate,
-          busType: bus.busType || "Standard",
-          origin: route.origin,
-          destination: route.destination,
-          departureTime,
-          arrivalTime,
-          availableSeats: schedule.availableSeats,
-          price: schedule.price,
-          duration: route.duration,
-          date: departureDateTime.toDateString(),
-        });
+  const handleLocationToggle = useCallback((enabled: boolean) => {
+    setUseLocation(enabled);
+    setLocationError("");
+    
+    if (enabled) {
+      setLocationLoading(true);
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            // In a real app, you'd reverse geocode these coordinates
+            // For now, we'll set a placeholder
+            setUserLocation(`${pos.coords.latitude},${pos.coords.longitude}`);
+            setLocationError("");
+            setLocationLoading(false);
+          },
+          (err) => {
+            setLocationError("Unable to access your location. Please enter it manually.");
+            setLocationLoading(false);
+          },
+          { timeout: 10000, enableHighAccuracy: true }
+        );
       } else {
-        console.warn("Missing related data for schedule:", schedule.id, { company, bus, route });
+        setLocationError("Geolocation is not supported by your browser.");
+        setLocationLoading(false);
       }
-    });
+    } else {
+      setUserLocation("");
+      setLocationLoading(false);
+    }
+  }, []);
 
-    console.log("Enhanced schedules count:", enhancedSchedules.length);
-    setSchedules(enhancedSchedules);
-  } catch (err: any) {
-    console.error("Error fetching schedules:", err);
-    setError("Unable to load schedules. Please try again later.");
-  } finally {
-    setLoading(false);
-  }
-}, []);
+  const fetchData = useCallback(async (targetDate: Date) => {
+    setLoading(true);
+    setError("");
+
+    try {
+      const startOfDay = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate());
+      const endOfDay = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate() + 1);
+
+      const startTimestamp = Timestamp.fromDate(startOfDay);
+      const endTimestamp = Timestamp.fromDate(endOfDay);
+
+      console.log("Fetching data for date range:", { startOfDay, endOfDay });
+
+      const [companiesSnapshot, busesSnapshot, routesSnapshot, schedulesSnapshot] = await Promise.all([
+        getDocs(query(collection(db, "companies"), where("status", "==", "active"))),
+        getDocs(query(collection(db, "buses"), where("status", "==", "active"))),
+        getDocs(query(collection(db, "routes"), where("isActive", "==", true))),
+        getDocs(query(
+          collection(db, "schedules"),
+          where("status", "==", "active"),
+          where("departureDateTime", ">=", startTimestamp),
+          where("departureDateTime", "<", endTimestamp),
+          orderBy("departureDateTime")
+        )),
+      ]);
+
+      console.log("Raw schedules count:", schedulesSnapshot.size);
+      const companiesMap = new Map<string, Company>();
+      companiesSnapshot.forEach((doc) => companiesMap.set(doc.id, { id: doc.id, ...doc.data() } as Company));
+
+      const busesMap = new Map<string, Bus>();
+      busesSnapshot.forEach((doc) => busesMap.set(doc.id, { id: doc.id, ...doc.data() } as Bus));
+
+      const routesMap = new Map<string, Route>();
+      routesSnapshot.forEach((doc) => routesMap.set(doc.id, { id: doc.id, ...doc.data() } as Route));
+
+      const enhancedSchedules: EnhancedSchedule[] = [];
+      schedulesSnapshot.forEach((doc) => {
+        const schedule = { id: doc.id, ...doc.data() } as Schedule;
+        const company = companiesMap.get(schedule.companyId);
+        const bus = busesMap.get(schedule.busId);
+        const route = routesMap.get(schedule.routeId);
+
+        if (company && bus && route) {
+          const departureDateTime = schedule.departureDateTime.toDate();
+          const arrivalDateTime = schedule.arrivalDateTime.toDate();
+          const departureTime = departureDateTime.toTimeString().slice(0, 5);
+          const arrivalTime = arrivalDateTime.toTimeString().slice(0, 5);
+
+          enhancedSchedules.push({
+            id: schedule.id,
+            companyName: company.name,
+            busNumber: bus.licensePlate,
+            busType: bus.busType || "Standard",
+            origin: route.origin,
+            destination: route.destination,
+            departureTime,
+            arrivalTime,
+            availableSeats: schedule.availableSeats,
+            price: schedule.price,
+            duration: route.duration,
+            date: departureDateTime.toDateString(),
+          });
+        }
+      });
+
+      setSchedules(enhancedSchedules);
+    } catch (err: any) {
+      console.error("Error fetching schedules:", err);
+      setError("Unable to load schedules. Please try again later.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     fetchData(selectedDate);
@@ -196,39 +278,40 @@ const fetchData = useCallback(async (targetDate: Date) => {
     return { origins, destinations };
   }, [schedules]);
 
-const filteredSchedules = useMemo(() => {
-  console.log("Filtering schedules:", schedules.length, "raw schedules");
-  let filtered = schedules.filter(schedule => {
-    const priceInMWK = schedule.price * 1700; // Convert USD to MWK
-    const matchesSearch = !searchTerm || 
-      schedule.companyName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      schedule.origin.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      schedule.destination.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesPrice = priceInMWK >= priceRange[0] * 1000 && priceInMWK <= priceRange[1] * 1000;
-    console.log("Schedule:", { ...schedule, priceInMWK }, "Matches Search:", matchesSearch, "Matches Price:", matchesPrice);
-    return matchesSearch && matchesPrice;
-  });
-  let matchesLocation = true;
-  if (useLocation && userLocation) {
-    matchesLocation = schedule.origin.toLowerCase().includes(userLocation.toLowerCase()) ||
-      schedule.destination.toLowerCase().includes(userLocation.toLowerCase());
-  }
+  const filteredSchedules = useMemo(() => {
+    let filtered = schedules.filter(schedule => {
+      const priceInMWK = schedule.price * 1700;
+      const matchesSearch = !searchTerm || 
+        schedule.companyName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        schedule.origin.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        schedule.destination.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesPrice = priceInMWK >= priceRange[0] * 1000 && priceInMWK <= priceRange[1] * 1000;
+      const matchesOrigin = !selectedOrigin || schedule.origin === selectedOrigin;
+      const matchesDest = !selectedDestination || schedule.destination === selectedDestination;
+      
+      let matchesLocation = true;
+      if (useLocation && userLocation) {
+        matchesLocation = schedule.origin.toLowerCase().includes(userLocation.toLowerCase()) ||
+          schedule.destination.toLowerCase().includes(userLocation.toLowerCase());
+      }
+      
+      return matchesSearch && matchesPrice && matchesOrigin && matchesDest && matchesLocation;
+    });
 
-  filtered.sort((a, b) => {
-    switch (sortBy) {
-      case 'price':
-        return a.price - b.price;
-      case 'company':
-        return a.companyName.localeCompare(b.companyName);
-      case 'time':
-      default:
-        return a.departureTime.localeCompare(b.departureTime);
-    }
-  });
+    filtered.sort((a, b) => {
+      switch (sortBy) {
+        case 'price':
+          return a.price - b.price;
+        case 'company':
+          return a.companyName.localeCompare(b.companyName);
+        case 'time':
+        default:
+          return a.departureTime.localeCompare(b.departureTime);
+      }
+    });
 
-  console.log("Filtered schedules count:", filtered.length);
-  return filtered;
-}, [schedules, searchTerm, priceRange, sortBy]);
+    return filtered;
+  }, [schedules, searchTerm, priceRange, selectedOrigin, selectedDestination, sortBy, useLocation, userLocation]);
 
   const handleBooking = useCallback((scheduleId: string) => {
     router.push(`/book/${scheduleId}?passengers=1`);
@@ -294,57 +377,67 @@ const filteredSchedules = useMemo(() => {
             </div>
           </div>
         </div>
-        <div className="flex items-center justify-between mb-4">
-      <div className="flex items-center gap-2">
-    <label className="font-medium text-gray-700">Show schedules from my location:</label>
-    <input
-      type="checkbox"
-      checked={useLocation}
-      onChange={e => {
-        setUseLocation(e.target.checked);
-        setLocationError("");
-        if (e.target.checked) {
-          // Try to get browser location
-          if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(
-              pos => {
-                // You can use pos.coords.latitude/longitude to match to a city/region
-                setUserLocation(`${pos.coords.latitude},${pos.coords.longitude}`);
-                setLocationError("");
-              },
-              err => {
-                setLocationError("Unable to access your location. Please enter it manually.");
-              }
-            );
-          } else {
-            setLocationError("Geolocation is not supported. Please enter your location manually.");
-          }
-        } else {
-          setUserLocation("");
-        }
-      }}
-      className="ml-2"
-       />
-    </div>
-    {useLocation && (
-  <div className="flex items-center gap-2 ml-6">
-      <label className="text-sm text-gray-700">Or enter location:</label>
-      <input
-        type="text"
-        value={userLocation}
-        onChange={e => setUserLocation(e.target.value)}
-        placeholder="City, Region, or Coordinates"
-        className="px-3 py-2 rounded-xl border border-gray-200 text-sm"
-      />
-    {locationError && <span className="text-xs text-red-600 ml-2">{locationError}</span>}
-  </div>)}
-  </div>
+
+        {/* Enhanced Location Toggle Section */}
+        <div className="bg-white rounded-3xl shadow-lg p-6 mb-6 border border-gray-100">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl flex items-center justify-center">
+                  <Navigation className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-3 mb-1">
+                    <label className="font-semibold text-gray-800">Location-Based Search</label>
+                    <ToggleSwitch
+                      checked={useLocation}
+                      onChange={handleLocationToggle}
+                      disabled={locationLoading}
+                    />
+                  </div>
+                  <p className="text-sm text-gray-600">
+                    Find routes from your current location
+                  </p>
+                </div>
+              </div>
+              
+              {locationLoading && (
+                <div className="flex items-center gap-2 text-blue-600">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span className="text-sm">Getting location...</span>
+                </div>
+              )}
+            </div>
+
+            {useLocation && (
+              <div className="flex flex-col lg:flex-row items-start lg:items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <MapPin className="w-4 h-4 text-gray-500" />
+                  <input
+                    type="text"
+                    value={userLocation}
+                    onChange={(e) => setUserLocation(e.target.value)}
+                    placeholder="Enter your location or city"
+                    className="px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm min-w-[200px]"
+                  />
+                </div>
+                {locationError && (
+                  <div className="flex items-center gap-2 text-amber-600 bg-amber-50 px-3 py-2 rounded-lg">
+                    <AlertCircle className="w-4 h-4" />
+                    <span className="text-sm">{locationError}</span>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+
         {/* Search and Filters */}
         <div className="bg-white rounded-3xl shadow-lg p-6 mb-8 border border-gray-100">
           {/* Date Selection with Picker */}
           <div className="flex flex-wrap gap-2 mb-6 items-center">
             <label className="text-sm font-medium text-gray-700 mr-2">Select Date:</label>
-            <div className="relative flex-1">
+            <div className="relative flex-1 max-w-xs">
               <input
                 type="date"
                 value={selectedDate.toISOString().split('T')[0]}
@@ -357,6 +450,9 @@ const filteredSchedules = useMemo(() => {
                 className="w-full pl-10 pr-4 py-3 rounded-2xl border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
               />
               <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+            </div>
+            <div className="text-sm text-gray-600 bg-blue-50 px-3 py-2 rounded-lg">
+              {formatDate(selectedDate)}
             </div>
           </div>
 
@@ -373,14 +469,17 @@ const filteredSchedules = useMemo(() => {
               />
             </div>
             
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               <Button
                 onClick={() => setShowFilters(!showFilters)}
                 variant="outline"
-                className="rounded-2xl border-gray-200"
+                className={`rounded-2xl border-gray-200 transition-all ${showFilters ? 'bg-blue-50 border-blue-300 text-blue-700' : ''}`}
               >
                 <SlidersHorizontal className="w-4 h-4 mr-2" />
                 Filters
+                {(selectedOrigin || selectedDestination || priceRange[0] > 0 || priceRange[1] < 100) && (
+                  <div className="ml-2 w-2 h-2 bg-blue-500 rounded-full"></div>
+                )}
               </Button>
               
               <select
@@ -397,6 +496,7 @@ const filteredSchedules = useMemo(() => {
                 onClick={() => setViewMode(viewMode === 'grid' ? 'timeline' : 'grid')}
                 variant="outline"
                 className="rounded-2xl border-gray-200"
+                title={`Switch to ${viewMode === 'grid' ? 'timeline' : 'grid'} view`}
               >
                 {viewMode === 'grid' ? <Timer className="w-4 h-4" /> : <div className="w-4 h-4 grid grid-cols-2 gap-0.5"><div className="bg-current"></div><div className="bg-current"></div><div className="bg-current"></div><div className="bg-current"></div></div>}
               </Button>
@@ -405,7 +505,7 @@ const filteredSchedules = useMemo(() => {
 
           {/* Advanced Filters */}
           {showFilters && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6 p-4 bg-gray-50 rounded-2xl">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6 p-4 bg-gradient-to-r from-gray-50 to-blue-50 rounded-2xl border border-gray-200">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Origin</label>
                 <select
@@ -662,6 +762,7 @@ const filteredSchedules = useMemo(() => {
                 setSelectedOrigin("");
                 setSelectedDestination("");
                 setPriceRange([0, 100]);
+                setUseLocation(false);
               }}
               variant="outline"
               className="rounded-2xl"

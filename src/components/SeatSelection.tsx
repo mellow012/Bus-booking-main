@@ -255,10 +255,14 @@ const SeatSelection: React.FC<SeatSelectionProps> = ({
                 {/* Left side seats */}
                 <div className="flex gap-1">
                   {row.slice(0, aislePosition).map((seat, colIndex) => {
+                    // <-- MODIFICATION: Render a spacer div for null seats
+                    if (!seat) {
+                      return <div key={`spacer-left-${rowIndex}-${colIndex}`} className="w-10 h-10" />;
+                    }
                     const status = getSeatStatus(seat);
                     return (
                       <button
-                        key={seat || `${rowIndex}-${colIndex}`}
+                        key={seat} // <-- MODIFICATION: Simplified key
                         className={getSeatClassName(status)}
                         onClick={() => seat && handleSeatClick(seat)}
                         onMouseEnter={() => seat && setHoveredSeat(seat)}
@@ -280,11 +284,15 @@ const SeatSelection: React.FC<SeatSelectionProps> = ({
 
                 {/* Right side seats */}
                 <div className="flex gap-1">
-                  {row.slice(aislePosition).map((seat, colIndex) => {
+                 {row.slice(aislePosition).map((seat, colIndex) => {
+                    // <-- MODIFICATION: Render a spacer div for null seats
+                    if (!seat) {
+                      return <div key={`spacer-right-${rowIndex}-${colIndex}`} className="w-10 h-10" />;
+                    }
                     const status = getSeatStatus(seat);
                     return (
                       <button
-                        key={seat || `${rowIndex}-${colIndex + aislePosition}`}
+                        key={seat} // <-- MODIFICATION: Simplified key
                         className={getSeatClassName(status)}
                         onClick={() => seat && handleSeatClick(seat)}
                         onMouseEnter={() => seat && setHoveredSeat(seat)}

@@ -266,10 +266,10 @@ const Footer: React.FC = () => {
                       💳 Visa
                     </div>
                     <div className="px-3 py-2 bg-white/10 rounded-lg text-xs text-gray-300 backdrop-blur-sm border border-white/10">
-                      💳 Mastercard
+                      💳 Stripe
                     </div>
                     <div className="px-3 py-2 bg-white/10 rounded-lg text-xs text-gray-300 backdrop-blur-sm border border-white/10">
-                      📱 PayPal
+                      📱 PayChangu
                     </div>
                   </div>
                 </div>
@@ -320,11 +320,11 @@ const Footer: React.FC = () => {
             <div className="flex items-center space-x-6 text-sm text-gray-400">
               <div className="flex items-center space-x-2">
                 <Globe className="w-4 h-4" />
-                <span>Global Coverage</span>
+                <span>country wide- Coverage</span>
               </div>
               <div className="flex items-center space-x-2">
                 <Users className="w-4 h-4" />
-                <span>10M+ Users</span>
+                <span>100 + Users</span>
               </div>
               <div className="flex items-center space-x-2">
                 <Zap className="w-4 h-4" />
