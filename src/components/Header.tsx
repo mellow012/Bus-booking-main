@@ -71,11 +71,14 @@ const Header: React.FC = () => {
   const { user, userProfile, signOut, loading } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
+  
+  // Initialize all hooks at the top level consistently
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
+  // All useEffect hooks should be called unconditionally
   useEffect(() => {
     const handleScroll = () => {
       setIsScrolled(window.scrollY > 20);
@@ -141,9 +144,10 @@ const Header: React.FC = () => {
     return pathname.startsWith(href);
   };
 
+  // Safe role checks - always check if userProfile exists first
   const isSuperAdmin = userProfile?.role === 'superadmin';
   const isCompanyAdmin = userProfile?.role === 'company_admin';
-  const isCustomer = !isSuperAdmin && !isCompanyAdmin && userProfile?.role !== 'company_admin' && userProfile?.role !== 'superadmin';
+  const isCustomer = userProfile && !isSuperAdmin && !isCompanyAdmin;
 
   const adminRoute = isSuperAdmin ? '/admin' : isCompanyAdmin ? '/company/admin' : null;
 
@@ -194,88 +198,109 @@ const Header: React.FC = () => {
 
           {/* User Actions */}
           <div className="flex items-center space-x-4">
-            {/* Notifications */}
-            {userProfile?.id && (
+            {/* Notifications - Only show if user and userProfile exist */}
+            {user && userProfile?.id && (
               <NotificationBell
                 userId={userProfile.id}
                 className="relative"
               />
             )}
 
-            {/* User Menu */}
-            <div className="relative" ref={userMenuRef}>
-              <button
-                onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-                className="flex items-center space-x-3 p-2 rounded-xl hover:bg-gray-100 transition-all duration-200 group"
-                aria-expanded={isUserMenuOpen}
-                aria-haspopup="true"
-              >
-                <UserAvatar user={user} userProfile={userProfile} />
-                <div className="hidden md:block text-left">
-                  <div className="text-sm font-semibold text-gray-900 group-hover:text-blue-600">
-                    {userProfile?.firstName || 'User'}
-                  </div>
-                  <div className="text-xs text-gray-500">
-                    {userProfile?.role || 'Member'}
-                  </div>
-                </div>
-                <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform duration-200 ${
-                  isUserMenuOpen ? 'rotate-180' : ''
-                }`} />
-              </button>
-
-              {/* User Dropdown */}
-              {isUserMenuOpen && (
-                <div className="absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-xl border border-gray-200 py-2 z-50 animate-in fade-in slide-in-from-top-5 duration-200">
-                  <div className="px-4 py-3 border-b border-gray-100">
-                    <div className="flex items-center space-x-3">
-                      <UserAvatar user={user} userProfile={userProfile} />
-                      <div className="min-w-0 flex-1">
-                        <div className="font-semibold text-gray-900 truncate">
-                          {userProfile?.firstName} {userProfile?.lastName}
-                        </div>
-                        <div className="text-sm text-gray-500 truncate">{user.email}</div>
-                      </div>
+            {/* User Menu - Only show if user exists */}
+            {user && (
+              <div className="relative" ref={userMenuRef}>
+                <button
+                  onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+                  className="flex items-center space-x-3 p-2 rounded-xl hover:bg-gray-100 transition-all duration-200 group"
+                  aria-expanded={isUserMenuOpen}
+                  aria-haspopup="true"
+                >
+                  <UserAvatar user={user} userProfile={userProfile} />
+                  <div className="hidden md:block text-left">
+                    <div className="text-sm font-semibold text-gray-900 group-hover:text-blue-600">
+                      {userProfile?.firstName || 'User'}
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      {userProfile?.role || 'Member'}
                     </div>
                   </div>
+                  <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform duration-200 ${
+                    isUserMenuOpen ? 'rotate-180' : ''
+                  }`} />
+                </button>
 
-                  <div className="py-2">
-                    {isCustomer && userMenuItems.map((item) => (
-                      <Link
-                        key={item.href}
-                        href={item.href}
-                        className="flex items-center space-x-3 px-4 py-2 text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors duration-200"
-                        onClick={() => setIsUserMenuOpen(false)}
+                {/* User Dropdown */}
+                {isUserMenuOpen && (
+                  <div className="absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-xl border border-gray-200 py-2 z-50 animate-in fade-in slide-in-from-top-5 duration-200">
+                    <div className="px-4 py-3 border-b border-gray-100">
+                      <div className="flex items-center space-x-3">
+                        <UserAvatar user={user} userProfile={userProfile} />
+                        <div className="min-w-0 flex-1">
+                          <div className="font-semibold text-gray-900 truncate">
+                            {userProfile?.firstName} {userProfile?.lastName}
+                          </div>
+                          {/* Fixed: Safe email access */}
+                          <div className="text-sm text-gray-500 truncate">{user?.email || 'No email'}</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="py-2">
+                      {isCustomer && userMenuItems.map((item) => (
+                        <Link
+                          key={item.href}
+                          href={item.href}
+                          className="flex items-center space-x-3 px-4 py-2 text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors duration-200"
+                          onClick={() => setIsUserMenuOpen(false)}
+                        >
+                          <item.icon className="w-4 h-4" />
+                          <span>{item.label}</span>
+                        </Link>
+                      ))}
+
+                      {(isSuperAdmin || isCompanyAdmin) && adminRoute && (
+                        <Link
+                          href={adminRoute}
+                          className="flex items-center space-x-3 px-4 py-2 text-purple-700 hover:bg-purple-50 transition-colors duration-200"
+                          onClick={() => setIsUserMenuOpen(false)}
+                        >
+                          <Shield className="w-4 h-4" />
+                          <span>Admin Panel</span>
+                        </Link>
+                      )}
+                    </div>
+
+                    <div className="border-t border-gray-100 py-2">
+                      <button
+                        onClick={handleLogout}
+                        className="flex items-center space-x-3 w-full px-4 py-2 text-red-600 hover:bg-red-50 transition-colors duration-200"
                       >
-                        <item.icon className="w-4 h-4" />
-                        <span>{item.label}</span>
-                      </Link>
-                    ))}
-
-                    {(isSuperAdmin || isCompanyAdmin) && adminRoute && (
-                      <Link
-                        href={adminRoute}
-                        className="flex items-center space-x-3 px-4 py-2 text-purple-700 hover:bg-purple-50 transition-colors duration-200"
-                        onClick={() => setIsUserMenuOpen(false)}
-                      >
-                        <Shield className="w-4 h-4" />
-                        <span>Admin Panel</span>
-                      </Link>
-                    )}
+                        <LogOut className="w-4 h-4" />
+                        <span>Sign Out</span>
+                      </button>
+                    </div>
                   </div>
+                )}
+              </div>
+            )}
 
-                  <div className="border-t border-gray-100 py-2">
-                    <button
-                      onClick={handleLogout}
-                      className="flex items-center space-x-3 w-full px-4 py-2 text-red-600 hover:bg-red-50 transition-colors duration-200"
-                    >
-                      <LogOut className="w-4 h-4" />
-                      <span>Sign Out</span>
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
+            {/* Show login/signup buttons if no user */}
+            {!loading && !user && (
+              <div className="hidden md:flex items-center space-x-3">
+                <Link
+                  href="/login"
+                  className="px-4 py-2 text-gray-700 hover:text-blue-600 font-medium transition-colors duration-200"
+                >
+                  Sign In
+                </Link>
+                <Link
+                  href="/register"
+                  className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-medium shadow-lg hover:shadow-xl transition-all duration-200"
+                >
+                  Get Started
+                </Link>
+              </div>
+            )}
 
             {/* Mobile Menu Button */}
             <button
@@ -327,7 +352,8 @@ const Header: React.FC = () => {
                     <div className="font-semibold text-gray-900 truncate">
                       {userProfile?.firstName} {userProfile?.lastName}
                     </div>
-                    <div className="text-sm text-gray-500 truncate">{user.email}</div>
+                    {/* Fixed: Safe email access */}
+                    <div className="text-sm text-gray-500 truncate">{user?.email || 'No email'}</div>
                   </div>
                 </div>
 
