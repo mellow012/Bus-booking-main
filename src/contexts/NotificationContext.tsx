@@ -129,7 +129,7 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
     }
   };
 
-  // Fixed sendNotification function with proper data cleaning
+  // Updated sendNotification function without FCM send
   const sendNotification = async ({
     userId,
     type,
@@ -140,7 +140,6 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
     priority = 'medium'
   }: SendNotificationParams) => {
     try {
-      // Clean the data object to remove undefined values
       const cleanData = data ? Object.fromEntries(
         Object.entries(data).filter(([_, value]) => value !== undefined && value !== null)
       ) : {};
@@ -158,10 +157,9 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
       };
 
       await addDoc(collection(db, 'notifications'), notificationDoc);
-      console.log('Notification sent successfully');
+      console.log('Notification stored in Firestore successfully');
     } catch (error: any) {
       console.error('Error sending notification:', error);
-      // Don't throw the error to prevent breaking the main flow
     }
   };
 
@@ -278,7 +276,6 @@ export async function sendNotification({
   priority = 'medium'
 }: SendNotificationParams) {
   try {
-    // Clean the data object to remove undefined values
     const cleanData = data ? Object.fromEntries(
       Object.entries(data).filter(([_, value]) => value !== undefined && value !== null)
     ) : {};
@@ -296,7 +293,6 @@ export async function sendNotification({
     });
   } catch (error) {
     console.error('Error sending notification:', error);
-    // Don't throw to prevent breaking main flow
   }
 }
 
@@ -318,7 +314,6 @@ export async function sendBulkNotification({
   priority?: string;
 }) {
   try {
-    // Clean the data object to remove undefined values
     const cleanData = data ? Object.fromEntries(
       Object.entries(data).filter(([_, value]) => value !== undefined && value !== null)
     ) : {};
@@ -342,7 +337,6 @@ export async function sendBulkNotification({
     await Promise.all(batch);
   } catch (error) {
     console.error('Error sending bulk notifications:', error);
-    // Don't throw to prevent breaking main flow
   }
 }
 

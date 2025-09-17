@@ -145,7 +145,7 @@ const SchedulesPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [selectedDate, setSelectedDate] = useState(new Date()); // Use current date
   const [selectedOrigin, setSelectedOrigin] = useState("");
   const [selectedDestination, setSelectedDestination] = useState("");
   const [priceRange, setPriceRange] = useState<[number, number]>([0, 1000000]);
@@ -157,10 +157,10 @@ const SchedulesPage = () => {
   const [locationError, setLocationError] = useState<string>("");
   const [locationLoading, setLocationLoading] = useState(false);
 
-  // Calculate 2-week range from today
-  const today = new Date("2025-08-24");
+  // Calculate 2-week range dynamically from today
+  const today = new Date(); // Current date: September 17, 2025
   const maxDate = new Date(today);
-  maxDate.setDate(today.getDate() + 13);
+  maxDate.setDate(today.getDate() + 13); // 2 weeks (14 days total)
 
   const handleLocationToggle = useCallback((enabled: boolean) => {
     setUseLocation(enabled);
@@ -171,8 +171,6 @@ const SchedulesPage = () => {
       if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
           (pos) => {
-            // In a real app, you'd reverse geocode these coordinates
-            // For now, we'll set a placeholder
             setUserLocation(`${pos.coords.latitude},${pos.coords.longitude}`);
             setLocationError("");
             setLocationLoading(false);
@@ -198,13 +196,21 @@ const SchedulesPage = () => {
     setError("");
 
     try {
-      const startOfDay = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate());
-      const endOfDay = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate() + 1);
+      // Calculate the start and end of the week (Monday to Sunday) for the target date
+      const startOfWeek = new Date(targetDate);
+      const dayOfWeek = startOfWeek.getDay();
+      const diff = startOfWeek.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1); // Adjust to Monday
+      startOfWeek.setDate(diff);
+      startOfWeek.setHours(0, 0, 0, 0);
 
-      const startTimestamp = Timestamp.fromDate(startOfDay);
-      const endTimestamp = Timestamp.fromDate(endOfDay);
+      const endOfWeek = new Date(startOfWeek);
+      endOfWeek.setDate(startOfWeek.getDate() + 6); // End on Sunday
+      endOfWeek.setHours(23, 59, 59, 999);
 
-      console.log("Fetching data for date range:", { startOfDay, endOfDay });
+      const startTimestamp = Timestamp.fromDate(startOfWeek);
+      const endTimestamp = Timestamp.fromDate(endOfWeek);
+
+      console.log("Fetching data for week range:", { startOfWeek, endOfWeek });
 
       const [companiesSnapshot, busesSnapshot, routesSnapshot, schedulesSnapshot] = await Promise.all([
         getDocs(query(collection(db, "companies"), where("status", "==", "active"))),
@@ -214,7 +220,7 @@ const SchedulesPage = () => {
           collection(db, "schedules"),
           where("status", "==", "active"),
           where("departureDateTime", ">=", startTimestamp),
-          where("departureDateTime", "<", endTimestamp),
+          where("departureDateTime", "<=", endTimestamp),
           orderBy("departureDateTime")
         )),
       ]);
@@ -271,7 +277,6 @@ const SchedulesPage = () => {
   useEffect(() => {
     fetchData(selectedDate);
   }, [fetchData, selectedDate]);
-
   const { origins, destinations } = useMemo(() => {
     const origins = [...new Set(schedules.map(s => s.origin))];
     const destinations = [...new Set(schedules.map(s => s.destination))];

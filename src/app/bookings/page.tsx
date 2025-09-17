@@ -679,38 +679,34 @@ const BookingsPage: React.FC = () => {
         bookingUpdates.cancellationDate = serverTimestamp();
         bookingUpdates.cancellationReason = 'Customer initiated';
         sendNotification({
-          userId: booking.userId,
-          type: 'booking_cancelled',
-          title: 'Booking Cancelled',
-          message: `Your booking ${bookingId.slice(-8)} has been cancelled. Seats released.`,
-          data: { bookingId, url: `/bookings` },
-        });
-      } else {
-        bookingUpdates.cancellationRequested = true;
-        bookingUpdates.cancellationReason = 'Customer requested';
-       sendNotification({
-  userId: booking.userId,
-  type: isCancellationRequest ? 'cancellation_requested' : 'booking_cancelled',
-  title: isCancellationRequest ? 'Cancellation Requested' : 'Booking Cancelled',
-  message: isCancellationRequest
-    ? `Your cancellation request for booking ${bookingId.slice(-8)} is under review.`
-    : `Your booking ${bookingId.slice(-8)} has been cancelled. Seats released.`,
-  data: { bookingId, url: `/bookings` },
-});
-      }
+        userId: booking.userId,
+        ...NotificationTemplates.bookingConfirmed(booking.id, `${booking.route.origin} → ${booking.route.destination}`), // Reuse template with adjusted message
+        message: `Your booking ${bookingId.slice(-8)} has been cancelled. Seats released.`,
+      });
+    } else {
+      bookingUpdates.cancellationRequested = true;
+      bookingUpdates.cancellationReason = 'Customer requested';
+      sendNotification({
+        userId: booking.userId,
+        type: 'cancellation_requested',
+        title: 'Cancellation Requested',
+        message: `Your cancellation request for booking ${bookingId.slice(-8)} is under review.`,
+        data: { bookingId, url: `/bookings` },
+      });
+    }
 
-      batch.update(doc(db, 'bookings', bookingId), bookingUpdates);
+    batch.update(doc(db, 'bookings', bookingId), bookingUpdates);
 
-      if (!isCancellationRequest) {
-        batch.update(doc(db, 'schedules', scheduleId), {
-          availableSeats: increment(seatNumbers.length),
-          bookedSeats: arrayRemove(...seatNumbers),
-          updatedAt: serverTimestamp(),
-        });
-      }
+    if (!isCancellationRequest) {
+      batch.update(doc(db, 'schedules', scheduleId), {
+        availableSeats: increment(seatNumbers.length),
+        bookedSeats: arrayRemove(...seatNumbers),
+        updatedAt: serverTimestamp(),
+      });
+    }
 
       await batch.commit();
-
+    fetchBookings();
       const successMessage = isCancellationRequest
         ? 'Cancellation requested. An admin will review your request.'
         : 'Booking cancelled successfully. Seats have been released.';
@@ -904,19 +900,21 @@ const BookingsPage: React.FC = () => {
     }
   }, [formatDate, formatTime]);
 
-  const handleConfirmDetails = useCallback((booking: BookingWithDetails) => {
-    if (!booking.seatNumbers?.length || !booking.passengerDetails?.length) {
-      setError('Invalid booking data. Cannot proceed with payment.');
-      return;
-    }
-    setSelectedBooking(booking);
-    setUserDetails({
-      name: `${userProfile?.firstName || ''} ${userProfile?.lastName || ''}`.trim() || '',
-      email: userProfile?.email || '',
-      phone: userProfile?.phone || '+265',
-    });
-    setPaymentMethodModalOpen(true);
-  }, [userProfile]);
+ const handleConfirmDetails = useCallback((booking: BookingWithDetails) => {
+  if (!booking.seatNumbers?.length || !booking.passengerDetails?.length) {
+    setError('Invalid booking data. Cannot proceed with payment.');
+    return;
+  }
+  // Use the first passenger's name as the default
+  const primaryPassenger = booking.passengerDetails[0];
+  setSelectedBooking(booking);
+  setUserDetails({
+    name: primaryPassenger.name || `${userProfile?.firstName || ''} ${userProfile?.lastName || ''}`.trim() || '',
+    email: userProfile?.email || '',
+    phone: userProfile?.phone || '+265',
+  });
+  setPaymentMethodModalOpen(true);
+}, [userProfile]);
 
   const handlePaymentMethodSelect = useCallback((method: string) => {
     setSelectedPaymentMethod(method);
@@ -948,62 +946,62 @@ const BookingsPage: React.FC = () => {
     return `TX${timestamp}${random}`.toUpperCase();
   }, []);
 
-  const handlePayment = useCallback(async (e: FormEvent) => {
-    e.preventDefault();
+const handlePayment = useCallback(async (e: FormEvent) => {
+  e.preventDefault();
 
-    if (!selectedBooking || !selectedPaymentMethod) {
-      setError('Please select a booking and payment method');
-      return;
-    }
-    if (!userDetails.name?.trim() || userDetails.name.trim().length < 2) {
-      setError('Please provide a valid full name (at least 2 characters)');
-      return;
-    }
-    if (!userDetails.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(userDetails.email)) {
-      setError('Please provide a valid email address');
-      return;
-    }
-    if (!userDetails.phone || !/^\+?\d{10,15}$/.test(userDetails.phone.replace(/\s/g, ''))) {
-      setError('Please provide a valid phone number (10-15 digits)');
-      return;
-    }
+  if (!selectedBooking || !selectedPaymentMethod) {
+    setError('Please select a booking and payment method');
+    return;
+  }
+  if (!userDetails.name?.trim() || userDetails.name.trim().length < 2) {
+    setError('Please provide a valid full name (at least 2 characters)');
+    return;
+  }
+  if (!userDetails.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(userDetails.email)) {
+    setError('Please provide a valid email address');
+    return;
+  }
+  if (!userDetails.phone || !/^\+?\d{10,15}$/.test(userDetails.phone.replace(/\s/g, ''))) {
+    setError('Please provide a valid phone number (10-15 digits)');
+    return;
+  }
 
-    setActionLoading(selectedBooking.id);
-    setError('');
+  setActionLoading(selectedBooking.id);
+  setError('');
 
-    try {
-      const auth = getAuth();
-      const user = auth.currentUser;
-      if (!user) throw new Error('User not authenticated');
+  try {
+    const auth = getAuth();
+    const user = auth.currentUser;
+    if (!user) throw new Error('User not authenticated');
 
-      const idToken = await user.getIdToken();
+    const idToken = await user.getIdToken();
 
-      const paymentPayload = {
-        bookingId: selectedBooking.id,
-        paymentProvider: selectedPaymentMethod === 'card' ? 'stripe' : 'paychangu',
-        customerDetails: {
-          email: userDetails.email.toLowerCase().trim(),
-          name: userDetails.name.trim(),
-          phone: userDetails.phone.trim(),
-        },
-        metadata: {
-          route: `${selectedBooking.route.origin}-${selectedBooking.route.destination}`,
-          departure: selectedBooking.schedule.departureDateTime instanceof Timestamp
-            ? selectedBooking.schedule.departureDateTime.toDate().toISOString()
-            : new Date(selectedBooking.schedule.departureDateTime).toISOString(),
-          passengerCount: selectedBooking.passengerDetails.length.toString(),
-          seatNumbers: selectedBooking.seatNumbers.join(','),
-        }
-      };
+    const paymentPayload = {
+      bookingId: selectedBooking.id,
+      paymentProvider: selectedPaymentMethod === 'card' ? 'stripe' : 'paychangu',
+      customerDetails: {
+        email: userDetails.email.toLowerCase().trim(),
+        name: userDetails.name.trim(), // This now reflects the passenger name
+        phone: userDetails.phone.trim(),
+      },
+      metadata: {
+        route: `${selectedBooking.route.origin}-${selectedBooking.route.destination}`,
+        departure: selectedBooking.schedule.departureDateTime instanceof Timestamp
+          ? selectedBooking.schedule.departureDateTime.toDate().toISOString()
+          : new Date(selectedBooking.schedule.departureDateTime).toISOString(),
+        passengerCount: selectedBooking.passengerDetails.length.toString(),
+        seatNumbers: selectedBooking.seatNumbers.join(','),
+      },
+    };
 
-      const response = await fetch('/api/payments/initiate', {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${idToken}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify(paymentPayload),
-      });
+    const response = await fetch('/api/payments/initiate', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${idToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(paymentPayload),
+    });
 
-      const result = await response.json();
-      sendNotification({
+    const result = await response.json();
+    sendNotification({
       userId: user.uid,
       type: 'payment_initiated',
       title: 'Payment Initiated',
@@ -1011,25 +1009,25 @@ const BookingsPage: React.FC = () => {
       data: { bookingId: selectedBooking?.id, url: result.checkoutUrl },
     });
 
-      if (!response.ok) {
-        throw new Error(result.error || result.message || 'Failed to create payment session');
-      }
-
-      if (result.success && result.checkoutUrl) {
-        setPaymentModalOpen(false);
-        setConfirmModalOpen(false);
-        setSuccess(`Redirecting to ${selectedPaymentMethod === 'card' ? 'Stripe' : 'PayChangu'} payment gateway...`);
-        setTimeout(() => { window.location.href = result.checkoutUrl; }, 1500);
-      } else {
-        throw new Error(result.error || 'Invalid response from server');
-      }
-    } catch (err: any) {
-      console.error('Payment error:', err);
-      setError(`Payment failed: ${err.message}`);
-    } finally {
-      setActionLoading(null);
+    if (!response.ok) {
+      throw new Error(result.error || result.message || 'Failed to create payment session');
     }
-  }, [selectedBooking, selectedPaymentMethod, userDetails]);
+
+    if (result.success && result.checkoutUrl) {
+      setPaymentModalOpen(false);
+      setConfirmModalOpen(false);
+      setSuccess(`Redirecting to ${selectedPaymentMethod === 'card' ? 'Stripe' : 'PayChangu'} payment gateway...`);
+      setTimeout(() => { window.location.href = result.checkoutUrl; }, 1500);
+    } else {
+      throw new Error(result.error || 'Invalid response from server');
+    }
+  } catch (err: any) {
+    console.error('Payment error:', err);
+    setError(`Payment failed: ${err.message}`);
+  } finally {
+    setActionLoading(null);
+  }
+}, [selectedBooking, selectedPaymentMethod, userDetails]);
 
   const verifyPaymentStatus = useCallback(async (provider: string, identifier: string) => {
     if (!provider || !identifier) {
@@ -1522,120 +1520,120 @@ const BookingsPage: React.FC = () => {
               </div>
             </div>
           </Modal>
-
-          <Modal isOpen={confirmModalOpen} onClose={() => setConfirmModalOpen(false)} title="Confirm Payment Details">
-            <form onSubmit={handleConfirmSubmit} className="space-y-6">
-              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-4">
-                <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
-                  <Shield className="w-5 h-5 text-blue-600" />
-                  Booking Summary
-                </h3>
-                {selectedBooking && (
-                  <div className="space-y-1 text-sm text-blue-700">
-                    <p><strong>Route:</strong> {selectedBooking.route.origin} → {selectedBooking.route.destination}</p>
-                    <p><strong>Departure:</strong> {formatDate(selectedBooking.schedule.departureDateTime)} {formatTime(selectedBooking.schedule.departureDateTime)}</p>
-                    <p><strong>Amount:</strong> MWK {selectedBooking.totalAmount.toLocaleString()}</p>
-                    <p><strong>Payment Method:</strong> {getPaymentMethodIcon(selectedPaymentMethod || '').label}</p>
-                  </div>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
-                <input
-                  type="text"
-                  value={userDetails.name}
-                  onChange={(e) => setUserDetails({ ...userDetails, name: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="Enter your full name"
-                  required
-                  aria-label="Full name"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                <input
-                  type="email"
-                  value={userDetails.email}
-                  onChange={(e) => setUserDetails({ ...userDetails, email: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="Enter your email"
-                  required
-                  aria-label="Email"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
-                <input
-                  type="tel"
-                  value={userDetails.phone}
-                  onChange={(e) => setUserDetails({ ...userDetails, phone: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="+265123456789"
-                  required
-                  aria-label="Phone number"
-                />
-              </div>
-
-              <button
-                type="submit"
-                disabled={actionLoading === selectedBooking?.id}
-                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-lg hover:from-emerald-600 hover:to-emerald-700 transition-all transform hover:scale-105 shadow-lg disabled:opacity-50"
-                aria-label="Confirm payment details"
-              >
-                {actionLoading === selectedBooking?.id ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <>
-                    <Zap className="w-4 h-4" />
-                    <span className="font-medium">Confirm & Pay</span>
-                  </>
-                )}
-              </button>
-            </form>
-          </Modal>
-
-          <Modal isOpen={paymentModalOpen} onClose={() => setPaymentModalOpen(false)} title="Complete Your Payment">
-            <form onSubmit={handlePayment} className="space-y-6">
-              <div className="bg-gradient-to-r from-emerald-50 to-blue-50 rounded-lg p-4">
-                <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
-                  <Shield className="w-5 h-5 text-emerald-600" />
-                  Payment Details
-                </h3>
-                {selectedBooking && (
-                  <div className="space-y-1 text-sm text-emerald-700">
-                    <p><strong>Route:</strong> {selectedBooking.route.origin} → {selectedBooking.route.destination}</p>
-                    <p><strong>Departure:</strong> {formatDate(selectedBooking.schedule.departureDateTime)} {formatTime(selectedBooking.schedule.departureDateTime)}</p>
-                    <p><strong>Amount:</strong> MWK {selectedBooking.totalAmount.toLocaleString()}</p>
-                    <p><strong>Method:</strong> {getPaymentMethodIcon(selectedPaymentMethod || '').label}</p>
-                    <p><strong>Name:</strong> {userDetails.name}</p>
-                    <p><strong>Email:</strong> {userDetails.email}</p>
-                    <p><strong>Phone:</strong> {userDetails.phone}</p>
-                  </div>
-                )}
-              </div>
-
-              <button
-                type="submit"
-                disabled={actionLoading === selectedBooking?.id}
-                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-lg hover:from-emerald-600 hover:to-emerald-700 transition-all transform hover:scale-105 shadow-lg disabled:opacity-50"
-                aria-label="Proceed to payment"
-              >
-                {actionLoading === selectedBooking?.id ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <>
-                    <Zap className="w-4 h-4" />
-                    <span className="font-medium">Proceed to Pay</span>
-                  </>
-                )}
-              </button>
-            </form>
-          </Modal>
+    <Modal isOpen={confirmModalOpen} onClose={() => setConfirmModalOpen(false)} title="Confirm Payment Details">
+      <form onSubmit={handleConfirmSubmit} className="space-y-6">
+        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-4">
+          <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
+            <Shield className="w-5 h-5 text-blue-600" />
+            Booking Summary
+          </h3>
+          {selectedBooking && (
+            <div className="space-y-1 text-sm text-blue-700">
+              <p><strong>Route:</strong> {selectedBooking.route.origin} → {selectedBooking.route.destination}</p>
+              <p><strong>Departure:</strong> {formatDate(selectedBooking.schedule.departureDateTime)} {formatTime(selectedBooking.schedule.departureDateTime)}</p>
+              <p><strong>Amount:</strong> MWK {selectedBooking.totalAmount.toLocaleString()}</p>
+              <p><strong>Payment Method:</strong> {getPaymentMethodIcon(selectedPaymentMethod || '').label}</p>
+              <p><strong>Name:</strong> {userDetails.name} {/* This now shows passenger name */}</p>
+            </div>
+          )}
         </div>
-      </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+          <input
+            type="text"
+            value={userDetails.name}
+            onChange={(e) => setUserDetails({ ...userDetails, name: e.target.value })}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            placeholder="Enter your full name"
+            required
+            aria-label="Full name"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+          <input
+            type="email"
+            value={userDetails.email}
+            onChange={(e) => setUserDetails({ ...userDetails, email: e.target.value })}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            placeholder="Enter your email"
+            required
+            aria-label="Email"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
+          <input
+            type="tel"
+            value={userDetails.phone}
+            onChange={(e) => setUserDetails({ ...userDetails, phone: e.target.value })}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            placeholder="+265123456789"
+            required
+            aria-label="Phone number"
+          />
+        </div>
+
+        <button
+          type="submit"
+          disabled={actionLoading === selectedBooking?.id}
+          className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-lg hover:from-emerald-600 hover:to-emerald-700 transition-all transform hover:scale-105 shadow-lg disabled:opacity-50"
+          aria-label="Confirm payment details"
+        >
+          {actionLoading === selectedBooking?.id ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <>
+              <Zap className="w-4 h-4" />
+              <span className="font-medium">Confirm & Pay</span>
+            </>
+          )}
+        </button>
+      </form>
+    </Modal>
+
+    <Modal isOpen={paymentModalOpen} onClose={() => setPaymentModalOpen(false)} title="Complete Your Payment">
+      <form onSubmit={handlePayment} className="space-y-6">
+        <div className="bg-gradient-to-r from-emerald-50 to-blue-50 rounded-lg p-4">
+          <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
+            <Shield className="w-5 h-5 text-emerald-600" />
+            Payment Details
+          </h3>
+          {selectedBooking && (
+            <div className="space-y-1 text-sm text-emerald-700">
+              <p><strong>Route:</strong> {selectedBooking.route.origin} → {selectedBooking.route.destination}</p>
+              <p><strong>Departure:</strong> {formatDate(selectedBooking.schedule.departureDateTime)} {formatTime(selectedBooking.schedule.departureDateTime)}</p>
+              <p><strong>Amount:</strong> MWK {selectedBooking.totalAmount.toLocaleString()}</p>
+              <p><strong>Method:</strong> {getPaymentMethodIcon(selectedPaymentMethod || '').label}</p>
+              <p><strong>Name:</strong> {userDetails.name} {/* Updated to passenger name */}</p>
+              <p><strong>Email:</strong> {userDetails.email}</p>
+              <p><strong>Phone:</strong> {userDetails.phone}</p>
+            </div>
+          )}
+        </div>
+
+        <button
+          type="submit"
+          disabled={actionLoading === selectedBooking?.id}
+          className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-lg hover:from-emerald-600 hover:to-emerald-700 transition-all transform hover:scale-105 shadow-lg disabled:opacity-50"
+          aria-label="Proceed to payment"
+        >
+          {actionLoading === selectedBooking?.id ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <>
+              <Zap className="w-4 h-4" />
+              <span className="font-medium">Proceed to Pay</span>
+            </>
+          )}
+        </button>
+        </form>
+    </Modal>
+    </div>
+    </div>
     </ErrorBoundary>
   );
 };
