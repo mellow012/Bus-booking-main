@@ -3,13 +3,10 @@ import React, { useEffect, useState } from 'react';
 import { db } from '@/lib/firebaseConfig';
 import { collection, query, where, orderBy, onSnapshot, updateDoc, doc } from 'firebase/firestore';
 import { Bell } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext'; // Adjust import path
 import { Notification } from '@/types';
 
-interface NotificationsProps {
-  userId: string;
-}
-
-const Notifications: React.FC<NotificationsProps> = ({ userId }) => {
+const Notifications: React.FC<{ userId: string }> = ({ userId }) => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [open, setOpen] = useState(false);
 
@@ -64,7 +61,7 @@ const Notifications: React.FC<NotificationsProps> = ({ userId }) => {
                   {new Date(n.createdAt).toLocaleString()}
                 </div>
                 {!n.isRead && (
-                      <button
+                  <button
                     className="mt-2 text-blue-600 text-xs underline"
                     onClick={() => markAsRead(n.id)}
                   >
@@ -80,4 +77,13 @@ const Notifications: React.FC<NotificationsProps> = ({ userId }) => {
   );
 };
 
-export default Notifications;
+export default function NotificationsPage() {
+  const { user } = useAuth();
+  const userId = user?.uid;
+
+  if (!userId) {
+    return <div>Please log in to view notifications.</div>;
+  }
+
+  return <Notifications userId={userId} />;
+}
