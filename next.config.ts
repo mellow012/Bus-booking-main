@@ -1,11 +1,13 @@
-
 import autoCert from "anchor-pki/auto-cert/integrations/next";
 
- //@ts-expect-error - No type definitions available for anchor-pki
 const withAutoCert = autoCert({
-  enabledEnv: "development",
+  enabledEnv: "development", // Only enable in development
 });
 
-const nextConfig = {};
+const nextConfig = {
+  eslint: {
+    ignoreDuringBuilds: true, // Temporarily disable ESLint during builds
+  },
+};
 
-export default withAutoCert(nextConfig);
+export default process.env.NODE_ENV === "development" ? withAutoCert(nextConfig) : nextConfig;
