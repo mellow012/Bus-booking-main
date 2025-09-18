@@ -46,7 +46,7 @@ import {
 import AlertMessage from '../../components/AlertMessage';
 import {
   Company,
-  DashboardStats,
+  DashboardData,
   CreateCompanyRequest,
   UserProfile,
   Booking,
