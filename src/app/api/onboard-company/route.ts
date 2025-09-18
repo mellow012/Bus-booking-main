@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/firebaseConfig';
-import { doc, setDoc, collection, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, collection, serverTimestamp,writeBatch } from 'firebase/firestore';
 import { getAuth } from 'firebase-admin/auth';
 import {admin} from '@/lib/firebaseAdmin';
 
