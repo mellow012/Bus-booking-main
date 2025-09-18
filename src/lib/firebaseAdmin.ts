@@ -15,6 +15,7 @@ export const adminApp = apps.length === 0 || !apps.some(app => app.name === 'adm
     }, 'admin')
   : getApps().find(app => app.name === 'admin')!;
 
+export const admin = adminApp;
 export const adminAuth = getAuth(adminApp);
 export const adminDb = getFirestore(adminApp);
 export const adminFieldValue = FieldValue;
