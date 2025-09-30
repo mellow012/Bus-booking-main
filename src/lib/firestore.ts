@@ -13,165 +13,197 @@ import {
   limit,
   Timestamp,
   writeBatch,
-  collectionGroup
+  collectionGroup,
+  QueryDocumentSnapshot
 } from 'firebase/firestore';
 import { db } from './firebaseConfig';
 import { 
-  User, 
-  Operator, 
+  UserProfile, // Replaced User
+  Company,     // Replaced Operator
   Bus, 
   Route, 
   Schedule, 
   Booking, 
-  SearchParams, 
+  SearchQuery, // Replaced SearchParams
   SearchResult 
-} from '@/types';
+} from '@/types'; // Assuming your new types are available at '@/types'
 
 // Helper function to convert Firestore timestamp to Date
 const timestampToDate = (timestamp: any): Date => {
   if (timestamp && timestamp.toDate) {
     return timestamp.toDate();
   }
+  // Fallback for non-Timestamp objects if needed, otherwise throws error if structure is wrong
   return new Date(timestamp);
 };
 
-// User operations
-export const createUser = async (userId: string, userData: Omit<User, 'id' | 'createdAt' | 'updatedAt'>) => {
+// --- UserProfile operations (formerly User) ---
+
+export const createUserProfile = async (userId: string, userData: Omit<UserProfile, 'id' | 'createdAt' | 'updatedAt' | 'lastLogin'>) => {
   const userRef = doc(db, 'users', userId);
   const now = Timestamp.now();
+  // Note: We exclude 'lastLogin' from the Omit as it's typically set on login, not creation
   await updateDoc(userRef, {
     ...userData,
     createdAt: now,
-    updatedAt: now
+    updatedAt: now,
+    lastLogin: now,
   });
 };
 
-export const getUser = async (userId: string): Promise<User | null> => {
+export const getUserProfile = async (userId: string): Promise<UserProfile | null> => {
   const userRef = doc(db, 'users', userId);
   const userSnap = await getDoc(userRef);
   
   if (userSnap.exists()) {
-    const data = userSnap.data();
+    const data = userSnap.data() as any; // Cast to 'any' to allow spreading unknown properties
     return {
       id: userSnap.id,
       ...data,
       createdAt: timestampToDate(data.createdAt),
-      updatedAt: timestampToDate(data.updatedAt)
-    } as User;
+      updatedAt: timestampToDate(data.updatedAt),
+      dateOfBirth: data.dateOfBirth ? timestampToDate(data.dateOfBirth) : undefined,
+      lastLogin: data.lastLogin ? timestampToDate(data.lastLogin) : undefined,
+      resetTokenExpiry: data.resetTokenExpiry ? timestampToDate(data.resetTokenExpiry) : undefined,
+    } as UserProfile; // Final cast to UserProfile
   }
   return null;
 };
 
-// Operator operations
-export const getOperators = async (): Promise<Operator[]> => {
-  const operatorsRef = collection(db, 'operators');
-  const snapshot = await getDocs(operatorsRef);
-  
-  return snapshot.docs.map(doc => ({
-    id: doc.id,
-    ...doc.data(),
-    createdAt: timestampToDate(doc.data().createdAt),
-    updatedAt: timestampToDate(doc.data().updatedAt)
-  })) as Operator[];
-};
+// --- Company operations (formerly Operator) ---
 
-export const getOperator = async (operatorId: string): Promise<Operator | null> => {
-  const operatorRef = doc(db, 'operators', operatorId);
-  const operatorSnap = await getDoc(operatorRef);
+export const getCompanies = async (): Promise<Company[]> => {
+  const companiesRef = collection(db, 'companies'); // Updated collection name
+  const snapshot = await getDocs(companiesRef);
   
-  if (operatorSnap.exists()) {
-    const data = operatorSnap.data();
+  return snapshot.docs.map(doc => {
+    const data = doc.data() as any; // Cast to 'any'
     return {
-      id: operatorSnap.id,
+      id: doc.id,
       ...data,
       createdAt: timestampToDate(data.createdAt),
       updatedAt: timestampToDate(data.updatedAt)
-    } as Operator;
+    } as Company; // Final cast to Company
+  });
+};
+
+export const getCompany = async (companyId: string): Promise<Company | null> => {
+  const companyRef = doc(db, 'companies', companyId); // Updated collection name
+  const companySnap = await getDoc(companyRef);
+  
+  if (companySnap.exists()) {
+    const data = companySnap.data() as any; // Cast to 'any'
+    return {
+      id: companySnap.id,
+      ...data,
+      createdAt: timestampToDate(data.createdAt),
+      updatedAt: timestampToDate(data.updatedAt)
+    } as Company; // Final cast to Company
   }
   return null;
 };
 
-// Route operations
-export const getRoutes = async (operatorId: string): Promise<Route[]> => {
-  const routesRef = collection(db, 'operators', operatorId, 'routes');
+// --- Route operations ---
+
+export const getRoutes = async (companyId: string): Promise<Route[]> => {
+  const routesRef = collection(db, 'companies', companyId, 'routes'); // Updated path
   const snapshot = await getDocs(routesRef);
   
-  return snapshot.docs.map(doc => ({
-    id: doc.id,
-    ...doc.data(),
-    createdAt: timestampToDate(doc.data().createdAt),
-    updatedAt: timestampToDate(doc.data().updatedAt)
-  })) as Route[];
+  return snapshot.docs.map(doc => {
+    const data = doc.data() as any; // Cast to 'any'
+    return {
+      id: doc.id,
+      ...data,
+      createdAt: timestampToDate(data.createdAt),
+      updatedAt: timestampToDate(data.updatedAt)
+    } as Route; // Final cast to Route
+  });
 };
 
-// Schedule operations
-export const getSchedules = async (operatorId: string, routeId: string): Promise<Schedule[]> => {
-  const schedulesRef = collection(db, 'operators', operatorId, 'routes', routeId, 'schedules');
-  const q = query(schedulesRef, where('status', '==', 'active'), orderBy('departureTime'));
+// --- Schedule operations ---
+
+export const getSchedules = async (companyId: string, routeId: string): Promise<Schedule[]> => {
+  const schedulesRef = collection(db, 'companies', companyId, 'routes', routeId, 'schedules'); // Updated path
+  // NOTE: orderBy is used here, ensure Firestore indexes are in place if running in production.
+  const q = query(schedulesRef, where('status', '==', 'active'), orderBy('departureDateTime')); 
   const snapshot = await getDocs(q);
   
-  return snapshot.docs.map(doc => ({
-    id: doc.id,
-    ...doc.data(),
-    departureTime: timestampToDate(doc.data().departureTime),
-    arrivalTime: timestampToDate(doc.data().arrivalTime),
-    createdAt: timestampToDate(doc.data().createdAt),
-    updatedAt: timestampToDate(doc.data().updatedAt)
-  })) as Schedule[];
+  return snapshot.docs.map(doc => {
+    const data = doc.data() as any; // Cast to 'any'
+    return {
+      id: doc.id,
+      ...data,
+      departureDateTime: timestampToDate(data.departureDateTime),
+      arrivalDateTime: timestampToDate(data.arrivalTime),
+      createdAt: timestampToDate(data.createdAt),
+      updatedAt: timestampToDate(data.updatedAt)
+    } as Schedule; // Final cast to Schedule
+  });
 };
 
-// Bus operations
-export const getBus = async (operatorId: string, busId: string): Promise<Bus | null> => {
-  const busRef = doc(db, 'operators', operatorId, 'buses', busId);
+// --- Bus operations ---
+
+export const getBus = async (companyId: string, busId: string): Promise<Bus | null> => {
+  const busRef = doc(db, 'companies', companyId, 'buses', busId); // Updated path
   const busSnap = await getDoc(busRef);
   
   if (busSnap.exists()) {
-    const data = busSnap.data();
+    const data = busSnap.data() as any; // Cast to 'any'
     return {
       id: busSnap.id,
       ...data,
+      // Handle nested date conversion for registrationDetails
+      registrationDetails: {
+        ...data.registrationDetails,
+        registrationDate: timestampToDate(data.registrationDetails.registrationDate),
+        expiryDate: timestampToDate(data.registrationDetails.expiryDate),
+      },
       createdAt: timestampToDate(data.createdAt),
       updatedAt: timestampToDate(data.updatedAt)
-    } as Bus;
+    } as Bus; // Final cast to Bus
   }
   return null;
 };
 
-// Search functionality
-export const searchBuses = async (searchParams: SearchParams): Promise<SearchResult[]> => {
+// --- Search functionality (Using SearchQuery) ---
+
+export const searchBuses = async (searchQuery: SearchQuery): Promise<SearchResult[]> => {
   const results: SearchResult[] = [];
   
   try {
-    // Get all operators
-    const operators = await getOperators();
+    // Get all companies (formerly operators)
+    const companies = await getCompanies();
     
-    for (const operator of operators) {
-      // Get routes for this operator that match origin and destination
-      const routes = await getRoutes(operator.id);
+    for (const company of companies) {
+      // Get routes for this company that match origin and destination
+      const routes = await getRoutes(company.id);
       const matchingRoutes = routes.filter(route => 
-        route.origin.toLowerCase().includes(searchParams.origin.toLowerCase()) &&
-        route.destination.toLowerCase().includes(searchParams.destination.toLowerCase())
+        route.origin.toLowerCase().includes(searchQuery.origin.toLowerCase()) &&
+        route.destination.toLowerCase().includes(searchQuery.destination.toLowerCase())
       );
       
       for (const route of matchingRoutes) {
         // Get schedules for this route on the specified date
-        const schedules = await getSchedules(operator.id, route.id);
+        const schedules = await getSchedules(company.id, route.id);
+        const searchDate = new Date(searchQuery.date);
+
         const matchingSchedules = schedules.filter(schedule => {
-          const scheduleDate = new Date(schedule.departureTime);
-          const searchDate = new Date(searchParams.departureDate);
+          const scheduleDate = new Date(schedule.departureDateTime); 
+          const passengers = searchQuery.passengers || 1; // Default to 1 passenger
+          
           return scheduleDate.toDateString() === searchDate.toDateString() &&
-                 schedule.availableSeats >= searchParams.passengers;
+             schedule.availableSeats >= passengers;
         });
         
         for (const schedule of matchingSchedules) {
           // Get bus details
-          const bus = await getBus(operator.id, schedule.busId);
+          const bus = await getBus(company.id, schedule.busId);
           if (bus) {
             results.push({
               schedule,
               route,
               bus,
-              operator
+              company // Updated to 'company'
             });
           }
         }
@@ -180,7 +212,7 @@ export const searchBuses = async (searchParams: SearchParams): Promise<SearchRes
     
     // Sort results by departure time
     results.sort((a, b) => 
-      new Date(a.schedule.departureTime).getTime() - new Date(b.schedule.departureTime).getTime()
+      new Date(a.schedule.departureDateTime).getTime() - new Date(b.schedule.departureDateTime).getTime()
     );
     
     return results;
@@ -190,15 +222,21 @@ export const searchBuses = async (searchParams: SearchParams): Promise<SearchRes
   }
 };
 
-// Booking operations
+// --- Booking operations ---
+
 export const createBooking = async (bookingData: Omit<Booking, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> => {
   const bookingsRef = collection(db, 'bookings');
   const now = Timestamp.now();
   
   const docRef = await addDoc(bookingsRef, {
     ...bookingData,
+    // Convert all Date fields to Timestamp for storage
     bookingDate: Timestamp.fromDate(bookingData.bookingDate),
-    confirmationDate: bookingData.confirmationDate ? Timestamp.fromDate(bookingData.confirmationDate) : null,
+    cancellationDate: bookingData.cancellationDate ? Timestamp.fromDate(bookingData.cancellationDate) : null,
+    refundDate: bookingData.refundDate ? Timestamp.fromDate(bookingData.refundDate) : null,
+    paymentInitiatedAt: bookingData.paymentInitiatedAt ? Timestamp.fromDate(bookingData.paymentInitiatedAt as Date) : null,
+    paymentCompletedAt: bookingData.paymentCompletedAt ? Timestamp.fromDate(bookingData.paymentCompletedAt as Date) : null,
+    confirmedDate: bookingData.confirmedDate ? Timestamp.fromDate(bookingData.confirmedDate as Date) : null,
     createdAt: now,
     updatedAt: now
   });
@@ -211,15 +249,20 @@ export const getBooking = async (bookingId: string): Promise<Booking | null> => 
   const bookingSnap = await getDoc(bookingRef);
   
   if (bookingSnap.exists()) {
-    const data = bookingSnap.data();
+    const data = bookingSnap.data() as any; // Cast to 'any'
     return {
       id: bookingSnap.id,
       ...data,
+      // Convert all stored Timestamps back to Date
       bookingDate: timestampToDate(data.bookingDate),
-      confirmationDate: data.confirmationDate ? timestampToDate(data.confirmationDate) : undefined,
+      cancellationDate: data.cancellationDate ? timestampToDate(data.cancellationDate) : undefined,
+      refundDate: data.refundDate ? timestampToDate(data.refundDate) : undefined,
+      paymentInitiatedAt: data.paymentInitiatedAt ? timestampToDate(data.paymentInitiatedAt) : undefined,
+      paymentCompletedAt: data.paymentCompletedAt ? timestampToDate(data.paymentCompletedAt) : undefined,
+      confirmedDate: data.confirmedDate ? timestampToDate(data.confirmedDate) : undefined,
       createdAt: timestampToDate(data.createdAt),
       updatedAt: timestampToDate(data.updatedAt)
-    } as Booking;
+    } as Booking; // Final cast to Booking
   }
   return null;
 };
@@ -229,35 +272,49 @@ export const getUserBookings = async (userId: string): Promise<Booking[]> => {
   const q = query(bookingsRef, where('userId', '==', userId), orderBy('createdAt', 'desc'));
   const snapshot = await getDocs(q);
   
-  return snapshot.docs.map(doc => ({
-    id: doc.id,
-    ...doc.data(),
-    bookingDate: timestampToDate(doc.data().bookingDate),
-    confirmationDate: doc.data().confirmationDate ? timestampToDate(doc.data().confirmationDate) : undefined,
-    createdAt: timestampToDate(doc.data().createdAt),
-    updatedAt: timestampToDate(doc.data().updatedAt)
-  })) as Booking[];
+  return snapshot.docs.map(doc => {
+    const data = doc.data() as any; // Cast to 'any'
+    return {
+      id: doc.id,
+      ...data,
+      bookingDate: timestampToDate(data.bookingDate),
+      cancellationDate: data.cancellationDate ? timestampToDate(data.cancellationDate) : undefined,
+      refundDate: data.refundDate ? timestampToDate(data.refundDate) : undefined,
+      paymentInitiatedAt: data.paymentInitiatedAt ? timestampToDate(data.paymentInitiatedAt) : undefined,
+      paymentCompletedAt: data.paymentCompletedAt ? timestampToDate(data.paymentCompletedAt) : undefined,
+      confirmedDate: data.confirmedDate ? timestampToDate(data.confirmedDate) : undefined,
+      createdAt: timestampToDate(data.createdAt),
+      updatedAt: timestampToDate(data.updatedAt)
+    } as Booking; // Final cast to Booking
+  });
 };
 
-export const getOperatorBookings = async (operatorId: string): Promise<Booking[]> => {
+export const getCompanyBookings = async (companyId: string): Promise<Booking[]> => {
   const bookingsRef = collection(db, 'bookings');
-  const q = query(bookingsRef, where('operatorId', '==', operatorId), orderBy('createdAt', 'desc'));
+  const q = query(bookingsRef, where('companyId', '==', companyId), orderBy('createdAt', 'desc'));
   const snapshot = await getDocs(q);
   
-  return snapshot.docs.map(doc => ({
-    id: doc.id,
-    ...doc.data(),
-    bookingDate: timestampToDate(doc.data().bookingDate),
-    confirmationDate: doc.data().confirmationDate ? timestampToDate(doc.data().confirmationDate) : undefined,
-    createdAt: timestampToDate(doc.data().createdAt),
-    updatedAt: timestampToDate(doc.data().updatedAt)
-  })) as Booking[];
+  return snapshot.docs.map(doc => {
+    const data = doc.data() as any; // Cast to 'any'
+    return {
+      id: doc.id,
+      ...data,
+      bookingDate: timestampToDate(data.bookingDate),
+      cancellationDate: data.cancellationDate ? timestampToDate(data.cancellationDate) : undefined,
+      refundDate: data.refundDate ? timestampToDate(data.refundDate) : undefined,
+      paymentInitiatedAt: data.paymentInitiatedAt ? timestampToDate(data.paymentInitiatedAt) : undefined,
+      paymentCompletedAt: data.paymentCompletedAt ? timestampToDate(data.paymentCompletedAt) : undefined,
+      confirmedDate: data.confirmedDate ? timestampToDate(data.confirmedDate) : undefined,
+      createdAt: timestampToDate(data.createdAt),
+      updatedAt: timestampToDate(data.updatedAt)
+    } as Booking; // Final cast to Booking
+  });
 };
 
 export const updateBookingStatus = async (
   bookingId: string, 
   status: Booking['bookingStatus'], 
-  confirmationDate?: Date
+  confirmedDate?: Date
 ) => {
   const bookingRef = doc(db, 'bookings', bookingId);
   const updateData: any = {
@@ -265,10 +322,11 @@ export const updateBookingStatus = async (
     updatedAt: Timestamp.now()
   };
   
-  if (confirmationDate) {
-    updateData.confirmationDate = Timestamp.fromDate(confirmationDate);
+  if (status === 'confirmed' && confirmedDate) {
+    updateData.confirmedDate = Timestamp.fromDate(confirmedDate);
+  } else if (status === 'cancelled') {
+    updateData.cancellationDate = Timestamp.now();
   }
   
   await updateDoc(bookingRef, updateData);
 };
-

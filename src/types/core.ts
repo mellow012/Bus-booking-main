@@ -1,3 +1,5 @@
+import { Timestamp } from 'firebase/firestore';
+
 /**
  * Base interface for all Firestore documents to ensure consistency.
  */
@@ -10,28 +12,38 @@ export interface FirestoreDocument {
 export interface Company extends FirestoreDocument {
   name: string;
   email: string;
-  ownerId: string; // Firebase Auth UID of company admin
+  ownerId: string;
   contact: string;
   address?: string;
   description?: string;
   logo?: string;
   status: 'active' | 'pending' | 'inactive';
-  paymentSettings?: { // Merged payment settings from your other example
+  paymentSettings?: {
     gateways?: {
       paychangu?: boolean;
       stripe?: boolean;
     };
   };
+  metadata?: Record<string, any>;
 }
+
+export type BusType = 'AC' | 'Non-AC' | 'Sleeper' | 'Semi-Sleeper' | 'Luxury' | 'Economy' | 'Minibus';
+export type BusStatus = 'active' | 'inactive' | 'maintenance';
 
 export interface Bus extends FirestoreDocument {
   companyId: string;
   licensePlate: string;
-  busType: 'AC' | 'Non-AC' | 'Sleeper' | 'Semi-Sleeper' | 'Luxury' | 'Economy' | 'Minibus';
+  busType: BusType;
   capacity: number;
   amenities: string[];
   images?: string[];
-  status: 'active' | 'inactive' | 'maintenance';
+  status: BusStatus;
+  registrationDetails: {
+    registrationNumber: string;
+    registrationDate: Date;
+    expiryDate: Date;
+    authority: string;
+  };
 }
 
 export interface RouteStop {
@@ -42,42 +54,58 @@ export interface RouteStop {
 }
 
 export interface Route extends FirestoreDocument {
+  name: string;
   companyId: string;
   origin: string;
   destination: string;
-  distance: number; // in kilometers
-  duration: number; // in minutes
+  distance: number;
+  duration: number;
   stops: RouteStop[];
   status: 'active' | 'inactive';
+  isActive: boolean;
 }
 
-export interface Schedule extends FirestoreDocument {
+export interface Schedule {
+  id: string;
   companyId: string;
   busId: string;
   routeId: string;
-  departureDateTime: Date; // Normalized to Date
-  arrivalDateTime: Date;   // Normalized to Date
+  departureLocation: string;
+  arrivalLocation: string;
+  departureDateTime: Date;
+  arrivalDateTime: Date;
   price: number;
   availableSeats: number;
   bookedSeats: string[];
   status: 'active' | 'cancelled' | 'completed';
-  isActive: boolean; // Retaining from your original component code
+  isActive: boolean;
+  createdAt: Date | Timestamp;
+  updatedAt: Date | Timestamp;
 }
 
-export interface PassengerDetail {
+export interface PassengerDetails {
   id?: string;
   name: string;
   age: number;
   gender: 'male' | 'female' | 'other';
   seatNumber: string;
+  specialNeeds?: string;
+  ticketType?: 'adult' | 'child' | 'senior' | 'infant';
+  identification?: {
+    type: 'passport' | 'national_id' | 'driver_license' | 'other';
+    number: string;
+  };
+  contactNumber?: string;
+  email?: string; 
 }
 
-export interface Booking extends FirestoreDocument {
+export interface Booking {
+  id: string;
   bookingReference: string;
   userId: string;
   scheduleId: string;
   companyId: string;
-  passengerDetails: PassengerDetail[];
+  passengerDetails: PassengerDetails[];
   seatNumbers: string[];
   totalAmount: number;
   bookingStatus: 'confirmed' | 'cancelled' | 'pending' | 'completed' | 'no-show';
@@ -87,16 +115,40 @@ export interface Booking extends FirestoreDocument {
   bookingDate: Date;
   cancellationDate?: Date;
   refundDate?: Date;
+  createdAt: Date | Timestamp;
+  updatedAt: Date | Timestamp;
+  cancellationReason?: string;
+  paymentInitiatedAt?: Date | Timestamp;
+  paymentCompletedAt?: Date | Timestamp;
+  metadata?: Record<string, any>;
+  paymentProvider?: string;
+  transactionId?: string;
+  routeId: string;
+  paymentGateway: string;
+  transactionReference?: string;
+  confirmedDate?: Date | Timestamp;
 }
 
 export interface UserProfile extends FirestoreDocument {
-  name: string;
-  email: string;
+  firstName: string;
+  lastName: string;
+  email?: string;
   phone?: string;
-  role: 'customer' | 'company_admin' | 'superadmin' | 'operator'; // Added operator
+  role: 'customer' | 'company_admin' | 'superadmin' | 'operator';
   companyId?: string;
   isActive: boolean;
   emailVerified: boolean;
+  sex?: string;
+  nationalId?: string;
+  dateOfBirth?: Date;
+  currentAddress?: string;
+  profilePicture?: string;
+  resetToken?: string;
+  resetTokenExpiry?: Date;
+  setupCompleted?: boolean;
+  passwordSet?: boolean;
+  lastLogin?: Date;
+  metadata?: Record<string, any>;
 }
 
 export interface Location extends FirestoreDocument {
@@ -104,5 +156,12 @@ export interface Location extends FirestoreDocument {
   city: string;
   region: string;
   country: string;
+  isActive: boolean;
+}
+
+export interface Amenity extends FirestoreDocument {
+  name: string;
+  description?: string;
+  icon?: string;
   isActive: boolean;
 }

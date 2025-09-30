@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
-import { collection, query, where, orderBy, limit, Timestamp, onSnapshot,getDocs } from "firebase/firestore";
+import { collection, query, where, orderBy, limit, Timestamp, onSnapshot, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebaseConfig";
 import { 
   Bus as BusIcon, 
@@ -31,6 +31,7 @@ import { Button } from "@/components/ui/button";
 import PromoBanner from "@/components/PromoBanner";
 import PopularRoutesCarousel from "@/components/PopularRouteCarousal";
 import HowItWorks from "@/components/HowItWorks";
+import Partners from "@/components/Partners";
 
 interface SearchCriteria {
   from: string;
@@ -79,9 +80,16 @@ interface Route {
   isActive: boolean;
 }
 
-interface EnhancedSchedule extends Omit<Schedule, "departureDateTime" | "arrivalDateTime"> {
+interface EnhancedSchedule {
+  id: string;
+  companyId: string;
+  busId: string;
+  routeId: string;
+  price: number;
+  availableSeats: number;
+  status: string;
   date: string;
-  departureTime: string;
+  departureDateTime: string; // Changed to string
   arrivalDate: string;
   arrivalTime: string;
   companyName: string;
@@ -121,7 +129,7 @@ class SmartCache {
 const cache = new SmartCache();
 
 const StatsCardSkeleton = () => (
-  <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 text-center shadow-lg border border-white/20 animate-pulse">
+  <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 text-center shadow-lg border border-white/20 animate-pulse" aria-hidden="true">
     <div className="w-8 h-8 bg-gray-200 rounded-full mx-auto mb-3"></div>
     <div className="h-8 bg-gray-200 rounded w-16 mx-auto mb-2"></div>
     <div className="h-4 bg-gray-200 rounded w-20 mx-auto"></div>
@@ -129,7 +137,7 @@ const StatsCardSkeleton = () => (
 );
 
 const ScheduleCardSkeleton = () => (
-  <div className="bg-white rounded-3xl shadow-lg p-6 animate-pulse border border-gray-100">
+  <div className="bg-white rounded-3xl shadow-lg p-6 animate-pulse border border-gray-100" aria-hidden="true">
     <div className="flex items-center justify-between mb-6">
       <div className="flex items-center space-x-4">
         <div className="w-14 h-14 bg-gray-200 rounded-2xl"></div>
@@ -192,9 +200,9 @@ export default function HomePage() {
   const [refreshing, setRefreshing] = useState(false);
 
   const stats = useMemo(() => ({
-    totalRoutes: 150,
-    totalCompanies: 25,
-    totalBookings: 15420,
+    totalRoutes: 20,
+    totalCompanies: 5,
+    totalBookings: 100,
     avgRating: 4.6,
   }), []);
 
@@ -246,19 +254,19 @@ export default function HomePage() {
 
       const companiesMap = new Map();
       companiesSnapshot.forEach((doc) => {
-        const data = { id: doc.id, ...doc.data() };
+        const data = { id: doc.id, ...doc.data() } as Company;
         companiesMap.set(doc.id, data);
       });
 
       const busesMap = new Map();
       busesSnapshot.forEach((doc) => {
-        const data = { id: doc.id, ...doc.data() };
+        const data = { id: doc.id, ...doc.data() } as Bus;
         busesMap.set(doc.id, data);
       });
 
       const routesMap = new Map();
       routesSnapshot.forEach((doc) => {
-        const data = { id: doc.id, ...doc.data() };
+        const data = { id: doc.id, ...doc.data() } as Route;
         routesMap.set(doc.id, data);
       });
 
@@ -278,9 +286,15 @@ export default function HomePage() {
           const arrivalTime = arrivalDateTime.toTimeString().slice(0, 5);
 
           return {
-            ...schedule,
+            id: schedule.id,
+            companyId: schedule.companyId,
+            busId: schedule.busId,
+            routeId: schedule.routeId,
+            price: schedule.price,
+            availableSeats: schedule.availableSeats,
+            status: schedule.status,
             date,
-            departureTime,
+            departureDateTime: departureTime,
             arrivalDate,
             arrivalTime,
             companyName: company.name,
@@ -293,7 +307,7 @@ export default function HomePage() {
             busType: bus.busType || "Standard",
             totalSeats: bus.capacity || bus.totalSeats || 40,
             amenities: bus.amenities || [],
-          };
+          } as EnhancedSchedule;
         }
         return null;
       };
@@ -307,7 +321,7 @@ export default function HomePage() {
         });
 
         const sortedSchedules = enhancedSchedules.sort((a, b) =>
-          a.departureDateTime.toDate().getTime() - b.departureDateTime.toDate().getTime()
+          new Date(a.date + "T" + a.departureDateTime).getTime() - new Date(b.date + "T" + b.departureDateTime).getTime()
         );
 
         cache.set(cacheKey, sortedSchedules, 180000);
@@ -315,14 +329,14 @@ export default function HomePage() {
         setLoading(false);
         setRefreshing(false);
       }, (error) => {
-        console.error("Snapshot error:", error);
-        setError("Unable to load schedules. Please try again.");
+        console.error("Snapshot error:", error.message);
+        setError("Failed to load schedules. Check your internet connection.");
         setLoading(false);
         setRefreshing(false);
       });
     } catch (err: any) {
-      console.error("Fetch error:", err);
-      setError("Unable to load schedules. Please try again.");
+      console.error("Fetch error:", err.message);
+      setError("Failed to load schedules. Please try again later.");
       setLoading(false);
       setRefreshing(false);
     }
@@ -336,12 +350,13 @@ export default function HomePage() {
   }, [fetchSchedulesWithDetails]);
 
   const handleSearch = useCallback((newCriteria: SearchCriteria) => {
-    const urlParams = new URLSearchParams({
-      from: newCriteria.from,
-      to: newCriteria.to,
+    const sanitizedCriteria = {
+      from: newCriteria.from.trim(),
+      to: newCriteria.to.trim(),
       date: newCriteria.date,
-      passengers: newCriteria.passengers.toString(),
-    });
+      passengers: Math.max(1, newCriteria.passengers),
+    };
+    const urlParams = new URLSearchParams(sanitizedCriteria as any);
     router.push(`/search?${urlParams.toString()}`);
   }, [router]);
 
@@ -356,44 +371,26 @@ export default function HomePage() {
   const formatDuration = (minutes: number): string => {
     const hours = Math.floor(minutes / 60);
     const mins = minutes % 60;
-    if (hours > 0) {
-      return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
-    }
-    return `${mins}m`;
+    return hours > 0 ? (mins > 0 ? `${hours}h ${mins}m` : `${hours}h`) : `${mins}m`;
   };
 
   const getSeatAvailabilityColor = (available: number, total: number) => {
     const percentage = (available / total) * 100;
-    if (percentage > 50) return "text-green-600";
-    if (percentage > 25) return "text-yellow-600";
-    return "text-red-600";
+    return percentage > 50 ? "text-green-600" : percentage > 25 ? "text-yellow-600" : "text-red-600";
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 overflow-hidden">
       <style jsx>{`
         @keyframes fadeIn {
-          from {
-            opacity: 0;
-            transform: translateY(20px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
+          from { opacity: 0; transform: translateY(20px); }
+          to { opacity: 1; transform: translateY(0); }
         }
-        .animate-fade-in {
-          animation: fadeIn 0.8s ease-out;
-        }
-        img {
-          transition: opacity 0.3s ease;
-        }
-        img:not([src]) {
-          opacity: 0;
-        }
+        .animate-fade-in { animation: fadeIn 0.8s ease-out; }
+        img { transition: opacity 0.3s ease; }
+        img:not([src]) { opacity: 0; }
       `}</style>
       
-      {/* Enhanced Hero Section */}
       <div className="relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-r from-blue-600/10 via-indigo-600/5 to-purple-600/10" />
         <div className="absolute top-0 right-0 w-96 h-96 bg-gradient-to-br from-blue-400/20 to-indigo-600/20 rounded-full blur-3xl transform translate-x-32 -translate-y-32" />
@@ -402,7 +399,7 @@ export default function HomePage() {
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-16">
           <div className="grid lg:grid-cols-2 gap-12 items-center mb-12">
             <div className="text-center lg:text-left">
-              <div className="inline-flex items-center px-4 py-2 bg-blue-100 text-blue-800 rounded-full text-sm font-medium mb-6 animate-pulse">
+              <div className="inline-flex items-center px-4 py-2 bg-blue-100 text-blue-800 rounded-full text-sm font-medium mb-6 animate-pulse" role="alert">
                 <Zap className="w-4 h-4 mr-2" />
                 Malawi's #1 Bus Booking Platform
               </div>
@@ -417,26 +414,26 @@ export default function HomePage() {
               </p>
               
               <div className="flex flex-wrap gap-6 justify-center lg:justify-start">
-                <div className="flex items-center space-x-2 text-gray-600">
+                <div className="flex items-center space-x-2 text-gray-600" aria-label="Instant Booking">
                   <CheckCircle className="w-5 h-5 text-green-500" />
                   <span className="text-sm font-medium">Instant Booking</span>
                 </div>
-                <div className="flex items-center space-x-2 text-gray-600">
+                <div className="flex items-center space-x-2 text-gray-600" aria-label="Secure Payment">
                   <Shield className="w-5 h-5 text-blue-500" />
                   <span className="text-sm font-medium">Secure Payment</span>
                 </div>
-                <div className="flex items-center space-x-2 text-gray-600">
+                <div className="flex items-center space-x-2 text-gray-600" aria-label="24/7 Support">
                   <Users className="w-5 h-5 text-purple-500" />
                   <span className="text-sm font-medium">24/7 Support</span>
                 </div>
               </div>
 
               <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start mt-6">
-                <Button onClick={() => handleSearch(searchCriteria)} className="btn-hero">
+                <Button onClick={() => handleSearch(searchCriteria)} className="btn-hero" aria-label="Find Your Journey">
                   <Search className="w-5 h-5 mr-2" />
                   Find Your Journey
                 </Button>
-                <Button variant="outline" className="group border-primary/20 text-primary hover:bg-primary/5">
+                <Button variant="outline" className="group border-primary/20 text-primary hover:bg-primary/5" aria-label="Watch Demo">
                   <Play className="w-4 h-4 mr-2" />
                   Watch Demo
                   <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
@@ -452,6 +449,7 @@ export default function HomePage() {
                     alt="Bus Transportation Illustration"
                     className="w-full h-auto animate-fade-in"
                     style={{ filter: "hue-rotate(15deg) saturate(1.1)" }}
+                    loading="lazy"
                   />
                 </div>
               </div>
@@ -518,7 +516,7 @@ export default function HomePage() {
                 </div>
               </div>
               {loading ? (
-                <div className="animate-pulse">
+                <div className="animate-pulse" aria-live="polite">
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                     <div>
                       <div className="h-4 bg-gray-200 rounded w-16 mb-2"></div>
@@ -544,48 +542,57 @@ export default function HomePage() {
               ) : (
                 <div className="grid md:grid-cols-4 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-900 mb-2">From</label>
+                    <label className="block text-sm font-medium text-gray-900 mb-2" htmlFor="from">From</label>
                     <input
+                      id="from"
                       type="text"
                       placeholder="Departure city"
                       value={searchCriteria.from}
-                      onChange={(e) => setSearchCriteria((prev) => ({ ...prev, from: e.target.value }))}
+                      onChange={(e) => setSearchCriteria((prev) => ({ ...prev, from: e.target.value.trim() }))}
                       className="h-12 rounded-md border border-gray-300 bg-white px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                      aria-required="true"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-900 mb-2">To</label>
+                    <label className="block text-sm font-medium text-gray-900 mb-2" htmlFor="to">To</label>
                     <input
+                      id="to"
                       type="text"
                       placeholder="Destination city"
                       value={searchCriteria.to}
-                      onChange={(e) => setSearchCriteria((prev) => ({ ...prev, to: e.target.value }))}
+                      onChange={(e) => setSearchCriteria((prev) => ({ ...prev, to: e.target.value.trim() }))}
                       className="h-12 rounded-md border border-gray-300 bg-white px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                      aria-required="true"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-900 mb-2">Date</label>
+                    <label className="block text-sm font-medium text-gray-900 mb-2" htmlFor="date">Date</label>
                     <input
+                      id="date"
                       type="date"
                       value={searchCriteria.date}
                       onChange={(e) => setSearchCriteria((prev) => ({ ...prev, date: e.target.value }))}
                       className="h-12 rounded-md border border-gray-300 bg-white px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                      aria-required="true"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-900 mb-2">Passengers</label>
+                    <label className="block text-sm font-medium text-gray-900 mb-2" htmlFor="passengers">Passengers</label>
                     <input
+                      id="passengers"
                       type="number"
                       min="1"
                       value={searchCriteria.passengers}
-                      onChange={(e) => setSearchCriteria((prev) => ({ ...prev, passengers: parseInt(e.target.value) || 1 }))}
+                      onChange={(e) => setSearchCriteria((prev) => ({ ...prev, passengers: Math.max(1, parseInt(e.target.value) || 1) }))}
                       className="h-12 rounded-md border border-gray-300 bg-white px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                      aria-required="true"
                     />
                   </div>
                   <div className="mt-6">
                     <Button
                       onClick={() => handleSearch(searchCriteria)}
                       className="btn-hero w-full"
+                      aria-label="Search Buses"
                     >
                       <Search className="w-4 h-4 mr-2" />
                       Search Buses
@@ -615,6 +622,7 @@ export default function HomePage() {
             variant="outline"
             onClick={() => router.push("/schedules")}
             className="group border-primary/20 text-primary hover:bg-primary/5"
+            aria-label="View All Routes"
           >
             View All Routes
             <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
@@ -622,7 +630,7 @@ export default function HomePage() {
         </div>
 
         {error && (
-          <div className="bg-red-50 border border-red-200 rounded-2xl p-6 mb-8 animate-slide-down">
+          <div className="bg-red-50 border border-red-200 rounded-2xl p-6 mb-8 animate-slide-down" role="alert">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-3">
                 <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
@@ -639,6 +647,7 @@ export default function HomePage() {
                 size="sm"
                 className="border-red-200 text-red-700 hover:bg-red-50"
                 disabled={refreshing}
+                aria-label="Retry Loading Schedules"
               >
                 {refreshing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />}
                 Retry
@@ -648,7 +657,7 @@ export default function HomePage() {
         )}
 
         {loading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12" aria-live="polite">
             {Array(5).fill(0).map((_, i) => <ScheduleCardSkeleton key={i} />)}
           </div>
         ) : featuredSchedules.length > 0 ? (
@@ -658,6 +667,7 @@ export default function HomePage() {
                 key={schedule.id}
                 className="card-elevated card-glow group hover:scale-105 transition-all duration-300"
                 style={{ animationDelay: `${index * 100}ms` }}
+                role="article"
               >
                 <div className="p-6">
                   <div className="flex items-center justify-between mb-4">
@@ -723,7 +733,7 @@ export default function HomePage() {
                     </div>
                     <div className="flex items-center space-x-2 p-2 rounded-lg bg-gray-50">
                       <Clock className="w-4 h-4 text-blue-600 flex-shrink-0" />
-                      <span className="text-sm font-medium text-gray-900">{schedule.departureTime}</span>
+                      <span className="text-sm font-medium text-gray-900">{schedule.departureDateTime}</span>
                     </div>
                     <div className="flex items-center space-x-2 p-2 rounded-lg bg-gray-50">
                       <Users className={`w-4 h-4 flex-shrink-0 ${getSeatAvailabilityColor(schedule.availableSeats, schedule.totalSeats)}`} />
@@ -745,6 +755,7 @@ export default function HomePage() {
                           <div
                             key={index}
                             className="flex items-center space-x-1 text-xs px-3 py-1.5 bg-blue-100 text-blue-800 rounded-full font-medium"
+                            aria-label={amenity}
                           >
                             <IconComponent className="w-3 h-3" />
                             <span>{amenity}</span>
@@ -755,8 +766,9 @@ export default function HomePage() {
                   )}
                   <Button
                     onClick={() => handleBooking(schedule.id)}
-                    className={`btn-hero w-full ${schedule.availableSeats <= 0 || schedule.departureDateTime.toDate() < new Date() ? 'opacity-50 cursor-not-allowed' : ''}`}
-                    disabled={schedule.availableSeats <= 0 || schedule.departureDateTime.toDate() < new Date()}
+                    className={`btn-hero w-full ${schedule.availableSeats <= 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    disabled={schedule.availableSeats <= 0}
+                    aria-label={`Book journey to ${schedule.destination}`}
                   >
                     Book Journey
                     <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
@@ -766,7 +778,7 @@ export default function HomePage() {
             ))}
           </div>
         ) : (
-          <div className="text-center py-16 mb-12">
+          <div className="text-center py-16 mb-12" role="alert">
             <div className="bg-white rounded-3xl shadow-lg p-12 max-w-lg mx-auto relative overflow-hidden">
               <div className="relative z-10 mb-8">
                 <div className="w-48 h-36 mx-auto mb-6">
@@ -775,6 +787,7 @@ export default function HomePage() {
                     alt="https://storyset.com/bus"
                     className="w-full h-full object-contain opacity-80"
                     style={{ filter: "hue-rotate(200deg) saturate(0.8)" }}
+                    loading="lazy"
                   />
                 </div>
               </div>
@@ -787,6 +800,7 @@ export default function HomePage() {
                 onClick={() => fetchSchedulesWithDetails(true)}
                 className="bg-blue-600 hover:bg-blue-700 text-white shadow-lg hover:shadow-xl transition-all duration-200"
                 disabled={refreshing}
+                aria-label="Refresh Schedules"
               >
                 {refreshing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />}
                 Refresh
@@ -804,8 +818,6 @@ export default function HomePage() {
           </div>
         )}
       </div>
-      <PopularRoutesCarousel routes={featuredSchedules} />
-      <HowItWorks />
     </div>
   );
 }

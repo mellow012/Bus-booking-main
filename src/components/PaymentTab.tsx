@@ -6,7 +6,15 @@ import { db } from "@/lib/firebaseConfig";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
-const PaymentsTab = ({ company, paymentSettings, bookings, setError, setSuccess }) => {
+interface PaymentsTabProps {
+  company: { id: string; [key: string]: any };
+  paymentSettings: any; // Replace 'any' with a more specific type if available
+  bookings: any[];
+  setError: (msg: string) => void;
+  setSuccess: (msg: string) => void;
+}
+
+const PaymentsTab: React.FC<PaymentsTabProps> = ({ company, paymentSettings, bookings, setError, setSuccess }) => {
   const [transactions, setTransactions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 

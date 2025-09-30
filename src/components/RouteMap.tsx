@@ -1,13 +1,30 @@
-// components/RouteMap.tsx (partial update)
+// components/RouteMap.tsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import mapboxgl from "mapbox-gl";
-import "mapbox-gl/dist/mapbox-gl.css";
-import { Info, MapPin, Route as RouteIcon } from "lucide-react";
-import { process.env.NEXT_PUBLIC_MAPBOX_TOKEN } from "@/config/env"; // Adjust path as needed
 
-const routes = [
-  { id: "llw-btn", name: "Lilongwe → Blantyre", color: "#3b82f6", coords: [[33.7741, -13.9626], [35.0058, -15.7861]] },
-  { id: "btn-mgz", name: "Blantyre → Mangochi", color: "#8b5cf6", coords: [[35.0058, -15.7861], [35.2610, -14.4780]] },
+import { Info, MapPin, Route as RouteIcon } from "lucide-react";
+
+// Define proper types for routes
+interface RouteData {
+  id: string;
+  name: string;
+  color: string;
+  coords: [number, number][]; // Array of coordinate tuples
+}
+
+const routes: RouteData[] = [
+  { 
+    id: "llw-btn", 
+    name: "Lilongwe → Blantyre", 
+    color: "#3b82f6", 
+    coords: [[33.7741, -13.9626], [35.0058, -15.7861]] 
+  },
+  { 
+    id: "btn-mgz", 
+    name: "Blantyre → Mangochi", 
+    color: "#8b5cf6", 
+    coords: [[35.0058, -15.7861], [35.2610, -14.4780]] 
+  },
 ];
 
 const DEFAULT_CENTER: [number, number] = [33.8, -13.9];
@@ -19,7 +36,7 @@ const RouteMap: React.FC = () => {
 
   const bounds = useMemo(() => {
     const b = new mapboxgl.LngLatBounds();
-    routes.forEach((r) => r.coords.forEach((c) => b.extend(c)));
+    routes.forEach((r) => r.coords.forEach((c) => b.extend(c as [number, number])));
     return b;
   }, []);
 
@@ -33,7 +50,7 @@ const RouteMap: React.FC = () => {
       center: DEFAULT_CENTER,
       zoom: 5.2,
       cooperativeGestures: true,
-      projection: "mercator",
+      projection: "mercator" as any, // Type assertion for projection
     });
 
     mapRef.current = map;
@@ -66,8 +83,8 @@ const RouteMap: React.FC = () => {
           },
         });
 
-        const start = r.coords[0];
-        const end = r.coords[r.coords.length - 1];
+        const start: [number, number] = r.coords[0];
+        const end: [number, number] = r.coords[r.coords.length - 1];
 
         new mapboxgl.Marker({ color: "#16a34a" })
           .setLngLat(start)

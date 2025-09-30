@@ -3,7 +3,7 @@ import { collection, updateDoc, deleteDoc, doc } from 'firebase/firestore';
 import { db } from '@/lib/firebaseConfig';
 import { Schedule, Route, Bus } from '@/types';
 import Modal from './Modals';
-import { Plus, Edit3, Trash2, Search, Clock, MapPin, DollarSign, Users, AlertCircle, Calendar, Bug } from 'lucide-react';
+import { Plus, Edit3, Trash2, Search, Clock, MapPin, DollarSign, Users, AlertCircle, Calendar } from 'lucide-react';
 
 interface SchedulesTabProps {
   schedules: Schedule[];
@@ -56,7 +56,6 @@ const formatDateTimeInput = (date: Date | string | null | undefined): string => 
     const dateObj = convertFirestoreDate(date);
     if (isNaN(dateObj.getTime())) return '';
     
-    // Format for datetime-local input
     const year = dateObj.getFullYear();
     const month = String(dateObj.getMonth() + 1).padStart(2, '0');
     const day = String(dateObj.getDate()).padStart(2, '0');
@@ -84,6 +83,8 @@ const createInitialSchedule = (companyId: string): Omit<Schedule, 'id'> => {
     routeId: '',
     departureDateTime: tomorrow,
     arrivalDateTime: arrivalTime,
+    departureLocation: '', // Add this
+    arrivalLocation: '',   // Add this
     price: 0,
     availableSeats: 0,
     bookedSeats: [],
@@ -109,18 +110,7 @@ const SchedulesTab: FC<SchedulesTabProps> = ({
   const [editSchedule, setEditSchedule] = useState<Schedule | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
-  const [showDebug, setShowDebug] = useState(true); // Set to false in production
   const [newSchedule, setNewSchedule] = useState<Omit<Schedule, 'id'>>(() => createInitialSchedule(companyId));
-
-  console.log('🔍 SchedulesTab render:', { 
-    schedulesCount: schedules.length, 
-    routesCount: routes.length, 
-    busesCount: buses.length,
-    companyId,
-    firstSchedule: schedules[0],
-    firstRoute: routes[0],
-    firstBus: buses[0]
-  });
 
   // Memoized lookup maps for better performance
   const routeMap = useMemo(() => {
@@ -128,7 +118,6 @@ const SchedulesTab: FC<SchedulesTabProps> = ({
     routes.forEach(route => {
       if (route?.id) map.set(route.id, route);
     });
-    console.log('🗺️ Route map created:', map.size, 'routes');
     return map;
   }, [routes]);
 
@@ -137,34 +126,23 @@ const SchedulesTab: FC<SchedulesTabProps> = ({
     buses.forEach(bus => {
       if (bus?.id) map.set(bus.id, bus);
     });
-    console.log('🚌 Bus map created:', map.size, 'buses');
     return map;
   }, [buses]);
 
   // Process and validate schedules with enhanced error handling
   const validSchedules = useMemo(() => {
-    console.log('🔄 Processing schedules...', schedules.length, 'total');
-    
     if (!Array.isArray(schedules)) {
-      console.error('❌ schedules is not an array:', typeof schedules, schedules);
       return [];
     }
 
-    const processedSchedules = schedules
+    return schedules
       .filter((schedule, index) => {
         if (!schedule) {
-          console.warn(`❌ Schedule ${index} is null/undefined`);
           return false;
         }
         
         const hasRequiredFields = schedule.id && schedule.routeId && schedule.busId;
         if (!hasRequiredFields) {
-          console.warn(`❌ Schedule ${index} missing required fields:`, {
-            id: !!schedule.id,
-            routeId: !!schedule.routeId,
-            busId: !!schedule.busId,
-            schedule
-          });
           return false;
         }
         
@@ -174,37 +152,24 @@ const SchedulesTab: FC<SchedulesTabProps> = ({
         try {
           const processed = {
             ...schedule,
-            // Ensure dates are properly converted
             departureDateTime: convertFirestoreDate(schedule.departureDateTime),
             arrivalDateTime: convertFirestoreDate(schedule.arrivalDateTime),
             createdAt: convertFirestoreDate(schedule.createdAt),
             updatedAt: convertFirestoreDate(schedule.updatedAt),
           };
           
-          // Validate the processed dates
           if (isNaN(processed.departureDateTime.getTime()) || isNaN(processed.arrivalDateTime.getTime())) {
-            console.warn(`⚠️ Schedule ${index} has invalid dates:`, {
-              original: schedule,
-              processed: {
-                departureDateTime: processed.departureDateTime,
-                arrivalDateTime: processed.arrivalDateTime
-              }
-            });
+            return schedule;
           }
           
           return processed;
         } catch (error) {
-          console.error(`❌ Error processing schedule ${index}:`, error, schedule);
-          return schedule; // Return original if processing fails
+          return schedule;
         }
       })
-      // Remove duplicates based on ID
       .filter((schedule, index, arr) => 
         arr.findIndex(s => s.id === schedule.id) === index
       );
-
-    console.log('✅ Valid schedules processed:', processedSchedules.length, 'out of', schedules.length);
-    return processedSchedules;
   }, [schedules]);
 
   // Filter schedules based on search with better error handling
@@ -224,7 +189,6 @@ const SchedulesTab: FC<SchedulesTabProps> = ({
           schedule.status?.toLowerCase().includes(searchLower)
         );
       } catch (error) {
-        console.error('Error filtering schedule:', error, schedule);
         return false;
       }
     });
@@ -255,7 +219,6 @@ const SchedulesTab: FC<SchedulesTabProps> = ({
       
       return null;
     } catch (error) {
-      console.error('Validation error:', error);
       return 'Form validation failed';
     }
   }, [busMap]);
@@ -283,7 +246,6 @@ const SchedulesTab: FC<SchedulesTabProps> = ({
         setSuccess('Schedule added successfully!');
       }
     } catch (err: any) {
-      console.error('❌ Add schedule error:', err);
       setError(`Failed to add schedule: ${err.message}`);
     } finally {
       setActionLoading(false);
@@ -318,7 +280,6 @@ const SchedulesTab: FC<SchedulesTabProps> = ({
       setEditSchedule(null);
       setSuccess('Schedule updated successfully!');
     } catch (err: any) {
-      console.error('❌ Edit schedule error:', err);
       setError(`Failed to update schedule: ${err.message}`);
     } finally {
       setActionLoading(false);
@@ -334,7 +295,6 @@ const SchedulesTab: FC<SchedulesTabProps> = ({
       setSchedules(prev => prev.filter(s => s.id !== id));
       setSuccess('Schedule deleted successfully!');
     } catch (err: any) {
-      console.error('❌ Delete schedule error:', err);
       setError(`Failed to delete schedule: ${err.message}`);
     } finally {
       setActionLoading(false);
@@ -366,94 +326,6 @@ const SchedulesTab: FC<SchedulesTabProps> = ({
     [buses]
   );
 
-  // Debug component
-  const DebugInfo = () => showDebug ? (
-    <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-      <div className="flex items-center justify-between mb-2">
-        <h4 className="font-semibold text-yellow-800 flex items-center">
-          <Bug className="w-4 h-4 mr-1" />
-          Debug Information
-        </h4>
-        <button 
-          onClick={() => setShowDebug(false)}
-          className="text-yellow-600 hover:text-yellow-800 text-sm"
-        >
-          Hide
-        </button>
-      </div>
-      <div className="text-sm space-y-1 text-yellow-900">
-        <div><strong>Raw Schedules:</strong> {schedules.length}</div>
-        <div><strong>Valid Schedules:</strong> {validSchedules.length}</div>
-        <div><strong>Filtered Schedules:</strong> {filteredSchedules.length}</div>
-        <div><strong>Routes:</strong> {routes.length}</div>
-        <div><strong>Buses:</strong> {buses.length}</div>
-        <div><strong>Active Buses:</strong> {activeBuses.length}</div>
-        <div><strong>Company ID:</strong> "{companyId}"</div>
-        
-        {schedules.length > 0 && (
-          <details className="mt-2">
-            <summary className="cursor-pointer text-yellow-700 hover:text-yellow-800">
-              View First Schedule Data
-            </summary>
-            <pre className="mt-2 text-xs bg-white p-3 rounded border overflow-auto max-h-32">
-              {JSON.stringify(schedules[0], (key, value) => {
-                if (value instanceof Date) return value.toISOString();
-                if (value?.toDate) return `[Timestamp: ${value.toDate().toISOString()}]`;
-                return value;
-              }, 2)}
-            </pre>
-          </details>
-        )}
-        
-        {routes.length > 0 && (
-          <details className="mt-1">
-            <summary className="cursor-pointer text-yellow-700 hover:text-yellow-800">
-              View First Route Data
-            </summary>
-            <pre className="mt-2 text-xs bg-white p-3 rounded border overflow-auto max-h-32">
-              {JSON.stringify(routes[0], null, 2)}
-            </pre>
-          </details>
-        )}
-
-        {buses.length > 0 && (
-          <details className="mt-1">
-            <summary className="cursor-pointer text-yellow-700 hover:text-yellow-800">
-              View First Bus Data
-            </summary>
-            <pre className="mt-2 text-xs bg-white p-3 rounded border overflow-auto max-h-32">
-              {JSON.stringify(buses[0], null, 2)}
-            </pre>
-          </details>
-        )}
-        
-        <div className="mt-2 p-2 bg-white rounded border">
-          <div className="text-xs font-medium mb-1">Quick Data Checks:</div>
-          <div className="text-xs space-y-1">
-            <div>✓ Schedules is array: {Array.isArray(schedules) ? 'Yes' : 'No'}</div>
-            <div>✓ Routes is array: {Array.isArray(routes) ? 'Yes' : 'No'}</div>
-            <div>✓ Buses is array: {Array.isArray(buses) ? 'Yes' : 'No'}</div>
-            <div>✓ Company ID provided: {companyId ? 'Yes' : 'No'}</div>
-            {validSchedules.length > 0 && (
-              <div>✓ First valid schedule has route: {routeMap.has(validSchedules[0].routeId) ? 'Yes' : 'No'}</div>
-            )}
-            {validSchedules.length > 0 && (
-              <div>✓ First valid schedule has bus: {busMap.has(validSchedules[0].busId) ? 'Yes' : 'No'}</div>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  ) : (
-    <button 
-      onClick={() => setShowDebug(true)}
-      className="mb-4 text-sm text-gray-500 hover:text-gray-700 flex items-center"
-    >
-      <Bug className="w-3 h-3 mr-1" />
-      Show Debug Info
-    </button>
-  );
-
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -476,9 +348,6 @@ const SchedulesTab: FC<SchedulesTabProps> = ({
           <span>Add Schedule</span>
         </button>
       </div>
-
-      {/* Debug Info */}
-      <DebugInfo />
 
       {/* Search and Stats */}
       <div className="bg-white rounded-xl shadow-sm border p-6">
@@ -515,7 +384,7 @@ const SchedulesTab: FC<SchedulesTabProps> = ({
                 <p className="text-gray-500 mb-6">
                   {schedules.length === 0 
                     ? 'Create your first schedule to start managing your bus timetables'
-                    : `Found ${schedules.length} schedules but none are valid. Check the debug info above.`
+                    : `Found ${schedules.length} schedules but none are valid.`
                   }
                 </p>
                 <button 

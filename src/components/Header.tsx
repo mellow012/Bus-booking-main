@@ -220,7 +220,7 @@ const Header: React.FC = () => {
                   <UserAvatar user={user} userProfile={userProfile} />
                   <div className="hidden md:block text-left">
                     <div className="text-sm font-semibold text-gray-900 group-hover:text-blue-600">
-                      {userProfile?.firstName || 'User'}
+                      {userProfile?.firstName} {userProfile?.lastName || 'User'}
                     </div>
                     <div className="text-xs text-gray-500">
                       {userProfile?.role || 'Member'}

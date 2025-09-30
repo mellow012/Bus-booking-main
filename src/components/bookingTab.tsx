@@ -4,6 +4,7 @@ import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { Search, Check, X, Clock, Users, MapPin, Calendar, Eye, CreditCard, FileText, Mail, ChevronLeft, ChevronRight, Ban, Loader2, RefreshCw, Activity, Download, DollarSign, AlertTriangle, RotateCcw, Phone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Booking } from "@/types/core";
 // Enhanced Skeleton Component
 const Skeleton = ({ className }: { className?: string }) => (
   <div className={`bg-gray-200 animate-pulse rounded ${className || 'h-4 w-3/4'}`} />
@@ -16,29 +17,6 @@ interface Passenger {
   age?: number;
   gender?: string;
   seatNumber?: string;
-}
-
-interface Booking {
-  id: string;
-  bookingReference?: string;
-  passengerDetails: Passenger[];
-  scheduleId: string;
-  companyId: string;
-  seatNumbers: string[];
-  totalAmount: number;
-  bookingStatus: "confirmed" | "pending" | "cancelled";
-  paymentStatus: "paid" | "pending" | "refunded" | "failed";
-  bookingDate?: Date;
-  createdAt?: Date;
-  updatedAt?: Date;
-  paymentMethod?: string;
-  paymentProvider?: string;
-  transactionReference?: string;
-  userId?: string;
-  cancellationDate?: Date;
-  cancellationReason?: string;
-  confirmedDate?: Date;
-  refundDate?: Date;
 }
 
 interface Schedule {
@@ -59,7 +37,7 @@ interface Company {
 }
 
 interface BookingsTabProps {
-  bookings: Booking[];
+  bookings: Booking[]; // Now uses the core Booking type
   setBookings: React.Dispatch<React.SetStateAction<Booking[]>>;
   schedules: Schedule[];
   routes: Route[];
@@ -69,6 +47,7 @@ interface BookingsTabProps {
   role?: "superadmin" | "company_admin";
   companies?: Company[];
 }
+
 
 const showNotification = (title: string, message: string, type: 'success' | 'error' | 'info' | 'warning' = 'info') => {
   if ('Notification' in window && Notification.permission === 'granted') {
@@ -126,10 +105,10 @@ const BookingsTab: FC<BookingsTabProps> = ({
         const bookingRef = booking.bookingReference || booking.id || "NO-REF";
         const matchesSearch =
           (Array.isArray(booking.passengerDetails) &&
-           booking.passengerDetails.some((p) => p?.name?.toLowerCase().includes(searchLower))) ||
+            booking.passengerDetails.some((p) => p?.name?.toLowerCase().includes(searchLower))) ||
           bookingRef.toLowerCase().includes(searchLower) ||
           (Array.isArray(booking.seatNumbers) &&
-           booking.seatNumbers.join(",").toLowerCase().includes(searchLower));
+            booking.seatNumbers.join(",").toLowerCase().includes(searchLower));
         if (role === "company_admin") {
           return matchesSearch && booking.companyId === companyId;
         }
@@ -279,7 +258,6 @@ const BookingsTab: FC<BookingsTabProps> = ({
 
         const bookingData = bookingDoc.data() as Booking;
         const updatedData = {
-          ...bookingData,
           bookingStatus: newStatus,
           updatedAt: new Date(),
           [newStatus === "confirmed" ? "confirmedDate" : "cancellationDate"]: new Date(),
@@ -288,8 +266,9 @@ const BookingsTab: FC<BookingsTabProps> = ({
 
         await updateDoc(bookingRef, updatedData);
 
+        // FIX: Explicitly cast the merged object as Booking to satisfy TypeScript's strict literal type checking
         setBookings((prev) =>
-          prev.map((b) => (b.id === bookingId ? { ...b, ...updatedData } : b))
+          prev.map((b) => (b.id === bookingId ? ({ ...b, ...updatedData } as Booking) : b))
         );
 
         showNotification(
@@ -366,7 +345,6 @@ const BookingsTab: FC<BookingsTabProps> = ({
         }
 
         const updatedData = {
-          ...bookingData,
           paymentStatus: "refunded",
           refundDate: new Date(),
           updatedAt: new Date(),
@@ -374,8 +352,9 @@ const BookingsTab: FC<BookingsTabProps> = ({
 
         await updateDoc(bookingRef, updatedData);
 
+        // FIX: Explicitly cast the merged object as Booking to satisfy TypeScript's strict literal type checking
         setBookings((prev) =>
-          prev.map((b) => (b.id === bookingId ? { ...b, ...updatedData } : b))
+          prev.map((b) => (b.id === bookingId ? ({ ...b, ...updatedData } as Booking) : b))
         );
 
         showNotification("Refund Processed", `Refund of MWK ${bookingData.totalAmount} for booking ${bookingId}`, "success");
@@ -389,7 +368,6 @@ const BookingsTab: FC<BookingsTabProps> = ({
     },
     [setBookings, setError, setSuccess]
   );
-
   if (!companyId && role === "company_admin") {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-6">
@@ -515,11 +493,14 @@ const BookingsTab: FC<BookingsTabProps> = ({
                   const route = routes.find((r) => r.id === schedule?.routeId);
                   const companyName = companies.find((c) => c.id === booking.companyId)?.name || "Unknown";
                   const bookingRef = booking.bookingReference || booking.id || "NO-REF";
-                  const departureDate = schedule?.departureDateTime?.seconds
-                    ? new Date(schedule.departureDateTime.seconds * 1000)
-                    : schedule?.departureDateTime instanceof Date
-                    ? schedule.departureDateTime
-                    : null;
+                  const departureDate =
+                    schedule && schedule.departureDateTime &&
+                    typeof schedule.departureDateTime === "object" &&
+                    "seconds" in schedule.departureDateTime && typeof schedule.departureDateTime.seconds === "number"
+                      ? new Date((schedule.departureDateTime as { seconds: number }).seconds * 1000)
+                      : schedule?.departureDateTime instanceof Date
+                      ? schedule.departureDateTime
+                      : null;
 
                   return (
                     <tr key={booking.id} className="hover:bg-gray-50 transition-colors">
@@ -550,10 +531,10 @@ const BookingsTab: FC<BookingsTabProps> = ({
                             {(booking.passengerDetails?.length || 0) > 1 && (
                               <div className="text-xs text-gray-500">+{booking.passengerDetails.length - 1} more</div>
                             )}
-                            {booking.passengerDetails?.[0]?.phone && (
+                            {booking.passengerDetails?.[0]?.contactNumber && (
                               <div className="text-xs text-gray-500 flex items-center">
                                 <Phone className="w-3 h-3 mr-1" />
-                                {booking.passengerDetails[0].phone}
+                                {booking.passengerDetails[0].contactNumber}
                               </div>
                             )}
                           </div>
@@ -593,8 +574,8 @@ const BookingsTab: FC<BookingsTabProps> = ({
                           <span className="text-sm font-medium text-gray-900">
                             MWK {(booking.totalAmount || 0).toLocaleString()}
                           </span>
-                          {booking.paymentMethod && (
-                            <span className="text-xs text-gray-500">{booking.paymentMethod}</span>
+                          {booking.paymentProvider && (
+                            <span className="text-xs text-gray-500">{booking.paymentProvider}</span>
                           )}
                         </div>
                       </td>
@@ -792,11 +773,14 @@ const BookingsTab: FC<BookingsTabProps> = ({
                           <span className="text-sm">
                             {(() => {
                               const schedule = schedules.find(s => s.id === selectedBooking.scheduleId);
-                              const departureDate = schedule?.departureDateTime?.seconds
-                                ? new Date(schedule.departureDateTime.seconds * 1000)
-                                : schedule?.departureDateTime instanceof Date
-                                ? schedule.departureDateTime
-                                : null;
+                              const departureDate =
+                                schedule && schedule.departureDateTime &&
+                                typeof schedule.departureDateTime === "object" &&
+                                "seconds" in schedule.departureDateTime && typeof (schedule.departureDateTime as any).seconds === "number"
+                                  ? new Date((schedule.departureDateTime as { seconds: number }).seconds * 1000)
+                                  : schedule?.departureDateTime instanceof Date
+                                  ? schedule.departureDateTime
+                                  : null;
                               return departureDate ? formatDateTime(departureDate) : "Unknown Time";
                             })()}
                           </span>
@@ -817,7 +801,7 @@ const BookingsTab: FC<BookingsTabProps> = ({
                         </div>
                         <div className="flex justify-between">
                           <span className="text-sm text-gray-600">Method:</span>
-                          <span className="text-sm">{selectedBooking.paymentMethod || "N/A"}</span>
+                          <span className="text-sm">{selectedBooking.paymentProvider || "N/A"}</span>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-sm text-gray-600">Provider:</span>
@@ -825,7 +809,7 @@ const BookingsTab: FC<BookingsTabProps> = ({
                         </div>
                         <div className="flex justify-between">
                           <span className="text-sm text-gray-600">Transaction:</span>
-                          <span className="text-sm font-mono text-xs">{selectedBooking.transactionReference || "N/A"}</span>
+                          <span className="text-sm font-mono">{selectedBooking.transactionReference || "N/A"}</span>
                         </div>
                       </div>
                     </div>
@@ -905,12 +889,12 @@ const BookingsTab: FC<BookingsTabProps> = ({
                                 <span className="text-gray-600 font-medium">Seat:</span>
                                 <p className="font-medium text-gray-900">{passenger.seatNumber || "N/A"}</p>
                               </div>
-                              {passenger.phone && (
+                              {passenger.contactNumber && (
                                 <div>
                                   <span className="text-gray-600 font-medium">Phone:</span>
                                   <p className="font-medium text-gray-900 flex items-center">
                                     <Phone className="w-3 h-3 mr-1" />
-                                    {passenger.phone}
+                                    {passenger.contactNumber}
                                   </p>
                                 </div>
                               )}

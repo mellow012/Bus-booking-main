@@ -229,7 +229,7 @@ export async function POST(request: Request) {
     
     const status = error instanceof z.ZodError ? 400 : 500;
     const errorMessage = error instanceof z.ZodError 
-      ? error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ')
+      ? error.issues.map(e => `${e.path.join('.')}: ${e.message}`).join(', ')
       : error.message;
     
     return NextResponse.json({ 
@@ -239,3 +239,4 @@ export async function POST(request: Request) {
     }, { status });
   }
 }
+

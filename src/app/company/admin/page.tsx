@@ -1,5 +1,4 @@
 "use client";
-
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { 
@@ -48,230 +47,246 @@ import CompanyProfileTab from "@/components/company-Profile";
 import SettingsTab from "@/components/SettingsTab";
 import PaymentsTab from "@/components/PaymentTab";
 import OperatorsTab from "@/components/OperatorsTab";
+import { id } from "zod/v4/locales";
 
-// Constants
-const TABS = [
-  { id: "overview" as const, label: "Overview", icon: BarChart3 },
-  { id: "schedules" as const, label: "Schedules", icon: Calendar },
-  { id: "routes" as const, label: "Routes", icon: MapPin },
-  { id: "buses" as const, label: "Buses", icon: Truck },
-  { id: "bookings" as const, label: "Bookings", icon: Users },
-  { id: "operators" as const, label: "Operators", icon: Users },
-  { id: "profile" as const, label: "Profile", icon: User },
-  { id: "settings" as const, label: "Settings", icon: Settings },
-] as const;
+  // Constants
+  const TABS = [
+    { id: "overview" as const, label: "Overview", icon: BarChart3 },
+    { id: "schedules" as const, label: "Schedules", icon: Calendar },
+    { id: "routes" as const, label: "Routes", icon: MapPin },
+    { id: "buses" as const, label: "Buses", icon: Truck },
+    { id: "bookings" as const, label: "Bookings", icon: Users },
+    { id: "operators" as const, label: "Operators", icon: Users },
+    { id: "profile" as const, label: "Profile", icon: User },
+    { id: "settings" as const, label: "Settings", icon: Settings },
+    { id: "payments" as const, label: "Payments", icon: DollarSign }
+  ] as const;
 
-const BUS_TYPES = ["AC", "Non-AC", "Sleeper", "Semi-Sleeper", "Luxury", "Economy", "Minibus"] as const;
-const BUS_STATUSES = ["active", "inactive", "maintenance"] as const;
-const CAPACITY_LIMITS = { min: 10, max: 100 } as const;
-const AUTO_REFRESH_INTERVAL = 5 * 60 * 1000; // 5 minutes
-const MAX_RECONNECT_ATTEMPTS = 3;
+  const BUS_TYPES = ["AC", "Non-AC", "Sleeper", "Semi-Sleeper", "Luxury", "Economy", "Minibus"] as const;
+  const BUS_STATUSES = ["active", "inactive", "maintenance"] as const;
+  const CAPACITY_LIMITS = { min: 10, max: 100 } as const;
+  const AUTO_REFRESH_INTERVAL = 5 * 60 * 1000; // 5 minutes
+  const MAX_RECONNECT_ATTEMPTS = 3;
 
-// Types
-type TabType = typeof TABS[number]["id"] | "payments";
-type AlertType = { type: "error" | "success" | "warning" | "info"; message: string } | null;
+  // Types
+  type TabType = typeof TABS[number]["id"] | "payments";
+  type AlertType = { type: "error" | "success" | "warning" | "info"; message: string } | null;
 
-interface DashboardData {
-  company: Company | null;
-  schedules: Schedule[];
-  routes: Route[];
-  buses: Bus[];
-  bookings: Booking[];
+  interface DashboardData {
+    company: Company | null;
+    schedules: Schedule[];
+    routes: Route[];
+    buses: Bus[];
+    bookings: Booking[];
+  }
+
+  interface RealtimeStatus {
+    isConnected: boolean;
+    lastUpdate: Date | null;
+    pendingUpdates: number;
+  }
+
+  interface SystemNotice {
+    type: "error" | "warning" | "info";
+    message: string;
+    action: () => void;
+  }
+    interface TabObject {
+    id: TabType;
+    label: string;
+    // You should use the actual type of your Lucide icons here, 
+    // but we'll use 'any' for brevity, or rely on the type derived from TABS.
+    icon: typeof TABS[number]["icon"]; 
 }
 
-interface RealtimeStatus {
-  isConnected: boolean;
-  lastUpdate: Date | null;
-  pendingUpdates: number;
-}
-
-interface SystemNotice {
-  type: "error" | "warning" | "info";
-  message: string;
-  action: () => void;
-}
-
-// Utility Functions
-const convertFirestoreDate = (date: any): Date => {
-  if (!date) return new Date();
-  if (date instanceof Date) return date;
-  if (date.toDate && typeof date.toDate === "function") {
-    try {
-      return date.toDate();
-    } catch (error) {
-      console.warn('Date conversion error:', error);
-      return new Date();
+  // Utility Functions
+  const convertFirestoreDate = (date: any): Date => {
+    if (!date) return new Date();
+    if (date instanceof Date) return date;
+    if (date.toDate && typeof date.toDate === "function") {
+      try {
+        return date.toDate();
+      } catch (error) {
+        console.warn('Date conversion error:', error);
+        return new Date();
+      }
     }
-  }
-  if (typeof date === "string" || typeof date === "number") return new Date(date);
-  if (date.seconds && typeof date.seconds === "number") return new Date(date.seconds * 1000);
-  return new Date();
-};
+    if (typeof date === "string" || typeof date === "number") return new Date(date);
+    if (date.seconds && typeof date.seconds === "number") return new Date(date.seconds * 1000);
+    return new Date();
+  };
 
-const formatRelativeTime = (date: Date): string => {
-  const now = new Date();
-  const diff = now.getTime() - date.getTime();
-  const minutes = Math.floor(diff / 60000);
-  const hours = Math.floor(diff / 3600000);
-  const days = Math.floor(diff / 86400000);
+  const formatRelativeTime = (date: Date): string => {
+    const now = new Date();
+    const diff = now.getTime() - date.getTime();
+    const minutes = Math.floor(diff / 60000);
+    const hours = Math.floor(diff / 3600000);
+    const days = Math.floor(diff / 86400000);
 
-  if (minutes < 60) return `${minutes}m ago`;
-  if (hours < 24) return `${hours}h ago`;
-  return `${days}d ago`;
-};
+    if (minutes < 60) return `${minutes}m ago`;
+    if (hours < 24) return `${hours}h ago`;
+    return `${days}d ago`;
+  };
 
-const validateBusData = (data: any): void => {
-  const requiredFields = ["licensePlate", "busType", "capacity", "status"];
-  const missingFields = requiredFields.filter((field) => !data[field]);
+  const validateBusData = (data: any): void => {
+    const requiredFields = ["licensePlate", "busType", "capacity", "status"];
+    const missingFields = requiredFields.filter((field) => !data[field]);
 
-  if (missingFields.length > 0) {
-    throw new Error(`Missing required fields: ${missingFields.join(", ")}`);
-  }
+    if (missingFields.length > 0) {
+      throw new Error(`Missing required fields: ${missingFields.join(", ")}`);
+    }
 
-  if (data.capacity < CAPACITY_LIMITS.min || data.capacity > CAPACITY_LIMITS.max) {
-    throw new Error(`Capacity must be between ${CAPACITY_LIMITS.min} and ${CAPACITY_LIMITS.max}`);
-  }
+    if (data.capacity < CAPACITY_LIMITS.min || data.capacity > CAPACITY_LIMITS.max) {
+      throw new Error(`Capacity must be between ${CAPACITY_LIMITS.min} and ${CAPACITY_LIMITS.max}`);
+    }
 
-  if (!BUS_TYPES.includes(data.busType)) {
-    throw new Error("Invalid bus type");
-  }
+    if (!BUS_TYPES.includes(data.busType)) {
+      throw new Error("Invalid bus type");
+    }
 
-  if (!BUS_STATUSES.includes(data.status)) {
-    throw new Error("Invalid status");
-  }
-};
+    if (!BUS_STATUSES.includes(data.status)) {
+      throw new Error("Invalid status");
+    }
+  };
 
-const getAvailableTabs = (paymentSettings: Company["paymentSettings"] | undefined) => {
-  const baseTabs = [...TABS];
+const baseTabs: TabObject[] = [...TABS] as unknown as TabObject[];
+// The function that builds the array
+const getAvailableTabs = (paymentSettings: Company["paymentSettings"] | undefined): TabObject[] => {
+  const baseTabs: TabObject[] = [...TABS]; // Start with unique base tabs
+
+  // Only add "payments" tab if payment gateways are configured and it's not already present
   if (paymentSettings && Object.keys(paymentSettings).length > 0 && 
       (paymentSettings.gateways?.paychangu || paymentSettings.gateways?.stripe)) {
-    baseTabs.push({ id: "payments" as const, label: "Payments", icon: DollarSign });
+    const hasPayments = baseTabs.some(tab => tab.id === "payments");
+    if (!hasPayments) {
+      baseTabs.push({ id: "payments" as const, label: "Payments", icon: DollarSign });
+    }
   }
+
   return baseTabs;
 };
+  // Custom Hooks
+  const useAlert = () => {
+    const [alert, setAlert] = useState<AlertType>(null);
+    
+    const showAlert = useCallback((type: "error" | "success" | "warning" | "info", message: string) => {
+      setAlert({ type, message });
+    }, []);
 
-// Custom Hooks
-const useAlert = () => {
-  const [alert, setAlert] = useState<AlertType>(null);
+    const clearAlert = useCallback(() => {
+      setAlert(null);
+    }, []);
 
-  const showAlert = useCallback((type: "error" | "success" | "warning" | "info", message: string) => {
-    setAlert({ type, message });
-  }, []);
+    useEffect(() => {
+      if (alert) {
+        const timer = setTimeout(clearAlert, alert.type === "error" ? 7000 : 5000);
+        return () => clearTimeout(timer);
+      }
+    }, [alert, clearAlert]);
 
-  const clearAlert = useCallback(() => {
-    setAlert(null);
-  }, []);
+    return { alert, showAlert, clearAlert };
+  };
 
-  useEffect(() => {
-    if (alert) {
-      const timer = setTimeout(clearAlert, alert.type === "error" ? 7000 : 5000);
-      return () => clearTimeout(timer);
-    }
-  }, [alert, clearAlert]);
+  const useRealtimeBookings = (companyId: string | undefined, showAlert: (type: "error" | "success" | "warning" | "info", message: string) => void, activeTab: TabType) => {
+    const [realtimeStatus, setRealtimeStatus] = useState<RealtimeStatus>({
+      isConnected: false,
+      lastUpdate: null,
+      pendingUpdates: 0
+    });
 
-  return { alert, showAlert, clearAlert };
-};
+    const [bookings, setBookings] = useState<Booking[]>([]);
 
-const useRealtimeBookings = (companyId: string | undefined, showAlert: (type: string, message: string) => void, activeTab: TabType) => {
-  const [realtimeStatus, setRealtimeStatus] = useState<RealtimeStatus>({
-    isConnected: false,
-    lastUpdate: null,
-    pendingUpdates: 0
-  });
+    useEffect(() => {
+      if (!companyId?.trim()) return;
 
-  const [bookings, setBookings] = useState<Booking[]>([]);
+      const q = query(
+        collection(db, "bookings"), 
+        where("companyId", "==", companyId.trim()), 
+        orderBy("updatedAt", "desc"),
+        limit(50)
+      );
 
-  useEffect(() => {
-    if (!companyId?.trim()) return;
+      let reconnectAttempts = 0;
 
-    const q = query(
-      collection(db, "bookings"), 
-      where("companyId", "==", companyId.trim()), 
-      orderBy("updatedAt", "desc"),
-      limit(50)
-    );
-
-    let reconnectAttempts = 0;
-
-    const createListener = () => {
-      const unsubscribe = onSnapshot(q, (snapshot) => {
-        try {
-          setRealtimeStatus(prev => ({
-            ...prev,
-            isConnected: true,
-            lastUpdate: new Date(),
-            pendingUpdates: 0
-          }));
-
-          let hasChanges = false;
-          const updatedBookings: Booking[] = [];
-
-          snapshot.docChanges().forEach((change) => {
-            if (change.type === "added" || change.type === "modified") {
-              hasChanges = true;
-              const docData = change.doc.data();
-              const bookingData = {
-                id: change.doc.id,
-                ...docData,
-                createdAt: convertFirestoreDate(docData.createdAt),
-                updatedAt: convertFirestoreDate(docData.updatedAt),
-                cancellationDate: docData.cancellationDate ? convertFirestoreDate(docData.cancellationDate) : undefined,
-                bookingDate: docData.bookingDate ? convertFirestoreDate(docData.bookingDate) : undefined,
-                confirmedDate: docData.confirmedDate ? convertFirestoreDate(docData.confirmedDate) : undefined,
-                refundDate: docData.refundDate ? convertFirestoreDate(docData.refundDate) : undefined,
-              } as Booking;
-
-              updatedBookings.push(bookingData);
-
-              if (change.type === "added" && activeTab === "bookings") {
-                showAlert("info", `New booking received from ${bookingData.passengerDetails?.[0]?.name || 'customer'}`);
-              }
-            }
-          });
-
-          if (hasChanges) {
-            setBookings(prevBookings => {
-              const existingIds = new Set(prevBookings.map(b => b.id));
-              
-              const updatedBookingsList = [
-                ...prevBookings.filter(b => !updatedBookings.some(ub => ub.id === b.id)),
-                ...updatedBookings
-              ];
-
-              return updatedBookingsList;
-            });
-
+      const createListener = () => {
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+          try {
             setRealtimeStatus(prev => ({
               ...prev,
-              pendingUpdates: prev.pendingUpdates + updatedBookings.length
+              isConnected: true,
+              lastUpdate: new Date(),
+              pendingUpdates: 0
             }));
 
-            setTimeout(() => {
-              setRealtimeStatus(prev => ({ ...prev, pendingUpdates: 0 }));
-            }, 3000);
+            let hasChanges = false;
+            const updatedBookings: Booking[] = [];
+
+            snapshot.docChanges().forEach((change) => {
+              if (change.type === "added" || change.type === "modified") {
+                hasChanges = true;
+                const docData = change.doc.data();
+                const bookingData = {
+                  id: change.doc.id,
+                  ...docData,
+                  createdAt: convertFirestoreDate(docData.createdAt),
+                  updatedAt: convertFirestoreDate(docData.updatedAt),
+                  cancellationDate: docData.cancellationDate ? convertFirestoreDate(docData.cancellationDate) : undefined,
+                  bookingDate: docData.bookingDate ? convertFirestoreDate(docData.bookingDate) : undefined,
+                  confirmedDate: docData.confirmedDate ? convertFirestoreDate(docData.confirmedDate) : undefined,
+                  refundDate: docData.refundDate ? convertFirestoreDate(docData.refundDate) : undefined,
+                } as Booking;
+
+                updatedBookings.push(bookingData);
+
+                if (change.type === "added" && activeTab === "bookings") {
+                  showAlert("info", `New booking received from ${bookingData.passengerDetails?.[0]?.name || 'customer'}`);
+                }
+              }
+            });
+
+            if (hasChanges) {
+              setBookings(prevBookings => {
+                const existingIds = new Set(prevBookings.map(b => b.id));
+                
+                const updatedBookingsList = [
+                  ...prevBookings.filter(b => !updatedBookings.some(ub => ub.id === b.id)),
+                  ...updatedBookings
+                ];
+
+                return updatedBookingsList;
+              });
+
+              setRealtimeStatus(prev => ({
+                ...prev,
+                pendingUpdates: prev.pendingUpdates + updatedBookings.length
+              }));
+
+              setTimeout(() => {
+                setRealtimeStatus(prev => ({ ...prev, pendingUpdates: 0 }));
+              }, 3000);
+            }
+
+            reconnectAttempts = 0;
+          } catch (error) {
+            console.error("Error processing booking updates:", error);
+            showAlert("error", "Failed to update bookings data");
           }
+        }, (error) => {
+          console.error("Firebase snapshot error:", error);
+          setRealtimeStatus(prev => ({
+            ...prev,
+            isConnected: false,
+            lastUpdate: prev.lastUpdate
+          }));
+          
+          showAlert("warning", "Connection to real-time updates lost");
 
-          reconnectAttempts = 0;
-        } catch (error) {
-          console.error("Error processing booking updates:", error);
-          showAlert("error", "Failed to update bookings data");
-        }
-      }, (error) => {
-        console.error("Firebase snapshot error:", error);
-        setRealtimeStatus(prev => ({
-          ...prev,
-          isConnected: false,
-          lastUpdate: prev.lastUpdate
-        }));
-        
-        showAlert("warning", "Connection to real-time updates lost");
-
-        if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
-          reconnectAttempts++;
-          console.log(`Attempting to reconnect... (${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`);
-          setTimeout(() => {
-            createListener();
-          }, Math.pow(2, reconnectAttempts) * 1000);
+          if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+            reconnectAttempts++;
+            console.log(`Attempting to reconnect... (${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`);
+            setTimeout(() => {
+              createListener();
+            }, Math.pow(2, reconnectAttempts) * 1000);
         } else {
           showAlert("error", "Unable to establish real-time connection. Please refresh the page.");
         }
@@ -432,7 +447,10 @@ export default function AdminDashboard() {
     }
   }, [dashboardData.company, showAlert]);
 
-  const fetchCollectionData = useCallback(async <T>(collectionName: string, companyId: string): Promise<T[]> => {
+  const fetchCollectionData = useCallback(async <T extends { id: string, createdAt?: any, updatedAt?: any }>(
+    collectionName: string, 
+    companyId: string
+  ): Promise<T[]> => {
     if (!companyId) {
       console.warn(`Invalid companyId for ${collectionName} query. Skipping fetch.`);
       return [];
@@ -445,22 +463,21 @@ export default function AdminDashboard() {
       
       console.log(`Found ${snapshot.docs.length} documents in ${collectionName}`);
 
-      return snapshot.docs.map((doc) => {
-        const data = doc.data();
+      return snapshot.docs.map((document) => {
+        const data = document.data();
 
         if (collectionName === "schedules") {
           return {
-            id: doc.id,
+            id: document.id,
             ...data,
             departureDateTime: convertFirestoreDate(data.departureDateTime),
             arrivalDateTime: convertFirestoreDate(data.arrivalDateTime),
             createdAt: convertFirestoreDate(data.createdAt),
             updatedAt: convertFirestoreDate(data.updatedAt),
-          } as T;
+          } as unknown as T;
         }
-
         return {
-          id: doc.id,
+          id: document.id,
           ...data,
           createdAt: data.createdAt ? convertFirestoreDate(data.createdAt) : new Date(),
           updatedAt: data.updatedAt ? convertFirestoreDate(data.updatedAt) : new Date(),
@@ -474,12 +491,6 @@ export default function AdminDashboard() {
 
   const fetchInitialData = useCallback(async () => {
     if (!companyId || authLoading) return;
-
-    if (!companyId) {
-      showAlert("error", "Invalid company ID");
-      router.push("/login");
-      return;
-    }
 
     try {
       setLoading(true);
@@ -1030,7 +1041,7 @@ export default function AdminDashboard() {
     const { company, schedules, routes, buses } = dashboardData;
 
     const commonProps = {
-      companyId,
+
       setError: (msg: string) => showAlert("error", msg),
       setSuccess: (msg: string) => showAlert("success", msg),
     };
@@ -1051,6 +1062,7 @@ export default function AdminDashboard() {
       case "schedules":
         return (
           <SchedulesTab
+            companyId={companyId}
             schedules={schedules}
             setSchedules={(newSchedules) => {
               const updatedSchedules = Array.isArray(newSchedules)
@@ -1081,6 +1093,7 @@ export default function AdminDashboard() {
       case "routes":
         return (
           <RoutesTab
+            companyId={companyId}
             routes={routes}
             setRoutes={(newRoutes) => {
               if (typeof newRoutes === "function") {
@@ -1098,6 +1111,7 @@ export default function AdminDashboard() {
         return (
           <BusesTab
             buses={buses}
+            companyId={companyId}
             setBuses={(newBuses) => {
               if (typeof newBuses === "function") {
                 updateDashboardData("buses", newBuses(buses));
@@ -1105,12 +1119,12 @@ export default function AdminDashboard() {
                 updateDashboardData("buses", newBuses);
               }
             }}
-            addBus={(data) => addItem("buses", data)}
             {...commonProps}
           />
         );
 
       case "bookings":
+        const isCompany = (item: Company | null | undefined): item is Company => !!item;
         return (
           <BookingsTab
             bookings={bookings}
@@ -1119,7 +1133,7 @@ export default function AdminDashboard() {
             routes={routes}
             companyId={companyId}
             role="company_admin"
-            companies={[dashboardData.company].filter(Boolean)}
+           companies={[dashboardData.company].filter(isCompany)} 
             {...commonProps}
           />
         );
@@ -1127,6 +1141,7 @@ export default function AdminDashboard() {
       case "profile":
         return company ? (
           <CompanyProfileTab
+
             company={company}
             setCompany={(newCompany) => updateDashboardData("company", newCompany as Company)}
             {...commonProps}
@@ -1137,18 +1152,18 @@ export default function AdminDashboard() {
         return company ? (
           <SettingsTab
             company={company}
-            setCompany={(newCompany) => updateDashboardData("company", newCompany as Company)}
+            setCompany={(company) => updateDashboardData("company", company as Company)}
             {...commonProps}
           />
         ) : null;
 
       case "operators":
-        return (
+        return company ? (
           <OperatorsTab
             companyId={companyId}
             {...commonProps}
           />
-        );
+        ) : null;
 
       case "payments":
         return company && paymentSettings ? (
@@ -1225,10 +1240,10 @@ export default function AdminDashboard() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
           <div className="flex items-center space-x-4">
             <div className="relative">
-              {company.logo ? (
+              {company?.logo ? (
                 <img
-                  src={company.logo}
-                  alt={`${company.name} logo`}
+                  src={company?.logo}
+                  alt={`${company?.name} logo`}
                   className="h-12 w-12 rounded-xl object-cover shadow-md"
                 />
               ) : (
@@ -1238,12 +1253,12 @@ export default function AdminDashboard() {
               )}
               <div
                 className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-white ${
-                  company.status === "active" ? "bg-green-500" : "bg-gray-400"
+                  company?.status === "active" ? "bg-green-500" : "bg-gray-400"
                 }`}
               />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-gray-900">{company.name}</h1>
+              <h1 className="text-xl font-bold text-gray-900">{company?.name}</h1>
               <p className="text-sm text-gray-500">Admin Dashboard</p>
             </div>
           </div>
@@ -1262,12 +1277,12 @@ export default function AdminDashboard() {
             <button
               onClick={handleStatusToggle}
               className={`px-6 py-2.5 rounded-lg font-medium transition-all duration-200 ${
-                company.status === "active"
+                company?.status === "active"
                   ? "bg-amber-500 hover:bg-amber-600 text-white shadow-lg hover:shadow-amber-500/25"
                   : "bg-green-600 hover:bg-green-700 text-white shadow-lg hover:shadow-green-600/25"
               }`}
             >
-              {company.status === "active" ? "Pause Company" : "Activate Company"}
+              {company?.status === "active" ? "Pause Company" : "Activate Company"}
             </button>
           </div>
         </div>
@@ -1276,7 +1291,7 @@ export default function AdminDashboard() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {alert && (
           <div className="mb-6">
-            <AlertMessage type={alert.type} message={alert.message} onClose={clearAlert} />
+            <AlertMessage type={alert?.type} message={alert?.message} onClose={clearAlert} />
           </div>
         )}
 

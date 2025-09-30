@@ -226,7 +226,7 @@ export default function Search() {
           date: scheduleData.departureDateTime?.toDate().toISOString().split('T')[0] || '',
           departureTime: extractTimeFromTimestamp(scheduleData.departureDateTime),
           arrivalTime: extractTimeFromTimestamp(scheduleData.arrivalDateTime),
-        } as Schedule;
+        } as unknown as Schedule;
 
         const route = routesMap.get(schedule.routeId);
         const company = companiesMap.get(schedule.companyId);
@@ -288,7 +288,7 @@ export default function Search() {
       results = results.filter(result => result.company?.name?.toLowerCase().trim()?.includes(filters.company.toLowerCase().trim()) || false);
     }
     if (filters.amenities && filters.amenities.length > 0) {
-      results = results.filter(result => filters.amenities.every(amenity => result.bus?.amenities?.some(busAmenity => busAmenity.toLowerCase().includes(amenity.toLowerCase())) || false));
+      results = results.filter(result => filters.amenities.every((amenity: string) => result.bus?.amenities?.some(busAmenity => busAmenity.toLowerCase().includes(amenity.toLowerCase())) || false));
     }
     if (filters.priceRange) {
       const { min, max } = filters.priceRange;
@@ -475,7 +475,7 @@ export default function Search() {
                       >
                         <div className="flex items-center space-x-4 mb-4">
                           <img
-                            src={result.company.logoUrl || `https://placehold.co/100x100/e2e8f0/64748b?text=${result.company.name?.charAt(0) || 'B'}`}
+                            src={result.company.logo || `https://placehold.co/100x100/e2e8f0/64748b?text=${result.company.name?.charAt(0) || 'B'}`}
                             alt={`${result.company.name || 'Bus Company'} Logo`}
                             className="h-12 w-12 rounded-full object-cover border-2 border-white shadow-sm"
                             onError={(e) => {

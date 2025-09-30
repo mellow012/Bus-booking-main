@@ -438,44 +438,37 @@ const ProfilePage: React.FC = () => {
       return;
     }
 
-    const fetchData = async () => {
-      setLoading(true);
-      setError('');
-      try {
-        const userDoc = await getDoc(doc(db, 'users', user.uid));
-        if (!userDoc.exists()) {
-          setError('User profile not found');
-          return;
-        }
-        
-        const userData = { id: userDoc.id, ...userDoc.data() } as UserProfile;
-        const createdAtDate = userData.createdAt instanceof Timestamp 
-          ? userData.createdAt.toDate() 
-          : userData.createdAt || new Date();
-          
-        setProfile({ ...userData, createdAt: createdAtDate });
-        setFormData({
-          firstName: userData.firstName || '',
-          lastName: userData.lastName || '',
-          phone: userData.phone || '',
-          nationalId: userData.nationalId || '',
-          sex: userData.sex || '',
-          currentAddress: userData.currentAddress || '',
-          email: userData.email || user.email || '',
-        });
-
-        // Load data in parallel
-        await Promise.all([
-          fetchBookingData(),
-          loadUserPreferences()
-        ]);
-        
-      } catch (err: any) {
-        setError('Failed to load profile. Please try again.');
-      } finally {
-        setLoading(false);
-      }
-    };
+  const fetchData = async () => {
+  setLoading(true);
+  setError('');
+  try {
+    const userDoc = await getDoc(doc(db, 'users', user.uid));
+    if (!userDoc.exists()) {
+      setError('User profile not found. Please complete your profile.');
+      return;
+    }
+    const userData = { id: userDoc.id, ...userDoc.data() } as UserProfile;
+    const createdAtDate = userData.createdAt instanceof Timestamp
+      ? userData.createdAt.toDate()
+      : userData.createdAt || new Date();
+    setProfile({ ...userData, createdAt: createdAtDate });
+    setFormData({
+      firstName: userData.firstName || '',
+      lastName: userData.lastName || '',
+      phone: userData.phone || '',
+      nationalId: userData.nationalId || '',
+      sex: userData.sex || '',
+      currentAddress: userData.currentAddress || '',
+      email: userData.email || user.email || '',
+    });
+    await Promise.all([fetchBookingData(), loadUserPreferences()]);
+  } catch (err: any) {
+    console.error('Profile fetch error:', err);
+    setError('Failed to load profile. Please try again or contact support.');
+  } finally {
+    setLoading(false);
+  }
+};
 
     fetchData();
   }, [user, userProfile, router, fetchBookingData, loadUserPreferences]);
@@ -511,10 +504,9 @@ const ProfilePage: React.FC = () => {
         firstName: formData.firstName,
         lastName: formData.lastName,
         phone: formData.phone,
-        nationalId: formData.nationalId || null,
-        sex: formData.sex || null,
-        currentAddress: formData.currentAddress || null,
-        email: formData.email,
+        nationalId: formData.nationalId || undefined,
+        sex: formData.sex || undefined,
+        currentAddress: formData.currentAddress || undefined,
       });
       
       setProfile(prev => prev ? { 

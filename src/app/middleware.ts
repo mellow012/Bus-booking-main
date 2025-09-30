@@ -1,3 +1,4 @@
+// middleware.ts
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { getAuth } from 'firebase-admin/auth';
@@ -33,6 +34,8 @@ export async function middleware(req: NextRequest) {
   return NextResponse.next();
 }
 
+// This middleware ONLY runs on /company/* routes
+// All other routes (login, register, forgot-password, reset-password) are NOT protected
 export const config = {
   matcher: '/company/:path*',
 };

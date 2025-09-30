@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { auth, db } from '@/lib/firebaseConfig';
 import { 
   confirmPasswordReset, 
+  sendPasswordResetEmail, 
   signInWithEmailAndPassword,
   verifyPasswordResetCode,
 } from 'firebase/auth';
@@ -48,7 +49,7 @@ function CompanySetupContent() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [errors, setErrors] = useState<{
-    password?: string;
+    password?: string | undefined;
     confirmPassword?: string;
     general?: string;
   }>({});
@@ -106,12 +107,16 @@ function CompanySetupContent() {
       setErrors({ general: 'Invalid setup link or missing company data.' });
       return;
     }
-    const passwordError = validatePassword(password);
-    const confirmError = password !== confirmPassword ? 'Passwords do not match' : null;
-    if (passwordError || confirmError) {
-      setErrors({ password: passwordError, confirmPassword: confirmError });
-      return;
-    }
+  // Validate password and convert null to undefined
+  const passwordError = validatePassword(password) ?? undefined;
+  const confirmError = password !== confirmPassword ? 'Passwords do not match' : null;
+  if (passwordError || confirmError) {
+    setErrors({ 
+      password: passwordError, 
+      confirmPassword: confirmError ?? undefined // Explicitly convert null to undefined
+    });
+    return;
+  }
     setLoading(true);
     setErrors({});
     try {

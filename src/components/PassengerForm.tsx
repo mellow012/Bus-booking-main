@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useCallback } from 'react';
-import { PassengerDetail } from '@/types';
+import { PassengerDetails } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,14 +12,14 @@ import Modal from '@/components/Modals'; // Ensure this path is correct for your
 import { AlertCircle, Users, ArrowLeft, Loader2 } from 'lucide-react';
 
 interface PassengerFormProps {
-  passengerDetails: PassengerDetail[];
-  onSubmit: (details: PassengerDetail[]) => void;
+  passengerDetails: PassengerDetails[];
+  onSubmit: (details: PassengerDetails[]) => void;
   onBack: () => void;
   loading: boolean;
 }
 
 interface ValidationError {
-  field: keyof PassengerDetail;
+  field: keyof PassengerDetails;
   message: string;
   passengerIndex: number;
 }
@@ -30,13 +30,13 @@ export default function PassengerForm({
   onBack,
   loading
 }: PassengerFormProps) {
-  const [details, setDetails] = useState<PassengerDetail[]>(passengerDetails);
+  const [details, setDetails] = useState<PassengerDetails[]>(passengerDetails);
   const [errors, setErrors] = useState<ValidationError[]>([]);
   const [isValidating, setIsValidating] = useState(false);
   const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
-  const [finalDetails, setFinalDetails] = useState<PassengerDetail[] | null>(null);
+  const [finalDetails, setFinalDetails] = useState<PassengerDetails[] | null>(null);
 
-  const validatePassengerDetails = useCallback((detailsToValidate: PassengerDetail[]): ValidationError[] => {
+  const validatePassengerDetails = useCallback((detailsToValidate: PassengerDetails[]): ValidationError[] => {
     const validationErrors: ValidationError[] = [];
     detailsToValidate.forEach((passenger, index) => {
       const nameRegex = /^[a-zA-Z\s\-\'\.]{2,50}$/;
@@ -59,7 +59,7 @@ export default function PassengerForm({
 
   const handleChange = useCallback((
     index: number,
-    field: keyof PassengerDetail,
+    field: keyof PassengerDetails,
     value: string | number
   ) => {
     const newDetails = [...details];
@@ -117,7 +117,7 @@ export default function PassengerForm({
     setIsConfirmModalOpen(false);
   };
 
-  const getFieldError = (passengerIndex: number, field: keyof PassengerDetail) => {
+  const getFieldError = (passengerIndex: number, field: keyof PassengerDetails) => {
     return errors.find(error => error.passengerIndex === passengerIndex && error.field === field);
   };
 

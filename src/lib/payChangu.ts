@@ -1,4 +1,4 @@
-export function verifySignature(signature, payload, secret) {
+export function verifySignature(signature: string, payload: object, secret: string): boolean {
   const crypto = require('crypto');
   const computedSignature = crypto
     .createHmac('sha256', secret)

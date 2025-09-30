@@ -41,3 +41,10 @@ export interface SearchResult {
   route: Route;
   company: Company;
 }
+export interface SearchFilterss {
+  busType: string;
+  priceRange: { min: number; max: number };
+  departureTime: { start: string; end: string };
+  amenities: string[];
+  company: string;
+}

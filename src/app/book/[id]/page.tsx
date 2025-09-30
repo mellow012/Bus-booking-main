@@ -19,7 +19,7 @@ import {
 } from "firebase/firestore";
 import { db } from "@/lib/firebaseConfig";
 import { useAuth } from "@/contexts/AuthContext";
-import { Schedule, Bus, Route, Company, PassengerDetail } from "@/types";
+import { Schedule, Bus, Route, Company, PassengerDetails } from "@/types";
 import SeatSelection from "@/components/SeatSelection";
 import PassengerForm from "@/components/PassengerForm";
 import { Button } from "@/components/ui/button";
@@ -95,7 +95,7 @@ export default function BookBus() {
   
   // Booking flow state
   const [selectedSeats, setSelectedSeats] = useState<string[]>([]);
-  const [passengerDetails, setPassengerDetails] = useState<PassengerDetail[]>([]);
+  const [passengerDetails, setPassengerDetails] = useState<PassengerDetails[]>([]);
   const [currentStep, setCurrentStep] = useState<"seats" | "passengers" | "confirm">("seats");
   const [reservationId, setReservationId] = useState<string | null>(null);
   
@@ -234,9 +234,9 @@ export default function BookBus() {
       }
       
       // Check if schedule is in the past
-      const departureTime = scheduleData.departureDateTime?.toDate ?
-        scheduleData.departureDateTime.toDate() :
-        new Date(scheduleData.departureDateTime);
+       const departureTime = (scheduleData.departureDateTime as any)?.toDate ?
+        (scheduleData.departureDateTime as any).toDate() :
+        new Date(scheduleData.departureDateTime);
       
       if (departureTime < new Date()) {
         throw new Error("This schedule has already departed");
@@ -310,6 +310,7 @@ export default function BookBus() {
         age: 18,
         gender: "male" as const,
         seatNumber: seat,
+        ticketType: "adult" as const,
       }));
       setPassengerDetails(initialDetails);
     }).catch(err => {
@@ -317,7 +318,7 @@ export default function BookBus() {
     });
   }, [passengers, schedule?.bookedSeats, holdSeats]);
 
-  const handlePassengerDetails = useCallback((details: PassengerDetail[]) => {
+  const handlePassengerDetails = useCallback((details: PassengerDetails[]) => {
     setError("");
     
     // Validate passenger details

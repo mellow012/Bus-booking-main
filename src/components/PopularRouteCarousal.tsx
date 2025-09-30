@@ -4,6 +4,7 @@ import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious
 import { ArrowRight, Clock, MapPin, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { EnhancedSchedule } from "@/types/";
+import router from "next/router";
 
 const PopularRoutesCarousel: React.FC<{ routes: EnhancedSchedule[] }> = ({ routes = [] }) => {
   const formatDuration = (minutes: number) => {

@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect, useCallback, useMemo, memo, ChangeEvent, FormEvent } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { sendNotification } from '../../contexts/NotificationContext'; // Adjust the import path
+import { sendNotification } from '../../contexts/NotificationContext'; // Adjust the import path'
+import { NotificationTemplates } from '@/utils/notificationHelper';
 import { 
   collection, 
   query, 
@@ -23,7 +24,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '@/lib/firebaseConfig';
 import { useAuth } from '@/contexts/AuthContext';
-import { Booking, Schedule, Bus, Route, Company, SearchFilters, UserProfile } from '@/types';
+import { Booking, Schedule, Bus, Route, Company, UserProfile } from '@/types';
 import { 
   Bus as BusIcon, 
   MapPin, 
@@ -57,10 +58,8 @@ import Modal from '../../components/Modals';
 import AlertMessage from '../../components/AlertMessage';
 import { getAuth } from 'firebase/auth';
 
-
-// Lazy load heavy dependencies
-const jsPDF = React.lazy(() => import('jspdf'));
-const QRCode = React.lazy(() => import('qrcode'));
+const jsPDF = React.lazy(() => import('jspdf').then(module => ({ default: module.jsPDF as any })));
+const QRCode = React.lazy(() => import('qrcode').then(module => ({ default: module.default as any })));
 
 interface BookingWithDetails extends Booking {
   schedule: Schedule;
@@ -68,6 +67,14 @@ interface BookingWithDetails extends Booking {
   route: Route;
   company: Company;
   paymentProvider?: string;
+}
+
+interface SearchFilters {
+    busType?: string | string[];
+    priceRange?: { min?: number; max?: number };
+    company?: string; // FIX: Added 'company' property to resolve the current error.
+    // Add other filter properties as needed
+    [key: string]: any;
 }
 
 // Error Boundary Component
@@ -269,14 +276,14 @@ const BookingCard = memo<{
               {booking.paymentProvider && (
                 <div className="text-right text-xs text-gray-500">
                   via {booking.paymentProvider}
-                  {booking.transactionReference && <div>Ref: {booking.transactionReference}</div>}
+                  {booking.bookingReference && <div>Ref: {booking.bookingReference}</div>}
                 </div>
               )}
 
-              {booking.paymentMethod && (
+              {booking.paymentProvider && (
                 <div className="text-right text-xs text-gray-500 mt-1 flex items-center gap-2 justify-end">
-                  <img src={getPaymentMethodIcon(booking.paymentMethod).logo} alt={`${getPaymentMethodIcon(booking.paymentMethod).label} logo`} className="w-6 h-6" />
-                  <span>{getPaymentMethodIcon(booking.paymentMethod).label}</span>
+                  <img src={getPaymentMethodIcon(booking.paymentProvider).logo} alt={`${getPaymentMethodIcon(booking.paymentProvider).label} logo`} className="w-6 h-6" />
+                  <span>{getPaymentMethodIcon(booking.paymentProvider).label}</span>
                 </div>
               )}
             </div>
@@ -521,81 +528,80 @@ const BookingsPage: React.FC = () => {
         firestoreLimit(50)
       );
       
-      const bookingsSnapshot = await getDocs(bookingsQuery);
+        const bookingsSnapshot = await getDocs(bookingsQuery);
 
-      const bookingsData = bookingsSnapshot.docs.map((doc) => ({
-        id: doc.id,
-        bookingReference: doc.data().bookingReference || doc.id,
-        ...doc.data(),
-        bookingDate: doc.data().bookingDate instanceof Timestamp ? doc.data().bookingDate.toDate() : new Date(doc.data().bookingDate),
-        createdAt: doc.data().createdAt instanceof Timestamp ? doc.data().createdAt.toDate() : new Date(doc.data().createdAt),
-        updatedAt: doc.data().updatedAt instanceof Timestamp ? doc.data().updatedAt.toDate() : new Date(doc.data().updatedAt),
-      })) as Booking[];
+      const bookingsData = bookingsSnapshot.docs.map((doc) => ({
+        id: doc.id,
+        bookingReference: doc.data().bookingReference || doc.id,
+        ...doc.data(),
+        bookingDate: doc.data().bookingDate instanceof Timestamp ? doc.data().bookingDate.toDate() : new Date(doc.data().bookingDate),
+        createdAt: doc.data().createdAt instanceof Timestamp ? doc.data().createdAt.toDate() : new Date(doc.data().createdAt),
+        updatedAt: doc.data().updatedAt instanceof Timestamp ? doc.data().updatedAt.toDate() : new Date(doc.data().updatedAt),
+      })) as unknown as Booking[]; // FIX: Added 'unknown' for safer type conversion
 
-      const bookingsWithDetails: BookingWithDetails[] = [];
-      const errors: string[] = [];
+      const bookingsWithDetails: BookingWithDetails[] = [];
+      const errors: string[] = [];
 
-      const batchSize = 5;
-      for (let i = 0; i < bookingsData.length; i += batchSize) {
-        const batch = bookingsData.slice(i, i + batchSize);
-        const batchPromises = batch.map(async (booking) => {
-          try {
-            if (!booking.scheduleId || !booking.companyId) {
-              errors.push(`Booking ${booking.id} missing scheduleId or companyId`);
-              return null;
-            }
-            if (!booking.seatNumbers || !booking.passengerDetails) {
-              errors.push(`Booking ${booking.id} missing seat or passenger data`);
-              return null;
-            }
+      const batchSize = 5;
+      for (let i = 0; i < bookingsData.length; i += batchSize) {
+        const batch = bookingsData.slice(i, i + batchSize);
+        const batchPromises = batch.map(async (booking) => {
+          try {
+            if (!booking.scheduleId || !booking.companyId) {
+              errors.push(`Booking ${booking.id} missing scheduleId or companyId`);
+              return null;
+            }
+            if (!booking.seatNumbers || !booking.passengerDetails) {
+              errors.push(`Booking ${booking.id} missing seat or passenger data`);
+              return null;
+            }
 
-            const [scheduleDoc, companyDoc] = await Promise.all([
-              getDoc(doc(db, 'schedules', booking.scheduleId)),
-              getDoc(doc(db, 'companies', booking.companyId)),
-            ]);
+            const [scheduleDoc, companyDoc] = await Promise.all([
+              getDoc(doc(db, 'schedules', booking.scheduleId)),
+              getDoc(doc(db, 'companies', booking.companyId)),
+            ]);
 
-            if (!scheduleDoc.exists() || !companyDoc.exists()) {
-              errors.push(`Missing schedule or company for booking ${booking.id}`);
-              return null;
-            }
+            if (!scheduleDoc.exists() || !companyDoc.exists()) {
+              errors.push(`Missing schedule or company for booking ${booking.id}`);
+              return null;
+            }
 
-            const scheduleData = scheduleDoc.data();
-            const companyData = companyDoc.data();
+            const scheduleData = scheduleDoc.data();
+            const companyData = companyDoc.data();
 
-            const schedule = {
-              id: scheduleDoc.id,
-              ...scheduleData,
-              departureDateTime: scheduleData.departureDateTime,
-              arrivalDateTime: scheduleData.arrivalDateTime,
-            } as Schedule;
+            const schedule = {
+              id: scheduleDoc.id,
+              ...scheduleData,
+              departureDateTime: scheduleData.departureDateTime,
+              arrivalDateTime: scheduleData.arrivalDateTime,
+            } as Schedule;
 
-            const company = { id: companyDoc.id, ...companyData } as Company;
+            const company = { id: companyDoc.id, ...companyData } as Company;
 
-            if (!schedule.busId || !schedule.routeId) {
-              errors.push(`Schedule ${schedule.id} missing busId or routeId`);
-              return null;
-            }
+            if (!schedule.busId || !schedule.routeId) {
+              errors.push(`Schedule ${schedule.id} missing busId or routeId`);
+              return null;
+            }
 
-            const [busDoc, routeDoc] = await Promise.all([
-              getDoc(doc(db, 'buses', schedule.busId)),
-              getDoc(doc(db, 'routes', schedule.routeId)),
-            ]);
+            const [busDoc, routeDoc] = await Promise.all([
+              getDoc(doc(db, 'buses', schedule.busId)),
+              getDoc(doc(db, 'routes', schedule.routeId)),
+            ]);
 
-            if (!busDoc.exists() || !routeDoc.exists()) {
-              errors.push(`Missing bus or route for schedule ${schedule.id}`);
-              return null;
-            }
+            if (!busDoc.exists() || !routeDoc.exists()) {
+              errors.push(`Missing bus or route for schedule ${schedule.id}`);
+              return null;
+            }
 
-            const bus = { id: busDoc.id, ...busDoc.data() } as Bus;
-            const route = { id: routeDoc.id, ...routeDoc.data() } as Route;
+            const bus = { id: busDoc.id, ...busDoc.data() } as Bus;
+            const route = { id: routeDoc.id, ...routeDoc.data() } as Route;
 
-            return { ...booking, schedule, bus, route, company } as BookingWithDetails;
-          } catch (error) {
-            errors.push(`Error fetching details for booking ${booking.id}: ${error}`);
-            return null;
-          }
-        });
-
+            return { ...booking, schedule, bus, route, company } as BookingWithDetails;
+          } catch (error) {
+            errors.push(`Error fetching details for booking ${booking.id}: ${error}`);
+            return null;
+          }
+        });
         const batchResults = await Promise.allSettled(batchPromises);
         batchResults.forEach((result) => {
           if (result.status === 'fulfilled' && result.value) {
@@ -750,86 +756,98 @@ const BookingsPage: React.FC = () => {
     }
   }, [bookings, fetchBookings]);
 
-  const applyFilters = useCallback((bookingsToFilter: BookingWithDetails[] = bookings) => {
-    let filtered = [...bookingsToFilter];
+   const applyFilters = useCallback((bookingsToFilter: BookingWithDetails[] = bookings) => {
+      let filtered = [...bookingsToFilter];
+  
+      if (activeFilter !== 'all') {
+        switch (activeFilter) {
+          case 'confirmed':
+            filtered = filtered.filter((b) => b.bookingStatus === 'confirmed' && b.paymentStatus === 'paid');
+            break;
+          case 'pending':
+            filtered = filtered.filter((b) => b.bookingStatus === 'pending' || (b.bookingStatus === 'confirmed' && b.paymentStatus === 'pending'));
+            break;
+          case 'cancelled':
+            filtered = filtered.filter((b) => b.bookingStatus === 'cancelled');
+            break;
+          case 'upcoming':
+            const now = new Date();
+            filtered = filtered.filter((b) => {
+              // Ensure schedule and departureDateTime exist before accessing
+              if (!b.schedule || !b.schedule.departureDateTime) return false;
 
-    if (activeFilter !== 'all') {
-      switch (activeFilter) {
-        case 'confirmed':
-          filtered = filtered.filter((b) => b.bookingStatus === 'confirmed' && b.paymentStatus === 'paid');
-          break;
-        case 'pending':
-          filtered = filtered.filter((b) => b.bookingStatus === 'pending' || (b.bookingStatus === 'confirmed' && b.paymentStatus === 'pending'));
-          break;
-        case 'cancelled':
-          filtered = filtered.filter((b) => b.bookingStatus === 'cancelled');
-          break;
-        case 'upcoming':
-          const now = new Date();
-          filtered = filtered.filter((b) => {
-            const departureDate = b.schedule.departureDateTime instanceof Timestamp
-              ? b.schedule.departureDateTime.toDate()
-              : new Date(b.schedule.departureDateTime);
-            return departureDate > now && b.bookingStatus === 'confirmed' && b.paymentStatus === 'paid';
-          });
-          break;
+              const departureDate = b.schedule.departureDateTime instanceof Timestamp
+                ? b.schedule.departureDateTime.toDate()
+                : new Date(b.schedule.departureDateTime);
+              return departureDate > now && b.bookingStatus === 'confirmed' && b.paymentStatus === 'paid';
+            });
+            break;
+        }
       }
-    }
-
-    if (filters.busType) {
-      filtered = filtered.filter((b) => b.bus.busType === filters.busType);
-    }
-
-    if (filters.priceRange) {
-      filtered = filtered.filter(
-        (b) => b.schedule.price >= (filters.priceRange?.min || 0) && b.schedule.price <= (filters.priceRange?.max || Infinity)
-      );
-    }
-
-    if (filters.company) {
-      filtered = filtered.filter((b) => b.company.name === filters.company);
-    }
-
-    setFilteredBookings(filtered);
-    setCurrentPage(1);
-  }, [bookings, activeFilter, filters]);
-
-  const bookingStats = useMemo(() => {
-    const all = bookings.length;
-    const confirmed = bookings.filter((b) => b.bookingStatus === 'confirmed' && b.paymentStatus === 'paid').length;
-    const pending = bookings.filter((b) => b.bookingStatus === 'pending' || (b.bookingStatus === 'confirmed' && b.paymentStatus === 'pending')).length;
-    const cancelled = bookings.filter((b) => b.bookingStatus === 'cancelled').length;
-    const upcoming = bookings.filter((b) => {
-      const departureDate = b.schedule.departureDateTime instanceof Timestamp
-        ? b.schedule.departureDateTime.toDate()
-        : new Date(b.schedule.departureDateTime);
-      return departureDate > new Date() && b.bookingStatus === 'confirmed' && b.paymentStatus === 'paid';
-    }).length;
-    return { all, confirmed, pending, cancelled, upcoming };
-  }, [bookings]);
-
-  const paginatedBookings = useMemo(() => {
-    return filteredBookings.slice((currentPage - 1) * bookingsPerPage, currentPage * bookingsPerPage);
-  }, [filteredBookings, currentPage, bookingsPerPage]);
-
-  const totalPages = useMemo(() => Math.ceil(filteredBookings.length / bookingsPerPage), [filteredBookings.length, bookingsPerPage]);
-
-  const handleFilterChange = useCallback((e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    let newFilters = { ...filters };
-
-    if (name === 'priceRangeMin' || name === 'priceRangeMax') {
-      newFilters.priceRange = { ...newFilters.priceRange, [name === 'priceRangeMin' ? 'min' : 'max']: value ? Number(value) : undefined };
-    } else {
-      newFilters[name] = value || undefined;
-    }
-
-    setFilters(newFilters);
-  }, [filters]);
-
-  const handleStatusFilter = useCallback((status: string) => {
-    setActiveFilter(status);
-  }, []);
+  
+      if (filters.busType) {
+        // FIX: Check if busType is included in the array of filters
+        const busTypesToFilter = Array.isArray(filters.busType) ? filters.busType : [filters.busType];
+        filtered = filtered.filter((b) => b.bus?.busType && busTypesToFilter.includes(b.bus.busType));
+      }
+  
+      if (filters.priceRange) {
+        // Ensure schedule and price exist before accessing
+        filtered = filtered.filter(
+          (b) => b.schedule?.price !== undefined && 
+                 b.schedule.price >= (filters.priceRange?.min || 0) && 
+                 b.schedule.price <= (filters.priceRange?.max || Infinity)
+        );
+      }
+  
+      if (filters.company) {
+        // Ensure company and name exist before accessing
+        filtered = filtered.filter((b) => b.company?.name === filters.company);
+      }
+  
+      setFilteredBookings(filtered);
+      setCurrentPage(1);
+    }, [bookings, activeFilter, filters]);
+  
+    const bookingStats = useMemo(() => {
+      const all = bookings.length;
+      const confirmed = bookings.filter((b) => b.bookingStatus === 'confirmed' && b.paymentStatus === 'paid').length;
+      const pending = bookings.filter((b) => b.bookingStatus === 'pending' || (b.bookingStatus === 'confirmed' && b.paymentStatus === 'pending')).length;
+      const cancelled = bookings.filter((b) => b.bookingStatus === 'cancelled').length;
+      const upcoming = bookings.filter((b) => {
+        // Ensure schedule and departureDateTime exist before accessing
+        if (!b.schedule || !b.schedule.departureDateTime) return false;
+        
+        const departureDate = b.schedule.departureDateTime instanceof Timestamp
+          ? b.schedule.departureDateTime.toDate()
+          : new Date(b.schedule.departureDateTime);
+        return departureDate > new Date() && b.bookingStatus === 'confirmed' && b.paymentStatus === 'paid';
+      }).length;
+      return { all, confirmed, pending, cancelled, upcoming };
+    }, [bookings]);
+  
+    const paginatedBookings = useMemo(() => {
+      return filteredBookings.slice((currentPage - 1) * bookingsPerPage, currentPage * bookingsPerPage);
+    }, [filteredBookings, currentPage, bookingsPerPage]);
+  
+    const totalPages = useMemo(() => Math.ceil(filteredBookings.length / bookingsPerPage), [filteredBookings.length, bookingsPerPage]);
+  
+    const handleFilterChange = useCallback((e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+      const { name, value } = e.target;
+      let newFilters = { ...filters };
+  
+      if (name === 'priceRangeMin' || name === 'priceRangeMax') {
+        newFilters.priceRange = { ...newFilters.priceRange, [name === 'priceRangeMin' ? 'min' : 'max']: value ? Number(value) : undefined };
+      } else {
+        newFilters[name] = value || undefined;
+      }
+  
+      setFilters(newFilters);
+    }, [filters]);
+  
+    const handleStatusFilter = useCallback((status: string) => {
+      setActiveFilter(status);
+    }, []);
 
   const handleDownloadTicket = useCallback(async (booking: BookingWithDetails, includeQR: boolean) => {
     setActionLoading(`download_${booking.id}`);

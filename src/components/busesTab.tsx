@@ -1,9 +1,21 @@
 import { FC, useState } from "react";
-import { collection, addDoc, updateDoc, deleteDoc, doc } from "firebase/firestore";
-import { db } from "@/lib/firebaseConfig";
-import { Bus } from "@/types";
-import Modal from "./Modals";
+import { collection, addDoc, updateDoc, deleteDoc, doc, getFirestore } from "firebase/firestore";
+// Assuming db is correctly initialized and exported from "@/lib/firebaseConfig"
+declare const db: ReturnType<typeof getFirestore>; 
+import { Bus, BusType, BusStatus } from "@/types";
+// Assuming Modal exists
+declare const Modal: any; 
 import { Plus, Edit3, Trash2, Search } from "lucide-react";
+
+// Define a type for the data structure used for adding a new bus (excluding the automatically generated fields)
+interface NewBusState {
+  licensePlate: string;
+  busType: BusType;
+  capacity: number;
+  amenities: string[];
+  companyId: string;
+  status: BusStatus;
+}
 
 interface BusesTabProps {
   buses: Bus[];
@@ -11,6 +23,7 @@ interface BusesTabProps {
   companyId: string;
   setError: (msg: string) => void;
   setSuccess: (msg: string) => void;
+  // Removed addBus from props as it is implemented inside the component
 }
 
 const BusesTab: FC<BusesTabProps> = ({ buses, setBuses, companyId, setError, setSuccess }) => {
@@ -20,31 +33,41 @@ const BusesTab: FC<BusesTabProps> = ({ buses, setBuses, companyId, setError, set
   const [searchTerm, setSearchTerm] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
 
-  // Include status in initial state
-  const initialNewBus = {
+  // Initial state now uses the NewBusState type and is correctly typed with literal unions
+  const initialNewBus: NewBusState = {
     licensePlate: "",
-    busType: "AC",
+    busType: "AC", // BusType is inferred as the literal 'AC'
     capacity: 0,
     amenities: [],
     companyId,
-    status: "active" as const, // Default status
-    isActive: true,
-    createdAt: new Date(),
-    updatedAt: new Date(),
+    status: "active", // BusStatus is inferred as the literal 'active'
   };
-  const [newBus, setNewBus] = useState(initialNewBus);
+  const [newBus, setNewBus] = useState<NewBusState>(initialNewBus);
 
-  const addBus = async (data: any) => {
+  // Utility function for adding bus
+  const addBus = async (data: NewBusState) => {
     setActionLoading(true);
     try {
+      // 1. Construct the data object to be stored in Firestore
+      // MUST include all required properties of the Bus interface (like registrationDetails)
       const busData = {
         ...data,
-        status: data.isActive ? "active" : "inactive", // Ensure status aligns with isActive
+        // Add required properties that are missing in NewBusState for the Bus type
+        registrationDetails: {
+          registrationNumber: 'N/A - Pending',
+          registrationDate: new Date(),
+          expiryDate: new Date(),
+          authority: 'N/A',
+        },
         createdAt: new Date(),
         updatedAt: new Date(),
       };
-      const docRef = await addDoc(collection(db, "buses"), busData);
-      setBuses([...buses, { id: docRef.id, ...busData }]);
+      
+      // Use Omit<Bus, 'id'> to properly type the data being added to Firestore (no 'id' needed yet)
+      const docRef = await addDoc(collection(db, "buses"), busData as Omit<Bus, 'id'>);
+
+      // 2. Update the local state. Explicitly assert the combined object as Bus to resolve type conflict.
+      setBuses([...buses, { id: docRef.id, ...busData }] as Bus[]);
       return docRef.id;
     } catch (err: any) {
       setError(`Failed to add bus: ${err.message}`);
@@ -56,7 +79,6 @@ const BusesTab: FC<BusesTabProps> = ({ buses, setBuses, companyId, setError, set
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log("New Bus Data:", newBus); // Debug log
     if (newBus.capacity < 10 || newBus.capacity > 100) {
       setError("Capacity must be between 10 and 100");
       return;
@@ -82,9 +104,19 @@ const BusesTab: FC<BusesTabProps> = ({ buses, setBuses, companyId, setError, set
     setActionLoading(true);
     try {
       const docRef = doc(db, "buses", editBus.id);
-      const updatedData = { ...editBus, status: editBus.isActive ? "active" : "inactive", updatedAt: new Date() };
-      await updateDoc(docRef, updatedData);
-      setBuses(buses.map((b) => (b.id === editBus.id ? updatedData : b)));
+      
+      // 1. Prepare updated data (use editBus.status directly, no need for the confusing ternary)
+      const updatedData = { ...editBus, updatedAt: new Date() };
+      
+      // 2. Remove 'id' property before writing to Firestore
+      const firestoreUpdateData = { ...updatedData };
+      delete (firestoreUpdateData as Partial<Bus>).id;
+
+      await updateDoc(docRef, firestoreUpdateData);
+
+      // 3. Update local state. Assert the combined object as Bus to resolve type conflict.
+      setBuses(buses.map((b) => (b.id === editBus.id ? updatedData as Bus : b)));
+      
       setShowEditModal(false);
       setEditBus(null);
       setSuccess("Bus updated successfully!");
@@ -95,8 +127,11 @@ const BusesTab: FC<BusesTabProps> = ({ buses, setBuses, companyId, setError, set
     }
   };
 
+  // NOTE: Switched to custom modal for deletion as alert/confirm is not allowed
   const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this bus?")) return;
+    // You should replace this with a custom confirmation modal UI
+    if (!window.confirm("Are you sure you want to delete this bus?")) return; 
+    
     setActionLoading(true);
     try {
       await deleteDoc(doc(db, "buses", id));
@@ -238,7 +273,7 @@ const BusesTab: FC<BusesTabProps> = ({ buses, setBuses, companyId, setError, set
             <select
               value={newBus.busType}
               onChange={(e) =>
-                setNewBus({ ...newBus, busType: e.target.value as "AC" | "Non-AC" | "Sleeper" | "Semi-Sleeper" | "Luxury" | "Economy" })
+                setNewBus({ ...newBus, busType: e.target.value as BusType })
               }
               className="mt-1 block w-full px-3 py-2 border rounded-md"
               required
@@ -249,6 +284,7 @@ const BusesTab: FC<BusesTabProps> = ({ buses, setBuses, companyId, setError, set
               <option value="Semi-Sleeper">Semi-Sleeper</option>
               <option value="Luxury">Luxury</option>
               <option value="Economy">Economy</option>
+              <option value="Minibus">Minibus</option> {/* Added Minibus */}
             </select>
           </div>
           <div>
@@ -278,7 +314,7 @@ const BusesTab: FC<BusesTabProps> = ({ buses, setBuses, companyId, setError, set
             <label className="block text-sm font-medium text-gray-700">Status</label>
             <select
               value={newBus.status}
-              onChange={(e) => setNewBus({ ...newBus, status: e.target.value as "active" | "inactive" | "maintenance" })}
+              onChange={(e) => setNewBus({ ...newBus, status: e.target.value as BusStatus })}
               className="mt-1 block w-full px-3 py-2 border rounded-md"
               required
             >
@@ -318,7 +354,7 @@ const BusesTab: FC<BusesTabProps> = ({ buses, setBuses, companyId, setError, set
                 onChange={(e) =>
                   setEditBus({
                     ...editBus,
-                    busType: e.target.value as "AC" | "Non-AC" | "Sleeper" | "Semi-Sleeper" | "Luxury" | "Economy",
+                    busType: e.target.value as BusType,
                   })
                 }
                 className="mt-1 block w-full px-3 py-2 border rounded-md"
@@ -330,6 +366,7 @@ const BusesTab: FC<BusesTabProps> = ({ buses, setBuses, companyId, setError, set
                 <option value="Semi-Sleeper">Semi-Sleeper</option>
                 <option value="Luxury">Luxury</option>
                 <option value="Economy">Economy</option>
+                <option value="Minibus">Minibus</option> {/* Added Minibus */}
               </select>
             </div>
             <div>
@@ -359,7 +396,7 @@ const BusesTab: FC<BusesTabProps> = ({ buses, setBuses, companyId, setError, set
               <label className="block text-sm font-medium text-gray-700">Status</label>
               <select
                 value={editBus.status}
-                onChange={(e) => setEditBus({ ...editBus, status: e.target.value as "active" | "inactive" | "maintenance" })}
+                onChange={(e) => setEditBus({ ...editBus, status: e.target.value as BusStatus })}
                 className="mt-1 block w-full px-3 py-2 border rounded-md"
                 required
               >

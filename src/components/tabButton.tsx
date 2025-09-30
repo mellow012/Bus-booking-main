@@ -4,15 +4,12 @@ import { LucideIcon } from 'lucide-react';
 interface TabButtonProps {
   id: string;
   label: string;
-  icon?: string; // Make icon optional
+  icon?: LucideIcon; // Change to LucideIcon to accept icon components
   isActive: boolean;
   onClick: () => void;
 }
 
-const TabButton: FC<TabButtonProps> = ({ id, label, icon, isActive, onClick }) => {
-  // Fallback to a default icon or null if icon is not provided
-  const Icon = icon ? (require('lucide-react')[icon] as LucideIcon) : null;
-
+const TabButton: FC<TabButtonProps> = ({ id, label, icon: Icon, isActive, onClick }) => {
   return (
     <button
       onClick={onClick}
@@ -20,7 +17,7 @@ const TabButton: FC<TabButtonProps> = ({ id, label, icon, isActive, onClick }) =
         isActive ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-50'
       }`}
     >
-      {Icon && <Icon className="w-4 h-4" />}
+      {Icon && <Icon className="w-4 h-4" />} {/* Render the icon component if provided */}
       <span>{label}</span>
     </button>
   );

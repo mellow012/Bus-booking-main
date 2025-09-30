@@ -124,7 +124,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const oobCode = searchParams?.get('oobCode');
 
     // Define public routes that don't require authentication
-    const publicRoutes = ['/login', '/register', '/company/setup', '/', '/about', '/contact'];
+    const publicRoutes = ['/login', '/register', '/company/setup', '/', '/about', '/contact','forgot-password','/reset-password'];
     const isPublicRoute = publicRoutes.includes(pathname);
 
     // Only redirect to login if user is not authenticated and not on a public route
@@ -299,11 +299,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         firstName: profile.firstName.trim(),
         lastName: profile.lastName.trim(),
         phone: profile.phone.trim(),
-        nationalId: profile.nationalId || null,
-        sex: profile.sex || null,
-        currentAddress: profile.currentAddress || null,
+        nationalId: profile.nationalId || undefined,
+        sex: profile.sex || undefined,
+        currentAddress: profile.currentAddress || undefined,
         role: profile.role || (userProfile?.role || 'customer'),
-        companyId: profile.companyId || null,
+        companyId: profile.companyId || undefined,
         updatedAt: serverTimestamp() as unknown as Date,
       };
 

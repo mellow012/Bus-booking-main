@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
-import { adminAuth, adminDb, adminFieldValue } from '@/lib/firebaseAdmin';
+import { adminAuth, adminDb, FieldValue } from '@/lib/firebaseAdmin';
 
 /**
  * GET handler
@@ -64,10 +64,10 @@ async function verifyStripePayment(sessionId: string | null, userId: string) {
     const session = await stripe.checkout.sessions.retrieve(sessionId, { expand: ["payment_intent"] });
 
     // Try to derive booking id from session metadata or client_reference_id
-    const metadataBookingId = (session.metadata as any)?.bookingId || null;
+   const metadataBookingId = (session.metadata as any)?.bookingId || null;
     const clientRef = (session.client_reference_id as string) || (session.metadata as any)?.client_reference_id || null;
 
-    let bookingDoc: FirebaseFirestore.QueryDocumentSnapshot<FirebaseFirestore.DocumentData> | null = null;
+    let bookingDoc: FirebaseFirestore.DocumentSnapshot<FirebaseFirestore.DocumentData> | null = null;
 
     if (metadataBookingId) {
       const docRef = await adminDb.collection("bookings").doc(metadataBookingId).get();
@@ -102,8 +102,14 @@ async function verifyStripePayment(sessionId: string | null, userId: string) {
     }
 
     const bookingData = bookingDoc.data();
-    // ownership check
-    if (bookingData?.userId && bookingData.userId !== userId) {
+    // Safety check: Ensure bookingData exists before proceeding (fixes the potential 'undefined' error)
+    if (!bookingData) {
+      console.error(`Booking document ${bookingDoc.id} found but data() was undefined/null.`);
+      return NextResponse.json({ error: "Booking data missing or corrupted" }, { status: 500 });
+    }
+    
+    // ownership check (no optional chaining needed on bookingData now)
+    if (bookingData.userId && bookingData.userId !== userId) {
       return NextResponse.json({ error: "Forbidden: Not booking owner" }, { status: 403 });
     }
 
@@ -126,8 +132,8 @@ async function verifyStripePayment(sessionId: string | null, userId: string) {
             paymentStatus: session.payment_status,
             raw: session,
           },
-          paymentConfirmedAt: adminFieldValue.serverTimestamp(),
-          updatedAt: adminFieldValue.serverTimestamp(),
+          paymentConfirmedAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
         });
       }
 
@@ -225,7 +231,13 @@ async function processPayChanguBookingUpdate(
   txRef: string
 ) {
   const bookingData = bookingDoc.data();
-  if (bookingData?.userId && bookingData.userId !== userId) {
+  // Safety check: Ensure bookingData exists
+  if (!bookingData) {
+    console.error(`PayChangu: Booking document ${bookingDoc.id} found but data() was undefined/null.`);
+    return NextResponse.json({ error: "Booking data missing or corrupted (PayChangu)" }, { status: 500 });
+  }
+
+  if (bookingData.userId && bookingData.userId !== userId) {
     return NextResponse.json({ error: "Forbidden: Not booking owner" }, { status: 403 });
   }
 
@@ -248,8 +260,8 @@ async function processPayChanguBookingUpdate(
           status: paymentData.status,
           raw: paymentData,
         },
-        paymentConfirmedAt: adminFieldValue.serverTimestamp(),
-        updatedAt: adminFieldValue.serverTimestamp(),
+        paymentConfirmedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
       });
     }
 
@@ -269,7 +281,7 @@ async function processPayChanguBookingUpdate(
           message: paymentData.message,
           raw: paymentData,
         },
-        updatedAt: adminFieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
       });
     }
     return NextResponse.json({ success: false, status: "failed", message: paymentData.message || "Payment failed", bookingId: bookingDoc.id }, { status: 200 });
