@@ -2,10 +2,10 @@ import { FC, useState, ChangeEvent, useEffect } from "react";
 import { doc, updateDoc, Timestamp } from "firebase/firestore";
 // NOTE: Assuming db, Company, useAuth, and useRouter are imported correctly elsewhere in the actual project structure.
 // For the purpose of this single file, we will comment out or stub non-provided imports.
-// import { db } from "@/lib/firebaseConfig"; // Assuming a valid Firebase setup
-// import { Company } from "@/types"; // Assuming this type is defined
-// import { useAuth } from "@/contexts/AuthContext";
-// import { useRouter } from "next/navigation";
+ import { db } from "@/lib/firebaseConfig"; // Assuming a valid Firebase setup
+ //import { Company } from "@/types"; // Assuming this type is defined
+ import { useAuth } from "@/contexts/AuthContext";
+ import { useRouter } from "next/navigation";
 
 // --- Mocking necessary types/imports for file completeness in this environment ---
 interface Company {
@@ -32,9 +32,7 @@ interface Company {
 // const Timestamp = {
 //   now: () => ({ toDate: () => new Date(), fakeTimestamp: true }),
 // };
-declare const db: any;
-declare const useAuth: any;
-declare const useRouter: any;
+
 // -------------------------------------------------------------------------------
 
 

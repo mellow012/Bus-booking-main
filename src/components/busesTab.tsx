@@ -3,8 +3,8 @@ import { collection, addDoc, updateDoc, deleteDoc, doc, getFirestore } from "fir
 // Assuming db is correctly initialized and exported from "@/lib/firebaseConfig"
 declare const db: ReturnType<typeof getFirestore>; 
 import { Bus, BusType, BusStatus } from "@/types";
+import Modal from "@/components/Modals";
 // Assuming Modal exists
-declare const Modal: any; 
 import { Plus, Edit3, Trash2, Search } from "lucide-react";
 
 // Define a type for the data structure used for adding a new bus (excluding the automatically generated fields)

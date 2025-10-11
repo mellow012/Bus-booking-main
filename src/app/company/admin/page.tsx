@@ -318,6 +318,8 @@ export default function AdminDashboard() {
     bookings: [],
   });
   const [loading, setLoading] = useState(true);
+const [error, setError] = useState("");
+const [success, setSuccess] = useState("");
 
   const companyId = userProfile?.companyId?.trim() || "";
   const { bookings, setBookings, realtimeStatus } = useRealtimeBookings(companyId, showAlert, activeTab);
