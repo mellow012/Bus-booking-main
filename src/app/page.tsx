@@ -57,6 +57,7 @@ interface Company {
   name: string;
   phone?: string;
   status: string;
+  logoUrl?: string;
 }
 
 interface Bus {
@@ -82,6 +83,7 @@ interface Route {
 
 interface EnhancedSchedule {
   id: string;
+  companyLogo?: string;
   companyId: string;
   busId: string;
   routeId: string;
@@ -299,6 +301,8 @@ export default function HomePage() {
             arrivalTime,
             companyName: company.name,
             companyPhone: company.phone,
+      
+            companyLogo: company.logo || company.logoUrl || null,
             origin: route.origin,
             destination: route.destination,
             duration: route.duration,
@@ -673,9 +677,20 @@ export default function HomePage() {
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center space-x-4">
                       <div className="relative">
-                        <div className="w-16 h-16 bg-gradient-to-br from-blue-500 via-indigo-600 to-purple-600 rounded-2xl flex items-center justify-center text-white font-bold text-xl shadow-lg">
-                          {schedule.companyName.charAt(0)}
-                        </div>
+                        {schedule.companyLogo ? (
+                          <div className="w-16 h-16 bg-gray-100 rounded-2xl overflow-hidden flex items-center justify-center shadow-lg">
+                          <img
+                            src={schedule.companyLogo}
+                            alt={schedule.companyName}
+                            className="absolute inset-0 w-full h-full object-cover rounded-2xl"
+                            loading="lazy"
+                          />
+                          </div>
+                        ) : (
+                          <div className="w-16 h-16 bg-gradient-to-br from-blue-500 via-indigo-600 to-purple-600 rounded-2xl flex items-center justify-center text-white font-bold text-xl shadow-lg">
+                            {schedule.companyName.charAt(0)}
+                          </div>
+                        )}
                         <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-success rounded-full border-2 border-background flex items-center justify-center shadow-md">
                           <CheckCircle className="w-3 h-3 text-white" />
                         </div>
@@ -816,7 +831,9 @@ export default function HomePage() {
               <div className="absolute bottom-16 right-8 w-3 h-3 bg-pink-400 rounded-full opacity-50 animate-bounce" style={{ animationDelay: "1s" }}></div>
             </div>
           </div>
+          
         )}
+        <HowItWorks />
       </div>
     </div>
   );

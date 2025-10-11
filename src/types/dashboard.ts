@@ -31,7 +31,6 @@ export interface DashboardData {
  * A transformed Schedule type for easier display on search result pages.
  */
 export interface EnhancedSchedule extends Omit<Schedule, "departureDateTime" | "arrivalDateTime"> {
-
 date: string;
 departureTime: string;
 arrivalDate: string;

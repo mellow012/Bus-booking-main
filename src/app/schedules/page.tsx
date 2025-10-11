@@ -35,6 +35,7 @@ interface Company {
   name: string;
   phone?: string;
   status: string;
+  logo?: string;
 }
 
 interface Bus {
@@ -83,6 +84,7 @@ interface EnhancedSchedule {
   price: number;
   duration: number;
   date: string;
+  companyLogo?: string | null;
 }
 
 // Custom Toggle Switch Component
@@ -145,7 +147,7 @@ const SchedulesPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedDate, setSelectedDate] = useState(new Date()); // Use current date
+  const [selectedDate, setSelectedDate] = useState(new Date());
   const [selectedOrigin, setSelectedOrigin] = useState("");
   const [selectedDestination, setSelectedDestination] = useState("");
   const [priceRange, setPriceRange] = useState<[number, number]>([0, 1000000]);
@@ -157,10 +159,9 @@ const SchedulesPage = () => {
   const [locationError, setLocationError] = useState<string>("");
   const [locationLoading, setLocationLoading] = useState(false);
 
-  // Calculate 2-week range dynamically from today
-  const today = new Date(); // Current date: September 17, 2025
+  const today = new Date();
   const maxDate = new Date(today);
-  maxDate.setDate(today.getDate() + 13); // 2 weeks (14 days total)
+  maxDate.setDate(today.getDate() + 13);
 
   const handleLocationToggle = useCallback((enabled: boolean) => {
     setUseLocation(enabled);
@@ -196,15 +197,14 @@ const SchedulesPage = () => {
     setError("");
 
     try {
-      // Calculate the start and end of the week (Monday to Sunday) for the target date
       const startOfWeek = new Date(targetDate);
       const dayOfWeek = startOfWeek.getDay();
-      const diff = startOfWeek.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1); // Adjust to Monday
+      const diff = startOfWeek.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
       startOfWeek.setDate(diff);
       startOfWeek.setHours(0, 0, 0, 0);
 
       const endOfWeek = new Date(startOfWeek);
-      endOfWeek.setDate(startOfWeek.getDate() + 6); // End on Sunday
+      endOfWeek.setDate(startOfWeek.getDate() + 6);
       endOfWeek.setHours(23, 59, 59, 999);
 
       const startTimestamp = Timestamp.fromDate(startOfWeek);
@@ -226,6 +226,7 @@ const SchedulesPage = () => {
       ]);
 
       console.log("Raw schedules count:", schedulesSnapshot.size);
+      
       const companiesMap = new Map<string, Company>();
       companiesSnapshot.forEach((doc) => companiesMap.set(doc.id, { id: doc.id, ...doc.data() } as Company));
 
@@ -236,6 +237,8 @@ const SchedulesPage = () => {
       routesSnapshot.forEach((doc) => routesMap.set(doc.id, { id: doc.id, ...doc.data() } as Route));
 
       const enhancedSchedules: EnhancedSchedule[] = [];
+      const currentTime = new Date();
+      
       schedulesSnapshot.forEach((doc) => {
         const schedule = { id: doc.id, ...doc.data() } as Schedule;
         const company = companiesMap.get(schedule.companyId);
@@ -245,6 +248,13 @@ const SchedulesPage = () => {
         if (company && bus && route) {
           const departureDateTime = schedule.departureDateTime.toDate();
           const arrivalDateTime = schedule.arrivalDateTime.toDate();
+          
+          // FILTER OUT EXPIRED SCHEDULES - Skip if arrival time has passed
+          if (arrivalDateTime < currentTime) {
+            console.log(`Skipping expired schedule ${schedule.id} - arrived at ${arrivalDateTime}`);
+            return;
+          }
+          
           const departureTime = departureDateTime.toTimeString().slice(0, 5);
           const arrivalTime = arrivalDateTime.toTimeString().slice(0, 5);
 
@@ -261,10 +271,12 @@ const SchedulesPage = () => {
             price: schedule.price,
             duration: route.duration,
             date: departureDateTime.toDateString(),
+            companyLogo: company.logo || null, // Use company.logo directly from interface
           });
         }
       });
 
+      console.log(`Filtered schedules: ${enhancedSchedules.length} (removed ${schedulesSnapshot.size - enhancedSchedules.length} expired)`);
       setSchedules(enhancedSchedules);
     } catch (err: any) {
       console.error("Error fetching schedules:", err);
@@ -277,6 +289,7 @@ const SchedulesPage = () => {
   useEffect(() => {
     fetchData(selectedDate);
   }, [fetchData, selectedDate]);
+
   const { origins, destinations } = useMemo(() => {
     const origins = [...new Set(schedules.map(s => s.origin))];
     const destinations = [...new Set(schedules.map(s => s.destination))];
@@ -323,7 +336,7 @@ const SchedulesPage = () => {
   }, [router]);
 
   const formatDate = (date: Date) => {
-    const today = new Date("2025-08-24");
+    const today = new Date();
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
 
@@ -602,19 +615,31 @@ const SchedulesPage = () => {
                 </div>
                 <div className="p-6">
                   <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
-                    {periodSchedules.map((schedule, index) => (
+                    {periodSchedules.map((schedule) => (
                       <div
                         key={schedule.id}
                         className="group relative bg-gradient-to-br from-gray-50 to-white rounded-2xl p-4 border border-gray-200 hover:border-blue-300 hover:shadow-lg transition-all duration-300"
                       >
                         <div className="flex items-start justify-between mb-3">
                           <div className="flex items-center space-x-3">
-                            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center text-white font-bold text-sm">
+                            {schedule.companyLogo ? (
+                              <div className="w-10 h-10 rounded-xl overflow-hidden border border-gray-200">
+                                <img
+                                  src={schedule.companyLogo}
+                                  alt={schedule.companyName}
+                                  className="w-full h-full object-cover"
+                                  loading="lazy"
+                                  onError={(e) => {
+                                    const target = e.target as HTMLImageElement;
+                                    target.style.display = 'none';
+                                    const fallback = target.parentElement?.nextElementSibling;
+                                    if (fallback) (fallback as HTMLElement).style.display = 'flex';
+                                  }}
+                                />
+                              </div>
+                            ) : null}
+                            <div className={`w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center text-white font-bold text-sm ${schedule.companyLogo ? 'hidden' : ''}`}>
                               {schedule.companyName.charAt(0)}
-                            </div>
-                            <div>
-                              <h4 className="font-semibold text-gray-900 text-sm">{schedule.companyName}</h4>
-                              <p className="text-xs text-gray-600">{schedule.busType}</p>
                             </div>
                           </div>
                           <div className="text-right">
@@ -670,7 +695,23 @@ const SchedulesPage = () => {
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center space-x-4">
                       <div className="relative">
-                        <div className="w-16 h-16 bg-gradient-to-br from-blue-500 via-indigo-600 to-purple-600 rounded-2xl flex items-center justify-center text-white font-bold text-xl shadow-lg">
+                        {schedule.companyLogo ? (
+                          <div className="w-16 h-16 rounded-2xl overflow-hidden border-2 border-gray-200 shadow-lg">
+                            <img
+                              src={schedule.companyLogo}
+                              alt={schedule.companyName}
+                              className="w-full h-full object-cover"
+                              loading="lazy"
+                              onError={(e) => {
+                                const target = e.target as HTMLImageElement;
+                                target.style.display = 'none';
+                                const fallback = target.parentElement?.nextElementSibling;
+                                if (fallback) (fallback as HTMLElement).style.display = 'flex';
+                              }}
+                            />
+                          </div>
+                        ) : null}
+                        <div className={`w-16 h-16 bg-gradient-to-br from-blue-500 via-indigo-600 to-purple-600 rounded-2xl flex items-center justify-center text-white font-bold text-xl shadow-lg ${schedule.companyLogo ? 'hidden' : ''}`}>
                           {schedule.companyName.charAt(0)}
                         </div>
                         <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-green-500 rounded-full border-2 border-white flex items-center justify-center shadow-md">

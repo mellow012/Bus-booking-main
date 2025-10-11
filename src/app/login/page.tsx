@@ -223,10 +223,10 @@ const handlePostLoginActions = async (user: any) => {
       return `/company/admin?companyId=${token.claims.companyId}`;
     }
     
-    return '/dashboard';
+    return '/';
   } catch (error) {
     console.error('Post-login actions failed:', error);
-    return '/dashboard'; // Default redirect even if post-login actions fail
+    return '/'; // Default redirect even if post-login actions fail
   }
 };
 

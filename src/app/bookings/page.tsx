@@ -174,17 +174,18 @@ const BookingCard = memo<{
 
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-all duration-300 group">
-      <div className="p-6">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg">
-              <span className="text-white font-bold text-lg">{booking.company.name.charAt(0)}</span>
+      <div className="p-4 sm:p-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 sm:w-14 sm:h-14 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
+              <span className="text-white font-bold text-lg">{booking.company.name?.charAt(0) || 'C'}</span>
             </div>
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900">{booking.company.name}</h3>
-              <p className="text-sm text-gray-600">Booking: {booking.bookingReference || booking.id.slice(-8)}</p>
+            <div className="min-w-0">
+              <h3 className="text-base sm:text-lg font-semibold text-gray-900 truncate">{booking.company.name}</h3>
+              <p className="text-sm text-gray-600 truncate">Booking: {booking.bookingReference || booking.id.slice(-8)}</p>
             </div>
           </div>
+
           <div className="flex items-center gap-2">
             <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getStatusColor(booking.bookingStatus)}`}>
               {booking.bookingStatus.charAt(0).toUpperCase() + booking.bookingStatus.slice(1)}
@@ -195,18 +196,19 @@ const BookingCard = memo<{
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          <div className="lg:col-span-2">
-            <div className="flex items-center justify-between mb-6 p-4 bg-gray-50 rounded-xl">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="md:col-span-2 lg:col-span-2">
+            <div className="flex flex-col sm:flex-row items-center gap-4 p-3 bg-gray-50 rounded-xl">
               <div className="text-center">
-                <div className="text-xl font-bold text-gray-900">{formatTime(booking.schedule.departureDateTime)}</div>
+                <div className="text-lg sm:text-xl font-bold text-gray-900">{formatTime(booking.schedule.departureDateTime)}</div>
                 <div className="text-sm text-gray-600 flex items-center justify-center gap-1">
                   <MapPin className="w-3 h-3" />
-                  {booking.route.origin}
+                  <span className="truncate">{booking.route.origin}</span>
                 </div>
                 <div className="text-xs text-gray-500 mt-1">{formatDate(booking.schedule.departureDateTime)}</div>
               </div>
-              <div className="flex-1 mx-6">
+
+              <div className="flex-1 mx-2 hidden sm:block">
                 <div className="relative">
                   <div className="absolute inset-0 flex items-center">
                     <div className="w-full border-t-2 border-dashed border-gray-300"></div>
@@ -218,82 +220,81 @@ const BookingCard = memo<{
                   </div>
                 </div>
                 <div className="text-center mt-2">
-                  <span className="text-xs text-gray-500">{Math.round(booking.route.duration / 60)}h {booking.route.duration % 60}m</span>
+                  <span className="text-xs text-gray-500">{Math.floor((booking.route.duration || 0) / 60)}h {(booking.route.duration || 0) % 60}m</span>
                 </div>
               </div>
-              <div className="text-center">
-                <div className="text-xl font-bold text-gray-900">{formatTime(booking.schedule.arrivalDateTime)}</div>
+
+              <div className="text-center sm:text-left">
+                <div className="text-lg sm:text-xl font-bold text-gray-900">{formatTime(booking.schedule.arrivalDateTime)}</div>
                 <div className="text-sm text-gray-600 flex items-center justify-center gap-1">
                   <MapPin className="w-3 h-3" />
-                  {booking.route.destination}
+                  <span className="truncate">{booking.route.destination}</span>
                 </div>
                 <div className="text-xs text-gray-500 mt-1">{formatDate(booking.schedule.arrivalDateTime)}</div>
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4 text-sm text-gray-600">
+            <div className="grid grid-cols-2 gap-3 mt-3 text-sm text-gray-600">
               <div className="flex items-center gap-2">
                 <BusIcon className="w-4 h-4 text-gray-400" />
-                <span>{booking.bus.busType} • {booking.bus.licensePlate || 'N/A'}</span>
+                <span className="truncate">{booking.bus?.busType || 'N/A'} • {booking.bus?.licensePlate || 'N/A'}</span>
               </div>
               <div className="flex items-center gap-2">
                 <Users className="w-4 h-4 text-gray-400" />
-                <span>{booking.passengerDetails.length} passenger{booking.passengerDetails.length > 1 ? 's' : ''}</span>
+                <span>{booking.passengerDetails?.length || 0} passenger{(booking.passengerDetails?.length || 0) > 1 ? 's' : ''}</span>
               </div>
               <div className="flex items-center gap-2">
                 <Armchair className="w-4 h-4 text-gray-400" />
-                <span>Seats: {booking.seatNumbers.join(', ')}</span>
+                <span className="truncate">Seats: {booking.seatNumbers.join(', ')}</span>
               </div>
               <div className="flex items-center gap-2">
                 <Clock className="w-4 h-4 text-gray-400" />
-                <span>Booked: {formatDate(booking.createdAt)}</span>
+                <span className="truncate">Booked: {formatDate(booking.createdAt)}</span>
               </div>
             </div>
           </div>
 
-          <div className="bg-gray-50 rounded-xl p-4">
-            <h4 className="font-medium text-gray-900 mb-3 flex items-center gap-2">
+          <div className="bg-gray-50 rounded-xl p-3 md:p-4 lg:p-4">
+            <h4 className="font-medium text-gray-900 mb-2 flex items-center gap-2">
               <Users className="w-4 h-4" />
               Passengers
             </h4>
-            <div className="space-y-2 max-h-32 overflow-y-auto">
+            <div className="space-y-2 max-h-36 overflow-y-auto text-sm">
               {booking.passengerDetails.map((passenger, index) => (
                 <div key={index} className="text-sm">
-                  <p className="font-medium text-gray-800">{passenger.name}</p>
+                  <p className="font-medium text-gray-800 truncate">{passenger.name}</p>
                   <p className="text-gray-600">Age: {passenger.age} • {passenger.gender} • Seat: {passenger.seatNumber}</p>
                 </div>
               ))}
             </div>
           </div>
 
-          <div className="flex flex-col justify-between">
-            <div className="mb-4">
-              <div className="text-right mb-2">
-                <div className="text-2xl font-bold text-gray-900">MWK {booking.totalAmount.toLocaleString()}</div>
-                <div className="text-sm text-gray-600">Total Amount</div>
-              </div>
-
-              {booking.paymentProvider && (
-                <div className="text-right text-xs text-gray-500">
-                  via {booking.paymentProvider}
-                  {booking.bookingReference && <div>Ref: {booking.bookingReference}</div>}
-                </div>
-              )}
-
-              {booking.paymentProvider && (
-                <div className="text-right text-xs text-gray-500 mt-1 flex items-center gap-2 justify-end">
-                  <img src={getPaymentMethodIcon(booking.paymentProvider).logo} alt={`${getPaymentMethodIcon(booking.paymentProvider).label} logo`} className="w-6 h-6" />
-                  <span>{getPaymentMethodIcon(booking.paymentProvider).label}</span>
-                </div>
-              )}
+          <div className="flex flex-col justify-between lg:col-span-1">
+            <div className="mb-3 text-right">
+              <div className="text-2xl font-bold text-gray-900">MWK {booking.totalAmount?.toLocaleString()}</div>
+              <div className="text-sm text-gray-600">Total Amount</div>
             </div>
+
+            {booking.paymentProvider && (
+              <div className="text-right text-xs text-gray-500 mb-3">
+                via {booking.paymentProvider}
+                {booking.bookingReference && <div>Ref: {booking.bookingReference}</div>}
+              </div>
+            )}
+
+            {booking.paymentProvider && (
+              <div className="text-right text-xs text-gray-500 mt-1 mb-3 flex items-center gap-2 justify-end">
+                <img src={getPaymentMethodIcon(booking.paymentProvider).logo} alt={`${getPaymentMethodIcon(booking.paymentProvider).label} logo`} className="w-6 h-6" />
+                <span className="truncate">{getPaymentMethodIcon(booking.paymentProvider).label}</span>
+              </div>
+            )}
 
             <div className="space-y-2">
               {booking.bookingStatus === 'confirmed' && booking.paymentStatus === 'pending' && (
                 <button
                   onClick={handlePayment}
                   disabled={actionLoading === booking.id}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-lg hover:from-emerald-600 hover:to-emerald-700 transition-all transform hover:scale-105 shadow-lg animate-pulse"
+                  className="w-full px-3 py-2 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-lg hover:from-emerald-600 hover:to-emerald-700 transition-all transform hover:scale-102 shadow-md flex items-center justify-center gap-2"
                   aria-label={`Pay for booking ${booking.bookingReference || booking.id.slice(-8)}`}
                 >
                   {actionLoading === booking.id ? (
@@ -312,7 +313,7 @@ const BookingCard = memo<{
                   <button
                     onClick={handleDownloadWithQR}
                     disabled={actionLoading === `download_${booking.id}`}
-                    className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors border border-blue-200"
+                    className="w-full px-3 py-2 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors border border-blue-200 flex items-center justify-center gap-2"
                     aria-label={`Download ticket with QR for booking ${booking.bookingReference || booking.id.slice(-8)}`}
                   >
                     {actionLoading === `download_${booking.id}` ? (
@@ -328,7 +329,7 @@ const BookingCard = memo<{
                   <button
                     onClick={handleDownloadOnly}
                     disabled={actionLoading === `download_${booking.id}`}
-                    className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-gray-50 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors border border-gray-200"
+                    className="w-full px-3 py-2 bg-gray-50 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors border border-gray-200 flex items-center justify-center gap-2"
                     aria-label={`Download ticket without QR for booking ${booking.bookingReference || booking.id.slice(-8)}`}
                   >
                     <Download className="w-4 h-4" />
@@ -342,7 +343,7 @@ const BookingCard = memo<{
                 <button
                   onClick={handleCancel}
                   disabled={actionLoading === booking.id}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-red-50 text-red-700 rounded-lg hover:bg-red-100 transition-colors border border-red-200"
+                  className="w-full px-3 py-2 bg-red-50 text-red-700 rounded-lg hover:bg-red-100 transition-colors border border-red-200 flex items-center justify-center gap-2"
                   aria-label={`Cancel booking ${booking.bookingReference || booking.id.slice(-8)}`}
                 >
                   {actionLoading === booking.id ? (
@@ -360,7 +361,7 @@ const BookingCard = memo<{
                 <button
                   onClick={handleCancel}
                   disabled={actionLoading === booking.id}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-amber-50 text-amber-700 rounded-lg hover:bg-amber-100 transition-colors border border-amber-200"
+                  className="w-full px-3 py-2 bg-amber-50 text-amber-700 rounded-lg hover:bg-amber-100 transition-colors border border-amber-200 flex items-center justify-center gap-2"
                   aria-label={`Request refund for booking ${booking.bookingReference || booking.id.slice(-8)}`}
                 >
                   {actionLoading === booking.id ? (
@@ -378,7 +379,7 @@ const BookingCard = memo<{
                 <button
                   onClick={handleDelete}
                   disabled={actionLoading === booking.id}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-gray-50 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors border border-gray-200"
+                  className="w-full px-3 py-2 bg-gray-50 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors border border-gray-200 flex items-center justify-center gap-2"
                   aria-label={`Delete canceled booking ${booking.bookingReference || booking.id.slice(-8)}`}
                 >
                   {actionLoading === booking.id ? (
@@ -397,7 +398,7 @@ const BookingCard = memo<{
       </div>
 
       {booking.bookingStatus === 'confirmed' && booking.paymentStatus === 'pending' && (
-        <div className="bg-gradient-to-r from-emerald-50 to-blue-50 border-t border-emerald-200 p-4">
+        <div className="bg-gradient-to-r from-emerald-50 to-blue-50 border-t border-emerald-200 p-3 sm:p-4">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 bg-emerald-500 rounded-full flex items-center justify-center">
               <CheckCircle className="w-4 h-4 text-white" />
@@ -494,10 +495,10 @@ const BookingsPage: React.FC = () => {
   const getPaymentMethodIcon = useCallback((method: string) => {
     switch (method) {
       case 'mobile_money':
-        return { Icon: Smartphone, label: 'Mobile Money', description: 'Airtel Money, TNM Mpamba', logo: '/PayChangu Logo-06.png' };
+        return { Icon: Smartphone, label: 'Mobile Money', description: 'Airtel Money, TNM Mpamba', logo: '/Airtel Money Uganda Logo PNG Vector (PDF) Free Download.JPG0'};
       case 'card':
       case 'credit_card':
-        return { Icon: CreditCard, label: 'Card Payment', description: 'Visa, Mastercard', logo: '/stripe_5968382.png' };
+        return { Icon: CreditCard, label: 'Card Payment', description: 'Visa, Mastercard', logo: '/nb logo.jpg' }; 
       default:
         return { Icon: CreditCard, label: 'Secure Payment', description: 'Safe & secure', logo: '/images/payment-default.png' };
     }
@@ -870,7 +871,6 @@ const BookingsPage: React.FC = () => {
         if (bold) pdf.setFont('helvetica', 'normal');
         yPos += lineHeight;
       };
-
       addText('Booking Reference', booking.bookingReference || booking.id.slice(-8), 20, true);
       addText('Company', booking.company.name);
       addText('Route', `${booking.route.origin} → ${booking.route.destination}`);
@@ -1283,16 +1283,16 @@ const handlePayment = useCallback(async (e: FormEvent) => {
           {error && <div className="mb-6"><AlertMessage type="error" message={error} onClose={() => setError('')} /></div>}
 
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-6">
-            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
               <div>
                 <h1 className="text-2xl font-bold text-gray-900 mb-2">My Bookings</h1>
                 <p className="text-gray-600">Manage and track your bus ticket bookings</p>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3 w-full sm:w-auto">
                 <button
                   onClick={() => fetchBookings()}
                   disabled={loading}
-                  className="flex items-center gap-2 px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
+                  className="flex items-center gap-2 px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50 w-full sm:w-auto"
                   aria-label="Refresh bookings"
                 >
                   <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
@@ -1300,7 +1300,7 @@ const handlePayment = useCallback(async (e: FormEvent) => {
                 </button>
                 <button
                   onClick={() => router.push('/search')}
-                  className="flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all transform hover:scale-105 shadow-lg"
+                  className="flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all transform hover:scale-105 shadow-lg w-full sm:w-auto justify-center"
                   aria-label="Book new ticket"
                 >
                   <Search className="w-4 h-4" />
@@ -1336,10 +1336,10 @@ const handlePayment = useCallback(async (e: FormEvent) => {
               ))}
             </div>
 
-            <div className="flex items-center justify-between mt-6 pt-4 border-t border-gray-100">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mt-6 pt-4 border-t border-gray-100 gap-3">
               <button
                 onClick={() => setShowFilters(!showFilters)}
-                className="flex items-center gap-2 px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                className="flex items-center gap-2 px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors w-full sm:w-auto"
                 aria-label={showFilters ? 'Hide filters' : 'Show filters'}
               >
                 <Filter className="w-4 h-4" />
@@ -1349,7 +1349,7 @@ const handlePayment = useCallback(async (e: FormEvent) => {
             </div>
 
             {showFilters && (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4 p-4 bg-gray-50 rounded-lg">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mt-4 p-4 bg-gray-50 rounded-lg">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Bus Type</label>
                   <select
@@ -1404,7 +1404,7 @@ const handlePayment = useCallback(async (e: FormEvent) => {
                     />
                   </div>
                 </div>
-                <div className="md:col-span-3">
+                <div className="sm:col-span-2 md:col-span-3">
                   <button
                     onClick={() => { setFilters({}); setActiveFilter('all'); }}
                     className="w-full md:w-auto px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors flex items-center justify-center gap-2"
@@ -1453,11 +1453,11 @@ const handlePayment = useCallback(async (e: FormEvent) => {
                 />
               ))}
               {filteredBookings.length > bookingsPerPage && (
-                <div className="flex items-center justify-between mt-6">
+                <div className="flex flex-col sm:flex-row items-center justify-between mt-6 gap-3">
                   <button
                     onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
                     disabled={currentPage === 1}
-                    className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-200 transition-colors"
+                    className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-200 transition-colors w-full sm:w-auto"
                     aria-label="Previous page"
                   >
                     Previous
@@ -1469,7 +1469,7 @@ const handlePayment = useCallback(async (e: FormEvent) => {
                   <button
                     onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
                     disabled={currentPage === totalPages}
-                    className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-200 transition-colors"
+                    className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-200 transition-colors w-full sm:w-auto"
                     aria-label="Next page"
                   >
                     Next

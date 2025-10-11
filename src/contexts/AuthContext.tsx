@@ -8,13 +8,10 @@ import {
   signOut,
   onAuthStateChanged,
   User,
-  sendSignInLinkToEmail,
-  ActionCodeSettings,
 } from 'firebase/auth';
-import { doc, getDoc, setDoc, serverTimestamp, updateDoc, collection, addDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, serverTimestamp, deleteField } from 'firebase/firestore';
 import { UserProfile } from '@/types';
 import { useRouter, usePathname } from 'next/navigation';
-import { v4 as uuidv4 } from 'uuid';
 
 interface AuthContextType {
   user: User | null;
@@ -27,15 +24,15 @@ interface AuthContextType {
     profile: { firstName: string; lastName: string; phone: string; role?: 'customer' | 'superadmin' }
   ) => Promise<void>;
   updateUserProfile: (
-    profile: { 
-      firstName: string; 
-      lastName: string; 
-      phone: string; 
-      nationalId?: string; 
-      sex?: string; 
-      currentAddress?: string; 
-      role?: 'customer' | 'superadmin' | 'company_admin'; 
-      companyId?: string 
+    profile: {
+      firstName: string;
+      lastName: string;
+      phone: string;
+      nationalId?: string;
+      sex?: string;
+      currentAddress?: string;
+      role?: 'customer' | 'superadmin' | 'company_admin';
+      companyId?: string;
     }
   ) => Promise<void>;
   signOut: () => Promise<void>;
@@ -52,7 +49,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
   const [isInitialized, setIsInitialized] = useState(false);
   const router = useRouter();
-  const pathname = usePathname(); // Use usePathname instead of router.pathname
+  const pathname = usePathname();
 
   const refreshUserProfile = useCallback(async () => {
     if (!user?.uid) {
@@ -64,7 +61,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.log('Refreshing user profile for UID:', user.uid);
       const userDocRef = doc(db, 'users', user.uid);
       const userDoc = await getDoc(userDocRef);
-      
+
       if (userDoc.exists()) {
         const profile = { id: userDoc.id, ...userDoc.data() } as UserProfile;
         console.log('Profile refreshed successfully:', profile);
@@ -89,7 +86,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (error: any) {
       console.error('Error refreshing user profile:', error);
     }
-  }, [user?.uid]); // Removed router.pathname dependency
+  }, [user?.uid]);
 
   useEffect(() => {
     console.log('Setting up auth state listener');
@@ -113,34 +110,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, [refreshUserProfile]);
 
-  // Separate effect for navigation handling to avoid infinite loops
   useEffect(() => {
     if (!isInitialized || loading) return;
-    
+
     console.log('Handling navigation - User:', user?.uid, 'Profile:', userProfile);
-    
-    // Get search params safely
+
     const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
     const oobCode = searchParams?.get('oobCode');
 
-    // Define public routes that don't require authentication
-    const publicRoutes = ['/login', '/register', '/company/setup', '/', '/about', '/contact','forgot-password','/reset-password'];
+    const publicRoutes = ['/login', '/register', '/company/setup', '/', '/about', '/contact', '/forgot-password', '/reset-password'];
     const isPublicRoute = publicRoutes.includes(pathname);
 
-    // Only redirect to login if user is not authenticated and not on a public route
     if (!user && !oobCode && !isPublicRoute) {
       console.log('No user found and not on public route, redirecting to /login');
       router.push('/login');
       return;
     }
 
-    // Handle authenticated user redirects - only for specific cases
     if (user && userProfile) {
-      // Only redirect customers with incomplete profiles on their first login
       if (
-        userProfile.role === 'customer' && 
-        !userProfile.nationalId && 
-        !userProfile.sex && 
+        userProfile.role === 'customer' &&
+        !userProfile.nationalId &&
+        !userProfile.sex &&
         !userProfile.currentAddress &&
         pathname !== '/profile'
       ) {
@@ -155,8 +146,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       }
 
-      // Optional: Redirect to default dashboard only from login/register pages
-      const authPages = [ '/login', '/register'];
+      const authPages = ['/login', '/register'];
       if (authPages.includes(pathname)) {
         console.log('User authenticated, redirecting from auth page to appropriate dashboard');
         if (userProfile.role === 'superadmin') {
@@ -164,7 +154,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         } else if (userProfile.role === 'company_admin' && userProfile.companyId) {
           router.push('/company/admin');
         } else {
-          router.push('/'); // Redirect customers to homepage
+          router.push('/');
         }
       }
     }
@@ -177,11 +167,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const trimmedEmail = email.trim().toLowerCase();
     console.log('Attempting sign in for:', trimmedEmail);
-    
+
     try {
       const userCredential = await signInWithEmailAndPassword(auth, trimmedEmail, password);
       console.log('Sign in successful');
-      // Don't call refreshUserProfile here - it will be called by the auth state change listener
     } catch (error: any) {
       console.error('Sign in error:', error);
       let userMessage;
@@ -243,12 +232,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         role: profile.role || 'customer',
         createdAt: serverTimestamp() as unknown as Date,
         updatedAt: serverTimestamp() as unknown as Date,
-        passwordSet: true, // Add this field
+        passwordSet: true,
       };
 
       await setDoc(doc(db, 'users', newUser.uid), userProfileData);
       console.log('User profile saved to Firestore');
-      // Don't call refreshUserProfile here - it will be called by the auth state change listener
     } catch (error: any) {
       console.error('Sign up error:', error);
       let userMessage;
@@ -273,15 +261,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const updateUserProfile = async (
-    profile: { 
-      firstName: string; 
-      lastName: string; 
-      phone: string; 
-      nationalId?: string; 
-      sex?: string; 
-      currentAddress?: string; 
-      role?: 'customer' | 'superadmin' | 'company_admin'; 
-      companyId?: string 
+    profile: {
+      firstName: string;
+      lastName: string;
+      phone: string;
+      nationalId?: string;
+      sex?: string;
+      currentAddress?: string;
+      role?: 'customer' | 'superadmin' | 'company_admin';
+      companyId?: string;
     }
   ) => {
     if (!user?.uid) {
@@ -299,20 +287,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         firstName: profile.firstName.trim(),
         lastName: profile.lastName.trim(),
         phone: profile.phone.trim(),
-        nationalId: profile.nationalId || undefined,
-        sex: profile.sex || undefined,
-        currentAddress: profile.currentAddress || undefined,
-        role: profile.role || (userProfile?.role || 'customer'),
-        companyId: profile.companyId || undefined,
         updatedAt: serverTimestamp() as unknown as Date,
       };
 
-      await setDoc(doc(db, 'users', user.uid), userProfileData, { merge: true });
+      // Only include optional fields if provided and not empty
+      if (profile.nationalId) userProfileData.nationalId = profile.nationalId;
+      if (profile.sex) userProfileData.sex = profile.sex;
+      if (profile.currentAddress) userProfileData.currentAddress = profile.currentAddress;
+      if (profile.role) userProfileData.role = profile.role;
+
+      // Prepare Firestore update object - using any type to allow FieldValue
+      const updateData: any = {
+        ...userProfileData,
+      };
+
+      // Only include companyId for company_admin role
+      if (profile.role === 'company_admin' && profile.companyId) {
+        updateData.companyId = profile.companyId;
+      } else if (userProfile?.role !== 'company_admin') {
+        updateData.companyId = deleteField(); // Remove companyId for non-company_admin roles
+      }
+
+      await setDoc(doc(db, 'users', user.uid), updateData, { merge: true });
       console.log('User profile updated successfully');
-      await refreshUserProfile(); // Refresh the profile after update
+      await refreshUserProfile();
     } catch (error: any) {
       console.error('Error updating user profile:', error);
-      throw new Error('Profile update failed. Please try again.');
+      let userMessage = 'Profile update failed. Please try again.';
+      if (error.code === 'invalid-argument' && error.message.includes('Unsupported field value: undefined')) {
+        userMessage = 'Invalid data provided. Please ensure all fields are valid and try again.';
+      }
+      throw new Error(userMessage);
     }
   };
 
@@ -334,9 +339,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!uid) throw new Error('UID is required');
     try {
       const userDocRef = doc(db, 'users', uid);
-      await updateDoc(userDocRef, { 
-        role: 'superadmin', 
-        updatedAt: serverTimestamp() as unknown as Date 
+      await updateDoc(userDocRef, {
+        role: 'superadmin',
+        updatedAt: serverTimestamp() as unknown as Date,
       });
       console.log('User set as superadmin:', uid);
       if (user?.uid === uid) await refreshUserProfile();
@@ -359,7 +364,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setSuperAdmin,
   };
 
-  // Show skeleton loader during initial load
   if (!isInitialized) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 flex items-center justify-center">

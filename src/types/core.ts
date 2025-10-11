@@ -165,3 +165,27 @@ export interface Amenity extends FirestoreDocument {
   icon?: string;
   isActive: boolean;
 }
+export interface GroupRequest {
+  id: string;
+  userId: string;
+  organizerName: string;
+  organizerPhone: string;
+  routeId: string;
+  scheduleId: string;
+  seatsRequested: number;
+  seatsBooked: number[];
+  totalPrice: number; // Base estimate
+  customPrice?: number; // Negotiated price
+  status: 'pending' | 'approved' | 'rejected' | 'confirmed' | 'cancelled';
+  notes: string; // Group purpose (e.g., "School trip for 20 students")
+  companyResponse?: string; // Company notes
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+export interface GroupBookingFormData {
+  organizerName: string;
+  organizerPhone: string;
+  seatsRequested: number;
+  notes: string;
+}
