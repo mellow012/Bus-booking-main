@@ -1,7 +1,6 @@
 import { FC, useState } from "react";
 import { collection, addDoc, updateDoc, deleteDoc, doc, getFirestore } from "firebase/firestore";
-// Assuming db is correctly initialized and exported from "@/lib/firebaseConfig"
-declare const db: ReturnType<typeof getFirestore>; 
+// Assuming db is correctly initialized and exported from "@/lib/firebaseConfig" 
 import { Bus, BusType, BusStatus } from "@/types";
 import Modal from "@/components/Modals";
 import {db} from "@/lib/firebaseConfig";
@@ -65,7 +64,7 @@ const BusesTab: FC<BusesTabProps> = ({ buses, setBuses, companyId, setError, set
       };
       
       // Use Omit<Bus, 'id'> to properly type the data being added to Firestore (no 'id' needed yet)
-      const docRef = await addDoc(collection(db, "buses"), busData as Omit<Bus, 'id'>);
+     const docRef = await addDoc(collection(db, "buses"), busData as Omit<Bus, 'id'>);
 
       // 2. Update the local state. Explicitly assert the combined object as Bus to resolve type conflict.
       setBuses([...buses, { id: docRef.id, ...busData }] as Bus[]);
