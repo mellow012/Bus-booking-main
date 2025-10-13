@@ -4,6 +4,7 @@ import { collection, addDoc, updateDoc, deleteDoc, doc, getFirestore } from "fir
 declare const db: ReturnType<typeof getFirestore>; 
 import { Bus, BusType, BusStatus } from "@/types";
 import Modal from "@/components/Modals";
+import {db} from "@/lib/firebaseConfig";
 // Assuming Modal exists
 import { Plus, Edit3, Trash2, Search } from "lucide-react";
 
