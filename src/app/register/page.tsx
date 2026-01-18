@@ -1,4 +1,6 @@
+
 'use client';
+
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -8,7 +10,6 @@ import {
   EnvelopeIcon, 
   LockClosedIcon, 
   UserIcon, 
-  PhoneIcon,
   EyeIcon,
   EyeSlashIcon,
   ExclamationTriangleIcon,
@@ -23,7 +24,6 @@ interface FormData {
   confirmPassword: string;
   firstName: string;
   lastName: string;
-  phone: string;
   agreeToTerms: boolean;
 }
 
@@ -33,7 +33,6 @@ interface FormErrors {
   confirmPassword?: string;
   firstName?: string;
   lastName?: string;
-  phone?: string;
   agreeToTerms?: string;
   general?: string;
 }
@@ -49,7 +48,6 @@ interface PasswordStrength {
 const MIN_PASSWORD_LENGTH = 8;
 const MAX_PASSWORD_LENGTH = 128;
 const NAME_REGEX = /^[a-zA-Z\s'-]+$/;
-const PHONE_REGEX = /^[\d\s()+-]+$/;
 
 // Password strength checker
 const checkPasswordStrength = (password: string): PasswordStrength => {
@@ -157,19 +155,6 @@ const useFormValidation = (formData: FormData) => {
         }
         return '';
 
-      case 'phone':
-        if (!value || typeof value !== 'string' || !value.trim()) {
-          return 'Phone number is required';
-        }
-        const digitsOnly = value.replace(/\D/g, '');
-        if (digitsOnly.length < 10) {
-          return 'Please enter a valid phone number (at least 10 digits)';
-        }
-        if (!PHONE_REGEX.test(value)) {
-          return 'Phone number contains invalid characters';
-        }
-        return '';
-
       case 'agreeToTerms':
         if (!value) {
           return 'You must agree to the terms and conditions';
@@ -242,13 +227,6 @@ const getErrorMessage = (error: any): string => {
   return error?.message || 'An unexpected error occurred. Please try again.';
 };
 
-const formatPhoneNumber = (value: string): string => {
-  const digitsOnly = value.replace(/\D/g, '');
-  if (digitsOnly.length <= 3) return digitsOnly;
-  if (digitsOnly.length <= 6) return `(${digitsOnly.slice(0, 3)}) ${digitsOnly.slice(3)}`;
-  return `(${digitsOnly.slice(0, 3)}) ${digitsOnly.slice(3, 6)}-${digitsOnly.slice(6, 10)}`;
-};
-
 // Main component
 export default function Register() {
   const { signUp } = useAuth();
@@ -261,7 +239,6 @@ export default function Register() {
     confirmPassword: '',
     firstName: '',
     lastName: '',
-    phone: '',
     agreeToTerms: false,
   });
   
@@ -288,19 +265,13 @@ export default function Register() {
   // Event handlers
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target;
-    let processedValue = type === 'checkbox' ? checked : value;
-
-    // Format phone number
-    if (name === 'phone' && typeof processedValue === 'string') {
-      processedValue = formatPhoneNumber(processedValue);
-    }
+    const processedValue = type === 'checkbox' ? checked : value;
 
     setFormData(prev => ({
       ...prev,
       [name]: processedValue
     }));
     
-    // Clear field error when user starts typing
     if (errors[name as keyof FormErrors]) {
       clearFieldError(name);
     }
@@ -313,7 +284,6 @@ export default function Register() {
     e.preventDefault();
 
     if (!validateForm()) {
-      // Focus on first error field
       const firstErrorField = Object.keys(errors)[0];
       document.getElementById(firstErrorField)?.focus();
       return;
@@ -326,13 +296,11 @@ export default function Register() {
       await signUp(formData.email, formData.password, {
         firstName: formData.firstName.trim(),
         lastName: formData.lastName.trim(),
-        phone: formData.phone,
         role: 'customer',
       });
       
       setSuccess(true);
       
-      // Redirect after 2 seconds
       setTimeout(() => {
         router.push('/dashboard');
       }, 2000);
@@ -434,9 +402,26 @@ export default function Register() {
     );
   };
 
+  // Skeleton Loader
+  const SkeletonLoader = () => (
+    <div className="bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-6 rounded-2xl shadow-xl animate-pulse sm:mx-auto sm:w-full sm:max-w-md">
+      <div className="h-16 w-16 bg-gray-200 rounded-full mx-auto mb-6"></div>
+      <div className="space-y-4">
+        <div className="h-8 bg-gray-200 rounded w-3/4 mx-auto"></div>
+        <div className="h-10 bg-gray-200 rounded"></div>
+        <div className="h-10 bg-gray-200 rounded"></div>
+        <div className="h-10 bg-gray-200 rounded"></div>
+        <div className="h-10 bg-gray-200 rounded"></div>
+        <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+        <div className="h-10 bg-gray-200 rounded"></div>
+      </div>
+    </div>
+  );
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
-      <div className="sm:mx-auto sm:w-full sm:max-w-md">
+      {isSubmitting && <SkeletonLoader />}
+      <div className={`sm:mx-auto sm:w-full sm:max-w-md ${isSubmitting ? 'hidden' : ''}`}>
         {/* Logo */}
         <div className="flex justify-center">
           <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center shadow-lg">
@@ -459,11 +444,9 @@ export default function Register() {
         </p>
       </div>
 
-      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
+      <div className={`mt-8 sm:mx-auto sm:w-full sm:max-w-md ${isSubmitting ? 'hidden' : ''}`}>
         <div className="bg-white py-10 px-6 shadow-xl rounded-2xl sm:px-12">
-          
           <form className="space-y-5" onSubmit={handleSubmit} noValidate>
-            
             {/* General Error */}
             {generalError && (
               <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex items-start" role="alert">
@@ -563,32 +546,6 @@ export default function Register() {
                 <EnvelopeIcon className="w-5 h-5 text-gray-400 absolute top-2.5 left-3 pointer-events-none" />
               </div>
               {renderError('email')}
-            </div>
-
-            {/* Phone Field */}
-            <div>
-              <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-1">
-                <PhoneIcon className="w-4 h-4 inline mr-1" />
-                Phone Number
-              </label>
-              <div className="relative">
-                <input
-                  id="phone"
-                  name="phone"
-                  type="tel"
-                  autoComplete="tel"
-                  required
-                  aria-invalid={errors.phone && touched.phone ? 'true' : 'false'}
-                  value={formData.phone}
-                  onChange={handleInputChange}
-                  onBlur={() => handleBlur('phone')}
-                  className={getInputClassName('phone')}
-                  placeholder="(123) 456-7890"
-                  disabled={isSubmitting || success}
-                />
-                <PhoneIcon className="w-5 h-5 text-gray-400 absolute top-2.5 left-3 pointer-events-none" />
-              </div>
-              {renderError('phone')}
             </div>
 
             {/* Password Field */}
@@ -750,5 +707,4 @@ export default function Register() {
         </div>
       </div>
     </div>
-  );
-}
+  );}

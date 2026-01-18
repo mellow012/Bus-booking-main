@@ -1,0 +1,27 @@
+changes to homescreen
+remove notification icon on second topapp bar, place greeting abit higher and on the middle
+
+replace quick action cards with those with higher preference
+fix nav 4 available schedules
+
+changes to search
+make the date selector easier to select/click
+modify popular routes card
+change icon to Ios
+fix topapp bar
+
+changes to My Bookings
+fix topApp bar
+modify booking card to include travel details, company and bus details
+fix navigation to details
+
+changes to Profile
+fix top app bar
+connect to DB and remove mock data
+fix navigation
+
+changes to Nav Drawer
+implement functionality of features
+
+overall app
+work on payments and theme, colors and icons for uniformality

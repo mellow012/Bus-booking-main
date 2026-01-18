@@ -1,0 +1,20 @@
+screens
+HomeScreen
+SearchScreen
+NotificationsScreen
+ProfileScreen
+BookingsScreen
+
+changes to homescreen
+show username on top app bar, guest or passanger if not set, n greeting shud be adapted to time of day
+keep the search bar as it is just change color of icon
+on quick actions, lets remove alerts n profile and replace them with location and favourites
+when clicked on available  schedules we should be redirected to a screen of buses with that schedule/route, so passangers get to choose from the list depending on what time the bus is set to start off, seats availability , amenities aand the like uk ,how it is in bus terminals, then thy can click and trigger the booking flow
+add available buses section, where we show buses that are active/onboarding passangers at that current time, with trip info
+move the popular routes section to search Screen
+we can also add an alert/info section to show users time left till journey, any important news about their journey
+switch my trisps and my tickets0
+
+on seat selection we need to make sure that the number of seats assigned to a bus by the admin side should reflect in seat selection, and also add real live update on seats selected/booked
+
+on the web refactor the admin dashboard to a card based interface, wea admin can view seats booked,n everything..

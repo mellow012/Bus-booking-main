@@ -28,6 +28,7 @@ import {
   Coffee,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import TourModal from '@/components/TourModal';
 import PromoBanner from "@/components/PromoBanner";
 import PopularRoutesCarousel from "@/components/PopularRouteCarousal";
 import HowItWorks from "@/components/HowItWorks";
@@ -200,6 +201,7 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [refreshing, setRefreshing] = useState(false);
+  const [isTourOpen, setIsTourOpen] = useState(false);
 
   const stats = useMemo(() => ({
     totalRoutes: 20,
@@ -437,11 +439,17 @@ export default function HomePage() {
                   <Search className="w-5 h-5 mr-2" />
                   Find Your Journey
                 </Button>
-                <Button variant="outline" className="group border-primary/20 text-primary hover:bg-primary/5" aria-label="Watch Demo">
+                <Button
+                  variant="outline"
+                  className="group border-primary/20 text-primary hover:bg-primary/5"
+                  aria-label="Take a Tour"
+                  onClick={() => setIsTourOpen(true)}
+                >
                   <Play className="w-4 h-4 mr-2" />
-                  Watch Demo
+                  Take a Tour
                   <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
                 </Button>
+                <TourModal open={isTourOpen} onClose={() => setIsTourOpen(false)} />
               </div>
             </div>
             

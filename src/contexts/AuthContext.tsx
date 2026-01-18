@@ -13,6 +13,39 @@ import { doc, getDoc, setDoc, updateDoc, serverTimestamp, deleteField } from 'fi
 import { UserProfile } from '@/types';
 import { useRouter, usePathname } from 'next/navigation';
 
+// Helper: normalize phone numbers to a simple E.164-like format.
+// Assumptions:
+// - If the phone starts with '+', keep the country code and digits only.
+// - If it starts with '00', convert leading '00' to '+'.
+// - If it starts with a single leading '0' or is a local number without country code,
+//   prefix it with '+265' (Malawi) as a sensible default for this project.
+// - Remove spaces, dashes, parentheses and other non-digit characters (except leading '+').
+const formatPhoneToE164 = (phone?: string): string => {
+  if (!phone) return '';
+  let p = phone.trim();
+  // Remove common separators but keep leading + if present
+  p = p.replace(/[\s\-()]/g, '');
+  // Convert leading 00 to +
+  if (p.startsWith('00')) p = '+' + p.slice(2);
+  // If it starts with +, keep + and digits only
+  if (p.startsWith('+')) {
+    const digits = p.replace(/[^\d]/g, '');
+    return '+' + digits;
+  }
+  // If it starts with 0, treat as local and replace leading zeros with country code +265
+  if (p.startsWith('0')) {
+    const digits = p.replace(/^0+/, '');
+    return '+265' + digits;
+  }
+  // If it's all digits and length looks local-ish, prefix with +265
+  const digitsOnly = p.replace(/[^\d]/g, '');
+  if (/^\d+$/.test(p) && (digitsOnly.length === 7 || digitsOnly.length === 8 || digitsOnly.length === 9 || digitsOnly.length === 10)) {
+    return '+265' + digitsOnly;
+  }
+  // Fallback: prefix + and strip non-digits
+  return '+' + digitsOnly;
+};
+
 interface AuthContextType {
   user: User | null;
   userProfile: UserProfile | null;
@@ -21,7 +54,7 @@ interface AuthContextType {
   signUp: (
     email: string,
     password: string,
-    profile: { firstName: string; lastName: string; phone: string; role?: 'customer' | 'superadmin' }
+    profile: { firstName: string; lastName: string; phone?: string; role?: 'customer' | 'superadmin' }
   ) => Promise<void>;
   updateUserProfile: (
     profile: {
@@ -203,7 +236,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signUp = async (
     email: string,
     password: string,
-    profile: { firstName: string; lastName: string; phone: string; role?: 'customer' | 'superadmin' }
+    profile: { firstName: string; lastName: string; phone?: string; role?: 'customer' | 'superadmin' }
   ) => {
     if (!email?.trim() || !password?.trim()) {
       throw new Error('Email and password are required');
@@ -211,9 +244,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!profile.firstName?.trim() || !profile.lastName?.trim()) {
       throw new Error('First name and last name are required');
     }
-    if (!profile.phone?.trim()) {
-      throw new Error('Phone number is required');
-    }
+    // Phone is optional during sign up because we collect it on the profile page later.
 
     const trimmedEmail = email.trim().toLowerCase();
     console.log('Attempting sign up for:', trimmedEmail);
@@ -223,12 +254,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const newUser = userCredential.user;
       console.log('User account created, UID:', newUser.uid);
 
+      const formattedPhone = formatPhoneToE164(profile.phone);
+
       const userProfileData: Partial<UserProfile> = {
         id: newUser.uid,
         email: newUser.email || trimmedEmail,
         firstName: profile.firstName.trim(),
         lastName: profile.lastName.trim(),
-        phone: profile.phone.trim(),
+        phone: formattedPhone,
         role: profile.role || 'customer',
         createdAt: serverTimestamp() as unknown as Date,
         updatedAt: serverTimestamp() as unknown as Date,
@@ -283,10 +316,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     try {
+      const formattedPhone = formatPhoneToE164(profile.phone);
+
       const userProfileData: Partial<UserProfile> = {
         firstName: profile.firstName.trim(),
         lastName: profile.lastName.trim(),
-        phone: profile.phone.trim(),
+        phone: formattedPhone,
         updatedAt: serverTimestamp() as unknown as Date,
       };
 

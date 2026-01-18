@@ -1,59 +1,200 @@
-import { FC, useState, useEffect, useMemo, useCallback } from "react";
-import { db, } from "@/lib/firebaseConfig";
+"use client";
+
+import { FC, useState, useMemo, useCallback } from "react";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
-import { Search, Check, X, Clock, Users, MapPin, Calendar, Eye, CreditCard, FileText, Mail, ChevronLeft, ChevronRight, Ban, Loader2, RefreshCw, Activity, Download, DollarSign, AlertTriangle, RotateCcw, Phone } from "lucide-react";
+import { db } from "@/lib/firebaseConfig";
+import { Booking } from "@/types/core";
+import {
+  Search,
+  Check,
+  X,
+  Clock,
+  Users,
+  MapPin,
+  Calendar,
+  Eye,
+  CreditCard,
+  RefreshCw,
+  Download,
+  DollarSign,
+  AlertTriangle,
+  Phone,
+  Bus as BusIcon,
+  List as ListIcon,
+  LayoutGrid,
+  Loader2,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Booking } from "@/types/core";
-// Enhanced Skeleton Component
-const Skeleton = ({ className }: { className?: string }) => (
-  <div className={`bg-gray-200 animate-pulse rounded ${className || 'h-4 w-3/4'}`} />
-);
 
-interface Passenger {
-  name: string;
-  phone?: string;
-  email?: string;
-  age?: number;
-  gender?: string;
-  seatNumber?: string;
-}
+// ────────────────────────────────────────────────
+// Adapted SeatSelection for view-only (admin/operator manifest style)
+// ────────────────────────────────────────────────
 
-interface Schedule {
-  id: string;
-  routeId: string;
-  departureDateTime: Date | { seconds: number };
-}
+const SEAT_LAYOUT_CONFIGS = {
+  standard: { seatsPerRow: 4, aislePosition: 2, seatLabels: ["A", "B", "C", "D"] },
+  luxury: { seatsPerRow: 3, aislePosition: 1, seatLabels: ["A", "B", "C"] },
+  express: { seatsPerRow: 4, aislePosition: 2, seatLabels: ["A", "B", "C", "D"] },
+};
 
-interface Route {
-  id: string;
-  origin: string;
-  destination: string;
-}
-
-interface Company {
-  id: string;
-  name: string;
+interface SeatSelectionViewProps {
+  bus: any;
+  schedule: any;
+  bookings: Booking[];
+  onSeatClick?: (booking: Booking) => void;
+  className?: string;
 }
 
 interface BookingsTabProps {
-  bookings: Booking[]; // Now uses the core Booking type
-  setBookings: React.Dispatch<React.SetStateAction<Booking[]>>;
-  schedules: Schedule[];
-  routes: Route[];
-  companyId: string;
-  setError: (msg: string) => void;
-  setSuccess: (msg: string) => void;
-  role?: "superadmin" | "company_admin";
-  companies?: Company[];
+  bookings: Booking[];
+  setBookings: (bookings: Booking[] | ((prev: Booking[]) => Booking[])) => void;
+  schedules: any[];
+  routes: any[];
+  companyId?: string;
+  setError: (error: string) => void;
+  setSuccess: (success: string) => void;
+  role?: "company_admin" | "operator" | "user";
+  companies?: any[];
+  buses?: any[];
 }
 
+const SeatSelectionView: FC<SeatSelectionViewProps> = ({
+  bus,
+  schedule,
+  bookings,
+  onSeatClick,
+  className = "",
+}) => {
+  const busTypeKey = (bus?.busType?.toLowerCase() || "standard") as keyof typeof SEAT_LAYOUT_CONFIGS;
+  const layoutConfig = SEAT_LAYOUT_CONFIGS[busTypeKey] || SEAT_LAYOUT_CONFIGS.standard;
 
-const showNotification = (title: string, message: string, type: 'success' | 'error' | 'info' | 'warning' = 'info') => {
-  if ('Notification' in window && Notification.permission === 'granted') {
-    new Notification(title, { body: message, icon: '/favicon.ico', badge: '/favicon.ico' });
+  const seatLayout = useMemo(() => {
+    const total = bus?.capacity || 40;
+    const { seatsPerRow, seatLabels } = layoutConfig;
+    const rows = Math.ceil(total / seatsPerRow);
+    const seats: (string | null)[][] = [];
+    let counter = 1;
+
+    for (let r = 1; r <= rows; r++) {
+      const row: (string | null)[] = [];
+      for (let c = 0; c < seatsPerRow && counter <= total; c++) {
+        row.push(`${r}${seatLabels[c]}`);
+        counter++;
+      }
+      while (row.length < seatsPerRow) row.push(null);
+      seats.push(row);
+    }
+    return seats;
+  }, [bus?.capacity, layoutConfig]);
+
+  // Map seat number → booking (first match)
+  const seatToBooking = useMemo(() => {
+    const map = new Map<string, Booking>();
+    bookings.forEach((b) => {
+      b.seatNumbers?.forEach((seat: string | number) => {
+        map.set(String(seat), b);
+      });
+    });
+    return map;
+  }, [bookings]);
+
+  const getSeatStatus = (seat: string | null) => {
+    if (!seat) return "empty";
+    return seatToBooking.has(seat) ? "booked" : "available";
+  };
+
+  const getSeatClass = (status: string) => {
+    const base = "w-10 h-10 rounded-xl text-xs font-semibold border-2 transition-all flex items-center justify-center";
+    switch (status) {
+      case "booked":
+        return `${base} bg-red-100 border-red-300 text-red-800 cursor-pointer hover:bg-red-200 hover:shadow-sm`;
+      case "available":
+        return `${base} bg-white border-gray-200 text-gray-400 cursor-default`;
+      default:
+        return "invisible";
+    }
+  };
+
+  return (
+    <div className={`bg-white rounded-xl shadow-sm border p-6 ${className}`}>
+      <div className="flex items-center justify-between mb-5">
+        <h3 className="text-lg font-semibold flex items-center gap-3">
+          <BusIcon className="w-5 h-5 text-blue-600" />
+          {bus?.licensePlate || "Bus"} • {bus?.capacity || "?"} seats
+        </h3>
+        <span className="text-sm text-gray-500">
+          {schedule?.departureDateTime?.toLocaleString() || "N/A"}
+        </span>
+      </div>
+
+      <div className="grid gap-2 mb-6" style={{ gridTemplateColumns: `repeat(${layoutConfig.seatsPerRow}, minmax(0, 1fr))` }}>
+        {seatLayout.flat().map((seat, idx) => {
+          if (!seat) return <div key={idx} className="w-10 h-10" />;
+          const status = getSeatStatus(seat);
+          const booking = seatToBooking.get(seat);
+
+          return (
+            <div
+              key={idx}
+              className={getSeatClass(status)}
+              onClick={() => status === "booked" && booking && onSeatClick?.(booking)}
+              title={booking ? booking.passengerDetails?.[0]?.name || "Passenger" : undefined}
+            >
+              {seat}
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="flex justify-center gap-6 text-sm text-gray-600">
+        <div className="flex items-center gap-2">
+          <div className="w-4 h-4 bg-white border border-gray-200 rounded" /> Available
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-4 h-4 bg-red-100 border border-red-300 rounded" /> Booked
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ────────────────────────────────────────────────
+// Main BookingsTab Component
+// ────────────────────────────────────────────────
+
+// Helper function for status badges
+const getStatusBadge = (status: string, type: "booking" | "payment" = "booking") => {
+  const baseClass = "px-3 py-1 rounded-full text-xs font-medium";
+  if (type === "booking") {
+    switch (status) {
+      case "confirmed":
+        return `${baseClass} bg-green-100 text-green-800`;
+      case "pending":
+        return `${baseClass} bg-yellow-100 text-yellow-800`;
+      case "cancelled":
+        return `${baseClass} bg-red-100 text-red-800`;
+      default:
+        return `${baseClass} bg-gray-100 text-gray-800`;
+    }
+  } else {
+    switch (status) {
+      case "paid":
+        return `${baseClass} bg-green-100 text-green-800`;
+      case "pending":
+        return `${baseClass} bg-yellow-100 text-yellow-800`;
+      case "refunded":
+        return `${baseClass} bg-blue-100 text-blue-800`;
+      default:
+        return `${baseClass} bg-gray-100 text-gray-800`;
+    }
   }
-  console.log(`${type.toUpperCase()}: ${title} - ${message}`);
+};
+
+// Helper function for notifications
+const showNotification = (title: string, message: string, type: "success" | "warning" | "error" = "success") => {
+  console.log(`[${type.toUpperCase()}] ${title}: ${message}`);
 };
 
 const BookingsTab: FC<BookingsTabProps> = ({
@@ -66,96 +207,51 @@ const BookingsTab: FC<BookingsTabProps> = ({
   setSuccess,
   role = "company_admin",
   companies = [],
+  buses = [],
 }) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [activeTab, setActiveTab] = useState("total");
-  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [viewMode, setViewMode] = useState<"list" | "seats">("list");
   const [actionLoading, setActionLoading] = useState<Record<string, boolean>>({});
 
-  useEffect(() => {
-    const checkPermission = async () => {
-      if ('Notification' in window) {
-        const permission = await Notification.requestPermission();
-        if (permission === 'denied') {
-          setError('Notification permission denied. Some alerts will be logged to console only.');
-        }
-      }
-    };
-    checkPermission();
-  }, [setError]);
+  // ────────────────────────────────────────────────
+  // Data Processing
+  // ────────────────────────────────────────────────
 
-  const getDateTime = useCallback((date: Date | { toDate(): Date } | { seconds: number } | any): number => {
+  const getTimestampMillis = useCallback((date: any): number => {
     if (!date) return 0;
     if (date instanceof Date) return date.getTime();
-    if (date.toDate && typeof date.toDate === 'function') return date.toDate().getTime();
+    if (typeof date.toMillis === 'function') return date.toMillis();
     if (date.seconds && typeof date.seconds === 'number') return date.seconds * 1000;
-    if (typeof date === "string") return new Date(date).getTime() || 0;
     return 0;
   }, []);
 
   const filteredBookings = useMemo(() => {
-    if (!Array.isArray(bookings) || !bookings.length) return [];
     return bookings
-      .filter((booking) => {
-        if (!booking || typeof booking !== 'object') return false;
-        const searchLower = searchTerm.toLowerCase();
-        const bookingRef = booking.bookingReference || booking.id || "NO-REF";
-        const matchesSearch =
-          (Array.isArray(booking.passengerDetails) &&
-            booking.passengerDetails.some((p) => p?.name?.toLowerCase().includes(searchLower))) ||
-          bookingRef.toLowerCase().includes(searchLower) ||
-          (Array.isArray(booking.seatNumbers) &&
-            booking.seatNumbers.join(",").toLowerCase().includes(searchLower));
-        if (role === "company_admin") {
-          return matchesSearch && booking.companyId === companyId;
-        }
-        return matchesSearch;
+      .filter((b) => {
+        if (!b) return false;
+        const q = searchTerm.toLowerCase();
+        const ref = b.bookingReference || b.id || "";
+        const matches =
+          b.passengerDetails?.some((p) => p?.name?.toLowerCase().includes(q)) ||
+          ref.toLowerCase().includes(q) ||
+          b.seatNumbers?.join(",").toLowerCase().includes(q);
+
+        return matches && (role !== "company_admin" || b.companyId === companyId);
       })
-      .sort((a, b) => getDateTime(b.createdAt) - getDateTime(a.createdAt));
-  }, [bookings, searchTerm, companyId, role, getDateTime]);
-
-  const handleManualRefresh = useCallback(async () => {
-    setIsRefreshing(true);
-    try {
-      setSuccess("Data refreshed successfully");
-    } catch (error) {
-      setError("Failed to refresh data");
-    } finally {
-      setTimeout(() => setIsRefreshing(false), 1000);
-    }
-  }, [setSuccess, setError]);
-
-  const getStatusBadge = useCallback((status: string, type: string = "booking") => {
-    const baseClasses = "inline-flex px-2 py-1 rounded-full text-xs font-medium";
-    if (type === "booking") {
-      switch (status?.toLowerCase()) {
-        case "confirmed": return `${baseClasses} bg-green-100 text-green-800`;
-        case "pending": return `${baseClasses} bg-yellow-100 text-yellow-800`;
-        case "cancelled": return `${baseClasses} bg-red-100 text-red-800`;
-        default: return `${baseClasses} bg-gray-100 text-gray-800`;
-      }
-    } else {
-      switch (status?.toLowerCase()) {
-        case "paid": return `${baseClasses} bg-green-100 text-green-800`;
-        case "pending": return `${baseClasses} bg-yellow-100 text-yellow-800`;
-        case "refunded": return `${baseClasses} bg-blue-100 text-blue-800`;
-        case "failed": return `${baseClasses} bg-red-100 text-red-800`;
-        default: return `${baseClasses} bg-gray-100 text-gray-800`;
-      }
-    }
-  }, []);
+      .sort((a, b) => getTimestampMillis(b.createdAt) - getTimestampMillis(a.createdAt));
+  }, [bookings, searchTerm, companyId, role, getTimestampMillis]);
 
   const bookingsByTab = useMemo(() => {
     switch (activeTab) {
       case "confirmed":
         return filteredBookings.filter((b) => b.bookingStatus === "confirmed" && b.paymentStatus === "paid");
       case "pending":
-        return filteredBookings.filter((b) =>
-          b.bookingStatus === "pending" ||
-          (b.bookingStatus === "confirmed" && b.paymentStatus === "pending")
+        return filteredBookings.filter(
+          (b) => b.bookingStatus === "pending" || (b.bookingStatus === "confirmed" && b.paymentStatus === "pending")
         );
       case "cancelled":
         return filteredBookings.filter((b) => b.bookingStatus === "cancelled");
@@ -169,9 +265,8 @@ const BookingsTab: FC<BookingsTabProps> = ({
   const stats = useMemo(() => ({
     total: filteredBookings.length,
     confirmed: filteredBookings.filter((b) => b.bookingStatus === "confirmed" && b.paymentStatus === "paid").length,
-    pending: filteredBookings.filter((b) =>
-      b.bookingStatus === "pending" ||
-      (b.bookingStatus === "confirmed" && b.paymentStatus === "pending")
+    pending: filteredBookings.filter(
+      (b) => b.bookingStatus === "pending" || (b.bookingStatus === "confirmed" && b.paymentStatus === "pending")
     ).length,
     cancelled: filteredBookings.filter((b) => b.bookingStatus === "cancelled").length,
     totalRevenue: filteredBookings
@@ -182,6 +277,17 @@ const BookingsTab: FC<BookingsTabProps> = ({
   const totalPages = Math.ceil(bookingsByTab.length / pageSize);
   const startIndex = (currentPage - 1) * pageSize;
   const paginatedBookings = bookingsByTab.slice(startIndex, startIndex + pageSize);
+
+  const bookingsBySchedule = useMemo(() => {
+    const map = new Map<string, Booking[]>();
+    filteredBookings.forEach((b) => {
+      if (b.scheduleId) {
+        if (!map.has(b.scheduleId)) map.set(b.scheduleId, []);
+        map.get(b.scheduleId)!.push(b);
+      }
+    });
+    return map;
+  }, [filteredBookings]);
 
   const handlePageChange = useCallback((page: number) => {
     if (page >= 1 && page <= totalPages) {
@@ -383,347 +489,247 @@ const BookingsTab: FC<BookingsTabProps> = ({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h2 className="text-3xl font-bold text-gray-900">Bookings Management</h2>
-          <p className="text-gray-600">Monitor and manage all customer bookings</p>
+          <h2 className="text-2xl font-bold text-gray-900">Bookings</h2>
+          <p className="text-gray-600">Monitor and manage reservations</p>
         </div>
-        <div className="flex items-center space-x-3">
-          <Button variant="outline" onClick={handleManualRefresh} disabled={isRefreshing} className="flex items-center space-x-2">
-            {isRefreshing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-            <span>Refresh</span>
+        <div className="flex items-center gap-3">
+          <Button variant="outline" size="sm" className="flex items-center gap-2">
+            <RefreshCw className="w-4 h-4" />
+            Refresh
           </Button>
-          <Button className="bg-blue-600 text-white hover:bg-blue-700">
-            <Download className="w-4 h-4 mr-2" />
+          <Button className="bg-blue-600 hover:bg-blue-700 flex items-center gap-2">
+            <Download className="w-4 h-4" />
             Export
           </Button>
         </div>
       </div>
 
-      <div className="border-b">
-        <div className="flex space-x-4 overflow-x-auto pb-2">
-          {[
-            { id: "total", label: "Total", icon: FileText, count: stats.total },
-            { id: "confirmed", label: "Confirmed", icon: Check, count: stats.confirmed },
-            { id: "pending", label: "Pending", icon: Clock, count: stats.pending },
-            { id: "cancelled", label: "Cancelled", icon: X, count: stats.cancelled },
-            { id: "revenue", label: "Revenue", icon: CreditCard, count: `MWK ${stats.totalRevenue.toLocaleString()}` },
-          ].map(({ id, label, icon: Icon, count }) => (
-            <Button
-              key={id}
-              variant={activeTab === id ? "default" : "outline"}
-              className={`flex items-center space-x-2 px-4 py-2 rounded-t-lg transition-all ${
-                activeTab === id ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-700 hover:bg-gray-50"
-              }`}
-              onClick={() => setActiveTab(id)}
-            >
-              <Icon className="w-4 h-4" />
-              <span>{label}</span>
-              <span className={`ml-2 text-xs font-medium px-2 py-1 rounded-full ${
-                activeTab === id ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-800'
-              }`}>
-                {count}
-              </span>
-            </Button>
-          ))}
-        </div>
-      </div>
-
-      <div className="bg-white rounded-xl p-6 border shadow-sm">
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
-          <div className="flex-1 max-w-md">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-              <input
-                type="text"
-                placeholder="Search bookings by name, reference, or seat..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-            </div>
+      {/* Controls */}
+      <div className="bg-white rounded-xl shadow-sm border p-5">
+        <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+          <div className="flex-1 relative w-full sm:w-auto">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <Input
+              placeholder="Search by name, reference, seat..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10 w-full"
+            />
           </div>
-          <div className="flex items-center space-x-4">
+
+          <div className="flex flex-wrap gap-3">
             <select
               value={pageSize}
               onChange={(e) => setPageSize(Number(e.target.value))}
-              className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500"
+              className="border rounded px-3 py-2 text-sm min-w-[140px]"
             >
               <option value={5}>5 per page</option>
               <option value={10}>10 per page</option>
-              <option value={25}>25 per page</option>
-              <option value={50}>50 per page</option>
+              <option value={20}>20 per page</option>
             </select>
+
+            <div className="flex gap-2">
+              <Button
+                variant={viewMode === "list" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setViewMode("list")}
+                className="flex items-center gap-2"
+              >
+                <ListIcon className="w-4 h-4" />
+                List View
+              </Button>
+              <Button
+                variant={viewMode === "seats" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setViewMode("seats")}
+                className="flex items-center gap-2"
+              >
+                <LayoutGrid className="w-4 h-4" />
+                Seat Layout
+              </Button>
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50 border-b">
-              <tr>
-                {role === "superadmin" && (
-                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Company</th>
-                )}
-                <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Reference</th>
-                <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Passenger(s)</th>
-                <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Route</th>
-                <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Journey</th>
-                <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Seats</th>
-                <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
-                <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                {role === "company_admin" && (
-                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                )}
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {paginatedBookings.length === 0 ? (
-                <tr>
-                  <td colSpan={role === "superadmin" ? 9 : 8} className="px-6 py-12 text-center">
-                    <div className="text-gray-500">
-                      {searchTerm ? "No bookings found matching your search." : "No bookings available."}
+      {/* Status Tabs */}
+      <div className="flex flex-wrap gap-2 overflow-x-auto pb-1">
+        {[
+          { id: "total", label: "All Bookings", count: stats.total, color: "blue" },
+          { id: "confirmed", label: "Confirmed", count: stats.confirmed, color: "green" },
+          { id: "pending", label: "Pending", count: stats.pending, color: "yellow" },
+          { id: "cancelled", label: "Cancelled", count: stats.cancelled, color: "red" },
+          { id: "revenue", label: "Revenue", count: stats.totalRevenue.toLocaleString("en-MW"), color: "purple" },
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg border transition-all ${
+              activeTab === tab.id
+                ? `bg-${tab.color}-600 text-white border-${tab.color}-600 shadow-sm`
+                : `bg-white text-gray-700 border-gray-200 hover:bg-gray-50`
+            }`}
+          >
+            {tab.label}
+            <span className="px-2 py-0.5 text-xs rounded-full bg-white/20">{tab.count}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* Main Content */}
+      {viewMode === "list" ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {paginatedBookings.length === 0 ? (
+            <div className="col-span-full py-12 text-center text-gray-500">
+              No bookings match your filters
+            </div>
+          ) : (
+            paginatedBookings.map((booking) => {
+              const route = routes.find((r) => r.id === schedules.find((s) => s.id === booking.scheduleId)?.routeId);
+              const statusColor =
+                booking.bookingStatus === "confirmed"
+                  ? "green"
+                  : booking.bookingStatus === "pending"
+                  ? "yellow"
+                  : "red";
+
+              return (
+                <div
+                  key={booking.id}
+                  className="bg-white rounded-xl shadow-sm border hover:shadow-md transition-all duration-200 overflow-hidden"
+                >
+                  <div className="p-5">
+                    <div className="flex justify-between items-start mb-4">
+                      <div>
+                        <div className="text-xs text-gray-500">
+                          Ref: {booking.bookingReference || booking.id?.slice(0, 8)}
+                        </div>
+                        <h3 className="font-semibold text-gray-900 mt-1">
+                          {booking.passengerDetails?.[0]?.name || "Passenger"}
+                        </h3>
+                      </div>
+                      <span
+                        className={`px-3 py-1 rounded-full text-xs font-medium bg-${statusColor}-100 text-${statusColor}-800`}
+                      >
+                        {booking.bookingStatus}
+                      </span>
                     </div>
-                  </td>
-                </tr>
-              ) : (
-                paginatedBookings.map((booking) => {
-                  const schedule = schedules.find((s) => s.id === booking.scheduleId);
-                  const route = routes.find((r) => r.id === schedule?.routeId);
-                  const companyName = companies.find((c) => c.id === booking.companyId)?.name || "Unknown";
-                  const bookingRef = booking.bookingReference || booking.id || "NO-REF";
-                  const departureDate =
-                    schedule && schedule.departureDateTime &&
-                    typeof schedule.departureDateTime === "object" &&
-                    "seconds" in schedule.departureDateTime && typeof schedule.departureDateTime.seconds === "number"
-                      ? new Date((schedule.departureDateTime as { seconds: number }).seconds * 1000)
-                      : schedule?.departureDateTime instanceof Date
-                      ? schedule.departureDateTime
-                      : null;
 
-                  return (
-                    <tr key={booking.id} className="hover:bg-gray-50 transition-colors">
-                      {role === "superadmin" && (
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className="text-sm text-gray-900">{companyName}</span>
-                        </td>
-                      )}
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex flex-col">
-                          <span className="text-sm font-medium text-gray-900 font-mono">
-                            {bookingRef.length > 10 ? `${bookingRef.substring(0, 10)}...` : bookingRef}
-                          </span>
-                          <span className="text-xs text-gray-500">
-                            {formatDate(booking.createdAt)}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          <div className="flex-shrink-0 w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                            <Users className="w-4 h-4 text-blue-600" />
-                          </div>
-                          <div className="ml-3">
-                            <div className="text-sm font-medium text-gray-900">
-                              {booking.passengerDetails?.[0]?.name || "N/A"}
-                            </div>
-                            {(booking.passengerDetails?.length || 0) > 1 && (
-                              <div className="text-xs text-gray-500">+{booking.passengerDetails.length - 1} more</div>
-                            )}
-                            {booking.passengerDetails?.[0]?.contactNumber && (
-                              <div className="text-xs text-gray-500 flex items-center">
-                                <Phone className="w-3 h-3 mr-1" />
-                                {booking.passengerDetails[0].contactNumber}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center space-x-2">
-                          <MapPin className="w-4 h-4 text-gray-400" />
-                          <span className="text-sm text-gray-900">
-                            {route ? `${route.origin} → ${route.destination}` : "Unknown Route"}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center space-x-2">
-                          <Calendar className="w-4 h-4 text-gray-400" />
-                          <span className="text-sm text-gray-900">
-                            {departureDate ? formatDateTime(departureDate) : "N/A"}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex flex-wrap gap-1">
-                          {Array.isArray(booking.seatNumbers) && booking.seatNumbers.length > 0 ? (
-                            booking.seatNumbers.map((seat, idx) => (
-                              <span key={idx} className="inline-flex px-2 py-1 bg-gray-100 text-gray-800 text-xs font-medium rounded">
-                                {seat}
-                              </span>
-                            ))
+                    <div className="space-y-2 text-sm text-gray-600 mb-5">
+                      <div className="flex items-center gap-2">
+                        <MapPin className="w-4 h-4 text-gray-500" />
+                        {route ? `${route.origin} → ${route.destination}` : "Route N/A"}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Clock className="w-4 h-4 text-gray-500" />
+                        {booking.createdAt?.toLocaleString() || "N/A"}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Users className="w-4 h-4 text-gray-500" />
+                        {booking.seatNumbers?.length || 0} seat(s) • MWK {booking.totalAmount?.toLocaleString() || "0"}
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex-1"
+                        onClick={() => setSelectedBooking(booking)}
+                      >
+                        <Eye className="w-4 h-4 mr-2" />
+                        View Details
+                      </Button>
+
+                      {booking.bookingStatus === "pending" && (
+                        <Button
+                          size="sm"
+                          className="flex-1 bg-green-600 hover:bg-green-700"
+                          onClick={() => handleUpdateBookingStatus(booking.id, "confirmed")}
+                          disabled={actionLoading[booking.id]}
+                        >
+                          {actionLoading[booking.id] ? (
+                            <Loader2 className="w-4 h-4 animate-spin mr-2" />
                           ) : (
-                            <span className="text-sm text-gray-500">N/A</span>
+                            <Check className="w-4 h-4 mr-2" />
                           )}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex flex-col">
-                          <span className="text-sm font-medium text-gray-900">
-                            MWK {(booking.totalAmount || 0).toLocaleString()}
-                          </span>
-                          {booking.paymentProvider && (
-                            <span className="text-xs text-gray-500">{booking.paymentProvider}</span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex flex-col space-y-1">
-                          <span className={getStatusBadge(booking.bookingStatus)}>
-                            {booking.bookingStatus}
-                          </span>
-                          <span className={getStatusBadge(booking.paymentStatus, "payment")}>
-                            {booking.paymentStatus}
-                          </span>
-                        </div>
-                      </td>
-                      {role === "company_admin" && (
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex space-x-1">
-                            {booking.bookingStatus === "pending" && (
-                              <>
-                                <Button
-                                  size="sm"
-                                  onClick={() => handleUpdateBookingStatus(booking.id, "confirmed")}
-                                  disabled={actionLoading[booking.id]}
-                                  className="bg-green-600 hover:bg-green-700 text-white px-2 py-1"
-                                  title="Approve Booking"
-                                >
-                                  {actionLoading[booking.id] ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="destructive"
-                                  onClick={() => handleReject(booking.id)}
-                                  disabled={actionLoading[booking.id]}
-                                  className="px-2 py-1"
-                                  title="Reject Booking"
-                                >
-                                  <X className="w-3 h-3" />
-                                </Button>
-                              </>
-                            )}
-
-                            {booking.bookingStatus === "confirmed" && booking.paymentStatus === "paid" && (
-                              <>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => handleResendConfirmation(booking.id)}
-                                  disabled={actionLoading[`resend-${booking.id}`]}
-                                  className="text-blue-600 hover:text-blue-700 px-2 py-1"
-                                  title="Resend Confirmation"
-                                >
-                                  {actionLoading[`resend-${booking.id}`] ? <Loader2 className="w-3 h-3 animate-spin" /> : <Mail className="w-3 h-3" />}
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="destructive"
-                                  onClick={() => handleUpdateBookingStatus(booking.id, "cancelled", "Cancelled by admin")}
-                                  disabled={actionLoading[booking.id]}
-                                  className="px-2 py-1"
-                                  title="Cancel Booking"
-                                >
-                                  {actionLoading[booking.id] ? <Loader2 className="w-3 h-3 animate-spin" /> : <Ban className="w-3 h-3" />}
-                                </Button>
-                              </>
-                            )}
-
-                            {booking.bookingStatus === "confirmed" && booking.paymentStatus === "pending" && (
-                              <>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => handleResendConfirmation(booking.id)}
-                                  disabled={actionLoading[`resend-${booking.id}`]}
-                                  className="text-orange-600 hover:text-orange-700 px-2 py-1"
-                                  title="Send Payment Reminder"
-                                >
-                                  {actionLoading[`resend-${booking.id}`] ? <Loader2 className="w-3 h-3 animate-spin" /> : <AlertTriangle className="w-3 h-3" />}
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="destructive"
-                                  onClick={() => handleUpdateBookingStatus(booking.id, "cancelled", "Payment not received")}
-                                  disabled={actionLoading[booking.id]}
-                                  className="px-2 py-1"
-                                  title="Cancel Due to Non-Payment"
-                                >
-                                  {actionLoading[booking.id] ? <Loader2 className="w-3 h-3 animate-spin" /> : <X className="w-3 h-3" />}
-                                </Button>
-                              </>
-                            )}
-
-                            {booking.bookingStatus === "cancelled" && booking.paymentStatus === "paid" && (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleRefund(booking.id)}
-                                disabled={actionLoading[`refund-${booking.id}`]}
-                                className="text-purple-600 hover:text-purple-700 px-2 py-1"
-                                title="Process Refund"
-                              >
-                                {actionLoading[`refund-${booking.id}`] ? <Loader2 className="w-3 h-3 animate-spin" /> : <DollarSign className="w-3 h-3" />}
-                              </Button>
-                            )}
-
-                            {booking.paymentStatus === "failed" && booking.bookingStatus !== "cancelled" && (
-                              <>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => handleResendConfirmation(booking.id)}
-                                  disabled={actionLoading[`resend-${booking.id}`]}
-                                  className="text-red-600 hover:text-red-700 px-2 py-1"
-                                  title="Request Payment Retry"
-                                >
-                                  {actionLoading[`resend-${booking.id}`] ? <Loader2 className="w-3 h-3 animate-spin" /> : <RotateCcw className="w-3 h-3" />}
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="destructive"
-                                  onClick={() => handleUpdateBookingStatus(booking.id, "cancelled", "Payment failed")}
-                                  disabled={actionLoading[booking.id]}
-                                  className="px-2 py-1"
-                                  title="Cancel Due to Payment Failure"
-                                >
-                                  {actionLoading[booking.id] ? <Loader2 className="w-3 h-3 animate-spin" /> : <X className="w-3 h-3" />}
-                                </Button>
-                              </>
-                            )}
-
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => setSelectedBooking(booking)}
-                              className="text-gray-600 hover:text-gray-700 px-2 py-1"
-                              title="View Full Details"
-                            >
-                              <Eye className="w-3 h-3" />
-                            </Button>
-                          </div>
-                        </td>
+                          Approve
+                        </Button>
                       )}
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          )}
         </div>
+      ) : (
+        <div className="space-y-8">
+          {Array.from(bookingsBySchedule.keys()).length === 0 ? (
+            <div className="bg-white rounded-xl shadow-sm border p-12 text-center text-gray-500">
+              No bookings with seat assignments to display
+            </div>
+          ) : (
+            Array.from(bookingsBySchedule.entries()).map(([scheduleId, groupBookings]) => {
+              const schedule = schedules.find((s) => s.id === scheduleId);
+              const bus = buses.find((b) => b.id === schedule?.busId);
 
+              return (
+                <SeatSelectionView
+                  key={scheduleId}
+                  bus={bus}
+                  schedule={schedule}
+                  bookings={groupBookings}
+                  onSeatClick={(booking) => setSelectedBooking(booking)}
+                />
+              );
+            })
+          )}
+        </div>
+      )}
+
+      {/* Pagination (list view only) */}
+      {viewMode === "list" && totalPages > 1 && (
+        <div className="flex items-center justify-between mt-6 px-1">
+          <div className="text-sm text-gray-600">
+            Showing {startIndex + 1}–{Math.min(startIndex + pageSize, bookingsByTab.length)} of {bookingsByTab.length}
+          </div>
+
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={currentPage === 1}
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </Button>
+
+            {getPaginationPages().map((page) => (
+              <Button
+                key={`page-${page}`}
+                variant={currentPage === page ? "default" : "outline"}
+                size="sm"
+                onClick={() => setCurrentPage(page)}
+              >
+                {page}
+              </Button>
+            ))}
+
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={currentPage === totalPages}
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+            >
+              <ChevronRight className="w-4 h-4" />
+            </Button>
+          </div>
+        </div>
+      )}
         {selectedBooking && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
@@ -853,8 +859,8 @@ const BookingsTab: FC<BookingsTabProps> = ({
                       <div className="bg-gray-50 p-4 rounded-lg">
                         <div className="flex flex-wrap gap-2">
                           {Array.isArray(selectedBooking.seatNumbers) && selectedBooking.seatNumbers.length > 0
-                            ? selectedBooking.seatNumbers.map((seat, index) => (
-                                <span key={index} className="inline-flex px-3 py-1 bg-blue-100 text-blue-800 text-sm font-medium rounded">
+                            ? selectedBooking.seatNumbers.map((seat) => (
+                                <span key={`seat-${seat}`} className="inline-flex px-3 py-1 bg-blue-100 text-blue-800 text-sm font-medium rounded">
                                   Seat {seat}
                                 </span>
                               ))
@@ -871,7 +877,7 @@ const BookingsTab: FC<BookingsTabProps> = ({
                   <div className="space-y-3">
                     {Array.isArray(selectedBooking.passengerDetails) && selectedBooking.passengerDetails.length > 0
                       ? selectedBooking.passengerDetails.map((passenger, index) => (
-                          <div key={index} className="bg-gray-50 p-4 rounded-lg">
+                          <div key={`passenger-${index}-${passenger.name || ''}`} className="bg-gray-50 p-4 rounded-lg">
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                               <div>
                                 <span className="text-gray-600 font-medium">Name:</span>
@@ -1009,7 +1015,7 @@ const BookingsTab: FC<BookingsTabProps> = ({
               <div className="flex space-x-1">
                 {getPaginationPages().map((page) => (
                   <Button
-                    key={page}
+                    key={`page-${page}`}
                     variant={currentPage === page ? "default" : "outline"}
                     size="sm"
                     onClick={() => handlePageChange(page)}
@@ -1033,8 +1039,7 @@ const BookingsTab: FC<BookingsTabProps> = ({
           </div>
         )}
       </div>
-    </div>
-  );
-};
+    );
+  };
 
 export default BookingsTab;

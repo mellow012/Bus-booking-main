@@ -1,5 +1,8 @@
 @import "tailwindcss";
+/* app/globals.css */
+@import 'react-big-calendar/lib/css/react-big-calendar.css';
 
+/* your other global styles */
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
