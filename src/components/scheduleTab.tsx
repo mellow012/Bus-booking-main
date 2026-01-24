@@ -45,6 +45,8 @@ interface SchedulesTabProps {
   addSchedule: (data: any) => Promise<string | null>;
   setError: (msg: string) => void;
   setSuccess: (msg: string) => void;
+  user: any; 
+  userProfile: any;
 }
 
 type RecurrenceType = 'none' | 'daily' | 'weekly' | 'monthly';
@@ -189,6 +191,7 @@ const createInitialSchedule = (companyId: string): Omit<Schedule, 'id'> => {
     bookedSeats: [],
     status: 'active',
     isActive: true,
+    createdBy: '',
     createdAt: new Date(),
     updatedAt: new Date()
   };
@@ -206,7 +209,9 @@ const SchedulesTab: FC<SchedulesTabProps> = ({
   companyId,
   addSchedule,
   setError,
-  setSuccess
+  setSuccess,
+  user,
+  userProfile,
 }) => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -231,6 +236,7 @@ const SchedulesTab: FC<SchedulesTabProps> = ({
       .filter(s => s?.id && s.routeId && s.busId)
       .map(s => ({
         ...s,
+        createdBy: s.createdBy || '',
         departureDateTime: convertFirestoreDate(s.departureDateTime),
         arrivalDateTime: convertFirestoreDate(s.arrivalDateTime),
         createdAt: convertFirestoreDate(s.createdAt),
@@ -238,8 +244,14 @@ const SchedulesTab: FC<SchedulesTabProps> = ({
       }));
   }, [schedules]);
 
-  const filteredSchedules = useMemo(() => {
+ const filteredSchedules = useMemo(() => {
     let res = validSchedules;
+
+    // Filter by ownership if user is an operator
+    if (userProfile?.role === 'operator') {
+      res = res.filter(s => s.createdBy === user?.uid);
+    }
+
     if (searchTerm.trim()) {
       const q = searchTerm.toLowerCase();
       res = res.filter(s => {
@@ -256,7 +268,7 @@ const SchedulesTab: FC<SchedulesTabProps> = ({
       res = res.filter(s => s.status === filterStatus);
     }
     return res;
-  }, [validSchedules, searchTerm, filterStatus, routeMap, busMap]);
+  }, [validSchedules, searchTerm, filterStatus, routeMap, busMap, userProfile, user]);
 
   const stats = useMemo(() => ({
     total: validSchedules.length,
@@ -375,94 +387,101 @@ const SchedulesTab: FC<SchedulesTabProps> = ({
   }, [editSchedule, validateScheduleForm, setSchedules, setError, setSuccess]);
 
   const handleAdd = useCallback(async (e: React.FormEvent) => {
-    e.preventDefault();
+  e.preventDefault();
+  setError(""); // Clear previous errors
+  setSuccess("");
 
-    const err = validateScheduleForm(newSchedule);
-    if (err) {
-      setError(err);
-      return;
-    }
+  const err = validateScheduleForm(newSchedule);
+  if (err) {
+    setError(err);
+    return;
+  }
 
-    if (recurrenceConfig.type === 'weekly' && (recurrenceConfig.daysOfWeek?.length ?? 0) === 0) {
-      setError('Please select at least one day for weekly recurrence');
-      return;
-    }
+  setActionLoading(true);
+  const addedSchedules: Schedule[] = [];
 
-    setActionLoading(true);
-    const added: Schedule[] = [];
+  try {
+    // 1. Base data that applies to all (Single or Recurring)
+    const baseScheduleData = {
+      ...newSchedule,
+      createdBy: user?.uid,
+      companyId: companyId,
+      isActive: newSchedule.status === 'active',
+    };
 
-    try {
-      if (recurrenceConfig.type === 'none') {
-        const id = await addSchedule({
-          ...newSchedule,
-          isActive: newSchedule.status === 'active'
-        });
-        if (id) {
-          added.push({ id, ...newSchedule } as Schedule);
-          setSuccess('Schedule added successfully!');
-        }
-      } else {
-        const dates = generateRecurringDates(new Date(newSchedule.departureDateTime), recurrenceConfig);
-        if (dates.length === 0) {
-          setError('No valid recurring dates generated');
-          return;
-        }
-
-        const depBase = new Date(newSchedule.departureDateTime);
-        const arrBase = new Date(newSchedule.arrivalDateTime);
-        const duration = arrBase.getTime() - depBase.getTime();
-
-        let count = 0;
-        for (const d of dates) {
-          const newDep = new Date(d);
-          newDep.setHours(depBase.getHours(), depBase.getMinutes());
-
-          const newArr = new Date(newDep.getTime() + duration);
-
-          const id = await addSchedule({
-            ...newSchedule,
-            departureDateTime: newDep,
-            arrivalDateTime: newArr,
-            isActive: newSchedule.status === 'active'
-          });
-
-          if (id) {
-            added.push({
-              id,
-              ...newSchedule,
-              departureDateTime: newDep,
-              arrivalDateTime: newArr
-            } as Schedule);
-            count++;
-          }
-        }
-        setSuccess(`${count} recurring schedules added!`);
+    if (recurrenceConfig.type === 'none') {
+      // --- SINGLE SCHEDULE CASE ---
+      const id = await addSchedule(baseScheduleData);
+      if (id) {
+        addedSchedules.push({ 
+          ...baseScheduleData, 
+          id,
+          departureDateTime: new Date(baseScheduleData.departureDateTime),
+          arrivalDateTime: new Date(baseScheduleData.arrivalDateTime),
+        } as Schedule);
+        setSuccess('Schedule added successfully!');
       }
+    } else {
+      // --- RECURRING SCHEDULE CASE ---
+      const dates = generateRecurringDates(new Date(newSchedule.departureDateTime), recurrenceConfig);
+      
+      const depBase = new Date(newSchedule.departureDateTime);
+      const arrBase = new Date(newSchedule.arrivalDateTime);
+      const duration = arrBase.getTime() - depBase.getTime();
 
-      // Fix loading glitch: optimistic update
-      setSchedules(prev => [...prev, ...added]);
+      for (const d of dates) {
+        const newDep = new Date(d);
+        newDep.setHours(depBase.getHours(), depBase.getMinutes());
+        const newArr = new Date(newDep.getTime() + duration);
 
-      setNewSchedule(createInitialSchedule(companyId));
-      setRecurrenceConfig({ type: 'none', interval: 1, daysOfWeek: [] });
-      setRecurrenceEndType('occurrences');
-      setShowAddModal(false);
+        const recurringData = {
+          ...baseScheduleData,
+          departureDateTime: newDep,
+          arrivalDateTime: newArr,
+        };
 
-    } catch (err: any) {
-      setError(`Failed to add schedule(s): ${err.message}`);
-    } finally {
-      setActionLoading(false);
+        const id = await addSchedule(recurringData);
+
+        if (id) {
+          addedSchedules.push({ ...recurringData, id } as Schedule);
+        }
+      }
+      setSuccess(`${addedSchedules.length} recurring schedules added!`);
     }
-  }, [
-    newSchedule,
-    recurrenceConfig,
-    validateScheduleForm,
-    addSchedule,
-    companyId,
-    setError,
-    setSuccess,
-    setSchedules
-  ]);
 
+    // 2. Update local state with the newly created schedules
+    if (addedSchedules.length > 0) {
+      setSchedules((prev) => [...addedSchedules, ...prev]);
+      
+      // 3. Reset Form and Close Modal
+      setShowAddModal(false);
+      setNewSchedule({
+        routeId: '',
+        busId: '',
+        departureDateTime:'' ,
+        arrivalDateTime: '',
+        price: 0,
+        availableSeats: 0,
+        status: 'active',
+        companyId: companyId,
+        departureLocation: '',
+        arrivalLocation: '',
+        bookedSeats: [],
+        isActive: true,
+        createdBy: '',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+      setRecurrenceConfig({ type: 'none', interval: 1, endDate: undefined, occurrences: undefined, daysOfWeek: [] });
+    }
+
+  } catch (err: any) {
+    console.error("UI HandleAdd Error:", err);
+    setError(`Failed to add schedule: ${err.message || 'Unknown error'}`);
+  } finally {
+    setActionLoading(false);
+  }
+}, [newSchedule, recurrenceConfig, addSchedule, user, companyId, setSchedules]);
   // ────────────────────────────────────────────────
   // Render
   // ────────────────────────────────────────────────

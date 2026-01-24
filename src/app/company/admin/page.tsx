@@ -1018,6 +1018,8 @@ export default function AdminDashboard() {
           <SchedulesTab
             companyId={companyId}
             schedules={schedules}
+            user={user}
+            userProfile={userProfile}
             setSchedules={(newSchedules) => {
               const updatedSchedules = Array.isArray(newSchedules)
                 ? newSchedules.map((s) => ({
@@ -1083,6 +1085,8 @@ export default function AdminDashboard() {
           <BookingsTab
             bookings={bookings}
             setBookings={setBookings}
+            user={user}
+            userProfile={userProfile} 
             schedules={schedules}
             routes={routes}
             companyId={companyId}
@@ -1096,6 +1100,8 @@ export default function AdminDashboard() {
         return company ? (
           <CompanyProfileTab
             company={company}
+            schedules={schedules}
+            routes={routes}
             setCompany={(newCompany) => updateDashboardData("company", newCompany as Company)}
             {...commonProps}
           />

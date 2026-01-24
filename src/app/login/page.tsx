@@ -28,7 +28,7 @@ interface ValidationResult {
 
 // Constants
 const MAX_ATTEMPTS = 5;
-const LOCKOUT_DURATION = 15 * 60 * 1000; // 15 minutes
+const LOCKOUT_DURATION = 15 * 60 * 1000;
 const MIN_PASSWORD_LENGTH = 8;
 
 // Custom hooks
@@ -201,9 +201,12 @@ const formatTime = (seconds: number): string => {
 const handlePostLoginActions = async (user: any) => {
   try {
     const token = await user.getIdTokenResult();
+    const role = token.claims.role;
+    const companyId = token.claims.companyId;
     
-    if (token.claims.role === 'company_admin' && token.claims.companyId) {
-      // Call secure API endpoint instead of direct Firestore operation
+    // Route based on role
+    if (role === 'company_admin' && companyId) {
+      // Activate company for company admin
       const response = await fetch('/api/auth/login', {
         method: 'POST',
         headers: {
@@ -211,7 +214,7 @@ const handlePostLoginActions = async (user: any) => {
           'Authorization': `Bearer ${await user.getIdToken()}`
         },
         body: JSON.stringify({
-          companyId: token.claims.companyId,
+          companyId: companyId,
           action: 'activate_company'
         })
       });
@@ -220,13 +223,26 @@ const handlePostLoginActions = async (user: any) => {
         console.error('Failed to activate company:', await response.text());
       }
 
-      return `/company/admin?companyId=${token.claims.companyId}`;
+      return `/company/admin?companyId=${companyId}`;
+    } 
+    else if (role === 'operator' && companyId) {
+      // Redirect operator to operator dashboard
+      return `company/operator/dashboard?companyId=${companyId}`;
+    }
+    else if (role === 'super_admin') {
+      // Redirect super admin
+      return '/admin/dashboard';
+    }
+    else if (role === 'customer') {
+      // Redirect customer
+      return '/dashboard';
     }
     
+    // Default fallback
     return '/';
   } catch (error) {
     console.error('Post-login actions failed:', error);
-    return '/'; // Default redirect even if post-login actions fail
+    return '/';
   }
 };
 
@@ -235,23 +251,19 @@ export default function Login() {
   const router = useRouter();
   const { signIn } = useAuth();
   
-  // Form state
   const [formData, setFormData] = useState<FormData>({
     email: '',
     password: '',
     rememberMe: false,
   });
   
-  // UI state
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [generalError, setGeneralError] = useState('');
   
-  // Custom hooks
   const { errors, touched, validateForm, handleBlur, clearErrors } = useFormValidation(formData);
   const { attemptCount, isLockedOut, remainingTime, incrementAttempts, resetAttempts } = useLoginAttempts();
 
-  // Event handlers
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target;
     setFormData(prev => ({
@@ -259,7 +271,6 @@ export default function Login() {
       [name]: type === 'checkbox' ? checked : value
     }));
     
-    // Clear errors when user starts typing
     if (errors[name as keyof FormErrors]) {
       clearErrors();
     }
@@ -288,10 +299,8 @@ export default function Login() {
       const auth = getAuth();
       const userCredential = await signInWithEmailAndPassword(auth, formData.email, formData.password);
       
-      // Reset attempts on successful login
       resetAttempts();
       
-      // Handle post-login actions and redirect
       const redirectUrl = await handlePostLoginActions(userCredential.user);
       router.push(redirectUrl);
       
@@ -300,7 +309,6 @@ export default function Login() {
       incrementAttempts();
       setGeneralError(getErrorMessage(error));
       
-      // Focus on email field for retry
       document.getElementById('email')?.focus();
     } finally {
       setIsSubmitting(false);
@@ -311,7 +319,6 @@ export default function Login() {
     router.push(`/forgot-password${formData.email ? `?email=${encodeURIComponent(formData.email)}` : ''}`);
   };
 
-  // Render helpers
   const renderError = (fieldName: keyof FormErrors) => {
     const error = errors[fieldName];
     const isTouched = touched[fieldName];
@@ -341,24 +348,22 @@ export default function Login() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
-        {/* Logo */}
         <div className="flex justify-center">
           <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center shadow-lg">
             <span className="text-white font-bold text-3xl">B</span>
           </div>
         </div>
         
-        {/* Header */}
         <h1 className="mt-6 text-center text-4xl font-extrabold text-gray-900 tracking-tight">
           Sign in to your account
         </h1>
         <p className="mt-2 text-center text-sm text-gray-600">
-          Or{' '}
+          New customer?{' '}
           <Link 
             href="/register" 
             className="font-medium text-blue-600 hover:text-blue-500 focus:outline-none focus:underline transition-colors duration-200"
           >
-            create a new account
+            Create an account
           </Link>
         </p>
       </div>
@@ -366,7 +371,6 @@ export default function Login() {
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
         <div className="bg-white py-10 px-6 shadow-xl rounded-2xl sm:px-12">
           
-          {/* Lockout Warning */}
           {isLockedOut && (
             <div className="mb-6 bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3 rounded-lg flex items-start">
               <ExclamationTriangleIcon className="w-5 h-5 mr-2 flex-shrink-0 mt-0.5" />
@@ -379,7 +383,6 @@ export default function Login() {
             </div>
           )}
 
-          {/* Attempt Warning */}
           {attemptCount > 0 && attemptCount < MAX_ATTEMPTS && !isLockedOut && (
             <div className="mb-6 bg-orange-50 border border-orange-200 text-orange-800 px-4 py-3 rounded-lg flex items-center">
               <ExclamationTriangleIcon className="w-5 h-5 mr-2 flex-shrink-0" />
@@ -391,7 +394,6 @@ export default function Login() {
 
           <form className="space-y-6" onSubmit={handleSubmit} noValidate>
             
-            {/* General Error */}
             {generalError && (
               <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex items-start" role="alert">
                 <ExclamationTriangleIcon className="w-5 h-5 mr-2 flex-shrink-0 mt-0.5" />
@@ -402,7 +404,6 @@ export default function Login() {
               </div>
             )}
 
-            {/* Email Field */}
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
                 <EnvelopeIcon className="w-4 h-4 inline mr-1" />
@@ -432,7 +433,6 @@ export default function Login() {
               {renderError('email')}
             </div>
 
-            {/* Password Field */}
             <div>
               <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
                 <LockClosedIcon className="w-4 h-4 inline mr-1" />
@@ -472,7 +472,6 @@ export default function Login() {
               {renderError('password')}
             </div>
 
-            {/* Remember Me & Forgot Password */}
             <div className="flex items-center justify-between">
               <div className="flex items-center">
                 <input
@@ -499,7 +498,6 @@ export default function Login() {
               </button>
             </div>
 
-            {/* Submit Button */}
             <div>
               <Button
                 type="submit"
@@ -522,7 +520,6 @@ export default function Login() {
             </div>
           </form>
 
-          {/* Additional Help */}
           <div className="mt-6 text-center">
             <p className="text-xs text-gray-500">
               Having trouble signing in?{' '}

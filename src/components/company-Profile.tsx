@@ -1,542 +1,400 @@
-import { FC, useState, ChangeEvent, useEffect } from "react";
+import { FC, useState, useEffect } from "react";
 import { doc, updateDoc, Timestamp } from "firebase/firestore";
-// NOTE: Assuming db, Company, useAuth, and useRouter are imported correctly elsewhere in the actual project structure.
-// For the purpose of this single file, we will comment out or stub non-provided imports.
- import { db } from "@/lib/firebaseConfig"; // Assuming a valid Firebase setup
- //import { Company } from "@/types"; // Assuming this type is defined
- import { useAuth } from "@/contexts/AuthContext";
- import { useRouter } from "next/navigation";
-
-// --- Mocking necessary types/imports for file completeness in this environment ---
-interface Company {
-    id: string;
-    name: string;
-    email: string;
-    ownerId: string;
-    contact: string; // Used for phone in the component
-    status: "active" | "pending" | "inactive";
-    createdAt: Date;
-    updatedAt: Date; // The critical type: Date
-    address?: string;
-    description?: string;
-    logo?: string;
-    paymentSettings?: {
-        gateways?: {
-            paychangu?: boolean;
-            stripe?: boolean;
-        };
-    };
-}
-// Placeholder for Timestamp - since we can't import Timestamp from firebase/firestore here
-// We'll trust the user's environment handles the real import.
-// const Timestamp = {
-//   now: () => ({ toDate: () => new Date(), fakeTimestamp: true }),
-// };
-
-// -------------------------------------------------------------------------------
-
-
+import { db } from "@/lib/firebaseConfig";
+import { useAuth } from "@/contexts/AuthContext";
+import { useRouter } from "next/navigation";
 import {
   Building2,
-  Mail,
-  Phone,
-  MapPin,
-  FileText,
   Edit3,
   Save,
   Camera,
   Loader2,
-  CheckCircle,
-  X,
-  AlertCircle,
+  Clock,
+  MessageCircle,
+  Calendar,
+  ChevronRight,
+  Navigation,
+  FileText
 } from "lucide-react";
+import { OperatingHours, Company } from "@/types";
 
 interface CompanyProfileTabProps {
   company: Company | null;
   setCompany: React.Dispatch<React.SetStateAction<Company | null>>;
+  schedules?: any[];
+  routes?: any[];
 }
 
-const CompanyProfileTab: FC<CompanyProfileTabProps> = ({ company, setCompany }) => {
-  const { user, userProfile, refreshUserProfile } = useAuth();
+const DEFAULT_HOURS: Record<string, OperatingHours> = {
+  Monday: { open: "08:00", close: "17:00", closed: false },
+  Tuesday: { open: "08:00", close: "17:00", closed: false },
+  Wednesday: { open: "08:00", close: "17:00", closed: false },
+  Thursday: { open: "08:00", close: "17:00", closed: false },
+  Friday: { open: "08:00", close: "17:00", closed: false },
+  Saturday: { open: "09:00", close: "13:00", closed: false },
+  Sunday: { open: "00:00", close: "00:00", closed: true },
+};
+
+const CompanyProfileTab: FC<CompanyProfileTabProps> = ({ 
+  company, 
+  setCompany, 
+  schedules = [], 
+  routes = [] 
+}) => {
+  const { userProfile, refreshUserProfile } = useAuth();
   const router = useRouter();
-  // Using the Company type for state here is slightly incorrect since Firestore data uses Timestamp,
-  // but we'll stick to the user's setup and ensure we convert Timestamp to Date when setting state.
+  
   const [editData, setEditData] = useState<Company | null>(company);
   const [logoPreview, setLogoPreview] = useState<string | null>(company?.logo || null);
   const [actionLoading, setActionLoading] = useState(false);
   const [isInitialSetup, setIsInitialSetup] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
-  const [errors, setErrors] = useState<Record<string, string>>({});
   const [success, setSuccess] = useState<string>("");
+
+  // Logic for live departures
+  const todaysSchedules = (schedules || []).filter(s => {
+    const sDate = s.departureDateTime instanceof Date 
+      ? s.departureDateTime 
+      : s.departureDateTime?.toDate?.() || null;
+    
+    return sDate?.toDateString() === new Date().toDateString();
+  });
 
   useEffect(() => {
     if (userProfile && !userProfile.setupCompleted) {
       setIsInitialSetup(true);
       setIsEditing(true);
-      setEditData(company || null);
-    } else if (userProfile?.setupCompleted) {
-      setIsInitialSetup(false);
+      setEditData(company);
     }
   }, [userProfile, company]);
 
-  const validateField = (field: string, value: string): string => {
-    switch (field) {
-      case "name":
-        return !value.trim() ? "Company name is required" : "";
-      case "email":
-        return !value.trim() || !value.includes("@") ? "Valid email is required" : "";
-      case "phone": // Maps to 'contact' field
-        const phoneRegex = /^\+265[0-9]{9}$/;
-        return !phoneRegex.test(value.replace(/[\s-]/g, ""))
-          ? "Phone must be in +265 format (e.g., +265123456789)"
-          : "";
-      case "address":
-        return !value.trim() ? "Address is required" : "";
-      case "description":
-        return isInitialSetup && !value?.trim() ? "Description is required for initial setup" : "";
-      default:
-        return "";
-    }
-  };
-
-  const handleFieldChange = (field: string, value: string) => {
-    if (!editData) return;
-
-    setEditData((prev) => (prev ? { ...prev, [field]: value } : prev));
-
-    // Clear field error when user starts typing
-    if (errors[field]) {
-      setErrors((prev) => ({ ...prev, [field]: "" }));
-    }
-  };
-
-  const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-
-      if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
-        setErrors((prev) => ({ ...prev, general: "Please upload a valid image (JPEG, PNG, or WebP)" }));
-        return;
-      }
-
-      if (file.size > 2 * 1024 * 1024) {
-        setErrors((prev) => ({ ...prev, general: "Image size must be less than 2MB" }));
-        return;
-      }
-
-      const reader = new FileReader();
-      reader.onload = () => {
-        const base64String = reader.result as string;
-        setLogoPreview(base64String);
-        setEditData((prev) => (prev ? { ...prev, logo: base64String } : prev));
+  const handleHoursChange = (day: string, field: keyof OperatingHours, value: any) => {
+    setEditData(prev => {
+      if (!prev) return prev;
+      const currentHours = prev.operatingHours || DEFAULT_HOURS;
+      return {
+        ...prev,
+        operatingHours: {
+          ...currentHours,
+          [day]: { ...currentHours[day], [field]: value }
+        }
       };
-      reader.onerror = () => setErrors((prev) => ({ ...prev, general: "Failed to read image file" }));
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const validateForm = (): boolean => {
-    if (!editData) return false;
-
-    const newErrors: Record<string, string> = {};
-    const fields = ["name", "email", "contact", "address", "description"]; // Note: using 'contact' here which maps to 'phone' validation
-
-    fields.forEach((field) => {
-        // Need to explicitly check if the key is 'contact' to use the 'phone' validator
-        const value = editData[field as keyof Company] as string || "";
-        const validationKey = field === 'contact' ? 'phone' : field;
-        const error = validateField(validationKey, value);
-        if (error) newErrors[field] = error;
     });
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
   };
 
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    if (!editData || !user || !userProfile) {
-      setErrors((prev) => ({ ...prev, general: "User authentication required" }));
-      return;
-    }
-
-    if (!validateForm()) {
-      setErrors((prev) => ({ ...prev, general: "Please correct the highlighted errors" }));
-      return;
-    }
+    if (!editData || !userProfile) return;
 
     setActionLoading(true);
-    setErrors({});
-    setSuccess("");
-
     try {
       const companyRef = doc(db, "companies", editData.id);
-      const userRef = doc(db, "users", userProfile.id);
+      const now = Timestamp.now();
       
-      // 1. Create the Timestamp for both database and state consistency
-      const firestoreUpdateTimestamp = Timestamp.now();
-      
-      // 2. Data payload for Firestore (uses Timestamp, which Firestore expects)
-      const firestorePayload = {
-        ...(editData as Company), // We checked for null earlier, safe to cast
-        updatedAt: firestoreUpdateTimestamp,
+      const payload = {
+        ...editData,
+        updatedAt: now,
+        operatingHours: editData.operatingHours || DEFAULT_HOURS
       };
 
-      // Firestore update
-      await updateDoc(companyRef, firestorePayload);
+      await updateDoc(companyRef, payload);
 
       if (isInitialSetup) {
-        await updateDoc(userRef, {
+        await updateDoc(doc(db, "users", userProfile.id), {
           setupCompleted: true,
-          updatedAt: Timestamp.now(),
+          updatedAt: now
         });
       }
 
-      // 3. Data payload for React State (uses Date, which the 'Company' type expects)
-      const clientStateUpdate: Company = {
-        ...(editData as Company), // The original data structure
-        // FIX: Convert the Timestamp back to a native Date object 
-        // before setting it on the React state.
-        updatedAt: firestoreUpdateTimestamp.toDate(), 
-      };
-
-      setCompany(clientStateUpdate); // NO ERROR HERE!
-      
+      setCompany({ ...payload, updatedAt: now.toDate() } as any);
+      setSuccess("Profile updated successfully!");
       setIsEditing(false);
-      setEditData(null);
-      setSuccess("Company profile updated successfully!");
-
+      
       if (isInitialSetup) {
         await refreshUserProfile();
         router.push("/company/admin");
       }
     } catch (err: any) {
-      console.error("Update error:", err);
-      setErrors((prev) => ({ ...prev, general: `Failed to update profile: ${err.message || "Network error occurred"}` }));
+      console.error(err);
     } finally {
       setActionLoading(false);
     }
   };
 
-  const handleCancelEdit = () => {
-    setIsEditing(false);
-    setEditData(company);
-    setLogoPreview(company?.logo || null);
-    setErrors({});
-    setSuccess("");
-  };
-
-  const handleStartEdit = () => {
-    setIsEditing(true);
-    setEditData(company);
-    setLogoPreview(company?.logo || null);
-  };
-
-  if (!company && actionLoading) {
-    return (
-      <div className="max-w-6xl mx-auto">
-        <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl p-8 mb-8 text-white relative overflow-hidden animate-pulse">
-          <div className="h-24 w-24 bg-gray-200 rounded-xl mb-4"></div>
-          <div className="h-8 bg-gray-200 rounded w-1/2 mb-2"></div>
-          <div className="h-6 bg-gray-200 rounded w-1/3"></div>
-        </div>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {Array(4)
-            .fill(0)
-            .map((_, index) => (
-              <div key={index} className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-                <div className="h-6 bg-gray-200 rounded mb-2"></div>
-                <div className="h-4 bg-gray-200 rounded w-1/2"></div>
-              </div>
-            ))}
-          <div className="lg:col-span-3 bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-            <div className="h-6 bg-gray-200 rounded mb-2"></div>
-            <div className="h-24 bg-gray-200 rounded"></div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   if (!company) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 text-gray-500">
-        <Building2 size={48} className="mb-4 text-gray-300" />
-        <h3 className="text-lg font-medium mb-2">No Company Data</h3>
-        <p className="text-sm">Company information is not available at this time.</p>
+      <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+        <Loader2 className="animate-spin mb-4" size={40} />
+        <p className="font-medium">Loading your profile...</p>
       </div>
     );
   }
 
   return (
-    <div className="max-w-6xl mx-auto">
+    <div className="max-w-6xl mx-auto pb-20 space-y-8 px-4">
       {/* Header Section */}
-      <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl p-8 mb-8 text-white relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -translate-y-32 translate-x-32"></div>
-        <div className="absolute bottom-0 left-0 w-48 h-48 bg-white/5 rounded-full translate-y-24 -translate-x-24"></div>
-
-        <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-          <div className="flex items-center gap-6">
-            <div className="relative group">
-              <div className="w-24 h-24 rounded-2xl bg-white/20 backdrop-blur-sm p-1">
-                <img
-                  src={logoPreview || company.logo || "https://images.unsplash.com/photo-1560472354-b33ff0c44a43?w=96&h=96&fit=crop&crop=center"}
-                  alt={`${company.name} Logo`}
-                  className="w-full h-full rounded-xl object-cover"
-                />
-              </div>
-              {isEditing && (
-                <label className="absolute -bottom-2 -right-2 bg-white text-gray-700 p-2 rounded-full shadow-lg cursor-pointer hover:bg-gray-50 transition-colors">
-                  <Camera size={16} />
-                  <input
-                    type="file"
-                    className="hidden"
-                    accept="image/jpeg,image/png,image/webp"
-                    onChange={handleFileChange}
-                  />
-                </label>
-              )}
+      <div className="bg-gradient-to-br from-blue-700 via-blue-600 to-indigo-800 rounded-[2.5rem] p-8 md:p-12 text-white shadow-2xl relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-96 h-96 bg-white/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
+        
+        <div className="relative z-10 flex flex-col md:flex-row items-center gap-8">
+          <div className="relative group">
+            <div className="w-32 h-32 rounded-3xl bg-white/20 backdrop-blur-xl p-1.5 border border-white/30 shadow-inner">
+              <img
+                src={logoPreview || company.logo || `https://ui-avatars.com/api/?name=${encodeURIComponent(company.name || "C")}&background=random`}
+                className="w-full h-full rounded-[1.25rem] object-cover shadow-sm"
+                alt="Company Logo"
+              />
             </div>
+            {isEditing && (
+              <label className="absolute -bottom-2 -right-2 bg-white text-blue-600 p-2.5 rounded-2xl shadow-xl cursor-pointer hover:scale-110 transition-transform border border-gray-100">
+                <Camera size={20} />
+                <input type="file" className="hidden" accept="image/*" onChange={(e) => {
+                   const file = e.target.files?.[0];
+                   if (file) {
+                     const reader = new FileReader();
+                     reader.onloadend = () => setLogoPreview(reader.result as string);
+                     reader.readAsDataURL(file);
+                   }
+                }} />
+              </label>
+            )}
+          </div>
 
-            <div>
-              <h1 className="text-3xl font-bold mb-2">{company.name}</h1>
-              <p className="text-white/80 text-lg">
-                {isInitialSetup ? "Complete your company setup" : "Company Profile"}
-              </p>
+          <div className="text-center md:text-left flex-1">
+            <h1 className="text-4xl md:text-5xl font-black tracking-tight mb-2">{company.name}</h1>
+            <div className="flex flex-wrap justify-center md:justify-start gap-3">
+              <span className="bg-white/20 backdrop-blur-md px-4 py-1 rounded-full text-sm font-bold border border-white/10">
+                {company.status || 'Active'}
+              </span>
+              <span className="bg-blue-400/30 backdrop-blur-md px-4 py-1 rounded-full text-sm font-bold border border-white/10">
+                {routes.length} Active Routes
+              </span>
             </div>
           </div>
 
-          {!isInitialSetup && !isEditing && (
-            <button
-              onClick={handleStartEdit}
-              className="flex items-center gap-2 bg-white/20 hover:bg-white/30 backdrop-blur-sm text-white px-6 py-3 rounded-xl transition-colors"
+          {!isEditing && (
+            <button 
+              onClick={() => setIsEditing(true)} 
+              className="bg-white text-blue-700 px-8 py-4 rounded-2xl font-black shadow-lg hover:bg-blue-50 transition-all active:scale-95 flex items-center gap-2"
             >
-              <Edit3 size={18} />
-              Edit Profile
+              <Edit3 size={20} /> Edit Profile
             </button>
           )}
         </div>
       </div>
 
-      {/* Content Section */}
       {isEditing ? (
-        <form onSubmit={handleUpdate} className="space-y-8">
-          {/* Action Buttons */}
-          <div className="flex justify-end gap-3">
-            <button
-              type="button"
-              onClick={handleCancelEdit}
-              className="flex items-center gap-2 px-6 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl transition-colors"
-            >
-              <X size={18} />
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={actionLoading}
-              className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {actionLoading ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
-              {isInitialSetup ? "Complete Setup" : "Save Changes"}
-            </button>
+        <form onSubmit={handleUpdate} className="grid grid-cols-1 lg:grid-cols-2 gap-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-gray-100 space-y-6">
+            <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-3">
+              <Building2 className="text-blue-500" size={28}/> General Info
+            </h2>
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs font-black uppercase tracking-widest text-gray-400 ml-1">Phone Number</label>
+                <input 
+                  className="w-full p-4 bg-gray-50 border-2 border-transparent focus:border-blue-500 focus:bg-white rounded-2xl transition-all outline-none mt-1" 
+                  value={editData?.contact || ""} 
+                  onChange={e => setEditData(prev => prev ? {...prev, contact: e.target.value} : null)}
+                />
+              </div>
+              <div>
+                <label className="text-xs font-black uppercase tracking-widest text-gray-400 ml-1">Physical Address</label>
+                <input 
+                  className="w-full p-4 bg-gray-50 border-2 border-transparent focus:border-blue-500 focus:bg-white rounded-2xl transition-all outline-none mt-1" 
+                  value={editData?.address || ""} 
+                  onChange={e => setEditData(prev => prev ? {...prev, address: e.target.value} : null)}
+                />
+              </div>
+              <div>
+                <label className="text-xs font-black uppercase tracking-widest text-gray-400 ml-1">Bio</label>
+                <textarea 
+                  className="w-full p-4 bg-gray-50 border-2 border-transparent focus:border-blue-500 focus:bg-white rounded-2xl transition-all outline-none h-40 resize-none mt-1" 
+                  value={editData?.description || ""}
+                  onChange={e => setEditData(prev => prev ? {...prev, description: e.target.value} : null)}
+                />
+              </div>
+            </div>
           </div>
 
-          {/* Form Fields */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {/* Basic Information */}
-            <div className="space-y-6">
-              <h3 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
-                <Building2 size={20} className="text-blue-600" />
-                Basic Information
-              </h3>
+          <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-gray-100">
+            <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-3 mb-8">
+              <Clock className="text-blue-500" size={28}/> Operating Hours
+            </h2>
+            <div className="space-y-4">
+              {Object.keys(DEFAULT_HOURS).map(day => {
+                const dayData = editData?.operatingHours?.[day] || DEFAULT_HOURS[day];
+                return (
+                  <div key={day} className="flex items-center justify-between p-3 hover:bg-gray-50 rounded-2xl">
+                    <span className="font-bold text-gray-700 w-24">{day}</span>
+                    <div className="flex items-center gap-3">
+                      {!dayData.closed ? (
+                        <div className="flex items-center gap-2">
+                          <input type="time" value={dayData.open} onChange={e => handleHoursChange(day, 'open', e.target.value)} className="p-2 border rounded-xl" />
+                          <span className="text-gray-300">-</span>
+                          <input type="time" value={dayData.close} onChange={e => handleHoursChange(day, 'close', e.target.value)} className="p-2 border rounded-xl" />
+                        </div>
+                      ) : <span className="text-red-400 font-bold italic">Closed</span>}
+                      <button 
+                        type="button"
+                        onClick={() => handleHoursChange(day, 'closed', !dayData.closed)}
+                        className={`text-[10px] font-black px-3 py-2 rounded-xl border-2 ${dayData.closed ? 'bg-green-50 text-green-600 border-green-200' : 'bg-gray-50 text-gray-400 border-gray-200'}`}
+                      >
+                        {dayData.closed ? 'OPEN' : 'CLOSE'}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
 
+          <div className="lg:col-span-2 flex items-center justify-between bg-blue-50 p-6 rounded-[2rem]">
+            <p className="text-blue-700 text-sm font-medium">Changes must be saved to apply.</p>
+            <div className="flex gap-4">
+              <button type="button" onClick={() => setIsEditing(false)} className="px-8 py-4 font-bold text-gray-500">Cancel</button>
+              <button type="submit" disabled={actionLoading} className="bg-blue-600 text-white px-12 py-4 rounded-2xl font-black flex items-center gap-2">
+                {actionLoading ? <Loader2 className="animate-spin" /> : <Save size={20}/>} Save Profile
+              </button>
+            </div>
+          </div>
+        </form>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div className="lg:col-span-2 space-y-8">
+            {/* Live Board */}
+            <div className="bg-white rounded-[2rem] p-8 shadow-sm border border-gray-100">
+              <div className="flex items-center justify-between mb-8">
+                <h3 className="text-2xl font-bold flex items-center gap-3"><Clock className="text-blue-600" size={28}/> Live Today</h3>
+                <div className="flex items-center gap-2 px-3 py-1 bg-red-50 text-red-600 rounded-full animate-pulse">
+                  <div className="w-2 h-2 bg-red-600 rounded-full" />
+                  <span className="text-xs font-black uppercase">Live Board</span>
+                </div>
+              </div>
               <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Company Name</label>
-                  <input
-                    type="text"
-                    value={editData?.name || ""}
-                    onChange={(e) => handleFieldChange("name", e.target.value)}
-                    className={`w-full px-4 py-3 rounded-xl border-2 transition-colors focus:outline-none ${
-                      errors.name ? "border-red-300 focus:border-red-500" : "border-gray-200 focus:border-blue-500"
-                    }`}
-                    placeholder="Enter company name"
-                    disabled={!isInitialSetup}
-                  />
-                  {errors.name && (
-                    <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
-                      <AlertCircle size={14} />
-                      {errors.name}
-                    </p>
-                  )}
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Email Address</label>
-                  <input
-                    type="email"
-                    value={editData?.email || ""}
-                    onChange={(e) => handleFieldChange("email", e.target.value)}
-                    className={`w-full px-4 py-3 rounded-xl border-2 transition-colors focus:outline-none ${
-                      errors.email ? "border-red-300 focus:border-red-500" : "border-gray-200 focus:border-blue-500"
-                    }`}
-                    placeholder="company@example.com"
-                    disabled={!isInitialSetup}
-                  />
-                  {errors.email && (
-                    <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
-                      <AlertCircle size={14} />
-                      {errors.email}
-                    </p>
-                  )}
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Phone Number</label>
-                  <input
-                    type="tel"
-                    value={editData?.contact || ""}
-                    onChange={(e) => handleFieldChange("contact", e.target.value)}
-                    className={`w-full px-4 py-3 rounded-xl border-2 transition-colors focus:outline-none ${
-                      errors.contact ? "border-red-300 focus:border-red-500" : "border-gray-200 focus:border-blue-500"
-                    }`}
-                    placeholder="+265123456789"
-                    disabled={!isInitialSetup}
-                  />
-                  {/* Note: changed from errors.phone to errors.contact for consistency */}
-                  {errors.contact && (
-                    <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
-                      <AlertCircle size={14} />
-                      {errors.contact}
-                    </p>
-                  )}
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Address</label>
-                  <input
-                    type="text"
-                    value={editData?.address || ""}
-                    onChange={(e) => handleFieldChange("address", e.target.value)}
-                    className={`w-full px-4 py-3 rounded-xl border-2 transition-colors focus:outline-none ${
-                      errors.address ? "border-red-300 focus:border-red-500" : "border-gray-200 focus:border-blue-500"
-                    }`}
-                    placeholder="Enter company address"
-                    disabled={!isInitialSetup}
-                  />
-                  {errors.address && (
-                    <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
-                      <AlertCircle size={14} />
-                      {errors.address}
-                    </p>
-                  )}
-                </div>
+                {todaysSchedules.length > 0 ? todaysSchedules.map(s => {
+                  const route = routes.find(r => r.id === s.routeId);
+                  return (
+                    <div key={s.id} className="flex items-center justify-between p-6 bg-gray-50 rounded-3xl border border-gray-100 transition-all">
+                      <div className="flex items-center gap-6">
+                        <div className="text-center">
+                          <p className="text-2xl font-black text-blue-600">
+                            {new Date(s.departureDateTime?.toDate?.() || s.departureDateTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                          </p>
+                        </div>
+                        <div className="h-10 w-[2px] bg-gray-200" />
+                        <div>
+                          <p className="font-black text-xl text-gray-900 leading-tight">
+                            {route?.origin || route?.departureLocation} <ChevronRight className="inline text-gray-300" size={16}/> {route?.destination || route?.arrivalLocation}
+                          </p>
+                          <p className="text-xs font-bold text-gray-400 mt-1 uppercase tracking-widest">{s.busId || 'Coach'}</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-2xl font-black text-gray-900">{s.availableSeats}</p>
+                        <p className="text-[10px] text-blue-500 font-black uppercase tracking-tighter">Seats Left</p>
+                      </div>
+                    </div>
+                  );
+                }) : (
+                  <div className="text-center py-12 bg-gray-50 rounded-[2rem] border-2 border-dashed border-gray-100">
+                    <Calendar className="mx-auto text-gray-300 mb-4" size={48} />
+                    <p className="text-gray-500 font-bold">No trips on the board for today.</p>
+                  </div>
+                )}
               </div>
             </div>
 
-            {/* Description */}
-            <div className="space-y-6">
-              <h3 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
-                <FileText size={20} className="text-green-600" />
-                About Company
-              </h3>
+            {/* Service Network Section */}
+            <div className="bg-white rounded-[2rem] p-8 shadow-sm border border-gray-100">
+              <div className="flex items-center justify-between mb-8">
+                <h3 className="text-2xl font-bold flex items-center gap-3">
+                  <Navigation className="text-indigo-600" size={28}/> 
+                  Service Network
+                </h3>
+                <span className="bg-indigo-50 text-indigo-700 px-4 py-1 rounded-full text-xs font-black uppercase tracking-widest">
+                  {routes.length} Active Routes
+                </span>
+              </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
-                <textarea
-                  value={editData?.description || ""}
-                  onChange={(e) => handleFieldChange("description", e.target.value)}
-                  rows={8}
-                  className={`w-full px-4 py-3 rounded-xl border-2 transition-colors focus:outline-none resize-none ${
-                    errors.description ? "border-red-300 focus:border-red-500" : "border-gray-200 focus:border-blue-500"
-                  }`}
-                  placeholder="Describe your company, its mission, and what makes it unique..."
-                  disabled={!isInitialSetup}
-                />
-                {errors.description && (
-                  <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
-                    <AlertCircle size={14} />
-                    {errors.description}
-                  </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {routes.length > 0 ? routes.map((route, index) => {
+                  const start = route.origin || route.departureLocation || "Unknown Origin";
+                  const end = route.destination || route.arrivalLocation || "Unknown Destination";
+                  return (
+                    <div key={route.id || index} className="relative overflow-hidden p-7 bg-gradient-to-br from-indigo-50/50 to-white rounded-[2rem] border border-indigo-100 group hover:shadow-xl transition-all">
+                      <div className="relative z-10">
+                        <div className="flex items-center gap-3 mb-6">
+                          <div className="w-10 h-10 rounded-2xl bg-indigo-600 text-white flex items-center justify-center font-black">
+                            {index + 1}
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Route Details</p>
+                            <p className="text-xs font-bold text-gray-400">{route.id?.substring(0, 8)}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-4">
+                          <div className="flex flex-col items-center">
+                            <div className="w-3 h-3 rounded-full border-2 border-indigo-600 bg-white" />
+                            <div className="w-[2px] h-8 bg-indigo-200 my-1" />
+                            <div className="w-3 h-3 rounded-full bg-blue-600" />
+                          </div>
+                          <div className="flex flex-col gap-5">
+                            <p className="font-black text-gray-900 uppercase text-base">{start}</p>
+                            <p className="font-black text-gray-900 uppercase text-base">{end}</p>
+                          </div>
+                        </div>
+                        <div className="mt-8 pt-5 border-t border-indigo-50 flex justify-between items-center">
+                          <span className="text-[10px] font-bold text-gray-400 uppercase">Est. Trip</span>
+                          <span className="text-sm font-black text-indigo-700">{route.duration || "N/A"}</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }) : (
+                  <div className="col-span-2 py-10 text-center bg-gray-50 rounded-3xl border-2 border-dashed border-gray-200">
+                    <p className="text-gray-400 font-bold">No routes available.</p>
+                  </div>
                 )}
               </div>
             </div>
           </div>
 
-          {/* General Error or Success Messages */}
-          {errors.general && (
-            <div className="mt-6 p-4 bg-red-50 border border-red-200 rounded-xl flex items-center gap-3 text-red-700">
-              <AlertCircle size={20} />
-              <span>{errors.general}</span>
-            </div>
-          )}
-          {success && (
-            <div className="mt-6 p-4 bg-green-50 border border-green-200 rounded-xl flex items-center gap-3 text-green-700">
-              <CheckCircle size={20} />
-              <span>{success}</span>
-            </div>
-          )}
-        </form>
-      ) : (
-        // Display Mode
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Info Cards */}
-          <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
-              <div className="flex items-center gap-4 mb-4">
-                <div className="p-3 bg-blue-100 rounded-xl">
-                  <Mail className="w-6 h-6 text-blue-600" />
+          {/* Sidebar */}
+          <div className="space-y-8">
+            {company.contact && (
+              <a href={`https://wa.me/${company.contact.replace(/\D/g,'')}`} target="_blank" rel="noreferrer" className="block group">
+                <div className="bg-green-500 rounded-[2rem] p-8 text-white shadow-xl hover:-translate-y-1 transition-all flex items-center gap-6">
+                  <div className="p-4 bg-white/20 rounded-2xl"><MessageCircle size={32} /></div>
+                  <div>
+                    <p className="font-black text-2xl">WhatsApp</p>
+                    <p className="text-sm opacity-80 uppercase font-bold tracking-widest">Direct Line</p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="font-medium text-gray-900">Email</h3>
-                  <p className="text-sm text-gray-500">Contact email</p>
-                </div>
+              </a>
+            )}
+
+            <div className="bg-white rounded-[2rem] p-8 shadow-sm border border-gray-100">
+              <h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-gray-900"><Clock size={22} className="text-blue-600"/> Terminal Hours</h3>
+              <div className="space-y-4">
+                {Object.keys(DEFAULT_HOURS).map(day => {
+                  const hours = company.operatingHours?.[day] || DEFAULT_HOURS[day];
+                  return (
+                    <div key={day} className="flex justify-between items-center text-sm border-b border-gray-50 pb-2 last:border-0">
+                      <span className="text-gray-400 font-bold uppercase text-[10px]">{day}</span>
+                      <span className={`font-black ${hours.closed ? 'text-red-400' : 'text-gray-900'}`}>
+                        {hours.closed ? 'Closed' : `${hours.open} - ${hours.close}`}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
-              <p className="text-gray-900 font-medium">{company.email}</p>
             </div>
 
-            <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
-              <div className="flex items-center gap-4 mb-4">
-                <div className="p-3 bg-green-100 rounded-xl">
-                  <Phone className="w-6 h-6 text-green-600" />
-                </div>
-                <div>
-                  <h3 className="font-medium text-gray-900">Phone</h3>
-                  <p className="text-sm text-gray-500">Primary contact</p>
-                </div>
-              </div>
-              <p className="text-gray-900 font-medium">{company.contact}</p>
+            <div className="bg-blue-600 rounded-[2rem] p-8 text-white shadow-xl shadow-blue-100">
+              <h3 className="text-xl font-bold mb-4 flex items-center gap-2"><FileText size={22} /> Our Story</h3>
+              <p className="text-sm italic text-blue-100">"{company.description || "Reliable travel services."}"</p>
             </div>
-
-            <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 hover:shadow-md transition-shadow md:col-span-2">
-              <div className="flex items-center gap-4 mb-4">
-                <div className="p-3 bg-purple-100 rounded-xl">
-                  <MapPin className="w-6 h-6 text-purple-600" />
-                </div>
-                <div>
-                  <h3 className="font-medium text-gray-900">Address</h3>
-                  <p className="text-sm text-gray-500">Business location</p>
-                </div>
-              </div>
-              <p className="text-gray-900 font-medium">{company.address}</p>
-            </div>
-          </div>
-
-          {/* Description Card */}
-          <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-            <div className="flex items-center gap-4 mb-6">
-              <div className="p-3 bg-orange-100 rounded-xl">
-                <FileText className="w-6 h-6 text-orange-600" />
-              </div>
-              <div>
-                <h3 className="font-medium text-gray-900">About</h3>
-                <p className="text-sm text-gray-500">Company description</p>
-              </div>
-            </div>
-            <p className="text-gray-700 leading-relaxed">
-              {company.description || "No description provided yet."}
-            </p>
           </div>
         </div>
       )}

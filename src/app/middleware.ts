@@ -15,27 +15,55 @@ if (!getApps().length) {
 }
 
 export async function middleware(req: NextRequest) {
-  const auth = getAuth();
-  const token = req.headers.get('authorization')?.split('Bearer ')[1];
+  const { pathname } = req.nextUrl;
+  const token = req.cookies.get('token')?.value;
+
+  // Public routes that don't need auth
+  const publicRoutes = ['/login', '/register', '/forgot-password', '/reset-password', '/company/setup', '/operator/signup'];
+  if (publicRoutes.some(route => pathname.startsWith(route))) {
+    return NextResponse.next();
+  }
 
   if (!token) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return NextResponse.redirect(new URL('/login', req.url));
   }
 
   try {
+    const auth = getAuth();
     const decodedToken = await auth.verifyIdToken(token);
-    if (decodedToken.role !== 'company_admin') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    
+    // Check role-based access
+    if (pathname.startsWith('/company/admin')) {
+      if (decodedToken.role !== 'company_admin') {
+        return NextResponse.redirect(new URL('/login', req.url));
+      }
     }
+
+    if (pathname.startsWith('/company/operator/dashboard')) {
+      if (decodedToken.role !== 'operator') {
+        return NextResponse.redirect(new URL('/login', req.url));
+      }
+    }
+
+    if (pathname.startsWith('/admin')) {
+      if (decodedToken.role !== 'super_admin') {
+        return NextResponse.redirect(new URL('/login', req.url));
+      }
+    }
+
   } catch (error) {
-    return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
+    console.error('Token verification error:', error);
+    return NextResponse.redirect(new URL('/login', req.url));
   }
 
   return NextResponse.next();
 }
 
-// This middleware ONLY runs on /company/* routes
-// All other routes (login, register, forgot-password, reset-password) are NOT protected
 export const config = {
-  matcher: '/company/:path*',
+  matcher: [
+    '/company/:path*',
+    '/company/operator/dashboard/:path*',
+    '/admin/:path*',
+    '/dashboard/:path*'
+  ],
 };

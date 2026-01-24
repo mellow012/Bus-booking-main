@@ -13,36 +13,23 @@ import { doc, getDoc, setDoc, updateDoc, serverTimestamp, deleteField } from 'fi
 import { UserProfile } from '@/types';
 import { useRouter, usePathname } from 'next/navigation';
 
-// Helper: normalize phone numbers to a simple E.164-like format.
-// Assumptions:
-// - If the phone starts with '+', keep the country code and digits only.
-// - If it starts with '00', convert leading '00' to '+'.
-// - If it starts with a single leading '0' or is a local number without country code,
-//   prefix it with '+265' (Malawi) as a sensible default for this project.
-// - Remove spaces, dashes, parentheses and other non-digit characters (except leading '+').
 const formatPhoneToE164 = (phone?: string): string => {
   if (!phone) return '';
   let p = phone.trim();
-  // Remove common separators but keep leading + if present
   p = p.replace(/[\s\-()]/g, '');
-  // Convert leading 00 to +
   if (p.startsWith('00')) p = '+' + p.slice(2);
-  // If it starts with +, keep + and digits only
   if (p.startsWith('+')) {
     const digits = p.replace(/[^\d]/g, '');
     return '+' + digits;
   }
-  // If it starts with 0, treat as local and replace leading zeros with country code +265
   if (p.startsWith('0')) {
     const digits = p.replace(/^0+/, '');
     return '+265' + digits;
   }
-  // If it's all digits and length looks local-ish, prefix with +265
   const digitsOnly = p.replace(/[^\d]/g, '');
-  if (/^\d+$/.test(p) && (digitsOnly.length === 7 || digitsOnly.length === 8 || digitsOnly.length === 9 || digitsOnly.length === 10)) {
+  if (/^\d+$/.test(p) && (digitsOnly.length >= 7 && digitsOnly.length <= 10)) {
     return '+265' + digitsOnly;
   }
-  // Fallback: prefix + and strip non-digits
   return '+' + digitsOnly;
 };
 
@@ -64,7 +51,7 @@ interface AuthContextType {
       nationalId?: string;
       sex?: string;
       currentAddress?: string;
-      role?: 'customer' | 'superadmin' | 'company_admin';
+      role?: 'customer' | 'superadmin' | 'company_admin' | 'operator';
       companyId?: string;
     }
   ) => Promise<void>;
@@ -150,17 +137,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
     const oobCode = searchParams?.get('oobCode');
+    const operatorId = searchParams?.get('operatorId');
 
-    const publicRoutes = ['/login', '/register', '/company/setup', '/', '/about', '/contact', '/forgot-password', '/reset-password'];
+    // Public routes that don't require authentication
+    const publicRoutes = [
+      '/login', 
+      '/register', 
+      '/company/setup', 
+      '/operator/signup',
+      '/', 
+      '/about', 
+      '/contact', 
+      '/forgot-password', 
+      '/reset-password'
+    ];
     const isPublicRoute = publicRoutes.includes(pathname);
 
-    if (!user && !oobCode && !isPublicRoute) {
+    // Allow access to setup pages with oobCode or operatorId
+    const isSetupPage = (pathname === '/company/setup' || pathname === '/operator/signup') && (oobCode || operatorId);
+
+    if (!user && !isSetupPage && !isPublicRoute) {
       console.log('No user found and not on public route, redirecting to /login');
       router.push('/login');
       return;
     }
 
     if (user && userProfile) {
+      // Handle customer profile completion
       if (
         userProfile.role === 'customer' &&
         !userProfile.nationalId &&
@@ -179,16 +182,51 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       }
 
+      // Redirect authenticated users away from auth pages
       const authPages = ['/login', '/register'];
       if (authPages.includes(pathname)) {
         console.log('User authenticated, redirecting from auth page to appropriate dashboard');
-        if (userProfile.role === 'superadmin') {
-          router.push('/admin');
-        } else if (userProfile.role === 'company_admin' && userProfile.companyId) {
-          router.push('/company/admin');
-        } else {
-          router.push('/');
+        
+        // Role-based redirects
+        switch (userProfile.role) {
+          case 'superadmin':
+            router.push('/super-admin/dashboard');
+            break;
+          case 'company_admin':
+            if (userProfile.companyId) {
+              router.push(`/company/admin?companyId=${userProfile.companyId}`);
+            } else {
+              router.push('/company/setup');
+            }
+            break;
+          case 'operator':
+            if (userProfile.companyId) {
+              router.push(`/operator/dashboard?companyId=${userProfile.companyId}`);
+            } else {
+              console.error('Operator without companyId');
+              router.push('/login');
+            }
+            break;
+          case 'customer':
+            router.push('/');
+            break;
+          default:
+            router.push('/');
         }
+      }
+
+      // Prevent operators from accessing company admin routes
+      if (pathname.startsWith('/company/admin') && userProfile.role === 'operator') {
+        console.log('Operator trying to access company admin, redirecting to operator dashboard');
+        router.push(`/company/operator/dashboard?companyId=${userProfile.companyId}`);
+        return;
+      }
+
+      // Prevent company admins from accessing operator routes
+      if (pathname.startsWith('/company/operator/dashboard') && userProfile.role === 'company_admin') {
+        console.log('Company admin trying to access operator dashboard, redirecting to admin dashboard');
+        router.push(`/company/admin?companyId=${userProfile.companyId}`);
+        return;
       }
     }
   }, [user, userProfile, isInitialized, loading, router, pathname]);
@@ -244,7 +282,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!profile.firstName?.trim() || !profile.lastName?.trim()) {
       throw new Error('First name and last name are required');
     }
-    // Phone is optional during sign up because we collect it on the profile page later.
 
     const trimmedEmail = email.trim().toLowerCase();
     console.log('Attempting sign up for:', trimmedEmail);
@@ -301,7 +338,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       nationalId?: string;
       sex?: string;
       currentAddress?: string;
-      role?: 'customer' | 'superadmin' | 'company_admin';
+      role?: 'customer' | 'superadmin' | 'company_admin' | 'operator';
       companyId?: string;
     }
   ) => {
@@ -325,22 +362,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         updatedAt: serverTimestamp() as unknown as Date,
       };
 
-      // Only include optional fields if provided and not empty
       if (profile.nationalId) userProfileData.nationalId = profile.nationalId;
       if (profile.sex) userProfileData.sex = profile.sex;
       if (profile.currentAddress) userProfileData.currentAddress = profile.currentAddress;
       if (profile.role) userProfileData.role = profile.role;
 
-      // Prepare Firestore update object - using any type to allow FieldValue
       const updateData: any = {
         ...userProfileData,
       };
 
-      // Only include companyId for company_admin role
-      if (profile.role === 'company_admin' && profile.companyId) {
+      // Handle companyId for company_admin and operator roles
+      if ((profile.role === 'company_admin' || profile.role === 'operator') && profile.companyId) {
         updateData.companyId = profile.companyId;
-      } else if (userProfile?.role !== 'company_admin') {
-        updateData.companyId = deleteField(); // Remove companyId for non-company_admin roles
+      } else if (userProfile?.role !== 'company_admin' && userProfile?.role !== 'operator') {
+        updateData.companyId = deleteField();
       }
 
       await setDoc(doc(db, 'users', user.uid), updateData, { merge: true });

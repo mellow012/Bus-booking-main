@@ -1,4 +1,5 @@
 import { Timestamp } from 'firebase/firestore';
+import { it } from 'node:test';
 
 /**
  * Base interface for all Firestore documents to ensure consistency.
@@ -9,6 +10,12 @@ export interface FirestoreDocument {
   updatedAt: Date;
 }
 
+
+export interface OperatingHours {
+  open: string;  // e.g., "08:00"
+  close: string; // e.g., "18:00"
+  closed: boolean;
+}
 export interface Company extends FirestoreDocument {
   name: string;
   email: string;
@@ -24,6 +31,11 @@ export interface Company extends FirestoreDocument {
       stripe?: boolean;
     };
   };
+  operatingHours?: Record<string, OperatingHours>; // Day of week as key
+  socials?: {
+    whatsapp?: string;
+    website?: string;
+  };
   metadata?: Record<string, any>;
 }
 
@@ -31,6 +43,7 @@ export type BusType = 'AC' | 'Non-AC' | 'Sleeper' | 'Semi-Sleeper' | 'Luxury' | 
 export type BusStatus = 'active' | 'inactive' | 'maintenance';
 
 export interface Bus extends FirestoreDocument {
+  id: string;
   companyId: string;
   licensePlate: string;
   busType: BusType;
@@ -44,16 +57,33 @@ export interface Bus extends FirestoreDocument {
     expiryDate: Date;
     authority: string;
   };
-}
+    fuelType: "diesel" | "petrol" | "electric" | "hybrid",
+  yearOfManufacture: number,
+  insuranceDetails: {
+    provider: string;
+    policyNumber: string;
+    expiryDate: Date;
+  },
+  insuranceExpiry: Date,
+  lastMaintenanceDate: Date,
+  nextMaintenanceDate: Date,
+};
+
 
 export interface RouteStop {
   id: string;
   name: string;
   distanceFromOrigin: number;
   order: number;
+   address?: string;
+  pickupPoint?: string; // Specific landmark/location
+  estimatedArrival?: number; // minutes from origin
+  contactPerson?: string;
+  contactPhone?: string;
 }
 
 export interface Route extends FirestoreDocument {
+  id: string;
   name: string;
   companyId: string;
   origin: string;
@@ -63,6 +93,8 @@ export interface Route extends FirestoreDocument {
   stops: RouteStop[];
   status: 'active' | 'inactive';
   isActive: boolean;
+  baseFare: number; // Base ticket price in MWK
+  pricePerKm?: number;
 }
 
 export interface Schedule {
@@ -72,13 +104,14 @@ export interface Schedule {
   routeId: string;
   departureLocation: string;
   arrivalLocation: string;
-  departureDateTime: Date;
-  arrivalDateTime: Date;
+  departureDateTime: Date | string;
+  arrivalDateTime: Date | string;
   price: number;
   availableSeats: number;
   bookedSeats: string[];
   status: 'active' | 'cancelled' | 'completed';
   isActive: boolean;
+  createdBy: string;
   createdAt: Date | Timestamp;
   updatedAt: Date | Timestamp;
 }
@@ -127,6 +160,7 @@ export interface Booking {
   paymentGateway: string;
   transactionReference?: string;
   confirmedDate?: Date | Timestamp;
+  createdBy?: string;
 }
 
 export interface UserProfile extends FirestoreDocument {
