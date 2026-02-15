@@ -44,6 +44,7 @@ import SettingsTab from "@/components/SettingsTab";
 import PaymentsTab from "@/components/PaymentTab";
 import TeamManagementTab from "@/components/OperatorsTab";
 import OverviewTab from "@/components/OverviewTab";
+import { FixRouteAssignmentsButton } from "@/components/RouteAssignmentButton";
 
 // Constants
 const TABS = [
@@ -686,24 +687,26 @@ export default function AdminDashboard() {
           />
         );
 
-      case "routes":
-        return (
-          <RoutesTab
-            companyId={companyId}
-            routes={routes}
-            setRoutes={(newRoutes) => {
-              if (typeof newRoutes === "function") {
-                updateDashboardData("routes", newRoutes(routes));
-              } else {
-                updateDashboardData("routes", newRoutes);
-              }
-            }}
-            addRoute={(data) => addItem("routes", data)}
-            {...commonProps}
-          />
-        );
-
-      case "buses":
+        case "routes":
+  return (
+    <>
+      <FixRouteAssignmentsButton companyId={companyId} />
+      <RoutesTab
+        companyId={companyId}
+        routes={routes}
+        setRoutes={(newRoutes) => {
+          if (typeof newRoutes === "function") {
+            updateDashboardData("routes", newRoutes(routes));
+          } else {
+            updateDashboardData("routes", newRoutes);
+          }
+        }}
+        addRoute={(data) => addItem("routes", data)}
+        {...commonProps}
+      />
+    </>
+  );
+  case "buses":
         return (
           <BusesTab
             buses={buses}

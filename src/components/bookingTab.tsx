@@ -1,8 +1,9 @@
 "use client";
 
-import { FC, useState, useMemo, useCallback } from "react";
-import { doc, getDoc, updateDoc } from "firebase/firestore";
+import { FC, useState, useMemo, useCallback, useEffect } from "react";
+import { doc, getDoc, updateDoc, collection, query, where, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebaseConfig";
+import { useAuth } from "@/contexts/AuthContext";
 import { Booking } from "@/types/core";
 import {
   Search,
@@ -29,6 +30,8 @@ import {
   User,
   Ban,
   RotateCcw,
+  Wallet,
+  CreditCard as CreditCardIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -62,6 +65,69 @@ interface BookingsTabProps {
   companies?: any[];
   buses?: any[];
 }
+
+// ✅ NEW: Payment Method Badge Component
+const PaymentMethodBadge: FC<{ paymentMethod?: string; paymentProvider?: string; paymentStatus?: string }> = ({
+  paymentMethod,
+  paymentProvider,
+  paymentStatus,
+}) => {
+  if (paymentStatus !== "paid") {
+    return (
+      <div className="flex items-center gap-1 px-2 py-1 bg-yellow-100 text-yellow-700 text-xs rounded whitespace-nowrap">
+        <Clock className="w-3 h-3" />
+        <span>Pending</span>
+      </div>
+    );
+  }
+
+  // Cash on boarding
+  if (paymentMethod === "cash_on_boarding") {
+    return (
+      <div className="flex items-center gap-1 px-2 py-1 bg-green-100 text-green-700 text-xs rounded whitespace-nowrap">
+        <Wallet className="w-3 h-3" />
+        <span>Cash Collected</span>
+      </div>
+    );
+  }
+
+  // Stripe payment
+  if (paymentProvider === "stripe" || paymentMethod === "stripe") {
+    return (
+      <div className="flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded whitespace-nowrap">
+        <CreditCardIcon className="w-3 h-3" />
+        <span>Stripe</span>
+      </div>
+    );
+  }
+
+  // Paychange payment
+  if (paymentProvider === "paychange" || paymentMethod === "paychange") {
+    return (
+      <div className="flex items-center gap-1 px-2 py-1 bg-purple-100 text-purple-700 text-xs rounded whitespace-nowrap">
+        <CreditCardIcon className="w-3 h-3" />
+        <span>Paychange</span>
+      </div>
+    );
+  }
+
+  // Generic online payment
+  if (paymentProvider || paymentMethod) {
+    return (
+      <div className="flex items-center gap-1 px-2 py-1 bg-indigo-100 text-indigo-700 text-xs rounded whitespace-nowrap">
+        <CreditCardIcon className="w-3 h-3" />
+        <span>{paymentProvider || paymentMethod}</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-1 px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded whitespace-nowrap">
+      <DollarSign className="w-3 h-3" />
+      <span>Not Paid</span>
+    </div>
+  );
+};
 
 const SeatSelectionView: FC<SeatSelectionViewProps> = ({
   bus,
@@ -281,6 +347,90 @@ const BookingsTab: FC<BookingsTabProps> = ({
   const [viewMode, setViewMode] = useState<"list" | "seats">("list");
   const [actionLoading, setActionLoading] = useState<Record<string, boolean>>({});
 
+  // ✅ REAL-TIME LISTENER: Listen for booking updates
+  useEffect(() => {
+    if (!companyId) return;
+
+    console.log("[BookingsTab] Setting up real-time booking listener...");
+
+    let q;
+
+    // For operators: Only listen to their own schedule bookings
+    if (userProfile?.role === "operator") {
+      const operatorScheduleIds = schedules
+        .filter(s => s.createdBy === user?.uid)
+        .map(s => s.id);
+
+      if (operatorScheduleIds.length === 0) {
+        console.log("[BookingsTab] Operator has no schedules, skipping listener");
+        return;
+      }
+
+      // Split into chunks of 30 for 'in' queries
+      const bookingListeners = [];
+      const chunks = [];
+      for (let i = 0; i < operatorScheduleIds.length; i += 30) {
+        chunks.push(operatorScheduleIds.slice(i, i + 30));
+      }
+
+      chunks.forEach(chunk => {
+        const chunkQuery = query(
+          collection(db, "bookings"),
+          where("companyId", "==", companyId),
+          where("scheduleId", "in", chunk)
+        );
+
+        const unsubscribe = onSnapshot(
+          chunkQuery,
+          (snap) => {
+            const updatedBookings = snap.docs.map(doc => ({
+              id: doc.id,
+              ...doc.data(),
+            })) as Booking[];
+
+            console.log(`[BookingsTab] Operator bookings updated: ${updatedBookings.length}`);
+
+            setBookings(prev => {
+              const bookingMap = new Map(prev.map(b => [b.id, b]));
+              updatedBookings.forEach(b => bookingMap.set(b.id, b));
+              return Array.from(bookingMap.values());
+            });
+          },
+          (error) => console.error("[BookingsTab] Booking listener error:", error)
+        );
+
+        bookingListeners.push(unsubscribe);
+      });
+
+      return () => {
+        bookingListeners.forEach(unsub => unsub());
+      };
+    } 
+    // For admin: Listen to all company bookings
+    else {
+      q = query(
+        collection(db, "bookings"),
+        where("companyId", "==", companyId)
+      );
+
+      const unsubscribe = onSnapshot(
+        q,
+        (snap) => {
+          const updatedBookings = snap.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+          })) as Booking[];
+
+          console.log(`[BookingsTab] Admin bookings updated: ${updatedBookings.length}`);
+          setBookings(updatedBookings);
+        },
+        (error) => console.error("[BookingsTab] Booking listener error:", error)
+      );
+
+      return () => unsubscribe();
+    }
+  }, [companyId, userProfile?.role, user?.uid, schedules, setBookings]);
+
   const getTimestampMillis = useCallback((date: any): number => {
     if (!date) return 0;
     if (date instanceof Date) return date.getTime();
@@ -289,35 +439,29 @@ const BookingsTab: FC<BookingsTabProps> = ({
     return 0;
   }, []);
 
-// Inside BookingsTab.tsx
+  const filteredBookings = useMemo(() => {
+    return bookings.filter((b) => {
+      if (!b) return false;
 
-const filteredBookings = useMemo(() => {
-  return bookings.filter((b) => {
-    if (!b) return false;
+      if (userProfile?.role === 'company_admin') {
+        if (b.companyId !== companyId) return false;
+      } 
+      else if (userProfile?.role === 'operator') {
+        const operatorScheduleIds = schedules
+          .filter(s => s.createdBy === user?.uid)
+          .map(s => s.id);
+        
+        if (!operatorScheduleIds.includes(b.scheduleId)) return false;
+      }
 
-    // --- ACCESS CONTROL LOGIC ---
-    if (userProfile?.role === 'company_admin') {
-      // Admin: Must match companyId (already fetched, but extra safety)
-      if (b.companyId !== companyId) return false;
-    } 
-    else if (userProfile?.role === 'operator') {
-      // Operator: Only show bookings for schedules they created
-      const operatorScheduleIds = schedules
-        .filter(s => s.createdBy === user?.uid)
-        .map(s => s.id);
-      
-      if (!operatorScheduleIds.includes(b.scheduleId)) return false;
-    }
+      const q = searchTerm.toLowerCase();
+      const matchesSearch = 
+        b.bookingReference?.toLowerCase().includes(q) ||
+        b.passengerDetails?.some(p => p.name?.toLowerCase().includes(q));
 
-    // --- SEARCH LOGIC ---
-    const q = searchTerm.toLowerCase();
-    const matchesSearch = 
-      b.bookingReference?.toLowerCase().includes(q) ||
-      b.passengerDetails?.some(p => p.name?.toLowerCase().includes(q));
-
-    return matchesSearch;
-  });
-}, [bookings, schedules, user, userProfile, companyId, searchTerm]);
+      return matchesSearch;
+    });
+  }, [bookings, schedules, user, userProfile, companyId, searchTerm]);
 
   const bookingsByTab = useMemo(() => {
     switch (activeTab) {
@@ -336,17 +480,17 @@ const filteredBookings = useMemo(() => {
     }
   }, [filteredBookings, activeTab]);
 
- const stats = useMemo(() => ({
-  total: filteredBookings.length,
-  confirmed: filteredBookings.filter((b) => b.bookingStatus === "confirmed" && b.paymentStatus === "paid").length,
-  pending: filteredBookings.filter(
-    (b) => b.bookingStatus === "pending" || (b.bookingStatus === "confirmed" && b.paymentStatus === "pending")
-  ).length,
-  cancelled: filteredBookings.filter((b) => b.bookingStatus === "cancelled").length,
-  totalRevenue: filteredBookings
-    .filter((b) => b.paymentStatus === "paid")
-    .reduce((sum, b) => sum + (b.totalAmount || 0), 0),
-}), [filteredBookings])
+  const stats = useMemo(() => ({
+    total: filteredBookings.length,
+    confirmed: filteredBookings.filter((b) => b.bookingStatus === "confirmed" && b.paymentStatus === "paid").length,
+    pending: filteredBookings.filter(
+      (b) => b.bookingStatus === "pending" || (b.bookingStatus === "confirmed" && b.paymentStatus === "pending")
+    ).length,
+    cancelled: filteredBookings.filter((b) => b.bookingStatus === "cancelled").length,
+    totalRevenue: filteredBookings
+      .filter((b) => b.paymentStatus === "paid")
+      .reduce((sum, b) => sum + (b.totalAmount || 0), 0),
+  }), [filteredBookings])
 
   const totalPages = Math.ceil(bookingsByTab.length / pageSize);
   const startIndex = (currentPage - 1) * pageSize;
@@ -555,7 +699,8 @@ const filteredBookings = useMemo(() => {
                   <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
                   <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase">Seats</th>
                   <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase">Amount</th>
-                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase">Payment</th>
+                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase">Booking Status</th>
                   {userProfile?.role === 'operator' && (
                     <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
                   )}
@@ -564,7 +709,7 @@ const filteredBookings = useMemo(() => {
               <tbody className="divide-y divide-gray-200">
                 {paginatedBookings.length === 0 ? (
                   <tr>
-                    <td colSpan={userProfile?.role === 'operator' ? 8 : 7} className="px-6 py-12 text-center text-gray-500">
+                    <td colSpan={userProfile?.role === 'operator' ? 9 : 8} className="px-6 py-12 text-center text-gray-500">
                       No bookings found matching your criteria
                     </td>
                   </tr>
@@ -631,24 +776,22 @@ const filteredBookings = useMemo(() => {
                           </div>
                         </td>
                         <td className="px-6 py-4">
-                          <div className="flex flex-col">
-                            <span className="text-sm font-medium text-gray-900">
-                              MWK {booking.totalAmount?.toLocaleString() || "0"}
-                            </span>
-                            {booking.paymentProvider && (
-                              <span className="text-xs text-gray-500">{booking.paymentProvider}</span>
-                            )}
-                          </div>
+                          <span className="text-sm font-medium text-gray-900">
+                            MWK {booking.totalAmount?.toLocaleString() || "0"}
+                          </span>
+                        </td>
+                        {/* ✅ NEW: Payment Method Column */}
+                        <td className="px-6 py-4">
+                          <PaymentMethodBadge
+                            paymentMethod={booking.paymentMethod}
+                            paymentProvider={booking.paymentProvider}
+                            paymentStatus={booking.paymentStatus}
+                          />
                         </td>
                         <td className="px-6 py-4">
-                          <div className="flex flex-col gap-1">
-                            <span className={getStatusBadge(booking.bookingStatus)}>
-                              {booking.bookingStatus}
-                            </span>
-                            <span className={getStatusBadge(booking.paymentStatus, "payment")}>
-                              {booking.paymentStatus}
-                            </span>
-                          </div>
+                          <span className={getStatusBadge(booking.bookingStatus)}>
+                            {booking.bookingStatus}
+                          </span>
                         </td>
                         {userProfile?.role === 'operator' && (
                           <td className="px-6 py-4">
@@ -811,9 +954,11 @@ const filteredBookings = useMemo(() => {
                 <span className={getStatusBadge(selectedBooking.bookingStatus)}>
                   {selectedBooking.bookingStatus}
                 </span>
-                <span className={getStatusBadge(selectedBooking.paymentStatus, "payment")}>
-                  {selectedBooking.paymentStatus}
-                </span>
+                <PaymentMethodBadge
+                  paymentMethod={selectedBooking.paymentMethod}
+                  paymentProvider={selectedBooking.paymentProvider}
+                  paymentStatus={selectedBooking.paymentStatus}
+                />
               </div>
 
               {/* Route & Schedule */}
@@ -893,7 +1038,11 @@ const filteredBookings = useMemo(() => {
                   </div>
                   <div>
                     <p className="text-sm text-gray-600">Payment Method</p>
-                    <p className="font-medium text-gray-900">{selectedBooking.paymentProvider || "N/A"}</p>
+                    <PaymentMethodBadge
+                      paymentMethod={selectedBooking.paymentMethod}
+                      paymentProvider={selectedBooking.paymentProvider}
+                      paymentStatus={selectedBooking.paymentStatus}
+                    />
                   </div>
                 </div>
               </div>

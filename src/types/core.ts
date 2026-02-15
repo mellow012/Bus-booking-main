@@ -50,6 +50,7 @@ export interface Company extends FirestoreDocument {
     website?: string;
   };
   metadata?: Record<string, any>;
+  branches?: string[]
 }
 
 export interface UserProfile extends FirestoreDocument {
@@ -78,6 +79,8 @@ export interface UserProfile extends FirestoreDocument {
   passwordSet?: boolean;
   lastLogin?: Date;
   metadata?: Record<string, any>;
+  branch?: string[]; // Array of branch names the operator is associated with
+  region?: string; // Primary region field for operators (e.g., "Lilongwe", "Blantyre", "Mzuzu")
 }
 
 
@@ -138,8 +141,16 @@ export interface Route extends FirestoreDocument {
   isActive: boolean;
   baseFare: number; // Base ticket price in MWK
   pricePerKm?: number;
+  assignedOperators?: RouteOperator[]; // Optional list of operator IDs responsible for this route
   associatedBusIds?: string[]; // Optional list of bus IDs that can serve this route
   assignedOperatorIds?: string[]; // Optional list of operator IDs responsible for this route
+}
+interface RouteOperator {
+  operatorId: string;
+  operatorName: string;
+  operatorEmail: string;
+  region: string;
+  assignedAt: Date;
 }
 
 export interface Schedule {
@@ -274,4 +285,19 @@ export interface GroupBookingFormData {
   organizerPhone: string;
   seatsRequested: number;
   notes: string;
+}
+export interface Operator {
+  id: string;
+  uid: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  role: 'operator';
+  companyId: string;
+  region: string;        // Primary location field - "Lilongwe", "Blantyre", "Mzuzu"
+  branch?: string[];       // Alternative/backup field
+  phoneNumber?: string;
+  createdAt: Date;
+  updatedAt: Date;
+  passwordSet: boolean;
 }

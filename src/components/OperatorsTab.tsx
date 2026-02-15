@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-  collection, query, where, getDocs, updateDoc, doc, deleteDoc,
+  collection, query, where, getDocs, updateDoc, doc, deleteDoc, getDoc,
   serverTimestamp, Timestamp
 } from 'firebase/firestore';
 import { db, auth } from '@/lib/firebaseConfig';
@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import Modal from '@/components/Modals';
 import {
   Trash2, UserPlus, ShieldCheck, Ban, RefreshCw, Send,
-  Users, Truck, ChevronDown
+  Users, Truck, ChevronDown, MapPin, Edit2, X
 } from 'lucide-react';
 
 type TeamRole = 'operator' | 'conductor';
@@ -20,6 +20,7 @@ interface TeamMember {
   name: string;
   role: TeamRole;
   status: 'active' | 'inactive' | 'pending';
+  region?: string;
   createdAt: Timestamp;
   createdBy: string;
   companyId: string;
@@ -29,6 +30,7 @@ interface TeamMember {
 
 interface TeamManagementTabProps {
   companyId: string;
+  companyBranches?: string[]; // Add branches from company
   setError: (msg: string) => void;
   setSuccess: (msg: string) => void;
 }
@@ -59,29 +61,66 @@ const ROLE_CONFIG: Record<TeamRole, {
   },
 };
 
-const TeamManagementTab: React.FC<TeamManagementTabProps> = ({ companyId, setError, setSuccess }) => {
+/**
+ * Helper function to safely parse branches from string or array
+ */
+const parseBranches = (branchesData: any): string[] => {
+  if (!branchesData) return [];
+  
+  // If it's already an array, return it
+  if (Array.isArray(branchesData)) {
+    return branchesData.filter(b => typeof b === 'string').map(b => b.trim());
+  }
+  
+  // If it's a string, split by comma
+  if (typeof branchesData === 'string') {
+    return branchesData
+      .split(",")
+      .map(b => b.trim())
+      .filter(b => b.length > 0);
+  }
+  
+  return [];
+};
+
+const TeamManagementTab: React.FC<TeamManagementTabProps> = ({ companyId, companyBranches = [], setError, setSuccess }) => {
   const [members, setMembers] = useState<TeamMember[]>([]);
+  const [branches, setBranches] = useState<string[]>([]);
   const [companyName, setCompanyName] = useState<string>('');
   const [activeTab, setActiveTab] = useState<TeamRole>('operator');
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingMember, setEditingMember] = useState<TeamMember | null>(null);
   const [addingRole, setAddingRole] = useState<TeamRole>('operator');
-  const [newMember, setNewMember] = useState({ name: '', email: '' });
+  const [newMember, setNewMember] = useState({ name: '', email: '', region: '' });
+  const [editData, setEditData] = useState<{ region: string; status: 'active' | 'inactive' | 'pending' }>({ 
+    region: '', 
+    status: 'active' 
+  });
   const [actionLoading, setActionLoading] = useState(false);
   const [resendingInvite, setResendingInvite] = useState<string | null>(null);
   const currentUser = auth.currentUser;
 
+  // Single useEffect to fetch all data
   useEffect(() => {
     if (!companyId || !currentUser) return;
 
     const fetchData = async () => {
       try {
-        const companySnap = await getDocs(
-          query(collection(db, 'companies'), where('__name__', '==', companyId))
-        );
-        if (!companySnap.empty) {
-          setCompanyName(companySnap.docs[0].data().name || 'Your Company');
+        // Fetch company data by ID (more efficient)
+        const companyRef = doc(db, 'companies', companyId);
+        const companySnap = await getDoc(companyRef);
+        
+        if (companySnap.exists()) {
+          const companyData = companySnap.data();
+          setCompanyName(companyData.name || 'Your Company');
+          
+          // Parse branches from Firestore company data
+          const parsedBranches = parseBranches(companyData.branches);
+          setBranches(parsedBranches);
         }
 
+        // Fetch team members
         const q = query(collection(db, 'operators'), where('companyId', '==', companyId));
         const snapshot = await getDocs(q);
         const data = snapshot.docs.map(d => ({
@@ -100,30 +139,49 @@ const TeamManagementTab: React.FC<TeamManagementTabProps> = ({ companyId, setErr
   }, [companyId, currentUser, setError]);
 
   const refreshMembers = async () => {
-    const q = query(collection(db, 'operators'), where('companyId', '==', companyId));
-    const snapshot = await getDocs(q);
-    const data = snapshot.docs.map(d => ({
-      id: d.id,
-      ...d.data(),
-      createdAt: d.data().createdAt,
-      invitationSentAt: d.data().invitationSentAt,
-    })) as TeamMember[];
-    setMembers(data);
+    try {
+      const q = query(collection(db, 'operators'), where('companyId', '==', companyId));
+      const snapshot = await getDocs(q);
+      const data = snapshot.docs.map(d => ({
+        id: d.id,
+        ...d.data(),
+        createdAt: d.data().createdAt,
+        invitationSentAt: d.data().invitationSentAt,
+      })) as TeamMember[];
+      setMembers(data);
+    } catch (err: any) {
+      setError(`Failed to refresh members: ${err.message}`);
+    }
   };
 
   const openAddModal = (role: TeamRole) => {
     setAddingRole(role);
-    setNewMember({ name: '', email: '' });
+    setNewMember({ name: '', email: '', region: '' });
     setShowAddModal(true);
+  };
+
+  const openEditModal = (member: TeamMember) => {
+    setEditingMember(member);
+    setEditData({
+      region: member.region || '',
+      status: member.status,
+    });
+    setShowEditModal(true);
   };
 
   const handleAddMember = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentUser) return setError('You must be logged in');
 
+    // Validate region for operators
+    if (addingRole === 'operator' && !newMember.region) {
+      return setError('Region is required for operators');
+    }
+
     const payload = {
       name: newMember.name.trim(),
       email: newMember.email.trim(),
+      region: newMember.region.trim() || undefined,
       role: addingRole,
       companyId,
       companyName,
@@ -151,10 +209,53 @@ const TeamManagementTab: React.FC<TeamManagementTabProps> = ({ companyId, setErr
 
       await refreshMembers();
       setShowAddModal(false);
-      setNewMember({ name: '', email: '' });
+      setNewMember({ name: '', email: '', region: '' });
       setSuccess(`Invitation sent to ${payload.email}!`);
     } catch (err: any) {
       setError(err.message || 'Failed to send invite');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleEditMember = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingMember) return;
+
+    // Validate region for operators
+    if (editingMember.role === 'operator' && !editData.region) {
+      return setError('Region is required for operators');
+    }
+
+    setActionLoading(true);
+    try {
+      const updatePayload: any = {
+        status: editData.status,
+        updatedAt: serverTimestamp(),
+      };
+
+      // Only update region if role is operator
+      if (editingMember.role === 'operator') {
+        updatePayload.region = editData.region;
+      }
+
+      await updateDoc(doc(db, 'operators', editingMember.id), updatePayload);
+
+      setMembers(members.map(m => 
+        m.id === editingMember.id 
+          ? { 
+              ...m, 
+              status: editData.status, 
+              region: editingMember.role === 'operator' ? editData.region : m.region 
+            } 
+          : m
+      ));
+
+      setShowEditModal(false);
+      setEditingMember(null);
+      setSuccess('Team member updated successfully!');
+    } catch (err: any) {
+      setError(`Failed to update member: ${err.message}`);
     } finally {
       setActionLoading(false);
     }
@@ -315,6 +416,9 @@ const TeamManagementTab: React.FC<TeamManagementTabProps> = ({ companyId, setErr
             <tr>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
+              {activeTab === 'operator' && (
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Region</th>
+              )}
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
@@ -323,7 +427,7 @@ const TeamManagementTab: React.FC<TeamManagementTabProps> = ({ companyId, setErr
           <tbody className="divide-y divide-gray-200">
             {filteredMembers.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-6 py-16 text-center">
+                <td colSpan={activeTab === 'operator' ? 6 : 5} className="px-6 py-16 text-center">
                   <div className="flex flex-col items-center gap-3 text-gray-400">
                     {roleConfig.icon}
                     <p className="text-sm">No {roleConfig.plural.toLowerCase()} yet.</p>
@@ -348,6 +452,18 @@ const TeamManagementTab: React.FC<TeamManagementTabProps> = ({ companyId, setErr
                     </div>
                   </td>
                   <td className="px-6 py-4 text-gray-600">{member.email}</td>
+                  {activeTab === 'operator' && (
+                    <td className="px-6 py-4">
+                      {member.region ? (
+                        <div className="flex items-center gap-1 text-sm text-gray-600">
+                          <MapPin className="w-3 h-3 text-gray-400" />
+                          <span>{member.region}</span>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-gray-400">Not set</span>
+                      )}
+                    </td>
+                  )}
                   <td className="px-6 py-4">
                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${ROLE_CONFIG[member.role]?.badgeColor ?? 'bg-gray-100 text-gray-700'}`}>
                       {ROLE_CONFIG[member.role]?.label ?? member.role}
@@ -370,6 +486,15 @@ const TeamManagementTab: React.FC<TeamManagementTabProps> = ({ companyId, setErr
                             : <Send className="w-4 h-4" />}
                         </Button>
                       )}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => openEditModal(member)}
+                        title="Edit"
+                        className="text-gray-500 hover:text-green-600"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </Button>
                       <Button
                         variant="ghost"
                         size="sm"
@@ -462,13 +587,47 @@ const TeamManagementTab: React.FC<TeamManagementTabProps> = ({ companyId, setErr
             </p>
           </div>
 
+          {/* Region field - only for operators */}
+          {addingRole === 'operator' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Operating Region / Branch *
+              </label>
+              {branches && branches.length > 0 ? (
+                <div className="relative">
+                  <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <select
+                    value={newMember.region}
+                    onChange={e => setNewMember({ ...newMember, region: e.target.value })}
+                    className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none appearance-none"
+                    required
+                  >
+                    <option value="">Select Region</option>
+                    {branches.map(branch => (
+                      <option key={branch} value={branch}>{branch}</option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                  <p className="text-sm text-yellow-800">
+                    No branches configured. Please add branches in your company profile first.
+                  </p>
+                </div>
+              )}
+              <p className="mt-1 text-xs text-gray-500">
+                Operators can only manage schedules and bookings from their assigned region.
+              </p>
+            </div>
+          )}
+
           <div className={`rounded-lg p-4 border ${addingRole === 'operator' ? 'bg-blue-50 border-blue-200' : 'bg-purple-50 border-purple-200'}`}>
             <p className={`text-sm font-medium ${addingRole === 'operator' ? 'text-blue-800' : 'text-purple-800'}`}>
               {ROLE_CONFIG[addingRole].label} Permissions
             </p>
             <p className={`text-xs mt-1 ${addingRole === 'operator' ? 'text-blue-700' : 'text-purple-700'}`}>
               {addingRole === 'operator'
-                ? 'Can create and manage schedules, handle bookings, and support daily operations.'
+                ? 'Can create and manage schedules for routes in their region, handle bookings, and support daily operations.'
                 : 'Can view only their assigned trips and related passenger information.'}
             </p>
           </div>
@@ -495,6 +654,113 @@ const TeamManagementTab: React.FC<TeamManagementTabProps> = ({ companyId, setErr
             </Button>
           </div>
         </form>
+      </Modal>
+
+      {/* Edit Member Modal */}
+      <Modal
+        isOpen={showEditModal}
+        onClose={() => {
+          setShowEditModal(false);
+          setEditingMember(null);
+        }}
+        title={`Edit ${editingMember?.name || 'Team Member'}`}
+      >
+        {editingMember && (
+          <form onSubmit={handleEditMember} className="space-y-5">
+            {/* Member Info - Read Only */}
+            <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+              <div>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Name</p>
+                <p className="text-sm font-medium text-gray-900 mt-1">{editingMember.name}</p>
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Email</p>
+                <p className="text-sm font-medium text-gray-900 mt-1">{editingMember.email}</p>
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Role</p>
+                <p className="text-sm font-medium text-gray-900 mt-1">{ROLE_CONFIG[editingMember.role]?.label}</p>
+              </div>
+            </div>
+
+            {/* Region - Editable for operators only */}
+            {editingMember.role === 'operator' && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Operating Region / Branch
+                </label>
+                {branches && branches.length > 0 ? (
+                  <div className="relative">
+                    <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <select
+                      value={editData.region}
+                      onChange={e => setEditData({ ...editData, region: e.target.value })}
+                      className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none appearance-none"
+                      required
+                    >
+                      <option value="">Select Region</option>
+                      {branches.map(branch => (
+                        <option key={branch} value={branch}>{branch}</option>
+                      ))}
+                    </select>
+                  </div>
+                ) : (
+                  <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                    <p className="text-sm text-yellow-800">
+                      No branches configured in your company profile.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Status */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+              <select
+                value={editData.status}
+                onChange={e => setEditData({ ...editData, status: e.target.value as 'active' | 'inactive' | 'pending' })}
+                className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none appearance-none"
+              >
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+                <option value="pending">Pending</option>
+              </select>
+            </div>
+
+            <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+              <p className="text-sm text-blue-900">
+                <span className="font-semibold">Note:</span> You can only edit company-related information here. 
+                To change the member's personal details, they must update their own profile.
+              </p>
+            </div>
+
+            <div className="flex justify-end gap-3 pt-3 border-t">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setShowEditModal(false);
+                  setEditingMember(null);
+                }}
+                disabled={actionLoading}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={actionLoading}
+                className="flex items-center gap-2"
+              >
+                {actionLoading ? (
+                  <><RefreshCw className="w-4 h-4 animate-spin" /> Saving...</>
+                ) : (
+                  <>Save Changes</>
+                )}
+              </Button>
+            </div>
+          </form>
+        )}
       </Modal>
     </div>
   );

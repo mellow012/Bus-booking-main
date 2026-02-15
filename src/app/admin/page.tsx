@@ -126,8 +126,22 @@ const STATUS_CONFIG = {
 const validateEmail = (email: string): boolean => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 const validatePhone = (phone: string): boolean => !phone || /^\+?[\d\s-()]{8,15}$/.test(phone);
 
-const formatDate = (date: Date | Timestamp): string => {
-  const dateObj = date instanceof Timestamp ? date.toDate() : date;
+// Fixed formatDate function to handle string, Date, and Timestamp
+const formatDate = (date: Date | Timestamp | string | undefined): string => {
+  if (!date) return '';
+  
+  let dateObj: Date;
+  
+  if (date instanceof Timestamp) {
+    dateObj = date.toDate();
+  } else if (date instanceof Date) {
+    dateObj = date;
+  } else if (typeof date === 'string') {
+    dateObj = new Date(date);
+  } else {
+    return '';
+  }
+
   return new Intl.DateTimeFormat('en-US', {
     year: 'numeric',
     month: 'short',

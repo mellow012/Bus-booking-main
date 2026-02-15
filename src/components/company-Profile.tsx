@@ -14,15 +14,21 @@ import {
   Calendar,
   ChevronRight,
   Navigation,
-  FileText
+  FileText,
+  MapPin,
+  Plus,
+  X
 } from "lucide-react";
 import { OperatingHours, Company } from "@/types";
+import { Button } from "@/components/ui/button";
 
 interface CompanyProfileTabProps {
   company: Company | null;
   setCompany: React.Dispatch<React.SetStateAction<Company | null>>;
   schedules?: any[];
   routes?: any[];
+  setError: (msg: string) => void;
+  setSuccess: (msg: string) => void;
 }
 
 const DEFAULT_HOURS: Record<string, OperatingHours> = {
@@ -35,11 +41,36 @@ const DEFAULT_HOURS: Record<string, OperatingHours> = {
   Sunday: { open: "00:00", close: "00:00", closed: true },
 };
 
+/**
+ * Helper function to safely parse branches from Company data
+ * Handles both string and array formats
+ */
+const parseBranches = (branchesData: any): string[] => {
+  if (!branchesData) return [];
+  
+  // If it's already an array, return it
+  if (Array.isArray(branchesData)) {
+    return branchesData.filter(b => typeof b === 'string').map(b => b.trim());
+  }
+  
+  // If it's a string, split by comma
+  if (typeof branchesData === 'string') {
+    return branchesData
+      .split(",")
+      .map(b => b.trim())
+      .filter(b => b.length > 0);
+  }
+  
+  return [];
+};
+
 const CompanyProfileTab: FC<CompanyProfileTabProps> = ({ 
   company, 
   setCompany, 
   schedules = [], 
-  routes = [] 
+  routes = [],
+  setError,
+  setSuccess
 }) => {
   const { userProfile, refreshUserProfile } = useAuth();
   const router = useRouter();
@@ -49,7 +80,10 @@ const CompanyProfileTab: FC<CompanyProfileTabProps> = ({
   const [actionLoading, setActionLoading] = useState(false);
   const [isInitialSetup, setIsInitialSetup] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
-  const [success, setSuccess] = useState<string>("");
+  const [newBranch, setNewBranch] = useState("");
+  const [branches, setBranches] = useState<string[]>(
+    company ? parseBranches(company.branches) : []
+  );
 
   // Logic for live departures
   const todaysSchedules = (schedules || []).filter(s => {
@@ -67,6 +101,30 @@ const CompanyProfileTab: FC<CompanyProfileTabProps> = ({
       setEditData(company);
     }
   }, [userProfile, company]);
+
+  useEffect(() => {
+    if (company?.branches) {
+      setBranches(parseBranches(company.branches));
+    }
+  }, [company?.branches]);
+
+  const handleAddBranch = () => {
+    const trimmed = newBranch.trim();
+    if (!trimmed) {
+      setError("Branch name cannot be empty");
+      return;
+    }
+    if (branches.includes(trimmed)) {
+      setError("This branch already exists");
+      return;
+    }
+    setBranches([...branches, trimmed]);
+    setNewBranch("");
+  };
+
+  const handleRemoveBranch = (branchToRemove: string) => {
+    setBranches(branches.filter(b => b !== branchToRemove));
+  };
 
   const handleHoursChange = (day: string, field: keyof OperatingHours, value: any) => {
     setEditData(prev => {
@@ -86,6 +144,11 @@ const CompanyProfileTab: FC<CompanyProfileTabProps> = ({
     e.preventDefault();
     if (!editData || !userProfile) return;
 
+    if (branches.length === 0) {
+      setError("Please add at least one branch/region");
+      return;
+    }
+
     setActionLoading(true);
     try {
       const companyRef = doc(db, "companies", editData.id);
@@ -93,6 +156,7 @@ const CompanyProfileTab: FC<CompanyProfileTabProps> = ({
       
       const payload = {
         ...editData,
+        branches: branches.join(", "), // Store as comma-separated string
         updatedAt: now,
         operatingHours: editData.operatingHours || DEFAULT_HOURS
       };
@@ -116,6 +180,7 @@ const CompanyProfileTab: FC<CompanyProfileTabProps> = ({
       }
     } catch (err: any) {
       console.error(err);
+      setError("Failed to update profile");
     } finally {
       setActionLoading(false);
     }
@@ -165,6 +230,9 @@ const CompanyProfileTab: FC<CompanyProfileTabProps> = ({
             <div className="flex flex-wrap justify-center md:justify-start gap-3">
               <span className="bg-white/20 backdrop-blur-md px-4 py-1 rounded-full text-sm font-bold border border-white/10">
                 {company.status || 'Active'}
+              </span>
+              <span className="bg-blue-400/30 backdrop-blur-md px-4 py-1 rounded-full text-sm font-bold border border-white/10">
+                {branches.length} {branches.length === 1 ? 'Branch' : 'Branches'}
               </span>
               <span className="bg-blue-400/30 backdrop-blur-md px-4 py-1 rounded-full text-sm font-bold border border-white/10">
                 {routes.length} Active Routes
@@ -217,7 +285,78 @@ const CompanyProfileTab: FC<CompanyProfileTabProps> = ({
             </div>
           </div>
 
+          {/* Branches Section */}
           <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-gray-100">
+            <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-3 mb-6">
+              <MapPin className="text-green-500" size={28}/> Operating Branches
+            </h2>
+            
+            <div className="space-y-4 mb-6">
+              <p className="text-sm text-gray-600">
+                Add all branches/regions where your company operates. These will be used to assign operators to their respective locations.
+              </p>
+              
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={newBranch}
+                  onChange={(e) => setNewBranch(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddBranch())}
+                  placeholder="e.g., Lilongwe, Blantyre, Mzuzu"
+                  className="flex-1 px-4 py-3 bg-gray-50 border-2 border-transparent focus:border-green-500 focus:bg-white rounded-xl transition-all outline-none"
+                />
+                <Button
+                  type="button"
+                  onClick={handleAddBranch}
+                  className="px-6 bg-green-600 hover:bg-green-700 text-white rounded-xl flex items-center gap-2"
+                >
+                  <Plus size={18} /> Add
+                </Button>
+              </div>
+            </div>
+
+            {branches.length > 0 ? (
+              <div className="space-y-2">
+                <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">
+                  Active Branches ({branches.length})
+                </p>
+                <div className="space-y-2 max-h-64 overflow-y-auto">
+                  {branches.map((branch, index) => (
+                    <div
+                      key={index}
+                      className="flex items-center justify-between p-3 bg-green-50 border border-green-100 rounded-xl group hover:bg-green-100 transition-colors"
+                    >
+                      <div className="flex items-center gap-2">
+                        <MapPin size={16} className="text-green-600" />
+                        <span className="font-semibold text-gray-900">{branch}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveBranch(branch)}
+                        className="text-red-500 hover:text-red-700 opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-red-50 rounded-lg"
+                      >
+                        <X size={16} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-8 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200">
+                <MapPin className="mx-auto text-gray-300 mb-2" size={32} />
+                <p className="text-sm text-gray-500 font-medium">No branches added yet</p>
+                <p className="text-xs text-gray-400 mt-1">Add your first branch to get started</p>
+              </div>
+            )}
+
+            <div className="mt-4 p-4 bg-yellow-50 rounded-xl border border-yellow-100">
+              <p className="text-xs text-yellow-800">
+                <strong>Note:</strong> Operators will be assigned to these branches. Make sure to add all your operating locations.
+              </p>
+            </div>
+          </div>
+
+          <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-gray-100 lg:col-span-2">
             <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-3 mb-8">
               <Clock className="text-blue-500" size={28}/> Operating Hours
             </h2>
@@ -252,7 +391,10 @@ const CompanyProfileTab: FC<CompanyProfileTabProps> = ({
           <div className="lg:col-span-2 flex items-center justify-between bg-blue-50 p-6 rounded-[2rem]">
             <p className="text-blue-700 text-sm font-medium">Changes must be saved to apply.</p>
             <div className="flex gap-4">
-              <button type="button" onClick={() => setIsEditing(false)} className="px-8 py-4 font-bold text-gray-500">Cancel</button>
+              <button type="button" onClick={() => {
+                setIsEditing(false);
+                setBranches(company ? parseBranches(company.branches) : []);
+              }} className="px-8 py-4 font-bold text-gray-500">Cancel</button>
               <button type="submit" disabled={actionLoading} className="bg-blue-600 text-white px-12 py-4 rounded-2xl font-black flex items-center gap-2">
                 {actionLoading ? <Loader2 className="animate-spin" /> : <Save size={20}/>} Save Profile
               </button>
@@ -262,6 +404,41 @@ const CompanyProfileTab: FC<CompanyProfileTabProps> = ({
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 space-y-8">
+            {/* Branches Display Card */}
+            <div className="bg-white rounded-[2rem] p-8 shadow-sm border border-gray-100">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-2xl font-bold flex items-center gap-3">
+                  <MapPin className="text-green-600" size={28}/> 
+                  Our Branches
+                </h3>
+                <span className="bg-green-50 text-green-700 px-4 py-1 rounded-full text-xs font-black uppercase tracking-widest">
+                  {branches.length} {branches.length === 1 ? 'Location' : 'Locations'}
+                </span>
+              </div>
+
+              {branches.length > 0 ? (
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  {branches.map((branch, index) => (
+                    <div
+                      key={index}
+                      className="flex items-center gap-3 p-4 bg-gradient-to-br from-green-50 to-white rounded-2xl border border-green-100"
+                    >
+                      <div className="w-10 h-10 rounded-xl bg-green-100 flex items-center justify-center flex-shrink-0">
+                        <MapPin size={20} className="text-green-600" />
+                      </div>
+                      <span className="font-bold text-gray-900">{branch}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-12 bg-gray-50 rounded-[2rem] border-2 border-dashed border-gray-100">
+                  <MapPin className="mx-auto text-gray-300 mb-4" size={48} />
+                  <p className="text-gray-500 font-bold">No branches configured</p>
+                  <p className="text-sm text-gray-400 mt-2">Add branches in edit mode</p>
+                </div>
+              )}
+            </div>
+
             {/* Live Board */}
             <div className="bg-white rounded-[2rem] p-8 shadow-sm border border-gray-100">
               <div className="flex items-center justify-between mb-8">

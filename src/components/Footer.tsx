@@ -121,7 +121,7 @@ const Footer: React.FC = () => {
                 </div>
                 <div>
                   <span className="text-2xl font-bold bg-gradient-to-r from-white to-blue-300 bg-clip-text text-transparent group-hover:from-blue-300 group-hover:to-white transition-all duration-300">
-                    BooknPay
+                    TibhukeBus
                   </span>
                   <div className="text-xs text-blue-400 -mt-1">Smart Travel Platform</div>
                 </div>
@@ -151,7 +151,7 @@ const Footer: React.FC = () => {
                   </div>
                   <div>
                     <div className="text-sm text-gray-400">Email Support</div>
-                    <div className="font-medium">support@booknpay.com</div>
+                    <div className="font-medium">support@tibhukebus.com</div>
                   </div>
                 </div>
 
@@ -312,7 +312,7 @@ const Footer: React.FC = () => {
         <div className="py-8 border-t border-gray-800/50">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
             <div className="flex items-center space-x-2 text-gray-300">
-              <span>© {currentYear} BooknPay. Made with</span>
+              <span>© {currentYear} TibhukeBus. Made with</span>
               <Heart className="w-4 h-4 text-red-500 animate-pulse" />
               <span>for travelers everywhere.</span>
             </div>
