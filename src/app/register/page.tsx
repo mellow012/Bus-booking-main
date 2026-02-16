@@ -425,7 +425,7 @@ export default function Register() {
         {/* Logo */}
         <div className="flex justify-center">
           <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center shadow-lg">
-            <span className="text-white font-bold text-3xl">B</span>
+            <span className="text-white font-bold text-3xl">TB</span>
           </div>
         </div>
         
