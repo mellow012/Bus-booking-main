@@ -34,7 +34,7 @@
     "lucide-react": "^0.525.0",
     "micro": "^10.0.1",
     "nestjs-rate-limiter": "^3.1.0",
-    "next": "^15.3.4",
+    "next": "15.3.8",
     "nodemailer": "^7.0.5",
     "paychangu": "^2.1.1",
     "paychangu-js": "^2.1.2",
