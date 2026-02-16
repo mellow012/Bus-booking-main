@@ -5,7 +5,7 @@ interface StatCardProps {
   title: string;
   value: string | number;
   icon: LucideIcon;
-  color?: 'blue' | 'green' | 'purple' | 'orange' | 'red' | 'yellow';
+  color?: 'blue' | 'green' | 'purple' | 'orange' | 'red' | 'yellow'| 'teal' | 'indigo';
   trend?: {
     value: number;
     label: string;
@@ -44,6 +44,16 @@ const colorVariants = {
     bg: 'bg-yellow-50',
     icon: 'text-yellow-600',
     text: 'text-yellow-600',
+  },
+  teal: {
+    bg: 'bg-teal-50',
+    icon: 'text-teal-600',
+    text: 'text-teal-600',
+  },
+  indigo: {
+    bg: 'bg-indigo-50',
+    icon: 'text-indigo-600',
+    text: 'text-indigo-600',
   },
 };
 

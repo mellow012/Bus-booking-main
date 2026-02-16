@@ -126,15 +126,27 @@ const STATUS_CONFIG = {
 const validateEmail = (email: string): boolean => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 const validatePhone = (phone: string): boolean => !phone || /^\+?[\d\s-()]{8,15}$/.test(phone);
 
-const formatDate = (date: Date | Timestamp): string => {
-  const dateObj = date instanceof Timestamp ? date.toDate() : date;
-  return new Intl.DateTimeFormat('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(dateObj);
+const convertTimestamp = (timestamp: any): Date => {
+  if (timestamp instanceof Timestamp) return timestamp.toDate();
+  if (timestamp && typeof timestamp.toDate === 'function') return timestamp.toDate();
+  if (timestamp instanceof Date) return timestamp;
+  if (typeof timestamp === 'string' || typeof timestamp === 'number') return new Date(timestamp);
+  return new Date();
+};
+
+const formatDate = (date: Date | Timestamp | string | number | undefined): string => {
+  try {
+    const dateObj = convertTimestamp(date);
+    return new Intl.DateTimeFormat('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(dateObj);
+  } catch (error) {
+    return 'Invalid Date';
+  }
 };
 
 const debounce = <T extends (...args: any[]) => any>(func: T, wait: number) => {
@@ -143,15 +155,6 @@ const debounce = <T extends (...args: any[]) => any>(func: T, wait: number) => {
     clearTimeout(timeout);
     timeout = setTimeout(() => func(...args), wait);
   };
-};
-
-// Convert Firestore timestamp to Date
-const convertTimestamp = (timestamp: any): Date => {
-  if (timestamp instanceof Timestamp) return timestamp.toDate();
-  if (timestamp && typeof timestamp.toDate === 'function') return timestamp.toDate();
-  if (timestamp instanceof Date) return timestamp;
-  if (typeof timestamp === 'string' || typeof timestamp === 'number') return new Date(timestamp);
-  return new Date();
 };
 
 // Bookings Tab Component
@@ -204,7 +207,7 @@ const BookingsTab: React.FC<{
         const company = companies.find(c => c.id === booking.companyId);
         const schedule = schedules.find(s => s.id === booking.scheduleId);
         const route = schedule ? routes.find(r => r.id === schedule.routeId) : undefined;
-        const createdAt = convertTimestamp(booking.createdAt);
+        const createdAt = booking.createdAt;
 
         return [
           booking.bookingReference,
@@ -300,7 +303,7 @@ const BookingsTab: React.FC<{
                   const company = companies.find(c => c.id === booking.companyId);
                   const schedule = schedules.find(s => s.id === booking.scheduleId);
                   const route = schedule ? routes.find(r => r.id === schedule.routeId) : undefined;
-                  const createdAt = convertTimestamp(booking.createdAt);
+                  const createdAt = booking.createdAt;
                   const primaryPassenger = booking.passengerDetails?.[0];
 
                   return (
@@ -559,7 +562,7 @@ export default function SuperAdminDashboard() {
           return {
             id: doc.id,
             ...data,
-            status: data.status || 'pending', // Default to 'pending' if status is missing
+            status: data.status || 'pending',
             createdAt: convertTimestamp(data.createdAt),
             updatedAt: convertTimestamp(data.updatedAt),
           } as Company;
@@ -900,8 +903,9 @@ export default function SuperAdminDashboard() {
 
         // Handle date sorting
         if (sortBy === 'createdAt') {
-          aValue = aValue instanceof Date ? aValue.getTime() : new Date(aValue).getTime();
-          bValue = bValue instanceof Date ? bValue.getTime() : new Date(bValue).getTime();
+          const aTime = aValue instanceof Date ? aValue.getTime() : new Date(String(aValue)).getTime();
+          const bTime = bValue instanceof Date ? bValue.getTime() : new Date(String(bValue)).getTime();
+          return sortOrder === 'asc' ? aTime - bTime : bTime - aTime;
         } else {
           aValue = String(aValue || '').toLowerCase();
           bValue = String(bValue || '').toLowerCase();
