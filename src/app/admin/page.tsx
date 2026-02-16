@@ -54,6 +54,7 @@ import {
 import TabButton from '@/components/tabButton';
 import CompanyProfileTab from '@/components/company-Profile';
 import StatCard from '@/components/startCard';
+import { ms } from 'zod/v4/locales';
 
 // Types and Interfaces
 type StatusFilter = 'all' | 'active' | 'inactive' | 'pending';
@@ -1373,6 +1374,8 @@ export default function SuperAdminDashboard() {
             <CompanyProfileTab
               company={selectedCompany}
               setCompany={setSelectedCompany}
+              setError={msg => showAlert('error', msg)}
+              setSuccess={msg => showAlert('success', msg)}
             />
           )}
 

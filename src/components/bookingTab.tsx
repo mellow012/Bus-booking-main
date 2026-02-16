@@ -66,7 +66,7 @@ interface BookingsTabProps {
   buses?: any[];
 }
 
-// ✅ NEW: Payment Method Badge Component
+// ✅ Payment Method Badge Component
 const PaymentMethodBadge: FC<{ paymentMethod?: string; paymentProvider?: string; paymentStatus?: string }> = ({
   paymentMethod,
   paymentProvider,
@@ -81,7 +81,6 @@ const PaymentMethodBadge: FC<{ paymentMethod?: string; paymentProvider?: string;
     );
   }
 
-  // Cash on boarding
   if (paymentMethod === "cash_on_boarding") {
     return (
       <div className="flex items-center gap-1 px-2 py-1 bg-green-100 text-green-700 text-xs rounded whitespace-nowrap">
@@ -91,7 +90,6 @@ const PaymentMethodBadge: FC<{ paymentMethod?: string; paymentProvider?: string;
     );
   }
 
-  // Stripe payment
   if (paymentProvider === "stripe" || paymentMethod === "stripe") {
     return (
       <div className="flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded whitespace-nowrap">
@@ -101,7 +99,6 @@ const PaymentMethodBadge: FC<{ paymentMethod?: string; paymentProvider?: string;
     );
   }
 
-  // Paychange payment
   if (paymentProvider === "paychange" || paymentMethod === "paychange") {
     return (
       <div className="flex items-center gap-1 px-2 py-1 bg-purple-100 text-purple-700 text-xs rounded whitespace-nowrap">
@@ -111,7 +108,6 @@ const PaymentMethodBadge: FC<{ paymentMethod?: string; paymentProvider?: string;
     );
   }
 
-  // Generic online payment
   if (paymentProvider || paymentMethod) {
     return (
       <div className="flex items-center gap-1 px-2 py-1 bg-indigo-100 text-indigo-700 text-xs rounded whitespace-nowrap">
@@ -347,13 +343,11 @@ const BookingsTab: FC<BookingsTabProps> = ({
   const [viewMode, setViewMode] = useState<"list" | "seats">("list");
   const [actionLoading, setActionLoading] = useState<Record<string, boolean>>({});
 
-  // ✅ REAL-TIME LISTENER: Listen for booking updates
+  // ✅ REAL-TIME LISTENER: Listen for booking updates (FIXED TYPE)
   useEffect(() => {
     if (!companyId) return;
 
     console.log("[BookingsTab] Setting up real-time booking listener...");
-
-    let q;
 
     // For operators: Only listen to their own schedule bookings
     if (userProfile?.role === "operator") {
@@ -366,9 +360,10 @@ const BookingsTab: FC<BookingsTabProps> = ({
         return;
       }
 
-      // Split into chunks of 30 for 'in' queries
-      const bookingListeners = [];
-      const chunks = [];
+      // ✅ FIXED: Properly type the bookingListeners array
+      const bookingListeners: Array<() => void> = [];
+      const chunks: string[][] = [];
+      
       for (let i = 0; i < operatorScheduleIds.length; i += 30) {
         chunks.push(operatorScheduleIds.slice(i, i + 30));
       }
@@ -408,13 +403,13 @@ const BookingsTab: FC<BookingsTabProps> = ({
     } 
     // For admin: Listen to all company bookings
     else {
-      q = query(
+      const adminQuery = query(
         collection(db, "bookings"),
         where("companyId", "==", companyId)
       );
 
       const unsubscribe = onSnapshot(
-        q,
+        adminQuery,
         (snap) => {
           const updatedBookings = snap.docs.map(doc => ({
             id: doc.id,
@@ -686,7 +681,7 @@ const BookingsTab: FC<BookingsTabProps> = ({
         </div>
       </div>
 
-      {/* Main Content */}
+      {/* Main Content - List View */}
       {viewMode === "list" ? (
         <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
           <div className="overflow-x-auto">
@@ -780,10 +775,9 @@ const BookingsTab: FC<BookingsTabProps> = ({
                             MWK {booking.totalAmount?.toLocaleString() || "0"}
                           </span>
                         </td>
-                        {/* ✅ NEW: Payment Method Column */}
                         <td className="px-6 py-4">
                           <PaymentMethodBadge
-                            paymentMethod={booking.paymentMethod}
+                            paymentMethod={booking.paymentGateway}
                             paymentProvider={booking.paymentProvider}
                             paymentStatus={booking.paymentStatus}
                           />
@@ -955,7 +949,7 @@ const BookingsTab: FC<BookingsTabProps> = ({
                   {selectedBooking.bookingStatus}
                 </span>
                 <PaymentMethodBadge
-                  paymentMethod={selectedBooking.paymentMethod}
+                  paymentMethod={selectedBooking.paymentGateway}
                   paymentProvider={selectedBooking.paymentProvider}
                   paymentStatus={selectedBooking.paymentStatus}
                 />
@@ -1039,7 +1033,7 @@ const BookingsTab: FC<BookingsTabProps> = ({
                   <div>
                     <p className="text-sm text-gray-600">Payment Method</p>
                     <PaymentMethodBadge
-                      paymentMethod={selectedBooking.paymentMethod}
+                      paymentMethod={selectedBooking.paymentGateway}
                       paymentProvider={selectedBooking.paymentProvider}
                       paymentStatus={selectedBooking.paymentStatus}
                     />

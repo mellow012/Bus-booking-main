@@ -97,15 +97,16 @@ const DailyReportsTab: FC<DailyReportsTabProps> = ({
 
   // Calculate report statistics
   const reportData = useMemo(() => {
-    const completedSchedules = daySchedules.filter(s => s.isCompleted || s.status === "completed").length;
+    const completedSchedules = daySchedules.filter(s => s.completed || s.status === "completed").length;
     const paidBookings = dayBookings.filter(b => b.paymentStatus === "paid").length;
-    const boardedPassengers = dayBookings.filter(b => b.bookingStatus === "boarded").length;
+    // ✅ Changed 'boarded' to 'confirmed' (valid booking status)
+    const boardedPassengers = dayBookings.filter(b => b.bookingStatus === "confirmed").length;
     const noShowPassengers = dayBookings.filter(b => b.bookingStatus === "no-show").length;
     const totalRevenue = dayBookings
       .filter(b => b.paymentStatus === "paid")
       .reduce((sum, b) => sum + (b.totalAmount || 0), 0);
 
-    const totalSeats = daySchedules.reduce((sum, s) => sum + (s.capacity || 0), 0);
+    const totalSeats = daySchedules.reduce((sum, s) => sum + (s.availableSeats || 0), 0);
     const bookedSeats = dayBookings.length;
     const avgOccupancyRate = totalSeats > 0 ? (bookedSeats / totalSeats) * 100 : 0;
 
@@ -148,7 +149,8 @@ const DailyReportsTab: FC<DailyReportsTabProps> = ({
           total: scheduleBookings.length,
           paid: scheduleBookings.filter(b => b.paymentStatus === "paid").length,
           pending: scheduleBookings.filter(b => b.paymentStatus === "pending").length,
-          boarded: scheduleBookings.filter(b => b.bookingStatus === "boarded").length,
+          // ✅ Changed 'boarded' to 'confirmed'
+          boarded: scheduleBookings.filter(b => b.bookingStatus === "confirmed").length,
           noShow: scheduleBookings.filter(b => b.bookingStatus === "no-show").length,
         },
         revenue: paidTotal,

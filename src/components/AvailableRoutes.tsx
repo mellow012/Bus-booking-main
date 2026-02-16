@@ -155,7 +155,7 @@ export default function AvailableRoutes({ limit }: AvailableRoutesProps) {
                   <div className="flex items-center justify-between mb-4">
                     <div className="text-center">
                       <div className="text-2xl font-bold text-gray-900">
-                        {formatTime(result.schedule.departureDateTime.toTimeString().slice(0, 5))}
+                        {formatTime(result.schedule.departureDateTime.toString().slice(0, 5))}
                       </div>
                       <div className="text-sm text-gray-600">{result.route.origin}</div>
                     </div>
@@ -173,7 +173,7 @@ export default function AvailableRoutes({ limit }: AvailableRoutesProps) {
                     </div>
                     <div className="text-center">
                       <div className="text-2xl font-bold text-gray-900">
-                        {formatTime(result.schedule.arrivalDateTime.toTimeString().slice(0, 5))}
+                        {formatTime(result.schedule.arrivalDateTime.toString().slice(0, 5))}
                       </div>
                       <div className="text-sm text-gray-600">{result.route.destination}</div>
                     </div>

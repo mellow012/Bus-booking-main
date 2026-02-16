@@ -1,5 +1,5 @@
-import { FC, useState, useMemo, useCallback,useEffect } from "react";
-import { collection, addDoc, updateDoc, deleteDoc, doc, query,where,onSnapshot, } from "firebase/firestore";
+import { FC, useState, useMemo, useCallback, useEffect } from "react";
+import { collection, addDoc, updateDoc, deleteDoc, doc, query, where, onSnapshot } from "firebase/firestore";
 import { Bus, BusType, BusStatus } from "@/types";
 import Modal from "@/components/Modals";
 import { db } from "@/lib/firebaseConfig";
@@ -22,16 +22,19 @@ import {
   Clock,
   Eye,
   UserCircle,
-  User
+  User,
+  X
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
+type FuelType = "diesel" | "petrol" | "electric" | "hybrid";
 
 interface Conductor {
   id: string;
   name: string;
   uid: string;
 }
+
 interface NewBusState {
   licensePlate: string;
   busType: BusType;
@@ -44,7 +47,7 @@ interface NewBusState {
   insuranceExpiry?: string;
   lastMaintenanceDate?: string;
   nextMaintenanceDate?: string;
-  fuelType?: string;
+  fuelType: FuelType;
   yearOfManufacture?: number;
   conductorIds: string[];
 }
@@ -93,7 +96,7 @@ const BusesTab: FC<BusesTabProps> = ({
     companyId,
     status: "active",
     registrationNumber: "",
-    fuelType: "Diesel",
+    fuelType: "diesel",
     conductorIds: [],
   };
   
@@ -146,7 +149,8 @@ const BusesTab: FC<BusesTabProps> = ({
     maintenance: buses.filter(b => b.status === 'maintenance').length,
     totalCapacity: buses.reduce((sum, b) => sum + (b.capacity || 0), 0),
   }), [buses]);
-const filteredBuses = useMemo(() => {
+
+  const filteredBuses = useMemo(() => {
     let filtered = buses.filter(b =>
       b.licensePlate.toLowerCase().includes(searchTerm.toLowerCase()) ||
       b.busType.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -161,12 +165,13 @@ const filteredBuses = useMemo(() => {
 
     return filtered;
   }, [buses, searchTerm, filterStatus, conductors]);
-  // Get assignments for a bus (drivers and conductors from schedules)
-  const getConductorNames = (ids: string[] = []) => {
+
+  const getConductorNames = (ids: string[] = []): string[] => {
     return ids
       .map(id => conductors.find(c => c.id === id)?.name)
       .filter((name): name is string => !!name);
   };
+
   const getBusAssignments = useCallback((busId: string) => {
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -190,17 +195,16 @@ const filteredBuses = useMemo(() => {
 
     const allSchedules = [...todaySchedules, ...upcomingSchedules];
     const drivers = [...new Set(allSchedules.map(s => s.driver).filter(Boolean))];
-    const conductors = [...new Set(allSchedules.map(s => s.conductor).filter(Boolean))];
+    const conductorsAssigned = [...new Set(allSchedules.map(s => s.conductor).filter(Boolean))];
 
     return {
       todaySchedules: todaySchedules.length,
       upcomingSchedules: upcomingSchedules.length,
-      drivers: drivers.slice(0, 2),
-      conductors: conductors.slice(0, 2),
+      drivers: drivers.slice(0, 2) as string[],
+      conductors: conductorsAssigned.slice(0, 2) as string[],
       hasAssignments: todaySchedules.length > 0 || upcomingSchedules.length > 0
     };
   }, [schedules]);
-
 
   const addBus = async (data: NewBusState) => {
     setActionLoading(true);
@@ -520,7 +524,7 @@ const filteredBuses = useMemo(() => {
                     </div>
                     <div className="text-center p-3 bg-gray-50 rounded-lg">
                       <Zap className="w-4 h-4 text-purple-600 mx-auto mb-1" />
-                      <p className="text-sm font-bold text-gray-900">{bus.fuelType || 'Diesel'}</p>
+                      <p className="text-sm font-bold text-gray-900 capitalize">{bus.fuelType || 'diesel'}</p>
                       <p className="text-xs text-gray-600">Fuel Type</p>
                     </div>
                   </div>
@@ -544,27 +548,25 @@ const filteredBuses = useMemo(() => {
                   )}
 
                   {/* Default Conductors */}
-                 {bus.conductorIds && bus.conductorIds.length > 0 && (
+                  {bus.conductorIds && bus.conductorIds.length > 0 && (
                     <div className="mb-4">
                       <p className="text-xs font-medium text-gray-700 mb-2 flex items-center gap-1.5">
                         <User className="w-3.5 h-3.5 text-indigo-600" />
                         Default Conductors:
                       </p>
                       <div className="flex flex-wrap gap-1.5">
-                        {getConductorNames(bus.conductorIds ??[]).map((name:string, idx: number) => (
-                            <span 
-                              key={idx}
-                              className="px-2.5 py-1 bg-indigo-50 text-indigo-700 text-xs rounded-md border border-indigo-100"
-                            >
-                              {name}
-                            </span>
-                          ))}
-                        : (
-                          <span className="text-xs text-gray-500">No default conductors assigned</span>
-                        )
+                        {getConductorNames(bus.conductorIds ?? []).map((name: string, idx: number) => (
+                          <span 
+                            key={idx}
+                            className="px-2.5 py-1 bg-indigo-50 text-indigo-700 text-xs rounded-md border border-indigo-100"
+                          >
+                            {name}
+                          </span>
+                        ))}
                       </div>
                     </div>
                   )}
+
                   {/* Operator Assignments from Schedules */}
                   {assignments.hasAssignments && (
                     <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-100">
@@ -667,265 +669,6 @@ const filteredBuses = useMemo(() => {
         </div>
       )}
 
-      {/* Bus Details Modal */}
-      <Modal 
-        isOpen={showBusDetailsModal} 
-        onClose={() => {
-          setShowBusDetailsModal(false);
-          setSelectedBusForDetails(null);
-        }} 
-        title="Bus Details"
-      >
-        {selectedBusForDetails && (
-          <div className="space-y-6">
-            {/* Header */}
-            <div className="flex items-start justify-between pb-4 border-b">
-              <div>
-                <h3 className="text-2xl font-bold text-gray-900 mb-1">
-                  {selectedBusForDetails.licensePlate}
-                </h3>
-                <p className="text-gray-600">{selectedBusForDetails.busType}</p>
-              </div>
-              <span className={`px-4 py-2 rounded-full text-sm font-medium ${
-                selectedBusForDetails.status === 'active' 
-                  ? 'bg-green-100 text-green-800' 
-                  : selectedBusForDetails.status === 'maintenance'
-                  ? 'bg-orange-100 text-orange-800'
-                  : 'bg-gray-100 text-gray-800'
-              }`}>
-                {selectedBusForDetails.status}
-              </span>
-            </div>
-
-            {/* Basic Info */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="p-4 bg-gray-50 rounded-lg">
-                <p className="text-sm text-gray-600 mb-1">Capacity</p>
-                <p className="text-xl font-bold text-gray-900">{selectedBusForDetails.capacity} seats</p>
-              </div>
-              <div className="p-4 bg-gray-50 rounded-lg">
-                <p className="text-sm text-gray-600 mb-1">Fuel Type</p>
-                <p className="text-xl font-bold text-gray-900">{selectedBusForDetails.fuelType || 'Diesel'}</p>
-              </div>
-              {selectedBusForDetails.yearOfManufacture && (
-                <div className="p-4 bg-gray-50 rounded-lg">
-                  <p className="text-sm text-gray-600 mb-1">Year</p>
-                  <p className="text-xl font-bold text-gray-900">{selectedBusForDetails.yearOfManufacture}</p>
-                </div>
-              )}
-            </div>
-
-            {/* Registration Details */}
-            {selectedBusForDetails.registrationDetails && (
-              <div className="p-4 bg-blue-50 rounded-lg border border-blue-100">
-                <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                  <FileText className="w-5 h-5 text-blue-600" />
-                  Registration Details
-                </h4>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Registration Number:</span>
-                    <span className="font-medium text-gray-900">
-                      {selectedBusForDetails.registrationDetails.registrationNumber}
-                    </span>
-                  </div>
-                  {selectedBusForDetails.registrationDetails.expiryDate && (
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Expiry Date:</span>
-                      <span className="font-medium text-gray-900">
-                        {new Date(selectedBusForDetails.registrationDetails.expiryDate).toLocaleDateString()}
-                      </span>
-                    </div>
-                  )}
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Authority:</span>
-                    <span className="font-medium text-gray-900">
-                      {selectedBusForDetails.registrationDetails.authority}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Default Conductors */}
-           {selectedBusForDetails.conductorIds && selectedBusForDetails.conductorIds.length > 0 && (
-              <div className="mt-6">
-                <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                  <User className="w-5 h-5 text-indigo-600" />
-                  Default Assigned Conductors
-                </h4>
-                <div className="flex flex-wrap gap-2">
-                  {getConductorNames(selectedBusForDetails.conductorIds).map((name, idx) => (
-                    <span 
-                      key={idx}
-                      className="px-3 py-1 bg-indigo-50 text-indigo-700 rounded-full text-sm font-medium border border-indigo-200"
-                    >
-                      {name}
-                    </span>
-                  ))}
-                </div>
-                <p className="text-xs text-gray-500 mt-2">
-                  Primary/regular conductors for this bus (max 2). Can be overridden per trip.
-                </p>
-              </div>
-            )}
-            {/* Current Assignments */}
-            {(() => {
-              const assignments = getBusAssignments(selectedBusForDetails.id);
-              return assignments.hasAssignments && (
-                <div className="p-4 bg-purple-50 rounded-lg border border-purple-100">
-                  <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                    <Users className="w-5 h-5 text-purple-600" />
-                    Current Assignments (from schedules)
-                  </h4>
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-gray-600">Today's Trips:</span>
-                      <span className="font-medium text-gray-900">{assignments.todaySchedules}</span>
-                    </div>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-gray-600">Upcoming Trips:</span>
-                      <span className="font-medium text-gray-900">{assignments.upcomingSchedules}</span>
-                    </div>
-                    
-                    {assignments.drivers.length > 0 && (
-                      <div className="pt-3 border-t border-purple-200">
-                        <p className="text-xs text-gray-600 mb-2">Assigned Drivers:</p>
-                        <div className="flex flex-wrap gap-2">
-                          {assignments.drivers.map((driver, idx) => (
-                            <span key={idx} className="px-3 py-1 bg-white text-purple-700 rounded-full text-sm font-medium border border-purple-200">
-                              {driver}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    
-                    {assignments.conductors.length > 0 && (
-                      <div className="pt-3 border-t border-purple-200">
-                        <p className="text-xs text-gray-600 mb-2">Assigned Conductors:</p>
-                        <div className="flex flex-wrap gap-2">
-                          {assignments.conductors.map((conductor, idx) => (
-                            <span key={idx} className="px-3 py-1 bg-white text-purple-700 rounded-full text-sm font-medium border border-purple-200">
-                              {conductor}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })()}
-
-            {/* Amenities */}
-            {selectedBusForDetails.amenities && selectedBusForDetails.amenities.length > 0 && (
-              <div>
-                <h4 className="font-semibold text-gray-900 mb-3">Amenities</h4>
-                <div className="flex flex-wrap gap-2">
-                  {selectedBusForDetails.amenities.map((amenity, idx) => (
-                    <span key={idx} className="px-3 py-1 bg-blue-50 text-blue-700 text-sm rounded-lg border border-blue-200">
-                      {amenity}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Actions */}
-            <div className="flex gap-3 pt-4 border-t">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setShowBusDetailsModal(false);
-                  setSelectedBusForDetails(null);
-                }}
-                className="flex-1"
-              >
-                Close
-              </Button>
-              <Button
-                onClick={() => {
-                  setEditBus(selectedBusForDetails);
-                  setShowBusDetailsModal(false);
-                  setShowEditModal(true);
-                }}
-                className="flex-1 bg-blue-600 text-white hover:bg-blue-700"
-              >
-                <Edit3 className="w-4 h-4 mr-2" />
-                Edit Bus
-              </Button>
-            </div>
-          </div>
-        )}
-      </Modal>
-
-      {/* Upgrade Modal */}
-      <Modal 
-        isOpen={showUpgradeModal} 
-        onClose={() => setShowUpgradeModal(false)} 
-        title="Upgrade to Premium"
-      >
-        <div className="space-y-6">
-          <div className="text-center">
-            <div className="w-16 h-16 bg-gradient-to-br from-purple-100 to-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Crown className="w-8 h-8 text-purple-600" />
-            </div>
-            <h3 className="text-xl font-bold text-gray-900 mb-2">
-              Unlock Unlimited Buses
-            </h3>
-            <p className="text-gray-600">
-              You've reached the free tier limit of {FREE_TIER_LIMIT} buses. Upgrade to add unlimited buses and access premium features.
-            </p>
-          </div>
-
-          <div className="bg-gradient-to-br from-purple-50 to-blue-50 rounded-xl p-6 border border-purple-200">
-            <h4 className="font-semibold text-gray-900 mb-4">Premium Features:</h4>
-            <ul className="space-y-3">
-              <li className="flex items-start gap-3">
-                <CheckCircle className="w-5 h-5 text-green-600 mt-0.5" />
-                <span className="text-gray-700">Unlimited buses in your fleet</span>
-              </li>
-              <li className="flex items-start gap-3">
-                <CheckCircle className="w-5 h-5 text-green-600 mt-0.5" />
-                <span className="text-gray-700">Advanced analytics and reporting</span>
-              </li>
-              <li className="flex items-start gap-3">
-                <CheckCircle className="w-5 h-5 text-green-600 mt-0.5" />
-                <span className="text-gray-700">Priority customer support</span>
-              </li>
-              <li className="flex items-start gap-3">
-                <CheckCircle className="w-5 h-5 text-green-600 mt-0.5" />
-                <span className="text-gray-700">Maintenance tracking & reminders</span>
-              </li>
-              <li className="flex items-start gap-3">
-                <CheckCircle className="w-5 h-5 text-green-600 mt-0.5" />
-                <span className="text-gray-700">Multi-user access</span>
-              </li>
-            </ul>
-          </div>
-
-          <div className="flex gap-3">
-            <Button
-              variant="outline"
-              onClick={() => setShowUpgradeModal(false)}
-              className="flex-1"
-            >
-              Maybe Later
-            </Button>
-            <Button
-              onClick={() => {
-                window.location.href = 'mailto:support@busops.com?subject=Premium Upgrade Request';
-              }}
-              className="flex-1 bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-700 hover:to-blue-700"
-            >
-              <Crown className="w-4 h-4 mr-2" />
-              Contact Admin
-            </Button>
-          </div>
-        </div>
-      </Modal>
-
       {/* Add Modal */}
       <Modal isOpen={showAddModal} onClose={() => setShowAddModal(false)} title="Add New Bus">
         <form onSubmit={handleAdd} className="space-y-6">
@@ -1002,14 +745,14 @@ const filteredBuses = useMemo(() => {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Fuel Type</label>
               <select
-                value={newBus.fuelType || 'Diesel'}
-                onChange={(e) => setNewBus({ ...newBus, fuelType: e.target.value })}
+                value={newBus.fuelType}
+                onChange={(e) => setNewBus({ ...newBus, fuelType: e.target.value as FuelType })}
                 className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
-                <option value="Diesel">Diesel</option>
-                <option value="Petrol">Petrol</option>
-                <option value="Electric">Electric</option>
-                <option value="Hybrid">Hybrid</option>
+                <option value="diesel">Diesel</option>
+                <option value="petrol">Petrol</option>
+                <option value="electric">Electric</option>
+                <option value="hybrid">Hybrid</option>
               </select>
             </div>
             
@@ -1017,8 +760,11 @@ const filteredBuses = useMemo(() => {
               <label className="block text-sm font-medium text-gray-700 mb-2">Year of Manufacture</label>
               <input
                 type="number"
-                value={newBus.yearOfManufacture || ''}
-                onChange={(e) => setNewBus({ ...newBus, yearOfManufacture: parseInt(e.target.value) || undefined })}
+                value={newBus.yearOfManufacture ?? ''}
+                onChange={(e) => {
+                  const val = e.target.value ? parseInt(e.target.value) : undefined;
+                  setNewBus({ ...newBus, yearOfManufacture: val });
+                }}
                 className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 min="1990"
                 max={new Date().getFullYear() + 1}
@@ -1209,14 +955,14 @@ const filteredBuses = useMemo(() => {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Fuel Type</label>
                 <select
-                  value={editBus.fuelType || 'Diesel'}
-                  onChange={(e) => setEditBus({ ...editBus, fuelType: e.target.value })}
+                  value={editBus.fuelType || 'diesel'}
+                  onChange={(e) => setEditBus({ ...editBus, fuelType: e.target.value as FuelType })}
                   className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
-                  <option value="Diesel">Diesel</option>
-                  <option value="Petrol">Petrol</option>
-                  <option value="Electric">Electric</option>
-                  <option value="Hybrid">Hybrid</option>
+                  <option value="diesel">Diesel</option>
+                  <option value="petrol">Petrol</option>
+                  <option value="electric">Electric</option>
+                  <option value="hybrid">Hybrid</option>
                 </select>
               </div>
               
@@ -1224,12 +970,12 @@ const filteredBuses = useMemo(() => {
                 <label className="block text-sm font-medium text-gray-700 mb-2">Year of Manufacture</label>
                 <input
                   type="number"
-                  value={editBus.yearOfManufacture || ''}
+                  value={editBus.yearOfManufacture ?? ''}
                   onChange={(e) => {
-                    const val = parseInt(e.target.value);
+                    const val = e.target.value ? parseInt(e.target.value) : undefined;
                     setEditBus({ 
                       ...editBus, 
-                      yearOfManufacture: isNaN(val) ? 0 : val 
+                      yearOfManufacture: val
                     });
                   }}
                   className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -1253,7 +999,7 @@ const filteredBuses = useMemo(() => {
               />
             </div>
 
-           <div>
+            <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Assign Conductors (max 2)
               </label>
@@ -1339,6 +1085,211 @@ const filteredBuses = useMemo(() => {
             </div>
           </form>
         )}
+      </Modal>
+
+      {/* Bus Details Modal */}
+      <Modal 
+        isOpen={showBusDetailsModal} 
+        onClose={() => {
+          setShowBusDetailsModal(false);
+          setSelectedBusForDetails(null);
+        }} 
+        title="Bus Details"
+      >
+        {selectedBusForDetails && (
+          <div className="space-y-6">
+            <div className="flex items-start justify-between pb-4 border-b">
+              <div>
+                <h3 className="text-2xl font-bold text-gray-900 mb-1">
+                  {selectedBusForDetails.licensePlate}
+                </h3>
+                <p className="text-gray-600">{selectedBusForDetails.busType}</p>
+              </div>
+              <span className={`px-4 py-2 rounded-full text-sm font-medium ${
+                selectedBusForDetails.status === 'active' 
+                  ? 'bg-green-100 text-green-800' 
+                  : selectedBusForDetails.status === 'maintenance'
+                  ? 'bg-orange-100 text-orange-800'
+                  : 'bg-gray-100 text-gray-800'
+              }`}>
+                {selectedBusForDetails.status}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="p-4 bg-gray-50 rounded-lg">
+                <p className="text-sm text-gray-600 mb-1">Capacity</p>
+                <p className="text-xl font-bold text-gray-900">{selectedBusForDetails.capacity} seats</p>
+              </div>
+              <div className="p-4 bg-gray-50 rounded-lg">
+                <p className="text-sm text-gray-600 mb-1">Fuel Type</p>
+                <p className="text-xl font-bold text-gray-900 capitalize">{selectedBusForDetails.fuelType || 'diesel'}</p>
+              </div>
+              {selectedBusForDetails.yearOfManufacture && (
+                <div className="p-4 bg-gray-50 rounded-lg">
+                  <p className="text-sm text-gray-600 mb-1">Year</p>
+                  <p className="text-xl font-bold text-gray-900">{selectedBusForDetails.yearOfManufacture}</p>
+                </div>
+              )}
+            </div>
+
+            {selectedBusForDetails.registrationDetails && (
+              <div className="p-4 bg-blue-50 rounded-lg border border-blue-100">
+                <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                  <FileText className="w-5 h-5 text-blue-600" />
+                  Registration Details
+                </h4>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Registration Number:</span>
+                    <span className="font-medium text-gray-900">
+                      {selectedBusForDetails.registrationDetails.registrationNumber}
+                    </span>
+                  </div>
+                  {selectedBusForDetails.registrationDetails.expiryDate && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Expiry Date:</span>
+                      <span className="font-medium text-gray-900">
+                        {new Date(selectedBusForDetails.registrationDetails.expiryDate).toLocaleDateString()}
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Authority:</span>
+                    <span className="font-medium text-gray-900">
+                      {selectedBusForDetails.registrationDetails.authority}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {selectedBusForDetails.conductorIds && selectedBusForDetails.conductorIds.length > 0 && (
+              <div className="mt-6">
+                <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                  <User className="w-5 h-5 text-indigo-600" />
+                  Default Assigned Conductors
+                </h4>
+                <div className="flex flex-wrap gap-2">
+                  {getConductorNames(selectedBusForDetails.conductorIds).map((name, idx) => (
+                    <span 
+                      key={idx}
+                      className="px-3 py-1 bg-indigo-50 text-indigo-700 rounded-full text-sm font-medium border border-indigo-200"
+                    >
+                      {name}
+                    </span>
+                  ))}
+                </div>
+                <p className="text-xs text-gray-500 mt-2">
+                  Primary/regular conductors for this bus (max 2). Can be overridden per trip.
+                </p>
+              </div>
+            )}
+
+            {selectedBusForDetails.amenities && selectedBusForDetails.amenities.length > 0 && (
+              <div>
+                <h4 className="font-semibold text-gray-900 mb-3">Amenities</h4>
+                <div className="flex flex-wrap gap-2">
+                  {selectedBusForDetails.amenities.map((amenity, idx) => (
+                    <span key={idx} className="px-3 py-1 bg-blue-50 text-blue-700 text-sm rounded-lg border border-blue-200">
+                      {amenity}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="flex gap-3 pt-4 border-t">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowBusDetailsModal(false);
+                  setSelectedBusForDetails(null);
+                }}
+                className="flex-1"
+              >
+                Close
+              </Button>
+              <Button
+                onClick={() => {
+                  setEditBus(selectedBusForDetails);
+                  setShowBusDetailsModal(false);
+                  setShowEditModal(true);
+                }}
+                className="flex-1 bg-blue-600 text-white hover:bg-blue-700"
+              >
+                <Edit3 className="w-4 h-4 mr-2" />
+                Edit Bus
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Upgrade Modal */}
+      <Modal 
+        isOpen={showUpgradeModal} 
+        onClose={() => setShowUpgradeModal(false)} 
+        title="Upgrade to Premium"
+      >
+        <div className="space-y-6">
+          <div className="text-center">
+            <div className="w-16 h-16 bg-gradient-to-br from-purple-100 to-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Crown className="w-8 h-8 text-purple-600" />
+            </div>
+            <h3 className="text-xl font-bold text-gray-900 mb-2">
+              Unlock Unlimited Buses
+            </h3>
+            <p className="text-gray-600">
+              You've reached the free tier limit of {FREE_TIER_LIMIT} buses. Upgrade to add unlimited buses and access premium features.
+            </p>
+          </div>
+
+          <div className="bg-gradient-to-br from-purple-50 to-blue-50 rounded-xl p-6 border border-purple-200">
+            <h4 className="font-semibold text-gray-900 mb-4">Premium Features:</h4>
+            <ul className="space-y-3">
+              <li className="flex items-start gap-3">
+                <CheckCircle className="w-5 h-5 text-green-600 mt-0.5" />
+                <span className="text-gray-700">Unlimited buses in your fleet</span>
+              </li>
+              <li className="flex items-start gap-3">
+                <CheckCircle className="w-5 h-5 text-green-600 mt-0.5" />
+                <span className="text-gray-700">Advanced analytics and reporting</span>
+              </li>
+              <li className="flex items-start gap-3">
+                <CheckCircle className="w-5 h-5 text-green-600 mt-0.5" />
+                <span className="text-gray-700">Priority customer support</span>
+              </li>
+              <li className="flex items-start gap-3">
+                <CheckCircle className="w-5 h-5 text-green-600 mt-0.5" />
+                <span className="text-gray-700">Maintenance tracking & reminders</span>
+              </li>
+              <li className="flex items-start gap-3">
+                <CheckCircle className="w-5 h-5 text-green-600 mt-0.5" />
+                <span className="text-gray-700">Multi-user access</span>
+              </li>
+            </ul>
+          </div>
+
+          <div className="flex gap-3">
+            <Button
+              variant="outline"
+              onClick={() => setShowUpgradeModal(false)}
+              className="flex-1"
+            >
+              Maybe Later
+            </Button>
+            <Button
+              onClick={() => {
+                window.location.href = 'mailto:support@busops.com?subject=Premium Upgrade Request';
+              }}
+              className="flex-1 bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-700 hover:to-blue-700"
+            >
+              <Crown className="w-4 h-4 mr-2" />
+              Contact Admin
+            </Button>
+          </div>
+        </div>
       </Modal>
     </div>
   );

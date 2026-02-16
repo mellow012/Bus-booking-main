@@ -202,8 +202,7 @@ export default function OverviewTab({
           ...route,
           schedulesCount: routeSchedules.length,
           operators: routeSchedules.map(s => ({
-            driver: s.driver,
-            conductor: s.conductor,
+            conductor: s.assignedConductorIds ? s.assignedConductorIds.map(id => `Conductor ${id}`).join(", ") : "Unassigned",
             busId: s.busId
           }))
         };
@@ -453,16 +452,16 @@ export default function OverviewTab({
                               <p className="text-gray-500 text-xs">Bus</p>
                               <p className="font-medium text-gray-900">{bus?.licensePlate || "N/A"}</p>
                             </div>
-                            {schedule.driver && (
+                            {schedule.assignedOperatorIds && schedule.assignedOperatorIds.length > 0 && (
                               <div>
-                                <p className="text-gray-500 text-xs">Driver</p>
-                                <p className="font-medium text-gray-900">{schedule.driver}</p>
+                                <p className="text-gray-500 text-xs">Operator</p>
+                                <p className="font-medium text-gray-900">{schedule.assignedOperatorIds.map(id => `Operator ${id}`).join(", ")}</p>
                               </div>
                             )}
-                            {schedule.conductor && (
+                            {schedule.assignedConductorIds && schedule.assignedConductorIds.length > 0 && (
                               <div>
                                 <p className="text-gray-500 text-xs">Conductor</p>
-                                <p className="font-medium text-gray-900">{schedule.conductor}</p>
+                                <p className="font-medium text-gray-900">{schedule.assignedConductorIds.map(id => `Conductor ${id}`).join(", ") }</p>
                               </div>
                             )}
                           </div>
@@ -565,21 +564,21 @@ export default function OverviewTab({
                         <div className="bg-gray-50 rounded-lg p-3 space-y-2">
                           <p className="text-xs font-medium text-gray-600">Current Assignment</p>
                           <div className="grid grid-cols-2 gap-2 text-sm">
-                            {schedule.driver && (
+                            {schedule.assignedOperatorIds && schedule.assignedOperatorIds.length > 0 && (
                               <div className="flex items-center gap-2">
                                 <UserCircle className="w-4 h-4 text-gray-400" />
                                 <div>
-                                  <p className="text-xs text-gray-500">Driver</p>
-                                  <p className="font-medium text-gray-900">{schedule.driver}</p>
+                                  <p className="text-xs text-gray-500">Operator</p>
+                                  <p className="font-medium text-gray-900">{schedule.assignedOperatorIds.map(id => `Operator ${id}`).join(", ")}</p>
                                 </div>
                               </div>
                             )}
-                            {schedule.conductor && (
+                            {schedule.assignedConductorIds && schedule.assignedConductorIds.length > 0 && (
                               <div className="flex items-center gap-2">
                                 <User className="w-4 h-4 text-gray-400" />
                                 <div>
                                   <p className="text-xs text-gray-500">Conductor</p>
-                                  <p className="font-medium text-gray-900">{schedule.conductor}</p>
+                                  <p className="font-medium text-gray-900">{schedule.assignedConductorIds.map(id => `Conductor ${id}`).join(", ")}</p>
                                 </div>
                               </div>
                             )}
@@ -676,7 +675,7 @@ export default function OverviewTab({
                                 <div key={idx} className="flex items-center gap-3 text-sm">
                                   <div className="flex items-center gap-2 flex-1">
                                     <UserCircle className="w-4 h-4 text-gray-400" />
-                                    <span className="text-gray-700">{operator.driver || 'N/A'}</span>
+                                    <span className="text-gray-700">{}</span>
                                   </div>
                                   <div className="flex items-center gap-2 flex-1">
                                     <User className="w-4 h-4 text-gray-400" />

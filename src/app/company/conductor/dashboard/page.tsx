@@ -1,7 +1,7 @@
 "use client";
 
-import { FC, useState, useEffect, useMemo } from "react";
-import { collection, query, where, onSnapshot, orderBy, doc, updateDoc, getDocs } from "firebase/firestore";
+import { FC, useState, useEffect } from "react";
+import { collection, query, where, onSnapshot, doc, updateDoc, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebaseConfig";
 import { useAuth } from "@/contexts/AuthContext";
 import { Schedule, Booking, Bus } from "@/types";
@@ -17,7 +17,6 @@ import {
   AlertCircle,
   DollarSign,
   Bell,
-  ArrowRight,
   Check,
   UserX,
   Lock,
@@ -26,6 +25,7 @@ import { Button } from "@/components/ui/button";
 import Modal from "@/components/Modals";
 import { format } from "date-fns";
 import { toast } from "react-hot-toast";
+import { logPassengerBoarded, logPassengerNoShow, logPaymentCollected } from "../../../../../src/utils/AuditLogs";
 
 const ConductorDashboard: FC = () => {
   const { userProfile, user } = useAuth();
@@ -189,7 +189,7 @@ const ConductorDashboard: FC = () => {
     }
   }, [myBuses]);
 
-  // ✅ Load bookings for selected trip
+  // ✅ Load bookings for selected trip (REAL-TIME)
   useEffect(() => {
     if (!selectedTrip?.id) {
       setTripBookings([]);
@@ -242,33 +242,97 @@ const ConductorDashboard: FC = () => {
     }
   }, [selectedTrip?.id]);
 
-  // ✅ Boarding / No-show (only after payment confirmed)
-  const handleUpdateStatus = async (bookingId: string, status: "boarded" | "no-show") => {
+  // ✅ Mark as boarded (FIXED: Type-safe)
+  const handleMarkBoarded = async (bookingId: string) => {
     if (!selectedTrip) return;
 
     setActionLoading(true);
     try {
+      const booking = tripBookings.find(b => b.id === bookingId);
+      if (!booking) throw new Error("Booking not found");
+
       const ref = doc(db, "bookings", bookingId);
       await updateDoc(ref, {
-        bookingStatus: status,
+        bookingStatus: "confirmed", // Use valid status type
         updatedAt: new Date(),
         updatedBy: conductorFirestoreId,
+        boardedAt: new Date(), // Add timestamp for boarding
       });
 
       setTripBookings(prev =>
-        prev.map(b => b.id === bookingId ? { ...b, bookingStatus: status } : b)
+        prev.map(b => 
+          b.id === bookingId 
+            ? { ...b, bookingStatus: "confirmed" } as Booking
+            : b
+        )
       );
 
-      toast.success(`Marked as ${status}`);
+      // ✅ Log audit
+      await logPassengerBoarded(
+        user?.uid || "",
+        conductorName,
+        userProfile?.role || "conductor",
+        userProfile?.companyId || "",
+        bookingId,
+        booking.passengerDetails?.[0]?.name || "Passenger",
+        booking.seatNumbers?.[0] || "?"
+      );
+
+      toast.success("Passenger marked as boarded");
     } catch (err: any) {
-      console.error("Status update error:", err);
+      console.error("Boarding error:", err);
       toast.error(`Failed: ${err.message}`);
     } finally {
       setActionLoading(false);
     }
   };
 
-  // ✅ Cash collection
+  // ✅ Mark as no-show (FIXED: Type-safe)
+  const handleMarkNoShow = async (bookingId: string) => {
+    if (!selectedTrip) return;
+
+    setActionLoading(true);
+    try {
+      const booking = tripBookings.find(b => b.id === bookingId);
+      if (!booking) throw new Error("Booking not found");
+
+      const ref = doc(db, "bookings", bookingId);
+      await updateDoc(ref, {
+        bookingStatus: "no-show", // Valid status type
+        updatedAt: new Date(),
+        updatedBy: conductorFirestoreId,
+        noShowAt: new Date(),
+      });
+
+      setTripBookings(prev =>
+        prev.map(b => 
+          b.id === bookingId 
+            ? { ...b, bookingStatus: "no-show" } as Booking
+            : b
+        )
+      );
+
+      // ✅ Log audit
+      await logPassengerNoShow(
+        user?.uid || "",
+        conductorName,
+        userProfile?.role || "conductor",
+        userProfile?.companyId || "",
+        bookingId,
+        booking.passengerDetails?.[0]?.name || "Passenger",
+        booking.seatNumbers?.[0] || "?"
+      );
+
+      toast.success("Passenger marked as no-show");
+    } catch (err: any) {
+      console.error("No-show error:", err);
+      toast.error(`Failed: ${err.message}`);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // ✅ Collect cash payment
   const handleCollectCash = async (bookingId: string, amount: number) => {
     if (!selectedTrip) return;
 
@@ -276,6 +340,9 @@ const ConductorDashboard: FC = () => {
 
     setActionLoading(true);
     try {
+      const booking = tripBookings.find(b => b.id === bookingId);
+      if (!booking) throw new Error("Booking not found");
+
       const ref = doc(db, "bookings", bookingId);
       await updateDoc(ref, {
         paymentStatus: "paid",
@@ -289,9 +356,25 @@ const ConductorDashboard: FC = () => {
       setTripBookings(prev =>
         prev.map(b =>
           b.id === bookingId 
-            ? { ...b, paymentStatus: "paid", paymentMethod: "cash_on_boarding" } 
+            ? { 
+                ...b, 
+                paymentStatus: "paid",
+                paymentMethod: "cash_on_boarding",
+              } as Booking
             : b
         )
+      );
+
+      // ✅ Log audit
+      await logPaymentCollected(
+        user?.uid || "",
+        conductorName,
+        userProfile?.role || "conductor",
+        userProfile?.companyId || "",
+        bookingId,
+        booking.passengerDetails?.[0]?.name || "Passenger",
+        amount,
+        "cash_on_boarding"
       );
 
       toast.success(`MWK ${amount.toLocaleString()} recorded`);
@@ -330,7 +413,7 @@ const ConductorDashboard: FC = () => {
               let icon = null;
 
               if (booking) {
-                if (booking.bookingStatus === "boarded") {
+                if (booking.bookingStatus === "confirmed") {
                   bg = "bg-green-500 border-green-600";
                   text = "text-white";
                   icon = <CheckCircle className="w-4 h-4" />;
@@ -350,7 +433,7 @@ const ConductorDashboard: FC = () => {
                   className={`aspect-square rounded-lg flex items-center justify-center font-medium text-sm relative cursor-pointer hover:scale-105 transition-transform ${bg} ${text}`}
                   onClick={() => {
                     if (booking && booking.bookingStatus === "pending" && booking.paymentStatus === "paid") {
-                      handleUpdateStatus(booking.id, "boarded");
+                      handleMarkBoarded(booking.id);
                     }
                   }}
                 >
@@ -591,16 +674,15 @@ const ConductorDashboard: FC = () => {
                   <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-2">
                     {tripBookings.map((booking) => {
                       const isPaid = booking.paymentStatus === "paid";
-                      const isBoarded = booking.bookingStatus === "boarded";
+                      const isConfirmed = booking.bookingStatus === "confirmed";
                       const isNoShow = booking.bookingStatus === "no-show";
-                      const isPending = booking.bookingStatus === "pending";
                       const firstPassenger = booking.passengerDetails?.[0];
 
                       return (
                         <div
                           key={booking.id}
                           className={`p-4 rounded-lg border flex flex-col md:flex-row justify-between items-start md:items-center gap-4 ${
-                            isBoarded 
+                            isConfirmed
                               ? "bg-green-50 border-green-200"
                               : isNoShow 
                               ? "bg-red-50 border-red-200"
@@ -610,7 +692,7 @@ const ConductorDashboard: FC = () => {
                           <div className="flex items-start gap-4 flex-1">
                             <div
                               className={`w-12 h-12 rounded-lg flex items-center justify-center font-bold text-white text-lg flex-shrink-0 ${
-                                isBoarded 
+                                isConfirmed
                                   ? "bg-green-600"
                                   : isNoShow 
                                   ? "bg-red-600"
@@ -623,7 +705,7 @@ const ConductorDashboard: FC = () => {
                             <div>
                               <p className="font-medium text-base flex items-center gap-1">
                                 {firstPassenger?.name || "Passenger"}
-                                {isBoarded && <CheckCircle className="w-4 h-4 text-green-600" />}
+                                {isConfirmed && <CheckCircle className="w-4 h-4 text-green-600" />}
                                 {isNoShow && <XCircle className="w-4 h-4 text-red-600" />}
                               </p>
                               <div className="text-sm text-gray-600 mt-1 space-y-0.5">
@@ -643,31 +725,39 @@ const ConductorDashboard: FC = () => {
                           </div>
 
                           <div className="flex flex-wrap gap-2 self-end md:self-center">
-                            {/* ✅ NEW: Show Boarded/No-Show ONLY if paid */}
-                            {isPaid && !isBoarded && !isNoShow && (
+                            {/* ✅ Show Boarded/No-Show ONLY if paid and not already marked */}
+                            {isPaid && !isConfirmed && !isNoShow && (
                               <>
                                 <Button
                                   size="sm"
                                   className="bg-green-600 hover:bg-green-700 text-white"
-                                  onClick={() => handleUpdateStatus(booking.id, "boarded")}
+                                  onClick={() => handleMarkBoarded(booking.id)}
                                   disabled={actionLoading}
                                 >
-                                  <Check className="w-4 h-4 mr-1" />
+                                  {actionLoading ? (
+                                    <Loader2 className="w-4 h-4 animate-spin mr-1" />
+                                  ) : (
+                                    <Check className="w-4 h-4 mr-1" />
+                                  )}
                                   Boarded
                                 </Button>
                                 <Button
                                   size="sm"
                                   variant="destructive"
-                                  onClick={() => handleUpdateStatus(booking.id, "no-show")}
+                                  onClick={() => handleMarkNoShow(booking.id)}
                                   disabled={actionLoading}
                                 >
-                                  <UserX className="w-4 h-4 mr-1" />
+                                  {actionLoading ? (
+                                    <Loader2 className="w-4 h-4 animate-spin mr-1" />
+                                  ) : (
+                                    <UserX className="w-4 h-4 mr-1" />
+                                  )}
                                   No-Show
                                 </Button>
                               </>
                             )}
 
-                            {/* ✅ SHOW: Collect Cash ONLY if payment pending */}
+                            {/* ✅ Collect Cash ONLY if payment pending */}
                             {!isPaid && (
                               <Button
                                 size="sm"
@@ -675,12 +765,16 @@ const ConductorDashboard: FC = () => {
                                 onClick={() => handleCollectCash(booking.id, booking.totalAmount || 0)}
                                 disabled={actionLoading}
                               >
-                                <DollarSign className="w-4 h-4 mr-1" />
+                                {actionLoading ? (
+                                  <Loader2 className="w-4 h-4 animate-spin mr-1" />
+                                ) : (
+                                  <DollarSign className="w-4 h-4 mr-1" />
+                                )}
                                 Collect Cash
                               </Button>
                             )}
 
-                            {/* ✅ Show lock icon if payment not done */}
+                            {/* ✅ Lock icon if payment not done */}
                             {!isPaid && (
                               <div className="flex items-center gap-1 px-2 py-1 text-xs text-gray-600 bg-gray-100 rounded-md">
                                 <Lock className="w-3 h-3" />

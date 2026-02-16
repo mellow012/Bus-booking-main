@@ -103,7 +103,7 @@ export interface Bus extends FirestoreDocument {
     authority: string;
   };
     fuelType: "diesel" | "petrol" | "electric" | "hybrid",
-  yearOfManufacture: number,
+  yearOfManufacture: number | undefined,
   insuranceDetails: {
     provider: string;
     policyNumber: string;
@@ -170,6 +170,12 @@ export interface Schedule {
   createdBy: string;
   createdAt: Date | Timestamp;
   updatedAt: Date | Timestamp;
+  assignedOperatorIds?: string[]; // Optional list of operator IDs responsible for this schedule
+  assignedConductorIds?: string[]; // Optional list of conductor IDs responsible for this schedule
+  completedAt?: Date | Timestamp;
+  completed?: boolean;
+  cancellationReason?: string;
+  metadata?: Record<string, any>;
 }
 
 export interface PassengerDetails {
