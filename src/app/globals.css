@@ -1,12 +1,8 @@
 @import 'react-big-calendar/lib/css/react-big-calendar.css';
-@source "../**/*.{js,ts,jsx,tsx}"; /*
 @import "tailwindcss";
-/* app/globals.css */
+@source "./**/*.{js,ts,jsx,tsx,mdx}";
 
-/* your other global styles */
-@custom-variant dark (&:is(.dark *));
-
-@theme inline {
+@theme {
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -112,28 +108,32 @@
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
 }
+
 .scrollbar-hide {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
 }
 
 @layer base {
-  * {
-    @apply border-border outline-ring/50;
-  }
   body {
     @apply bg-background text-foreground;
   }
+  
+  /* Fix SVG/image vertical alignment issues in Edge */
+  svg,
+  img {
+    display: block;
+    vertical-align: baseline;
+  }
 }
+
 @supports (padding: max(0px)) {
   .safe-area-inset {
     padding-left: max(1rem, env(safe-area-inset-left));
     padding-right: max(1rem, env(safe-area-inset-right));
   }
 }
-
-
-
