@@ -49,3 +49,5 @@ next-env.d.ts
 
 # local service account / private key files
 src/lib/serviceAccountKey.json
+
+.busbookingapp-50592-firebase-adminsdk-fbsvc-00047ea501e.json
