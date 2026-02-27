@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { stripe } from '@/lib/stripe';
-import { doc, updateDoc, serverTimestamp, getDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebaseConfig';
+import { adminDb, FieldValue } from '@/lib/firebaseAdmin'; // Switched to Admin SDK
 import { headers } from 'next/headers';
-import crypto from 'crypto'; // Node.js built-in crypto module
+import crypto from 'crypto';
 
 export async function POST(request: NextRequest) {
   const body = await request.text();
@@ -57,6 +56,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Webhook processing failed', message: error.message }, { status: 500 });
   }
 }
+
+/* -------------------------------------------------- */
+/* STRIPE HANDLERS                                    */
+/* -------------------------------------------------- */
+
 async function handleStripeWebhook(body: string, signature: string) {
   if (!process.env.STRIPE_WEBHOOK_SECRET) {
     throw new Error('Stripe webhook secret not configured');
@@ -84,6 +88,7 @@ async function handleStripeWebhook(body: string, signature: string) {
       await handleStripePaymentExpired(event.data.object as any);
       break;
     case 'payment_intent.payment_failed':
+      // NEW: Handling explicit payment failures (e.g., card declined)
       await handleStripePaymentFailed(event.data.object as any);
       break;
     default:
@@ -93,11 +98,116 @@ async function handleStripeWebhook(body: string, signature: string) {
   return NextResponse.json({ received: true });
 }
 
+async function handleStripePaymentSuccess(session: any) {
+  const bookingId = session.metadata?.bookingId;
+  if (!bookingId) {
+    console.error('No bookingId in Stripe session metadata');
+    return;
+  }
+
+  try {
+    const bookingRef = adminDb.collection('bookings').doc(bookingId);
+    const bookingDoc = await bookingRef.get();
+    
+    if (!bookingDoc.exists) {
+      console.error('Booking not found:', bookingId);
+      return;
+    }
+
+    const currentStatus = bookingDoc.data()?.paymentStatus;
+    
+    // Idempotency check
+    if (currentStatus === 'paid') {
+      console.log('Payment already processed for booking:', bookingId);
+      return;
+    }
+
+    await bookingRef.update({
+      paymentStatus: 'paid',
+      bookingStatus: 'confirmed',
+      paymentDetails: {
+        provider: 'stripe',
+        sessionId: session.id,
+        paymentIntentId: session.payment_intent,
+        amountTotal: session.amount_total,
+        currency: session.currency,
+        customerEmail: session.customer_email,
+        paymentStatus: session.payment_status,
+      },
+      paymentConfirmedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    console.log('Stripe payment confirmed for booking:', bookingId);
+  } catch (error: any) {
+    console.error('Error processing Stripe payment success:', error);
+    throw error;
+  }
+}
+
+async function handleStripePaymentExpired(session: any) {
+  const bookingId = session.metadata?.bookingId;
+  if (!bookingId) return;
+
+  try {
+    await adminDb.collection('bookings').doc(bookingId).update({
+      paymentStatus: 'expired',
+      paymentFailureReason: 'Stripe checkout session expired',
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    console.log('Stripe payment expired for booking:', bookingId);
+  } catch (error: any) {
+    console.error('Error processing Stripe payment expiration:', error);
+  }
+}
+
+/**
+ * NEW: Handles Stripe payment failures (e.g., insufficient funds, card declined)
+ */
+async function handleStripePaymentFailed(paymentIntent: any) {
+  const bookingId = paymentIntent.metadata?.bookingId;
+  
+  // If we don't have the bookingId in metadata (rare), we might need to query by intent ID
+  // But standard flow usually propagates metadata.
+  if (!bookingId) {
+    console.warn('Stripe payment_failed: No bookingId in metadata', paymentIntent.id);
+    return;
+  }
+
+  try {
+    const failureMessage = paymentIntent.last_payment_error?.message || 'Card payment failed';
+    const failureCode = paymentIntent.last_payment_error?.code || 'unknown';
+
+    await adminDb.collection('bookings').doc(bookingId).update({
+      paymentStatus: 'failed',
+      paymentFailureReason: `Stripe: ${failureMessage} (Code: ${failureCode})`,
+      paymentDetails: {
+        provider: 'stripe',
+        paymentIntentId: paymentIntent.id,
+        status: 'failed',
+        error: paymentIntent.last_payment_error,
+      },
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    console.log(`Stripe payment failed for booking ${bookingId}: ${failureMessage}`);
+    
+    // Note: The frontend 'bookings/page.tsx' has a real-time listener (onSnapshot).
+    // When we update the status to 'failed' here, the user sees the update immediately.
+    
+  } catch (error: any) {
+    console.error('Error processing Stripe payment failure:', error);
+  }
+}
+
+/* -------------------------------------------------- */
+/* PAYCHANGU HANDLERS                                 */
+/* -------------------------------------------------- */
+
 async function handlePayChanguWebhook(body: string) {
   const data = JSON.parse(body);
   console.log('PayChangu webhook data:', data);
 
-  // PayChangu webhook structure validation
   if (!data.tx_ref && !data.transaction_id) {
     throw new Error('Invalid PayChangu webhook: missing transaction reference');
   }
@@ -130,107 +240,34 @@ async function handlePayChanguWebhook(body: string) {
   return NextResponse.json({ received: true });
 }
 
-// Stripe Event Handlers
-async function handleStripePaymentSuccess(session: any) {
-  const bookingId = session.metadata?.bookingId;
-  if (!bookingId) {
-    console.error('No bookingId in Stripe session metadata');
-    return;
-  }
-
-  try {
-    const bookingRef = doc(db, 'bookings', bookingId);
-    const bookingDoc = await getDoc(bookingRef);
-    
-    if (!bookingDoc.exists()) {
-      console.error('Booking not found:', bookingId);
-      return;
-    }
-
-    const currentStatus = bookingDoc.data()?.paymentStatus;
-    
-    // Prevent duplicate processing
-    if (currentStatus === 'paid') {
-      console.log('Payment already processed for booking:', bookingId);
-      return;
-    }
-
-    await updateDoc(bookingRef, {
-      paymentStatus: 'paid',
-      bookingStatus: 'confirmed',
-      paymentDetails: {
-        provider: 'stripe',
-        sessionId: session.id,
-        paymentIntentId: session.payment_intent,
-        amountTotal: session.amount_total,
-        currency: session.currency,
-        customerEmail: session.customer_email,
-        paymentStatus: session.payment_status,
-      },
-      paymentConfirmedAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
-
-    console.log('Stripe payment confirmed for booking:', bookingId);
-  } catch (error: any) {
-    console.error('Error processing Stripe payment success:', error);
-    throw error;
-  }
-}
-
-async function handleStripePaymentExpired(session: any) {
-  const bookingId = session.metadata?.bookingId;
-  if (!bookingId) return;
-
-  try {
-    await updateDoc(doc(db, 'bookings', bookingId), {
-      paymentStatus: 'expired',
-      paymentFailureReason: 'Stripe checkout session expired',
-      updatedAt: serverTimestamp(),
-    });
-
-    console.log('Stripe payment expired for booking:', bookingId);
-  } catch (error: any) {
-    console.error('Error processing Stripe payment expiration:', error);
-  }
-}
-
-async function handleStripePaymentFailed(paymentIntent: any) {
-  // Find booking by payment intent if needed
-  // This is more complex as we need to query by stripeSessionId
-  console.log('Stripe payment failed:', paymentIntent.id);
-}
-
-// PayChangu Event Handlers
 async function handlePayChanguPaymentSuccess(data: any, txRef: string) {
   try {
-    // Find booking by transaction reference
+    // FIX: Use robust lookup instead of string parsing
     const bookingId = await findBookingByTxRef(txRef);
     if (!bookingId) {
-      console.error('Booking not found for tx_ref:', txRef);
+      console.error('Booking not found for successful tx_ref:', txRef);
       return;
     }
 
-    const bookingRef = doc(db, 'bookings', bookingId);
-    const bookingDoc = await getDoc(bookingRef);
+    const bookingRef = adminDb.collection('bookings').doc(bookingId);
+    const bookingDoc = await bookingRef.get();
     
-    if (!bookingDoc.exists()) {
+    if (!bookingDoc.exists) {
       console.error('Booking document not found:', bookingId);
       return;
     }
 
     const currentStatus = bookingDoc.data()?.paymentStatus;
     
-    // Prevent duplicate processing
+    // Idempotency check
     if (currentStatus === 'paid') {
       console.log('Payment already processed for booking:', bookingId);
       return;
     }
 
-    // Determine payment method from PayChangu data
     const paymentMethod = determinePayChanguPaymentMethod(data);
 
-    await updateDoc(bookingRef, {
+    await bookingRef.update({
       paymentStatus: 'paid',
       bookingStatus: 'confirmed',
       paymentMethod: paymentMethod,
@@ -246,8 +283,8 @@ async function handlePayChanguPaymentSuccess(data: any, txRef: string) {
         netAmount: data.net_amount,
         status: data.status,
       },
-      paymentConfirmedAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
+      paymentConfirmedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
     });
 
     console.log('PayChangu payment confirmed for booking:', bookingId);
@@ -259,13 +296,14 @@ async function handlePayChanguPaymentSuccess(data: any, txRef: string) {
 
 async function handlePayChanguPaymentFailed(data: any, txRef: string) {
   try {
+    // FIX: Use robust lookup
     const bookingId = await findBookingByTxRef(txRef);
     if (!bookingId) {
       console.error('Booking not found for failed payment tx_ref:', txRef);
       return;
     }
 
-    await updateDoc(doc(db, 'bookings', bookingId), {
+    await adminDb.collection('bookings').doc(bookingId).update({
       paymentStatus: 'failed',
       paymentFailureReason: `PayChangu: ${data.status} - ${data.message || 'Payment failed'}`,
       paymentDetails: {
@@ -275,7 +313,7 @@ async function handlePayChanguPaymentFailed(data: any, txRef: string) {
         message: data.message,
         failureReason: data.failure_reason,
       },
-      updatedAt: serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
     });
 
     console.log('PayChangu payment failed for booking:', bookingId);
@@ -289,7 +327,7 @@ async function handlePayChanguPaymentPending(data: any, txRef: string) {
     const bookingId = await findBookingByTxRef(txRef);
     if (!bookingId) return;
 
-    await updateDoc(doc(db, 'bookings', bookingId), {
+    await adminDb.collection('bookings').doc(bookingId).update({
       paymentStatus: 'pending',
       paymentDetails: {
         provider: 'paychangu',
@@ -297,7 +335,7 @@ async function handlePayChanguPaymentPending(data: any, txRef: string) {
         status: data.status,
         message: data.message,
       },
-      updatedAt: serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
     });
 
     console.log('PayChangu payment pending for booking:', bookingId);
@@ -306,36 +344,45 @@ async function handlePayChanguPaymentPending(data: any, txRef: string) {
   }
 }
 
-// Helper Functions
+/* -------------------------------------------------- */
+/* HELPERS                                            */
+/* -------------------------------------------------- */
+
+/**
+ * FIX: Robust TX Ref Lookup
+ * Replaces string parsing with a Firestore query using Admin SDK.
+ */
 async function findBookingByTxRef(txRef: string): Promise<string | null> {
   try {
-    // Extract booking ID from transaction reference if it follows the pattern
-    if (txRef.includes('booking_')) {
-      const parts = txRef.split('_');
-      if (parts.length >= 2) {
-        // Try to find booking with the extracted ID pattern
-        const potentialBookingId = parts[1];
-        const bookingRef = doc(db, 'bookings', potentialBookingId);
-        const bookingDoc = await getDoc(bookingRef);
-        
-        if (bookingDoc.exists() && bookingDoc.data()?.transactionReference === txRef) {
-          return potentialBookingId;
-        }
-      }
+    // 1. Try exact match on transactionReference
+    const snapshot = await adminDb.collection('bookings')
+      .where('transactionReference', '==', txRef)
+      .limit(1)
+      .get();
+
+    if (!snapshot.empty) {
+      return snapshot.docs[0].id;
     }
 
-    // If pattern matching fails, we'd need to query the collection
-    // This is less efficient but more reliable
-    console.warn('Could not extract booking ID from tx_ref pattern, might need collection query');
+    // 2. Fallback: Try match on paymentSessionId (sometimes used interchangeably)
+    const sessionSnapshot = await adminDb.collection('bookings')
+      .where('paymentSessionId', '==', txRef)
+      .limit(1)
+      .get();
+
+    if (!sessionSnapshot.empty) {
+      return sessionSnapshot.docs[0].id;
+    }
+
+    console.warn(`findBookingByTxRef: No booking found for ref ${txRef}`);
     return null;
   } catch (error) {
-    console.error('Error finding booking by tx_ref:', error);
+    console.error('Error in findBookingByTxRef:', error);
     return null;
   }
 }
 
 function determinePayChanguPaymentMethod(data: any): string {
-  // Determine payment method based on PayChangu response data
   const method = data.payment_method?.toLowerCase() || '';
   const channel = data.channel?.toLowerCase() || '';
   
@@ -354,6 +401,5 @@ function determinePayChanguPaymentMethod(data: any): string {
     return 'bank_transfer';
   }
   
-  // Default to mobile money for PayChangu (most common in Malawi)
   return 'mobile_money';
 }

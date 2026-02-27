@@ -60,7 +60,9 @@ const PopularRoutesCarousel: React.FC<{ routes: EnhancedSchedule[] }> = ({ route
                     <div className="mt-auto flex items-center justify-between">
                       <div>
                         <div className="text-xs text-gray-600">from</div>
-                        <div className="text-xl font-bold text-blue-600">MWK {(route.price * 1700).toLocaleString()}</div>
+                        <div className="text-xl font-bold text-blue-600"> 
+                          MWK {route.price.toLocaleString()}
+                        </div>
                       </div>
                       <Button
                         onClick={() => router.push(`/book/${route.id}?passengers=1`)}

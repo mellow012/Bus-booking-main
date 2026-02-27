@@ -18,28 +18,23 @@ export const metadata: Metadata = {
   description: "Book and pay for bus tickets from multiple companies. Find the best routes, compare prices, book & pay for your journey with ease.",
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
       <body className={inter.className}>
         <NotificationProvider>
           <AuthProvider>
             <ToastProvider>
-              <EmailVerificationBannerLayout />
-              <FCMInitializer />
               <div className="min-h-screen flex flex-col">
                 <Header />
                 <main className="flex-grow py-12">
+                  <EmailVerificationBannerLayout />   {/* ← move it here */}
                   <AuthListener />
                   {children}
                 </main>
                 <Footer />
               </div>
-              {/* ✅ Toast Container - displays at bottom-right */}
+              <FCMInitializer />
               <ToastContainer />
             </ToastProvider>
           </AuthProvider>

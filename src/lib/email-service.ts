@@ -2,23 +2,36 @@ import nodemailer from 'nodemailer';
 
 type TeamRole = 'operator' | 'conductor';
 
-// Create a single transporter instance
+// Single shared transporter instance
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
     user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
+    pass: process.env.EMAIL_PASS,  // MUST be a 16-char App Password if 2FA is on
   },
+  // Optional but helpful in 2026: pool connections + timeouts
+  pool: true,
+  maxConnections: 1,  // Gmail limits concurrent anyway
+  rateDelta: 1000,
+  connectionTimeout: 5000,
+  greetingTimeout: 5000,
+  socketTimeout: 5000,
 });
 
-// Verify transporter at startup to provide an early, helpful error message
-transporter.verify().then(() => {
-  console.log('[email-service] SMTP transporter verified');
-}).catch((err) => {
-  console.error('[email-service] SMTP transporter verification failed:', err);
-  console.error('[email-service] Verify EMAIL_USER and EMAIL_PASS environment variables.');
-  console.error('[email-service] For Gmail, create an App Password or configure OAuth2.');
-});
+// Startup verification (logs early errors)
+transporter.verify()
+  .then(() => {
+    console.log('[email-service] SMTP transporter verified successfully');
+  })
+  .catch((err) => {
+    console.error('[email-service] SMTP transporter verification FAILED:', err.message || err);
+    console.error('[email-service] Check: EMAIL_USER, EMAIL_PASS env vars set correctly?');
+    console.error('[email-service] Gmail requires App Password (with 2FA enabled) or OAuth2 in 2026.');
+    console.error('[email-service] Docs: https://support.google.com/accounts/answer/185833');
+  });
+
+// Export the transporter so other files (like your API route) can import it
+export { transporter };
 
 export async function sendPasswordResetEmail(
   email: string,
@@ -48,13 +61,13 @@ export async function sendPasswordResetEmail(
   };
 
   try {
-    console.time('Email Sending');
-    console.log('Attempting to send email to:', email);
+    console.time('Password Reset Email');
+    console.log('Sending password reset to:', email);
     const info = await transporter.sendMail(mailOptions);
-    console.log('Email sent successfully:', info.response);
-    console.timeEnd('Email Sending');
-  } catch (error) {
-    console.error('Failed to send email to', email, ':', error);
+    console.log('Password reset email sent:', info.response);
+    console.timeEnd('Password Reset Email');
+  } catch (error: any) {
+    console.error('Failed to send password reset to', email, ':', error.message || error);
     throw new Error('Email sending failed');
   }
 }
@@ -67,11 +80,9 @@ export async function sendOperatorInviteEmail(
   operatorId: string,
   role: TeamRole = 'operator'
 ): Promise<void> {
-
   const isOperator = role === 'operator';
-
   const roleLabel = isOperator ? 'Operator' : 'Conductor / Driver';
-  const roleColor = isOperator ? '#2563eb' : '#7c3aed';   // blue vs purple
+  const roleColor = isOperator ? '#2563eb' : '#7c3aed';
   const roleDescription = isOperator
     ? 'In this role, you\'ll be able to create and manage schedules, handle bookings, and support daily operations for your company.'
     : 'In this role, you\'ll be able to view your assigned trips, check passenger manifests, and manage your daily schedule.';
@@ -129,10 +140,10 @@ export async function sendOperatorInviteEmail(
     console.time(`${roleLabel} Invite Email`);
     console.log(`Sending ${roleLabel} invite to:`, email);
     const info = await transporter.sendMail(mailOptions);
-    console.log('Email sent successfully:', info.response);
+    console.log('Invite email sent:', info.response);
     console.timeEnd(`${roleLabel} Invite Email`);
-  } catch (error) {
-    console.error(`Failed to send ${roleLabel} invite to`, email, ':', error);
+  } catch (error: any) {
+    console.error(`Failed to send ${roleLabel} invite to`, email, ':', error.message || error);
     throw new Error('Failed to send invitation email');
   }
 }

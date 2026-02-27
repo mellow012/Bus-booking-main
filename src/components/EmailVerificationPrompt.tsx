@@ -11,8 +11,8 @@ interface EmailVerificationPromptProps {
   showBanner?: boolean;
 }
 
-const GRACE_PERIOD = 60 * 60 * 1000; // 1 hour grace period
-const DISMISS_DURATION = 24 * 60 * 60 * 1000; // Dismiss for 24 hours after clicking dismiss
+const GRACE_PERIOD = 60 * 60 * 1000; // 1 hour
+const DISMISS_DURATION = 24 * 60 * 60 * 1000; // 24 hours
 
 export const EmailVerificationPrompt: React.FC<EmailVerificationPromptProps> = ({
   email,
@@ -20,20 +20,20 @@ export const EmailVerificationPrompt: React.FC<EmailVerificationPromptProps> = (
   showBanner = true,
 }) => {
   const [isResending, setIsResending] = useState(false);
+  const [resendStatus, setResendStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [resendMessage, setResendMessage] = useState('');
   const [showBannerState, setShowBannerState] = useState(false);
   const [signupTime, setSignupTime] = useState<number | null>(null);
+
   const { sendVerificationEmail } = useEmailVerification();
 
-  // Initialize: check if user should see banner
   useEffect(() => {
     if (!showBanner || !email) return;
 
-    // Load signup time and last dismiss time from localStorage
     const storedSignupTime = localStorage.getItem(`emailSignupTime_${email}`);
     const lastDismissTime = localStorage.getItem(`emailDismissed_${email}`);
     const now = Date.now();
 
-    // Set signup time if first time
     if (!storedSignupTime) {
       localStorage.setItem(`emailSignupTime_${email}`, now.toString());
       setSignupTime(now);
@@ -42,28 +42,35 @@ export const EmailVerificationPrompt: React.FC<EmailVerificationPromptProps> = (
       const signup = parseInt(storedSignupTime);
       setSignupTime(signup);
 
-      // Show banner if:
-      // 1. Still within grace period (1 hour), OR
-      // 2. Dismissed more than 24 hours ago
-      const withinGracePeriod = now - signup < GRACE_PERIOD;
+      const withinGrace = now - signup < GRACE_PERIOD;
       const canShowAgain = !lastDismissTime || now - parseInt(lastDismissTime) > DISMISS_DURATION;
 
-      if (withinGracePeriod || canShowAgain) {
-        setShowBannerState(true);
-      }
+      setShowBannerState(withinGrace || canShowAgain);
     }
   }, [email, showBanner]);
 
   const handleResendEmail = async () => {
     setIsResending(true);
+    setResendStatus('idle');
+    setResendMessage('');
+
     try {
       await sendVerificationEmail();
-      // Reset signup time so banner shows from now
-      localStorage.setItem(`emailSignupTime_${email}`, Date.now().toString());
+      const now = Date.now();
+      localStorage.setItem(`emailSignupTime_${email}`, now.toString());
       localStorage.removeItem(`emailDismissed_${email}`);
-      setSignupTime(Date.now());
-    } catch (error) {
-      console.error('Failed to resend verification email:', error);
+      setSignupTime(now);
+
+      setResendStatus('success');
+      setResendMessage('Verification email resent! Check your inbox & spam folder.');
+    } catch (err: any) {
+      console.error('Resend failed:', err);
+      setResendStatus('error');
+      setResendMessage(
+        err.message?.includes('too-many-requests')
+          ? 'Too many attempts. Wait a minute and try again.'
+          : 'Failed to resend. Please try again later.'
+      );
     } finally {
       setIsResending(false);
     }
@@ -77,51 +84,68 @@ export const EmailVerificationPrompt: React.FC<EmailVerificationPromptProps> = (
   if (!showBannerState) return null;
 
   return (
-    <div className="fixed top-0 left-0 right-0 z-40 bg-gradient-to-r from-blue-50 to-indigo-50 border-b-2 border-blue-200 shadow-md animate-in fade-in slide-in-from-top-4">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
-        <div className="flex items-center justify-between gap-4">
-          {/* Left: Message */}
+    <div className="fixed top-0 left-0 right-0 z-50 bg-gradient-to-r from-blue-50 via-indigo-50 to-blue-50 border-b border-blue-200 shadow-sm">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5">
+        <div className="flex items-center justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-3 flex-1 min-w-0">
-            <div className="flex-shrink-0">
-              <EnvelopeIcon className="w-5 h-5 text-blue-600" />
-            </div>
-            <div className="flex-1 min-w-0">
+            <EnvelopeIcon className="w-5 h-5 text-blue-600 flex-shrink-0" />
+            <div className="min-w-0">
               <p className="text-sm font-medium text-gray-900">
-                Email not verified yet
+                Please verify your email
               </p>
               <p className="text-xs text-gray-600 truncate">
-                Check {email} for verification link
+                We sent a link to {email}
               </p>
             </div>
           </div>
 
-          {/* Right: Actions */}
-          <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="flex items-center gap-3 flex-shrink-0">
             <Button
               onClick={handleResendEmail}
               disabled={isResending}
               size="sm"
-              className="bg-blue-600 hover:bg-blue-700 text-white text-xs h-8"
+              variant={resendStatus === 'success' ? 'outline' : 'default'}
+              className={`text-xs h-8 px-4 ${
+                resendStatus === 'success'
+                  ? 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100'
+                  : ''
+              }`}
             >
               {isResending ? (
-                <>
-                  <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin mr-1" />
+                <span className="flex items-center gap-2">
+                  <div className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
                   Sending...
-                </>
+                </span>
+              ) : resendStatus === 'success' ? (
+                'Resent!'
               ) : (
-                'Resend'
+                'Resend Email'
               )}
             </Button>
+
             <button
               onClick={handleDismiss}
-              className="flex-shrink-0 text-gray-500 hover:text-gray-700 transition-colors p-1"
-              aria-label="Dismiss"
+              className="text-gray-500 hover:text-gray-700 p-1 rounded-full hover:bg-gray-100 transition-colors"
+              aria-label="Dismiss banner"
             >
               <XMarkIcon className="w-5 h-5" />
             </button>
           </div>
         </div>
+
+        {/* Feedback message */}
+        {resendMessage && (
+          <div
+            className={`mt-3 text-xs p-2.5 rounded-lg ${
+              resendStatus === 'success'
+                ? 'bg-green-50 text-green-800 border border-green-200'
+                : 'bg-red-50 text-red-800 border border-red-200'
+            }`}
+          >
+            {resendMessage}
+          </div>
+        )}
       </div>
     </div>
   );
-};
+};  

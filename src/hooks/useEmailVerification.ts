@@ -1,5 +1,15 @@
 import { useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { reload } from 'firebase/auth';
+import { getAuth } from 'firebase/auth';
+
+/**
+ * FIXES:
+ * - refreshEmailVerificationStatus now calls reload() on the Firebase user
+ *   before reading emailVerified, so it reflects server-side truth.
+ * - Added refreshAndSync which forces token refresh AND reloads the user
+ *   object — use this after the user returns from clicking the email link.
+ */
 
 interface VerificationStatus {
   isVerified: boolean;
@@ -16,16 +26,14 @@ export const useEmailVerification = () => {
     message: string;
     verificationLink?: string;
   }> => {
-    if (!user) {
-      throw new Error('User not authenticated');
-    }
+    if (!user) throw new Error('User not authenticated');
 
     try {
       const token = await user.getIdToken();
       const response = await fetch('/api/auth/send-verification-email', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${token}`,
+          Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
       });
@@ -42,19 +50,14 @@ export const useEmailVerification = () => {
         verificationLink: data.verificationLink,
       };
     } catch (error: any) {
-      console.error('Error sending verification email:', error);
+      console.error('[useEmailVerification] Error sending email:', error);
       throw error;
     }
   }, [user]);
 
   const checkVerificationStatus = useCallback(async (): Promise<VerificationStatus> => {
     if (!user) {
-      return {
-        isVerified: false,
-        email: '',
-        loading: false,
-        error: 'User not authenticated',
-      };
+      return { isVerified: false, email: '', loading: false, error: 'User not authenticated' };
     }
 
     try {
@@ -62,7 +65,7 @@ export const useEmailVerification = () => {
       const response = await fetch('/api/auth/check-verification', {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer ${token}`,
+          Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
       });
@@ -80,7 +83,7 @@ export const useEmailVerification = () => {
         error: null,
       };
     } catch (error: any) {
-      console.error('Error checking verification status:', error);
+      console.error('[useEmailVerification] Error checking status:', error);
       return {
         isVerified: false,
         email: user.email || '',
@@ -90,14 +93,33 @@ export const useEmailVerification = () => {
     }
   }, [user]);
 
-  // Refresh firebase token (forces Firebase to read updated emailVerified claim)
-  const refreshEmailVerificationStatus = useCallback(async () => {
+  /**
+   * Reload the Firebase user object AND force a token refresh.
+   * Call this when the user returns to the app after clicking the verification
+   * link — e.g. on window focus, after polling, or on a "I've verified" button.
+   *
+   * Returns true if emailVerified is now true.
+   */
+  const refreshEmailVerificationStatus = useCallback(async (): Promise<boolean> => {
     if (!user) return false;
+
     try {
-      const token = await user.getIdToken(true); // Force refresh
-      return user.emailVerified;
+      const auth = getAuth();
+      const currentUser = auth.currentUser;
+
+      if (!currentUser) return false;
+
+      // reload() fetches the latest user data from Firebase Auth servers
+      // This is what actually updates emailVerified on the user object
+      await reload(currentUser);
+
+      // Force-refresh the ID token so the new emailVerified claim propagates
+      await currentUser.getIdToken(true);
+
+      console.log('[useEmailVerification] Refreshed — emailVerified:', currentUser.emailVerified);
+      return currentUser.emailVerified;
     } catch (error) {
-      console.error('Error refreshing email verification status:', error);
+      console.error('[useEmailVerification] Refresh error:', error);
       return false;
     }
   }, [user]);
@@ -106,5 +128,7 @@ export const useEmailVerification = () => {
     sendVerificationEmail,
     checkVerificationStatus,
     refreshEmailVerificationStatus,
+    isVerified: user?.emailVerified ?? false,
+    email: user?.email ?? '',
   };
 };

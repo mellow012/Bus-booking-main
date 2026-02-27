@@ -1,29 +1,23 @@
-/**
- * FCMInitializer Component
- * Initializes Firebase Cloud Messaging when user is authenticated
- * This component runs on client-side only
- */
+// components/FCMInitializer.tsx
 
 'use client';
 
 import { useInitializeFCM } from '@/hooks/useFCM';
 
 export function FCMInitializer() {
-  // Initialize FCM - this will automatically request notification permission
-  // and register the device token
   useInitializeFCM({
     enabled: true,
     onTokenReceived: (token) => {
-      console.log('✅ FCM token received and registered:', token.substring(0, 20) + '...');
+      console.log('FCM token registered:', token.substring(0, 20) + '...');
     },
     onMessageReceived: (payload) => {
-      console.log('📬 New message received:', payload.notification?.title);
+      console.log('New FCM message:', payload.notification?.title);
+      // Optional: toast.info(payload.notification?.body);
     },
-    onError: (error) => {
-      console.warn('⚠️ FCM initialization error:', error.message);
-      // Don't throw - let app continue if FCM fails
+    onError: (err) => {
+      console.warn('FCM error:', err.message);
     },
   });
 
-  return null; // This component doesn't render anything
+  return null;
 }

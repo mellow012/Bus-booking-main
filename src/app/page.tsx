@@ -719,9 +719,7 @@ export default function HomePage() {
                       </div>
                     </div>
                     <div className="text-right">
-                      <div className="text-2xl font-bold text-gradient-primary">
-                        MWK {(schedule.price * 1700).toLocaleString()}
-                      </div>
+                      <div className="text-2xl font-bold text-gradient-primary">MWK {schedule.price.toLocaleString()}</div>
                       <div className="text-xs text-gray-600">per person</div>
                     </div>
                   </div>

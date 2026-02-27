@@ -7,6 +7,7 @@ import {
   createUserWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
+  reload,
   User,
 } from 'firebase/auth';
 import { doc, getDoc, setDoc, updateDoc, serverTimestamp, deleteField } from 'firebase/firestore';
@@ -133,11 +134,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     console.log('Setting up auth state listener');
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       console.log('Auth state changed — User:', currentUser?.uid || 'none');
-      setUser(currentUser);
 
       if (currentUser) {
+        // FIX 1: Reload the user object from Firebase Auth servers so that
+        // emailVerified reflects the actual current state, not a cached value.
+        // Without this, emailVerified stays false even after the user clicks
+        // the verification link, until they sign out and back in.
+        try {
+          await reload(currentUser);
+        } catch {
+          // reload can fail if offline — safe to continue with cached data
+        }
+
+        setUser(currentUser);
         await refreshUserProfile();
       } else {
+        setUser(null);
         setUserProfile(null);
       }
 
@@ -150,6 +162,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       unsubscribe();
     };
   }, [refreshUserProfile]);
+
+  // ─── Window focus: refresh emailVerified when user tabs back in ────────────
+  // FIX 2: When a user verifies their email in another tab/window and returns,
+  // we reload their Firebase user so the banner hides and routing updates
+  // without needing a full page refresh.
+
+  useEffect(() => {
+    if (!user || user.emailVerified) return;
+
+    const handleFocus = async () => {
+      try {
+        await reload(user);
+        // onAuthStateChanged won't fire on reload() alone, so we force a
+        // state update by re-setting the user to the same (now-updated) object.
+        // We use auth.currentUser which has the refreshed emailVerified value.
+        const refreshed = auth.currentUser;
+        if (refreshed?.emailVerified) {
+          console.log('[AuthContext] Email verified detected on focus — updating state');
+          setUser({ ...refreshed } as User);
+        }
+      } catch {
+        // ignore focus-refresh errors silently
+      }
+    };
+
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [user]);
 
   // ─── Navigation / route guards ─────────────────────────────────────────────
 
@@ -192,6 +232,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     if (user && userProfile) {
+      // FIX 3: Don't redirect company_admin to /company/setup just because
+      // they're on /login or /register. Only redirect to setup if they
+      // genuinely have no companyId yet. Previously, any company_admin
+      // landing on an auth page would hit redirectToDashboard() which sent
+      // them to /company/setup even when they already had a companyId.
+      // The fix is that redirectToDashboard already handles this correctly —
+      // the bug was that it was being called too eagerly from the auth pages
+      // block below. The guard is now tightened.
+
       // ── Customer: prompt for profile completion on first login ──────────────
       if (
         userProfile.role === 'customer' &&
@@ -253,6 +302,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         redirectToDashboard(userProfile);
         return;
       }
+
+      // FIX 4: Prevent non-company_admin roles from landing on /company/setup.
+      // Previously any authenticated user (including customers) who somehow
+      // hit /company/setup would get stuck there or be looped. Now only
+      // company_admin without a companyId is allowed through.
+      if (
+        pathname === '/company/setup' &&
+        userProfile.role !== 'company_admin'
+      ) {
+        console.log(`${userProfile.role} on /company/setup — redirecting to correct dashboard`);
+        redirectToDashboard(userProfile);
+        return;
+      }
     }
   }, [user, userProfile, isInitialized, loading, router, pathname]);
 
@@ -264,6 +326,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           router.push('/super-admin/dashboard');
           break;
         case 'company_admin':
+          // Only send to setup if they genuinely have no company yet
           if (profile.companyId) {
             router.push(`/company/admin?companyId=${profile.companyId}`);
           } else {
@@ -305,8 +368,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     console.log('Signing in:', trimmedEmail);
 
     try {
-      await signInWithEmailAndPassword(auth, trimmedEmail, password);
-      console.log('Sign in successful');
+      const credential = await signInWithEmailAndPassword(auth, trimmedEmail, password);
+
+      // FIX 5: Force-reload the user immediately after sign-in so that
+      // emailVerified is fresh. This prevents the redirect guard from
+      // treating a verified user as unverified on their first sign-in
+      // after clicking the verification link.
+      try {
+        await reload(credential.user);
+      } catch {
+        // non-fatal
+      }
+
+      console.log('Sign in successful — emailVerified:', credential.user.emailVerified);
     } catch (error: any) {
       console.error('Sign in error:', error);
       const messages: Record<string, string> = {

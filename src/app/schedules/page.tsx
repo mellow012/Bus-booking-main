@@ -644,7 +644,7 @@ const SchedulesPage = () => {
                           </div>
                           <div className="text-right">
                             <div className="text-lg font-bold text-blue-600">
-                              MWK {(schedule.price * 1700).toLocaleString()}
+                              MWK {(schedule.price).toLocaleString()}
                             </div>
                             <div className="text-xs text-gray-500">{schedule.availableSeats} seats</div>
                           </div>
@@ -733,7 +733,7 @@ const SchedulesPage = () => {
                     </div>
                     <div className="text-right">
                       <div className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
-                        MWK {(schedule.price * 1700).toLocaleString()}
+                        MWK {(schedule.price).toLocaleString()}
                       </div>
                       <p className="text-xs text-gray-500">per person</p>
                     </div>
