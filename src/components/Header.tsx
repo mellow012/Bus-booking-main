@@ -64,10 +64,13 @@ const Header: React.FC = () => {
   const [isScrolled, setIsScrolled] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
-  // Check if we're on an admin/operator page
+  // Check if we're on an admin/operator/conductor page
+  // On these pages, the dashboard has its OWN internal header,
+  // so we suppress the global header entirely to avoid overlap.
   const isAdminPage = pathname.startsWith('/admin') || 
                       pathname.startsWith('/company/admin') || 
-                      pathname.startsWith('/company/operator');
+                      pathname.startsWith('/company/operator') ||
+                      pathname.startsWith('/company/conductor');
 
   useEffect(() => {
     const handleScroll = () => setIsScrolled(window.scrollY > 20);
@@ -119,7 +122,7 @@ const Header: React.FC = () => {
   };
 
   // ────────────────────────────────────────────────
-  //           IMPROVED ROLE DETECTION
+  //           ROLE DETECTION
   // ────────────────────────────────────────────────
   const rawRole = String(userProfile?.role ?? '').trim();
   const normalizedRole = rawRole.toLowerCase();
@@ -130,7 +133,6 @@ const Header: React.FC = () => {
                          normalizedRole.includes('companyadmin');
   const isOperator     = normalizedRole === 'operator';
   
-  // More flexible conductor detection
   const isConductor    = normalizedRole.includes('conductor') ||
                          normalizedRole === 'driver' ||
                          normalizedRole.includes('conduct') ||
@@ -141,7 +143,6 @@ const Header: React.FC = () => {
   const isCustomer = user && userProfile && 
     !isSuperAdmin && !isCompanyAdmin && !isOperator && !isConductor;
 
-  // Route and Label Configuration
   const adminRoute = isSuperAdmin 
     ? '/admin' 
     : isCompanyAdmin 
@@ -152,7 +153,6 @@ const Header: React.FC = () => {
 
   const adminLabel = isOperator ? 'Operator Panel' : 'Admin Panel';
 
-  // Display name
   const displayName = (() => {
     const fn = userProfile?.firstName?.trim();
     const ln = userProfile?.lastName?.trim();
@@ -162,7 +162,6 @@ const Header: React.FC = () => {
     return 'User';
   })();
 
-  // Debug log (you can keep this or remove later)
   useEffect(() => {
     if (!user) return;
     console.log('[Header] Role info:', {
@@ -178,124 +177,11 @@ const Header: React.FC = () => {
   }, [user, userProfile, normalizedRole, isConductor, displayName]);
 
   // ────────────────────────────────────────────────
-  //              ADMIN-PAGE-SPECIFIC HEADER
+  // SUPPRESS global header on dashboard pages.
+  // Those pages manage their own headers internally.
   // ────────────────────────────────────────────────
   if (isAdminPage) {
-    return (
-      <header className="fixed top-0 left-0 right-0 z-20 bg-white border-b border-gray-200 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-6">
-          <div className="flex justify-between items-center py-3">
-            {/* Logo */}
-            <Link href="/" className="flex items-center space-x-3 group">
-              <div className="relative">
-                <div className="w-8 h-8 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center shadow group-hover:shadow-lg transition-all duration-300">
-                  <BusIcon className="w-4 h-4 text-white" />
-                </div>
-              </div>
-              <span className="text-lg font-bold text-gray-900 group-hover:text-blue-600 transition-colors">
-                TibhukeBus
-              </span>
-            </Link>
-
-            {/* Quick Nav for Admin */}
-            <div className="flex items-center space-x-3">
-              <Link
-                href="/"
-                className="hidden md:flex items-center space-x-2 px-3 py-2 text-sm text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
-              >
-                <HomeIcon className="w-4 h-4" />
-                <span>Back to Site</span>
-              </Link>
-
-              {user && userProfile?.id && (
-                <NotificationBell userId={userProfile.id} className="relative" />
-              )}
-
-              {user && (
-                <div className="relative" ref={userMenuRef}>
-                  <button
-                    onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-                    className="flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-100 transition-all"
-                  >
-                    <UserAvatar user={user} userProfile={userProfile} />
-                    <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${isUserMenuOpen ? 'rotate-180' : ''}`} />
-                  </button>
-
-                  {isUserMenuOpen && (
-                    <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-xl border border-gray-200 py-2 z-50">
-                      <div className="px-4 py-3 border-b border-gray-100">
-                        <div className="font-semibold text-gray-900 truncate">
-                          {displayName}
-                        </div>
-                        <div className="text-sm text-gray-500 truncate">{user?.email}</div>
-                      </div>
-
-                      <div className="py-2">
-                        {isConductor ? (
-                          <>
-                            <Link
-                              href="/company/conductor/dashboard"
-                              className="flex items-center space-x-3 px-4 py-2 text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors"
-                              onClick={() => setIsUserMenuOpen(false)}
-                            >
-                              <BusIcon className="w-4 h-4" />
-                              <span>Dashboard</span>
-                            </Link>
-                          </>
-                        ) : (
-                          <>
-                            <Link
-                              href="/"
-                              className="flex items-center space-x-3 px-4 py-2 text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors"
-                              onClick={() => setIsUserMenuOpen(false)}
-                            >
-                              <HomeIcon className="w-4 h-4" />
-                              <span>Main Site</span>
-                            </Link>
-
-                            {isCustomer && (
-                              <Link
-                                href="/bookings"
-                                className="flex items-center space-x-3 px-4 py-2 text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors"
-                                onClick={() => setIsUserMenuOpen(false)}
-                              >
-                                <Calendar className="w-4 h-4" />
-                                <span>My Bookings</span>
-                              </Link>
-                            )}
-
-                            {(isCustomer || isOperator) && (
-                              <Link
-                                href="/profile"
-                                className="flex items-center space-x-3 px-4 py-2 text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors"
-                                onClick={() => setIsUserMenuOpen(false)}
-                              >
-                                <User className="w-4 h-4" />
-                                <span>Profile</span>
-                              </Link>
-                            )}
-                          </>
-                        )}
-                      </div>
-
-                      <div className="border-t border-gray-100 py-2">
-                        <button
-                          onClick={handleLogout}
-                          className="flex items-center space-x-3 w-full px-4 py-2 text-red-600 hover:bg-red-50 transition-colors"
-                        >
-                          <LogOut className="w-4 h-4" />
-                          <span>Sign Out</span>
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </header>
-    );
+    return null;
   }
 
   // ────────────────────────────────────────────────
@@ -382,9 +268,7 @@ const Header: React.FC = () => {
                       </div>
                     </div>
 
-
                     <div className="py-2">
-                      {/* Customer Only: My Bookings */}
                       {isCustomer && (
                         <Link
                           href="/bookings"
@@ -396,7 +280,6 @@ const Header: React.FC = () => {
                         </Link>
                       )}
 
-                      {/* Customer & Operator: Profile Access */}
                       {(isCustomer || isOperator) && (
                         <Link
                           href="/profile"
@@ -408,7 +291,6 @@ const Header: React.FC = () => {
                         </Link>
                       )}
 
-                      {/* Staff/Admin specific Dashboard Link */}
                       {isConductor ? (
                         <Link
                           href="/company/conductor/dashboard"
@@ -503,16 +385,14 @@ const Header: React.FC = () => {
                 </div>
 
                 {isConductor ? (
-                  <>
-                    <Link
-                      href="/company/conductor/dashboard"
-                      className="flex items-center space-x-3 p-3 bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-700 rounded-xl font-medium"
-                      onClick={() => setIsMenuOpen(false)}
-                    >
-                      <BusIcon className="w-5 h-5" />
-                      <span>Conductor Dashboard</span>
-                    </Link>
-                  </>
+                  <Link
+                    href="/company/conductor/dashboard"
+                    className="flex items-center space-x-3 p-3 bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-700 rounded-xl font-medium"
+                    onClick={() => setIsMenuOpen(false)}
+                  >
+                    <BusIcon className="w-5 h-5" />
+                    <span>Conductor Dashboard</span>
+                  </Link>
                 ) : (
                   <>
                     {adminRoute && (

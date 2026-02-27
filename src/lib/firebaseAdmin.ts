@@ -1,6 +1,7 @@
 import { initializeApp, getApps, cert, App } from 'firebase-admin/app';
 import { getAuth, Auth } from 'firebase-admin/auth';
 import { getFirestore, Firestore, FieldValue } from 'firebase-admin/firestore';
+import { getMessaging, Messaging } from 'firebase-admin/messaging';
 
 // A function to safely get credentials, throwing an error if env vars are missing.
 // This improves type safety by guaranteeing the variables are strings.
@@ -40,6 +41,7 @@ const adminApp: App =
 const admin: App = adminApp; // Alias for clarity
 const adminAuth: Auth = getAuth(adminApp);
 const adminDb: Firestore = getFirestore(adminApp);
+const adminMessaging: Messaging = getMessaging(adminApp);
 
 // Export everything in a single, clear statement.
-export { admin ,adminApp, adminAuth, adminDb, FieldValue };
+export { admin, adminApp, adminAuth, adminDb, adminMessaging, FieldValue };

@@ -3,9 +3,32 @@ import { db } from '@/lib/firebaseConfig';
 import { doc, setDoc, collection, serverTimestamp,writeBatch } from 'firebase/firestore';
 import { getAuth } from 'firebase-admin/auth';
 import {admin} from '@/lib/firebaseAdmin';
+import { apiRateLimiter, getClientIp } from '@/lib/rateLimiter';
 
 export async function POST(req: NextRequest) {
-  const authHeader = req.headers.get('Authorization');
+  // ─── Rate Limiting ──────────────────────────────────────────────────────────
+  const ip = getClientIp(req);
+  const rateLimitResult = apiRateLimiter.check(ip);
+
+  if (!rateLimitResult.allowed) {
+    console.warn(`[RATE LIMIT] Too many company onboarding requests from ${ip}`);
+    return new NextResponse(
+      JSON.stringify({
+        error: 'Too many requests',
+        message: `Please try again in ${rateLimitResult.retryAfter} seconds.`,
+      }),
+      {
+        status: 429,
+        headers: {
+          'Retry-After': rateLimitResult.retryAfter?.toString() || '60',
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+  }
+
+  // ─── Authorization ──────────────────────────────────────────────────────────
+  const authHeader = req.headers.get('authorization');
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return new NextResponse('Unauthorized', { status: 401 });
   }

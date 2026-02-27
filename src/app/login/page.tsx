@@ -227,7 +227,7 @@ const handlePostLoginActions = async (user: any) => {
     } 
     else if (role === 'operator' && companyId) {
       // Redirect operator to operator dashboard
-      return `company/operator/dashboard?companyId=${companyId}`;
+      return `/company/operator/dashboard?companyId=${companyId}`;
     }
     else if (role === 'super_admin') {
       // Redirect super admin

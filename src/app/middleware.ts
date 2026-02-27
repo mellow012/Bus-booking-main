@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { getAuth } from 'firebase-admin/auth';
 import { initializeApp, getApps, cert } from 'firebase-admin/app';
+import { validateCSRFToken, requiresCSRFProtection } from '@/lib/csrfProtection';
 
 if (!getApps().length) {
   const sanitizePrivateKey = (key?: string) =>
@@ -22,8 +23,8 @@ if (!getApps().length) {
 
 const ROLE_PROTECTED_ROUTES: { prefix: string; roles: string[] }[] = [
   { prefix: '/company/admin',          roles: ['company_admin'] },
-  { prefix: '/operator/dashboard',     roles: ['operator'] },
-  { prefix: '/conductor/dashboard',    roles: ['conductor'] },           // NEW
+  { prefix: '/company/operator/dashboard',     roles: ['operator'] },
+  { prefix: '/company/conductor/dashboard',    roles: ['conductor'] },           // NEW
   { prefix: '/admin',            roles: ['superadmin'] },
 ];
 
@@ -51,10 +52,50 @@ const isPublicRoute = (pathname: string): boolean =>
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
+  const method = req.method;
 
   // Always allow public routes through
   if (isPublicRoute(pathname)) {
     return NextResponse.next();
+  }
+
+  // ─── CSRF Protection for API routes ───────────────────────────────────────
+
+  // Only check CSRF for state-changing requests on API endpoints
+  if (pathname.startsWith('/api') && requiresCSRFProtection(method)) {
+    // Whitelist endpoints that don't need CSRF (e.g., public APIs, auth endpoints)
+    const csrfExemptPaths = [
+      '/api/csrf-token', // token endpoint itself
+      '/api/auth/login',
+      '/api/auth/send-verification-email', // public endpoint
+    ];
+
+    const isExempt = csrfExemptPaths.some(path =>
+      pathname === path || pathname.startsWith(path + '/')
+    );
+
+    if (!isExempt) {
+      // Get CSRF token from header or cookie
+      const headerToken = req.headers.get('x-csrf-token');
+      const cookieToken = req.cookies.get('csrf_token')?.value;
+
+      if (!headerToken) {
+        console.warn(`[CSRF] Missing token on ${method} ${pathname}`);
+        return NextResponse.json(
+          { error: 'CSRF token required', success: false },
+          { status: 403 }
+        );
+      }
+
+      // Validate both header token and cookie token are present and match
+      if (!cookieToken || !validateCSRFToken(headerToken)) {
+        console.warn(`[CSRF] Invalid token on ${method} ${pathname}`);
+        return NextResponse.json(
+          { error: 'Invalid CSRF token', success: false },
+          { status: 403 }
+        );
+      }
+    }
   }
 
   const token = req.cookies.get('token')?.value;

@@ -8,6 +8,7 @@ import { z } from 'zod';
 import { RateLimiterMemory } from 'rate-limiter-flexible';
 import { v4 as uuidv4 } from 'uuid';
 import PaymentsService from 'paychangu';
+import { logger } from '@/lib/logger';
 
 // Get Admin Firestore instance
 const adminDb = getFirestore(adminApp);
@@ -19,7 +20,7 @@ const rateLimiter = new RateLimiterMemory({
 });
 
 // --- Zod Schema for Input Validation ---
-const requestSchema = z.object({
+const paymentInitiateSchema = z.object({
   bookingId: z.string().min(1, 'Booking ID is required'),
   paymentProvider: z.enum(['stripe', 'paychangu']),
   customerDetails: z.object({
@@ -45,7 +46,7 @@ export async function POST(request: Request) {
   try {
     await rateLimiter.consume(ip);
   } catch (rateLimitError) {
-    console.warn('Rate limit exceeded:', { ip });
+    await logger.logSecurityEvent('Rate limit exceeded on payment initiation', ip);
     return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
   }
 
@@ -54,13 +55,14 @@ export async function POST(request: Request) {
     requestBody = await request.json();
     bookingIdFromBody = requestBody.bookingId;
   } catch (parseError) {
-    console.error('Failed to parse request body:', { parseError, ip });
+    await logger.logError('payment', 'Failed to parse payment request body', parseError, { ip });
     return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 });
   }
 
   // Verify Firebase Auth Token
   const authHeader = request.headers.get('Authorization');
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    await logger.logSecurityEvent('Missing authorization header on payment request', ip);
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   const idToken = authHeader.split('Bearer ')[1];
@@ -69,15 +71,20 @@ export async function POST(request: Request) {
     const decodedToken = await adminAuth.verifyIdToken(idToken, true);
     userId = decodedToken.uid;
   } catch (error: any) {
-    console.error('Token verification failed:', { error: error.message, ip });
+    await logger.logError('payment', 'Token verification failed on payment request', error, { ip });
     return NextResponse.json({ error: 'Invalid or expired token' }, { status: 401 });
   }
 
   try {
-    const validatedData = requestSchema.parse(requestBody);
+    const validatedData = paymentInitiateSchema.parse(requestBody);
     const { bookingId, paymentProvider, customerDetails, metadata } = validatedData;
 
-    console.log('Payment initiation attempt:', { bookingId, userId, paymentProvider });
+    await logger.logSuccess('payment', 'Payment initiation started', {
+      userId,
+      ip,
+      action: 'payment_initiate',
+      metadata: { bookingId, paymentProvider },
+    });
 
     const bookingRef = adminDb.collection('bookings').doc(bookingId);
     let checkoutUrl: string | null = null;
@@ -104,11 +111,10 @@ export async function POST(request: Request) {
       const amount = bookingData.totalAmount;
       const currency = bookingData.currency || 'mwk';
 
-      console.log('Processing payment for booking:', {
-        bookingId,
-        amount,
-        currency,
-        paymentProvider
+      await logger.logPayment('Payment processing initiated', bookingId, amount, paymentProvider, true, {
+        userId,
+        ip,
+        metadata: { currency, provider: paymentProvider },
       });
 
       // Prepare update data
@@ -202,12 +208,11 @@ export async function POST(request: Request) {
     }, { status: 200 });
 
   } catch (error: any) {
-    console.error('Payment initiation error:', { 
-      error: error.message, 
-      userId, 
-      ip, 
-      bookingId: bookingIdFromBody,
-      stack: error.stack?.slice(0, 300)
+    await logger.logError('payment', 'Payment initiation failed', error, {
+      userId,
+      ip,
+      action: 'payment_initiate_error',
+      metadata: { bookingId: bookingIdFromBody },
     });
     
     // Update booking status to 'failed' using Admin SDK
@@ -218,11 +223,14 @@ export async function POST(request: Request) {
                 paymentFailureReason: error.message || 'Unknown error',
                 updatedAt: new Date(),
             });
-            console.log('Successfully updated booking status to failed:', bookingIdFromBody);
+            await logger.logSuccess('payment', 'Updated booking status to failed', {
+              userId,
+              metadata: { bookingId: bookingIdFromBody },
+            });
         } catch (updateError: any) {
-            console.error('Failed to update booking status on error:', { 
-                updateError: updateError.message, 
-                bookingId: bookingIdFromBody 
+            await logger.logError('payment', 'Failed to update booking status on error', updateError, {
+              userId,
+              metadata: { bookingId: bookingIdFromBody },
             });
         }
     }

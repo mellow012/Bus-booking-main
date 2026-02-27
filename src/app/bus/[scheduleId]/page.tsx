@@ -174,7 +174,7 @@ const BusDetailsPage: React.FC = () => {
         contactEmail: userProfile?.email || user.email || 'N/A', 
         contactPhone: userProfile?.phone || 'N/A',
         routeId: schedule.routeId,
-        paymentGateway: 'paychangu', // Example value
+        
       };
 
       await setDoc(doc(db, 'bookings', bookingId), booking);

@@ -6,8 +6,11 @@ import { useAuth } from '@/contexts/AuthContext';
 import { collection, query, where, getDocs, limit, orderBy, startAfter, QueryDocumentSnapshot, Timestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebaseConfig';
 import SearchForm from '@/components/SearchForm';
-import SearchFilters from '@/components/SearchFiltersComponent';
-import { Schedule, Company, Bus, Route, SearchFilterss } from '@/types';
+// ✅ Renamed component import to avoid clash with the `SearchFilters` type
+import SearchFiltersComponent from '@/components/SearchFiltersComponent';
+// ✅ `SearchFilters` is a type — must use `import type` when isolatedModules is enabled
+import { Schedule, Company, Bus, Route } from '@/types';
+import type { SearchFilters } from '@/types';
 import { Bus as BusIcon, Map as MapIcon, Clock, DollarSign as Currency, Loader2, AlertCircle } from 'lucide-react';
 import AlertMessage from '../../components/AlertMessage';
 import { Button } from '@/components/ui/button';
@@ -66,13 +69,13 @@ export default function Search() {
     hasMore: false,
   });
 
-  // State for user-selected filters with more reasonable defaults
-  const [filters, setFilters] = useState<SearchFilterss>({
-    busType: '',
+  // State for user-selected filters
+  const [filters, setFilters] = useState<SearchFilters>({
+    busType: [],
     priceRange: { min: 0, max: 100000 },
     departureTime: { start: '00:00', end: '23:59' },
     amenities: [],
-    company: '',
+    companyId: '',
   });
 
   // State for caching search results to reduce Firestore reads
@@ -266,7 +269,7 @@ export default function Search() {
       console.error('Search error:', err);
       let errorMessage = 'Failed to load search results. Please try again.';
       if (err.code === 'unavailable') errorMessage = 'Network error. Check your connection.';
-      else if (err.code === 'permission-denied') errorMessage = 'Permission denied. Ensure you’re logged in.';
+      else if (err.code === 'permission-denied') errorMessage = 'Permission denied. Ensure you\'re logged in.';
       else if (err.code === 'failed-precondition') errorMessage = 'Database index required. Contact support.';
       setSearchState(prev => ({
         ...prev,
@@ -281,14 +284,26 @@ export default function Search() {
   const filteredResults = useMemo(() => {
     let results = searchState.results;
 
-    if (filters.busType && filters.busType.trim() !== '') {
-      results = results.filter(result => result.bus?.busType?.toLowerCase().trim() === filters.busType.toLowerCase().trim());
+    // busType is now string[] in the type definition
+    if (filters.busType && filters.busType.length > 0) {
+      results = results.filter(result =>
+        filters.busType!.some(t => t.toLowerCase() === result.bus?.busType?.toLowerCase().trim())
+      );
     }
-    if (filters.company && filters.company.trim() !== '') {
-      results = results.filter(result => result.company?.name?.toLowerCase().trim()?.includes(filters.company.toLowerCase().trim()) || false);
+    if (filters.companyId && filters.companyId.trim() !== '') {
+      results = results.filter(result =>
+        result.company?.id === filters.companyId ||
+        result.company?.name?.toLowerCase().includes(filters.companyId!.toLowerCase())
+      );
     }
     if (filters.amenities && filters.amenities.length > 0) {
-      results = results.filter(result => filters.amenities.every((amenity: string) => result.bus?.amenities?.some(busAmenity => busAmenity.toLowerCase().includes(amenity.toLowerCase())) || false));
+      results = results.filter(result =>
+        filters.amenities!.every((amenity: string) =>
+          result.bus?.amenities?.some(busAmenity =>
+            busAmenity.toLowerCase().includes(amenity.toLowerCase())
+          ) || false
+        )
+      );
     }
     if (filters.priceRange) {
       const { min, max } = filters.priceRange;
@@ -341,7 +356,7 @@ export default function Search() {
   }, [searchBuses, searchState.hasMore, searchState.loading]);
 
   // Handler for filter changes
-  const handleFiltersChange = useCallback((newFilters: SearchFilterss) => {
+  const handleFiltersChange = useCallback((newFilters: SearchFilters) => {
     setFilters(newFilters);
     setSearchState(prev => ({ ...prev, page: 1 }));
   }, []);
@@ -349,11 +364,11 @@ export default function Search() {
   // Handler to clear all filters
   const handleClearFilters = useCallback(() => {
     setFilters({
-      busType: '',
+      busType: [],
       priceRange: { min: 0, max: 100000 },
       departureTime: { start: '00:00', end: '23:59' },
       amenities: [],
-      company: '',
+      companyId: '',
     });
     setSearchState(prev => ({ ...prev, page: 1 }));
   }, []);
@@ -370,7 +385,7 @@ export default function Search() {
   };
 
   // Utility to format time strings
-  const formatTime = (timestamp: any, date?: string) => {
+  const formatTime = (timestamp: any) => {
     return extractTimeFromTimestamp(timestamp);
   };
 
@@ -402,7 +417,8 @@ export default function Search() {
           <section aria-label="Search Results" className="grid grid-cols-1 lg:grid-cols-4 gap-8">
             <aside className="lg:col-span-1" aria-label="Search Filters">
               <div className="sticky top-4">
-                <SearchFilters
+                {/* ✅ Using renamed component import */}
+                <SearchFiltersComponent
                   filters={filters}
                   onFiltersChange={handleFiltersChange}
                   results={searchState.results}

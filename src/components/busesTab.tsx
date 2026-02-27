@@ -207,34 +207,55 @@ const BusesTab: FC<BusesTabProps> = ({
   }, [schedules]);
 
   const addBus = async (data: NewBusState) => {
-    setActionLoading(true);
-    try {
-      const busData = {
-        ...data,
-        registrationDetails: {
-          registrationNumber: data.registrationNumber || 'Pending',
-          registrationDate: new Date(),
-          expiryDate: data.registrationExpiry ? new Date(data.registrationExpiry) : new Date(),
-          authority: 'Road Traffic Directorate',
-        },
-        insuranceExpiry: data.insuranceExpiry ? new Date(data.insuranceExpiry) : undefined,
-        lastMaintenanceDate: data.lastMaintenanceDate ? new Date(data.lastMaintenanceDate) : undefined,
-        nextMaintenanceDate: data.nextMaintenanceDate ? new Date(data.nextMaintenanceDate) : undefined,
-        conductorIds: data.conductorIds || [],
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
+  setActionLoading(true);
+  try {
+    // Restructure data to match the Bus interface
+    const busData: Omit<Bus, 'id'> = {
+      licensePlate: data.licensePlate,
+      busType: data.busType,
+      capacity: data.capacity,
+      amenities: data.amenities || [],
+      companyId: companyId,
+      status: data.status,
+      fuelType: data.fuelType,
+      yearOfManufacture: data.yearOfManufacture || new Date().getFullYear(),
       
-      const docRef = await addDoc(collection(db, "buses"), busData as Omit<Bus, 'id'>);
-      setBuses([...buses, { id: docRef.id, ...busData }] as Bus[]);
-      return docRef.id;
-    } catch (err: any) {
-      setError(`Failed to add bus: ${err.message}`);
-      return null;
-    } finally {
-      setActionLoading(false);
-    }
-  };
+      // Nesting Registration Details
+      registrationDetails: {
+        registrationNumber: data.registrationNumber || 'Pending',
+        registrationDate: new Date(),
+        expiryDate: data.registrationExpiry ? new Date(data.registrationExpiry) : new Date(),
+        authority: 'Road Traffic Directorate',
+      },
+
+      // Nesting Insurance Details (The fix for your error)
+      insuranceDetails: {
+        provider: 'General Insurance', // Default or add to NewBusState
+        policyNumber: 'Pending',       // Default or add to NewBusState
+        expiryDate: data.insuranceExpiry ? new Date(data.insuranceExpiry) : new Date(),
+      },
+
+      // Handling Dates
+      lastMaintenanceDate: data.lastMaintenanceDate ? new Date(data.lastMaintenanceDate) : new Date(),
+      nextMaintenanceDate: data.nextMaintenanceDate ? new Date(data.nextMaintenanceDate) : new Date(),
+      
+      conductorIds: data.conductorIds || [],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    
+    const docRef = await addDoc(collection(db, "buses"), busData);
+    
+    // Update local state with the new ID
+    setBuses([...buses, { id: docRef.id, ...busData } as Bus]);
+    return docRef.id;
+  } catch (err: any) {
+    setError(`Failed to add bus: ${err.message}`);
+    return null;
+  } finally {
+    setActionLoading(false);
+  }
+};
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -970,12 +991,16 @@ const BusesTab: FC<BusesTabProps> = ({
                 <label className="block text-sm font-medium text-gray-700 mb-2">Year of Manufacture</label>
                 <input
                   type="number"
-                  value={editBus.yearOfManufacture ?? ''}
+                  // If the value is undefined or null, show an empty string in the input
+                  value={editBus.yearOfManufacture ?? ''} 
                   onChange={(e) => {
-                    const val = e.target.value ? parseInt(e.target.value) : undefined;
+                    // Parse the value; if it's empty, use a default (like the current year) 
+                    // or keep the previous value to satisfy the 'number' requirement.
+                    const val = e.target.value ? parseInt(e.target.value) : new Date().getFullYear();
+                    
                     setEditBus({ 
                       ...editBus, 
-                      yearOfManufacture: val
+                      yearOfManufacture: val // This is now guaranteed to be a number
                     });
                   }}
                   className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"

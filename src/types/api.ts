@@ -1,5 +1,4 @@
 import { Schedule, Bus, Route, Company } from './core';
-import { SearchFilters } from './dashboard';
 
 export interface CreateCompanyRequest {
   name: string;
@@ -10,11 +9,18 @@ export interface CreateCompanyRequest {
   description?: string;
 }
 
+export interface ApiError {
+  code: string;
+  message: string;
+  details?: Record<string, any>;
+  timestamp: Date;
+}
+
 export interface ApiResponse<T> {
   success: boolean;
   data?: T;
+  error?: ApiError;
   message?: string;
-  error?: string;
 }
 
 export interface PaginatedResponse<T> {
@@ -25,6 +31,14 @@ export interface PaginatedResponse<T> {
     total: number;
     totalPages: number;
   };
+}
+
+export interface SearchFilters {
+  busType?: string[];
+  priceRange?: { min: number; max: number };
+  departureTime?: { start: string; end: string };
+  amenities?: string[];
+  companyId?: string;
 }
 
 export interface SearchQuery {
@@ -40,11 +54,4 @@ export interface SearchResult {
   bus: Bus;
   route: Route;
   company: Company;
-}
-export interface SearchFilterss {
-  busType: string;
-  priceRange: { min: number; max: number };
-  departureTime: { start: string; end: string };
-  amenities: string[];
-  company: string;
 }

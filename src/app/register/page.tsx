@@ -6,6 +6,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
+import { EmailVerificationPrompt } from '@/components/EmailVerificationPrompt';
+import { useEmailVerification } from '@/hooks/useEmailVerification';
 import { 
   EnvelopeIcon, 
   LockClosedIcon, 
@@ -229,7 +231,6 @@ const getErrorMessage = (error: any): string => {
 
 // Main component
 export default function Register() {
-  const { signUp } = useAuth();
   const router = useRouter();
   
   // Form state
@@ -248,10 +249,13 @@ export default function Register() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [generalError, setGeneralError] = useState('');
   const [success, setSuccess] = useState(false);
+  const [userEmail, setUserEmail] = useState('');
   const [passwordStrength, setPasswordStrength] = useState<PasswordStrength | null>(null);
   
   // Custom hooks
   const { errors, touched, validateForm, handleBlur, clearFieldError } = useFormValidation(formData);
+  const { signUp } = useAuth();
+  const { sendVerificationEmail } = useEmailVerification();
 
   // Update password strength when password changes
   useEffect(() => {
@@ -299,10 +303,21 @@ export default function Register() {
         role: 'customer',
       });
       
+      setUserEmail(formData.email);
       setSuccess(true);
       
+      // Send verification email and show banner
+      try {
+        await sendVerificationEmail();
+        // Banner will automatically show
+      } catch (verificationError: any) {
+        console.error('Failed to send verification email:', verificationError);
+        // Continue anyway - user can see banner to resend
+      }
+      
+      // Redirect to home after 2 seconds
       setTimeout(() => {
-        router.push('/dashboard');
+        router.push('/');
       }, 2000);
       
     } catch (error: any) {
@@ -419,9 +434,17 @@ export default function Register() {
   );
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
-      {isSubmitting && <SkeletonLoader />}
-      <div className={`sm:mx-auto sm:w-full sm:max-w-md ${isSubmitting ? 'hidden' : ''}`}>
+    <>
+      {/* Only show banner after successful signup */}
+      {userEmail && (
+        <EmailVerificationPrompt
+          email={userEmail}
+          showBanner={true}
+        />
+      )}
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+        {isSubmitting && <SkeletonLoader />}
+        <div className={`sm:mx-auto sm:w-full sm:max-w-md ${isSubmitting ? 'hidden' : ''}`}>
         {/* Logo */}
         <div className="flex justify-center">
           <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center shadow-lg">
@@ -707,4 +730,5 @@ export default function Register() {
         </div>
       </div>
     </div>
+    </>
   );}

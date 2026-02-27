@@ -63,9 +63,3 @@ export interface CompanyStats {
   };
 }
 
-export interface SearchFilters {
-  busType?: string[];
-  priceRange?: { min: number; max: number };
-  departureTime?: { start: string; end: string };
-  amenities?: string[];
-}

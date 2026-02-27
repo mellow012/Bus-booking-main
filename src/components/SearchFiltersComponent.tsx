@@ -1,11 +1,12 @@
 'use client';
 
 import React, { useMemo } from 'react';
-import { SearchFilterss, SearchResult } from '@/types';
+import {  SearchResult } from '@/types';
+import type { SearchFilters } from '@/types';
 
 interface SearchFiltersProps {
-  filters: SearchFilterss;
-  onFiltersChange: (filters: SearchFilterss) => void;
+  filters: SearchFilters;
+  onFiltersChange: (filters: SearchFilters) => void;
   results: SearchResult[];
 }
 
@@ -14,7 +15,7 @@ export default function SearchFilters({ filters, onFiltersChange, results }: Sea
   const companies = useMemo(() => Array.from(new Set(results.map(r => r.company.name))), [results]);
   const amenities = useMemo(() => Array.from(new Set(results.flatMap(r => r.bus.amenities))), [results]);
 
-  const handleFilterChange = (key: keyof SearchFilterss, value: any) => {
+  const handleFilterChange = (key: keyof SearchFilters, value: any) => {
     onFiltersChange({ ...filters, [key]: value });
   };
 
@@ -42,8 +43,8 @@ export default function SearchFilters({ filters, onFiltersChange, results }: Sea
         <div>
           <label className="block text-sm font-semibold text-gray-800 mb-2">Company</label>
           <select
-            value={filters.company || ''}
-            onChange={e => handleFilterChange('company', e.target.value || undefined)}
+            value={filters.companyId || ''}
+            onChange={e => handleFilterChange('companyId', e.target.value || undefined)}
             className="w-full px-4 py-2 text-gray-800 bg-white border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 transition-all duration-200"
             aria-label="Filter by company"
           >

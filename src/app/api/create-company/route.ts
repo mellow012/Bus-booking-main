@@ -2,14 +2,18 @@ import { NextRequest, NextResponse } from 'next/server';
 import { adminAuth, adminDb } from '@/lib/firebaseAdmin';
 import { sendPasswordResetEmail } from '@/lib/email-service';
 import { FieldValue } from 'firebase-admin/firestore';
+import { apiRateLimiter, getClientIp } from '@/lib/rateLimiter';
+import { logger } from '@/lib/logger';
+import { z } from 'zod';
+import { companyNameSchema, emailSchema, phoneSchema } from '@/lib/validationSchemas';
 
-interface CreateCompanyRequest {
-  companyName: string;
-  companyEmail: string;
-  adminFirstName?: string;
-  adminLastName?: string;
-  adminPhone?: string;
-}
+const createCompanySchema = z.object({
+  companyName: companyNameSchema,
+  companyEmail: emailSchema,
+  adminFirstName: z.string().max(50).trim().default(''),
+  adminLastName: z.string().max(50).trim().default(''),
+  adminPhone: z.string().max(20).trim().default(''),
+}).strict();
 
 interface ApiResponse {
   success: boolean;
@@ -21,31 +25,54 @@ interface ApiResponse {
 
 export async function POST(request: NextRequest): Promise<NextResponse<ApiResponse>> {
   try {
-    const body: CreateCompanyRequest = await request.json();
-    const { 
-      companyName, 
-      companyEmail, 
-      adminFirstName = '', 
-      adminLastName = '', 
-      adminPhone = '' 
-    } = body;
+    // ─── Rate Limiting ───────────────────────────────────────────────────────
+    const ip = getClientIp(request);
+    const rateLimitResult = apiRateLimiter.check(ip);
 
-    if (!companyName?.trim() || !companyEmail?.trim()) {
+    if (!rateLimitResult.allowed) {
+      console.warn(`[RATE LIMIT] Too many company creation requests from ${ip}`);
       return NextResponse.json(
-        { success: false, error: 'Company name and email are required', message: '' },
-        { status: 400 }
+        {
+          success: false,
+          message: `Too many requests. Please try again in ${rateLimitResult.retryAfter} seconds.`,
+          error: 'Rate limit exceeded',
+        },
+        {
+          status: 429,
+          headers: {
+            'Retry-After': rateLimitResult.retryAfter?.toString() || '60',
+          },
+        }
       );
     }
 
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(companyEmail.trim())) {
-      return NextResponse.json(
-        { success: false, error: 'Invalid email address', message: '' },
-        { status: 400 }
-      );
+    // ─── Validation ──────────────────────────────────────────────────────────
+    try {
+      const body = await request.json();
+      var { companyName, companyEmail, adminFirstName, adminLastName, adminPhone } = 
+        createCompanySchema.parse(body);
+    } catch (error: any) {
+      if (error instanceof z.ZodError) {
+        await logger.logWarning('api', 'Company creation validation failed', {
+          ip,
+          action: 'company_create_validation_error',
+          metadata: {
+            issues: error.issues.map(i => `${i.path.join('.')}: ${i.message}`),
+          },
+        });
+        return NextResponse.json(
+          { 
+            success: false, 
+            message: 'Invalid request data',
+            error: error.issues[0]?.message || 'Validation failed' 
+          },
+          { status: 400 }
+        );
+      }
+      throw error;
     }
 
-    const trimmedEmail = companyEmail.trim().toLowerCase();
+    const trimmedEmail = companyEmail.toLowerCase();
 
     let existingUser = null;
     try {
@@ -106,9 +133,9 @@ export async function POST(request: NextRequest): Promise<NextResponse<ApiRespon
     const userRef = adminDb.collection('users').doc(userRecord.uid);
     batch.set(userRef, {
       email: trimmedEmail,
-      firstName: adminFirstName.trim(),
-      lastName: adminLastName.trim(),
-      phone: adminPhone.trim(),
+      firstName: (adminFirstName || '').trim(),
+      lastName: (adminLastName || '').trim(),
+      phone: (adminPhone || '').trim(),
       role: 'company_admin',
       companyId,
       passwordSet: false,
