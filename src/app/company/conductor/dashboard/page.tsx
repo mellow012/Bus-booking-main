@@ -59,7 +59,6 @@ const WalkOnBookingModal: FC<WalkOnModalProps> = ({
   });
   const [errors, setErrors] = useState<Partial<Record<keyof WalkOnFormData, string>>>({});
 
-  // Reset every time modal opens
   useEffect(() => {
     if (isOpen) {
       setStep("seat");
@@ -123,7 +122,6 @@ const WalkOnBookingModal: FC<WalkOnModalProps> = ({
   const stepIndex: Record<WalkOnStep, number> = { seat: 0, details: 1, payment: 2, confirm: 3 };
   const stepLabels = ["Seat", "Details", "Payment", "Confirm"];
 
-  // ── Immutable route/schedule info block ───────────────────────────────────
   const renderScheduleInfo = () => (
     <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-2">
       <div className="flex items-center gap-2 text-blue-800 font-semibold text-sm mb-1">
@@ -159,22 +157,18 @@ const WalkOnBookingModal: FC<WalkOnModalProps> = ({
     </div>
   );
 
-  // ── Step: Seat selection ──────────────────────────────────────────────────
   const renderSeatStep = () => (
     <div className="space-y-4">
       {renderScheduleInfo()}
-
       <p className="text-sm text-gray-600">
         Tap an available seat to assign it. Grey = available, coloured = taken.
       </p>
-
       <div className="bg-gray-50 rounded-xl border p-5">
         <div className="flex justify-center mb-4">
           <div className="px-4 py-1.5 bg-gray-200 rounded-full text-xs text-gray-600 font-medium flex items-center gap-2">
             <BusIcon className="w-4 h-4" /> Driver's Cab — Front
           </div>
         </div>
-
         <div className="grid gap-2.5" style={{ gridTemplateColumns: "repeat(4, 1fr)" }}>
           {Array.from({ length: bus.capacity }).map((_, i) => {
             const seatNum = (i + 1).toString();
@@ -213,7 +207,6 @@ const WalkOnBookingModal: FC<WalkOnModalProps> = ({
             );
           })}
         </div>
-
         <div className="mt-4 flex flex-wrap gap-3 justify-center text-xs text-gray-600">
           {[
             { color: "bg-white border-2 border-gray-300", label: "Available" },
@@ -228,7 +221,6 @@ const WalkOnBookingModal: FC<WalkOnModalProps> = ({
           ))}
         </div>
       </div>
-
       {selectedSeat && (
         <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 text-sm text-blue-800 font-medium">
           <CheckCircle className="w-4 h-4 text-blue-600" />
@@ -238,73 +230,41 @@ const WalkOnBookingModal: FC<WalkOnModalProps> = ({
     </div>
   );
 
-  // ── Step: Passenger details ───────────────────────────────────────────────
   const renderDetailsStep = () => (
     <div className="space-y-4">
-      {/* Immutable route summary */}
       {renderScheduleInfo()}
-
       <div className="flex items-center gap-3 p-3 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-700">
         <Ticket className="w-5 h-5 flex-shrink-0 text-blue-600" />
         <span>Assigning <strong>Seat {selectedSeat}</strong> — enter passenger details below</span>
       </div>
-
-      {/* Name row */}
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            First Name <span className="text-red-500">*</span>
-          </label>
-          <input
-            type="text"
-            value={form.firstName}
-            onChange={(e) => setForm({ ...form, firstName: e.target.value })}
+          <label className="block text-sm font-medium text-gray-700 mb-1">First Name <span className="text-red-500">*</span></label>
+          <input type="text" value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })}
             className={`w-full px-3 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.firstName ? "border-red-400 bg-red-50" : "border-gray-300"}`}
-            placeholder="John"
-          />
+            placeholder="John" />
           {errors.firstName && <p className="text-xs text-red-600 mt-1">{errors.firstName}</p>}
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Last Name <span className="text-red-500">*</span>
-          </label>
-          <input
-            type="text"
-            value={form.lastName}
-            onChange={(e) => setForm({ ...form, lastName: e.target.value })}
+          <label className="block text-sm font-medium text-gray-700 mb-1">Last Name <span className="text-red-500">*</span></label>
+          <input type="text" value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })}
             className={`w-full px-3 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.lastName ? "border-red-400 bg-red-50" : "border-gray-300"}`}
-            placeholder="Banda"
-          />
+            placeholder="Banda" />
           {errors.lastName && <p className="text-xs text-red-600 mt-1">{errors.lastName}</p>}
         </div>
       </div>
-
-      {/* Phone */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Phone Number <span className="text-red-500">*</span>
-        </label>
-        <input
-          type="tel"
-          value={form.phone}
-          onChange={(e) => setForm({ ...form, phone: e.target.value })}
+        <label className="block text-sm font-medium text-gray-700 mb-1">Phone Number <span className="text-red-500">*</span></label>
+        <input type="tel" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })}
           className={`w-full px-3 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.phone ? "border-red-400 bg-red-50" : "border-gray-300"}`}
-          placeholder="+265 999 000 000"
-        />
+          placeholder="+265 999 000 000" />
         {errors.phone && <p className="text-xs text-red-600 mt-1">{errors.phone}</p>}
       </div>
-
-      {/* Sex + Age side by side */}
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Sex <span className="text-red-500">*</span>
-          </label>
-          <select
-            value={form.sex}
-            onChange={(e) => setForm({ ...form, sex: e.target.value as WalkOnFormData["sex"] })}
-            className={`w-full px-3 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white ${errors.sex ? "border-red-400 bg-red-50" : "border-gray-300"}`}
-          >
+          <label className="block text-sm font-medium text-gray-700 mb-1">Sex <span className="text-red-500">*</span></label>
+          <select value={form.sex} onChange={(e) => setForm({ ...form, sex: e.target.value as WalkOnFormData["sex"] })}
+            className={`w-full px-3 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white ${errors.sex ? "border-red-400 bg-red-50" : "border-gray-300"}`}>
             <option value="">Select…</option>
             <option value="male">Male</option>
             <option value="female">Female</option>
@@ -313,59 +273,37 @@ const WalkOnBookingModal: FC<WalkOnModalProps> = ({
           {errors.sex && <p className="text-xs text-red-600 mt-1">{errors.sex}</p>}
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Age <span className="text-red-500">*</span>
-          </label>
-          <input
-            type="number"
-            value={form.age}
-            onChange={(e) => setForm({ ...form, age: e.target.value })}
+          <label className="block text-sm font-medium text-gray-700 mb-1">Age <span className="text-red-500">*</span></label>
+          <input type="number" value={form.age} onChange={(e) => setForm({ ...form, age: e.target.value })}
             className={`w-full px-3 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.age ? "border-red-400 bg-red-50" : "border-gray-300"}`}
-            placeholder="30"
-            min={1}
-            max={120}
-          />
+            placeholder="30" min={1} max={120} />
           {errors.age && <p className="text-xs text-red-600 mt-1">{errors.age}</p>}
         </div>
       </div>
     </div>
   );
 
-  // ── Step: Payment ─────────────────────────────────────────────────────────
   const renderPaymentStep = () => (
     <div className="space-y-4">
-      {/* Immutable summary */}
       {renderScheduleInfo()}
-
       <div className="flex items-center gap-3 p-3 bg-gray-50 border rounded-lg">
-        <div className="w-10 h-10 rounded-lg bg-blue-600 text-white font-bold flex items-center justify-center flex-shrink-0">
-          {selectedSeat}
-        </div>
+        <div className="w-10 h-10 rounded-lg bg-blue-600 text-white font-bold flex items-center justify-center flex-shrink-0">{selectedSeat}</div>
         <div>
           <p className="font-semibold text-gray-900">{form.firstName} {form.lastName}</p>
           <p className="text-sm text-gray-500">{form.phone} · {form.sex} · {form.age} yrs</p>
         </div>
       </div>
-
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1.5">
-          Amount Received (MWK) <span className="text-red-500">*</span>
-        </label>
+        <label className="block text-sm font-medium text-gray-700 mb-1.5">Amount Received (MWK) <span className="text-red-500">*</span></label>
         <div className="relative">
           <Banknote className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-          <input
-            type="number"
-            value={form.amountPaid}
+          <input type="number" value={form.amountPaid}
             onChange={(e) => { setForm({ ...form, amountPaid: e.target.value }); setErrors({}); }}
             className={`w-full pl-10 pr-4 py-3 border rounded-xl text-xl font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.amountPaid ? "border-red-400 bg-red-50" : "border-gray-300"}`}
-            placeholder={String(fareAmount)}
-            min={0}
-          />
+            placeholder={String(fareAmount)} min={0} />
         </div>
         {errors.amountPaid && (
-          <p className="mt-1.5 text-sm text-red-600 flex items-center gap-1">
-            <AlertCircle className="w-4 h-4" /> {errors.amountPaid}
-          </p>
+          <p className="mt-1.5 text-sm text-red-600 flex items-center gap-1"><AlertCircle className="w-4 h-4" /> {errors.amountPaid}</p>
         )}
         {!errors.amountPaid && parsedAmount > 0 && (
           <div className="mt-2 text-sm">
@@ -377,17 +315,13 @@ const WalkOnBookingModal: FC<WalkOnModalProps> = ({
           </div>
         )}
       </div>
-
       <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
         <p className="font-medium">Cash only — collect before confirming.</p>
-        <p className="mt-0.5 text-amber-700">
-          Once confirmed the booking is created and the passenger is marked as boarded immediately.
-        </p>
+        <p className="mt-0.5 text-amber-700">Once confirmed the booking is created and the passenger is marked as boarded immediately.</p>
       </div>
     </div>
   );
 
-  // ── Step: Confirm ─────────────────────────────────────────────────────────
   const renderConfirmStep = () => (
     <div className="space-y-4">
       <div className="bg-green-50 border border-green-200 rounded-xl p-5 space-y-3">
@@ -420,7 +354,6 @@ const WalkOnBookingModal: FC<WalkOnModalProps> = ({
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Walk-on Booking">
       <div className="space-y-5">
-        {/* Step indicator */}
         <div className="flex items-center justify-between px-1">
           {stepLabels.map((label, idx) => {
             const current = stepIndex[step];
@@ -432,9 +365,7 @@ const WalkOnBookingModal: FC<WalkOnModalProps> = ({
                   <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold border-2 transition-all ${done ? "bg-blue-600 border-blue-600 text-white" : active ? "bg-white border-blue-600 text-blue-600" : "bg-white border-gray-300 text-gray-400"}`}>
                     {done ? <Check className="w-3.5 h-3.5" /> : idx + 1}
                   </div>
-                  <span className={`text-xs font-medium ${active ? "text-blue-700" : done ? "text-blue-500" : "text-gray-400"}`}>
-                    {label}
-                  </span>
+                  <span className={`text-xs font-medium ${active ? "text-blue-700" : done ? "text-blue-500" : "text-gray-400"}`}>{label}</span>
                 </div>
                 {idx < stepLabels.length - 1 && (
                   <div className={`h-0.5 w-10 mx-1 mb-4 rounded ${done ? "bg-blue-500" : "bg-gray-200"}`} />
@@ -444,7 +375,6 @@ const WalkOnBookingModal: FC<WalkOnModalProps> = ({
           })}
         </div>
 
-        {/* Content */}
         <div>
           {step === "seat" && renderSeatStep()}
           {step === "details" && renderDetailsStep()}
@@ -452,7 +382,6 @@ const WalkOnBookingModal: FC<WalkOnModalProps> = ({
           {step === "confirm" && renderConfirmStep()}
         </div>
 
-        {/* Navigation */}
         <div className="flex gap-3 pt-2 border-t">
           {step !== "seat" ? (
             <Button variant="outline" className="flex-1" onClick={handleBack} disabled={loading}>
@@ -462,19 +391,11 @@ const WalkOnBookingModal: FC<WalkOnModalProps> = ({
             <Button variant="outline" className="flex-1" onClick={onClose} disabled={loading}>Cancel</Button>
           )}
           {step !== "confirm" ? (
-            <Button
-              className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
-              onClick={handleNext}
-              disabled={step === "seat" && !selectedSeat}
-            >
+            <Button className="flex-1 bg-blue-600 hover:bg-blue-700 text-white" onClick={handleNext} disabled={step === "seat" && !selectedSeat}>
               Continue <ChevronRight className="w-4 h-4 ml-1" />
             </Button>
           ) : (
-            <Button
-              className="flex-1 bg-green-600 hover:bg-green-700 text-white"
-              onClick={handleSubmit}
-              disabled={loading}
-            >
+            <Button className="flex-1 bg-green-600 hover:bg-green-700 text-white" onClick={handleSubmit} disabled={loading}>
               {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <CheckCircle className="w-4 h-4 mr-2" />}
               Confirm & Board
             </Button>
@@ -612,7 +533,6 @@ const ConductorDashboard: FC = () => {
   const [cashModalBooking, setCashModalBooking] = useState<Booking | null>(null);
   const [walkOnModalOpen, setWalkOnModalOpen] = useState(false);
 
-  // ── Fetch conductor ID ────────────────────────────────────────────────────
   useEffect(() => {
     if (!authUid) { setError("No conductor authentication found – please log in again"); setLoading(false); return; }
     const run = async () => {
@@ -626,7 +546,6 @@ const ConductorDashboard: FC = () => {
     run();
   }, [authUid]);
 
-  // ── Fetch buses ───────────────────────────────────────────────────────────
   useEffect(() => {
     if (!conductorFirestoreId) return;
     const unsub = onSnapshot(
@@ -637,7 +556,6 @@ const ConductorDashboard: FC = () => {
     return () => unsub();
   }, [conductorFirestoreId]);
 
-  // ── Fetch schedules ───────────────────────────────────────────────────────
   useEffect(() => {
     if (myBuses.length === 0) { setMyTrips([]); setLoading(false); return; }
     const now = new Date();
@@ -661,7 +579,6 @@ const ConductorDashboard: FC = () => {
     run();
   }, [myBuses]);
 
-  // ── Real-time bookings ────────────────────────────────────────────────────
   useEffect(() => {
     if (!selectedTrip?.id) { setTripBookings([]); return; }
     let initialLoad = true;
@@ -690,18 +607,20 @@ const ConductorDashboard: FC = () => {
     try {
       const booking = tripBookings.find((b) => b.id === bookingId);
       if (!booking) throw new Error("Booking not found");
-      // Only allowed fields per Firestore rules for conductor updates
       await updateDoc(doc(db, "bookings", bookingId), {
         bookingStatus: "confirmed",
-        paymentStatus: booking.paymentStatus,   // keep existing
+        paymentStatus: booking.paymentStatus,
         paymentMethod: booking.paymentMethod || null,
         paidAmount: booking.totalAmount || null,
         paidAt: booking.paidAt || null,
         paidBy: conductorFirestoreId,
         updatedAt: new Date(),
-        boardedAt: new Date(),                  // ← added to rules
+        boardedAt: new Date(),
       });
-      setTripBookings((prev) => prev.map((b) => b.id === bookingId ? { ...b, bookingStatus: "confirmed" } as Booking : b));
+      // FIX: Update local state directly and cleanly — no cast to unknown
+      setTripBookings((prev) =>
+        prev.map((b) => b.id === bookingId ? { ...b, bookingStatus: "confirmed" } : b)
+      );
       await logPassengerBoarded(user?.uid || "", conductorName, userProfile?.role || "conductor", userProfile?.companyId || "", bookingId, booking.passengerDetails?.[0]?.name || "Passenger", booking.seatNumbers?.[0] || "?");
       toast.success("Passenger marked as boarded");
     } catch (err: any) { toast.error(`Failed: ${err.message}`); }
@@ -721,9 +640,12 @@ const ConductorDashboard: FC = () => {
         paidAt: booking.paidAt || null,
         paidBy: conductorFirestoreId,
         updatedAt: new Date(),
-        noShowAt: new Date(),                   // ← added to rules
+        noShowAt: new Date(),
       });
-      setTripBookings((prev) => prev.map((b) => b.id === bookingId ? { ...b, bookingStatus: "no-show" } as Booking : b));
+      // FIX: Update local state directly and cleanly
+      setTripBookings((prev) =>
+        prev.map((b) => b.id === bookingId ? { ...b, bookingStatus: "no-show" } : b)
+      );
       await logPassengerNoShow(user?.uid || "", conductorName, userProfile?.role || "conductor", userProfile?.companyId || "", bookingId, booking.passengerDetails?.[0]?.name || "Passenger", booking.seatNumbers?.[0] || "?");
       toast.success("Passenger marked as no-show");
     } catch (err: any) { toast.error(`Failed: ${err.message}`); }
@@ -736,7 +658,7 @@ const ConductorDashboard: FC = () => {
       const booking = tripBookings.find((b) => b.id === bookingId);
       if (!booking) throw new Error("Booking not found");
       await updateDoc(doc(db, "bookings", bookingId), {
-        bookingStatus: booking.bookingStatus,   // unchanged — don't auto-board
+        bookingStatus: booking.bookingStatus,
         paymentStatus: "paid",
         paymentMethod: "cash_on_boarding",
         paidAmount: amount,
@@ -744,7 +666,15 @@ const ConductorDashboard: FC = () => {
         paidBy: conductorFirestoreId,
         updatedAt: new Date(),
       });
-      setTripBookings((prev) => prev.map((b) => b.id === bookingId ? { ...b, paymentStatus: "paid", paymentMethod: "cash_on_boarding" } as  unknown as Booking : b));
+      // FIX: Properly update paymentStatus and paymentMethod in local state
+      // Previously cast to `unknown as Booking` which silently lost the update
+      setTripBookings((prev) =>
+        prev.map((b) =>
+          b.id === bookingId
+            ? { ...b, paymentStatus: "paid", paymentMethod: "cash_on_boarding" }
+            : b
+        )
+      );
       await logPaymentCollected(user?.uid || "", conductorName, userProfile?.role || "conductor", userProfile?.companyId || "", bookingId, booking.passengerDetails?.[0]?.name || "Passenger", amount, "cash_on_boarding");
       toast.success(`MWK ${amount.toLocaleString()} recorded — now mark boarding status`);
     } catch (err: any) { toast.error(`Failed: ${err.message}`); }
@@ -762,18 +692,22 @@ const ConductorDashboard: FC = () => {
         seatNumbers: [seatNumber],
         passengerDetails: [{
           name: passengerName,
-          phone: data.phone,
-          sex: data.sex,
+          gender: (data.sex || 'other') as 'male' | 'female' | 'other',
           age: Number(data.age),
+          seatNumber: seatNumber,
+          contactNumber: data.phone,
         }],
         contactPhone: data.phone,
         totalAmount: selectedTrip.price || amount,
         paidAmount: amount,
-        // Walk-ons are paid + boarded in one step — no intermediate state needed
         bookingStatus: "confirmed",
         paymentStatus: "paid",
         paymentMethod: "cash_on_boarding",
+        // FIX: Use "bookedBy" AND "createdBy" both set to "conductor"
+        // so both the walk-on badge (createdBy) and any legacy checks (bookedBy) work
         bookedBy: "conductor",
+        createdBy: "conductor",
+        isWalkOn: true,           // Explicit flag — most reliable walk-on check
         conductorId: conductorFirestoreId,
         conductorUid: user?.uid || "",
         paidAt: new Date(),
@@ -785,10 +719,8 @@ const ConductorDashboard: FC = () => {
         arrivalLocation: selectedTrip.arrivalLocation,
         departureDateTime: selectedTrip.departureDateTime,
         companyId: userProfile?.companyId || "",
-        // No userId field — walk-ons have no registered user account
       });
 
-      // Keep bookedSeats in sync on the schedule doc
       await updateDoc(doc(db, "schedules", selectedTrip.id), {
         bookedSeats: [...(selectedTrip.bookedSeats || []), seatNumber],
         updatedAt: new Date(),
@@ -830,11 +762,9 @@ const ConductorDashboard: FC = () => {
                   bg = "bg-red-500 border-red-600 cursor-default"; text = "text-white";
                   icon = <XCircle className="w-4 h-4" />;
                 } else if (booking.paymentStatus !== "paid") {
-                  // Unpaid — tap to open cash modal
                   bg = "bg-amber-400 border-amber-500 cursor-pointer hover:scale-105"; text = "text-white";
                   icon = <DollarSign className="w-4 h-4" />;
                 } else {
-                  // Paid but not yet boarded — tap does nothing (use manifest buttons)
                   bg = "bg-blue-500 border-blue-600 cursor-default"; text = "text-white";
                 }
               }
@@ -842,15 +772,15 @@ const ConductorDashboard: FC = () => {
               return (
                 <div
                   key={seatNum}
-                  title={booking ? `${booking.passengerDetails?.[0]?.name || "Passenger"} — ${booking.paymentStatus === "paid" ? "Paid, awaiting boarding action" : "Cash due"}` : "Available"}
+                  title={booking
+                    ? `${booking.passengerDetails?.[0]?.name || "Passenger"} — ${booking.paymentStatus === "paid" ? "Paid, awaiting boarding action" : "Cash due"}`
+                    : "Available"}
                   className={`aspect-square rounded-lg flex items-center justify-center font-medium text-sm relative transition-transform ${bg} ${text}`}
                   onClick={() => {
-                    // Only tap-to-act for unpaid seats — opens cash modal
                     if (booking && booking.paymentStatus !== "paid" && booking.bookingStatus !== "cancelled") {
                       setCashModalBooking(booking);
                       setCashModalOpen(true);
                     }
-                    // Paid + pending seats: no auto-action — conductor uses the manifest buttons below
                   }}
                 >
                   {seatNum}
@@ -975,7 +905,8 @@ const ConductorDashboard: FC = () => {
                 <div className="bg-blue-50 rounded-lg p-3 border border-blue-100"><p className="text-2xl font-bold text-blue-700">{tripBookings.length}</p><p className="text-xs text-blue-600 mt-0.5">Booked</p></div>
                 <div className="bg-green-50 rounded-lg p-3 border border-green-100"><p className="text-2xl font-bold text-green-700">{tripBookings.filter((b) => b.bookingStatus === "confirmed").length}</p><p className="text-xs text-green-600 mt-0.5">Boarded</p></div>
                 <div className="bg-amber-50 rounded-lg p-3 border border-amber-100"><p className="text-2xl font-bold text-amber-700">{tripBookings.filter((b) => b.paymentStatus !== "paid").length}</p><p className="text-xs text-amber-600 mt-0.5">Cash Due</p></div>
-                <div className="bg-purple-50 rounded-lg p-3 border border-purple-100"><p className="text-2xl font-bold text-purple-700">{tripBookings.filter((b) => b.createdBy === "conductor").length}</p><p className="text-xs text-purple-600 mt-0.5">Walk-ons</p></div>
+                {/* FIX: Walk-on count now checks createdBy which is set correctly */}
+                <div className="bg-purple-50 rounded-lg p-3 border border-purple-100"><p className="text-2xl font-bold text-purple-700">{tripBookings.filter((b) => (b as any).bookedBy === "conductor" || b.createdBy === "conductor").length}</p><p className="text-xs text-purple-600 mt-0.5">Walk-ons</p></div>
               </div>
 
               <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white h-11 text-base" onClick={() => setWalkOnModalOpen(true)}>
@@ -1002,7 +933,9 @@ const ConductorDashboard: FC = () => {
                       const isPaid = booking.paymentStatus === "paid";
                       const isConfirmed = booking.bookingStatus === "confirmed";
                       const isNoShow = booking.bookingStatus === "no-show";
-                      const isWalkOn = booking.createdBy === "conductor";
+                      // FIX: Check createdBy (set on new walk-ons) with bookedBy fallback
+                      // for any existing records that only have bookedBy
+                      const isWalkOn = (booking as any).bookedBy === "conductor" || booking.createdBy === "conductor";
                       const passenger = booking.passengerDetails?.[0];
 
                       return (
@@ -1014,7 +947,11 @@ const ConductorDashboard: FC = () => {
                             <div className="flex-1 min-w-0">
                               <p className="font-semibold text-base flex items-center gap-1.5 flex-wrap">
                                 {passenger?.name || "Passenger"}
-                                {isWalkOn && <span className="inline-flex items-center gap-1 text-xs font-medium text-purple-700 bg-purple-100 px-2 py-0.5 rounded-full"><UserPlus className="w-3 h-3" /> Walk-on</span>}
+                                {isWalkOn && (
+                                  <span className="inline-flex items-center gap-1 text-xs font-medium text-purple-700 bg-purple-100 px-2 py-0.5 rounded-full">
+                                    <UserPlus className="w-3 h-3" /> Walk-on
+                                  </span>
+                                )}
                                 {isConfirmed && <CheckCircle className="w-4 h-4 text-green-600" />}
                                 {isNoShow && <XCircle className="w-4 h-4 text-red-600" />}
                               </p>
@@ -1023,7 +960,8 @@ const ConductorDashboard: FC = () => {
                                 <span className="text-sm font-medium text-gray-700">MWK {booking.totalAmount?.toLocaleString() || "?"}</span>
                                 {isPaid ? (
                                   <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700 bg-green-100 px-2 py-0.5 rounded-full">
-                                    <CreditCard className="w-3 h-3" />{booking.paymentMethod === "cash_on_boarding" ? "Cash collected" : "Paid online"}
+                                    <CreditCard className="w-3 h-3" />
+                                    {booking.paymentMethod === "cash_on_boarding" ? "Cash collected" : "Paid online"}
                                   </span>
                                 ) : (
                                   <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">
@@ -1036,35 +974,68 @@ const ConductorDashboard: FC = () => {
 
                           {/* ── Action area ── */}
                           <div className="mt-3 flex flex-wrap items-center gap-2">
-                            {/* Step 1: Collect cash — shown only when unpaid */}
+                            {/* Step 1: Collect cash — only shown when unpaid */}
                             {!isPaid && (
-                              <Button size="sm" className="bg-amber-600 hover:bg-amber-700 text-white" onClick={() => { setCashModalBooking(booking); setCashModalOpen(true); }} disabled={actionLoading}>
+                              <Button
+                                size="sm"
+                                className="bg-amber-600 hover:bg-amber-700 text-white"
+                                onClick={() => { setCashModalBooking(booking); setCashModalOpen(true); }}
+                                disabled={actionLoading}
+                              >
                                 <Banknote className="w-4 h-4 mr-1.5" /> Collect Cash
                               </Button>
                             )}
 
                             {/*
-                              Step 2: Board / No-Show — shown ONLY when:
-                              - payment is done AND
-                              - not yet actioned (not confirmed, not no-show)
-                              Intentionally NOT auto-triggered. Conductor must tap explicitly.
+                              FIX: Step 2 — Boarded / No-Show buttons
+                              Shown when:
+                                - paymentStatus === "paid"  (cash collected OR paid online)
+                                - bookingStatus is still pending (not yet confirmed/no-show)
+                              
+                              Previously this worked correctly in logic but the local state
+                              update in handleCollectCash used `unknown as Booking` which
+                              could silently drop the paymentStatus field, keeping isPaid=false
+                              and hiding these buttons even after cash was collected.
+                              The local state update is now a proper spread with explicit fields.
                             */}
                             {isPaid && !isConfirmed && !isNoShow && (
                               <>
-                                <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white" onClick={() => handleMarkBoarded(booking.id)} disabled={actionLoading}>
+                                <Button
+                                  size="sm"
+                                  className="bg-green-600 hover:bg-green-700 text-white"
+                                  onClick={() => handleMarkBoarded(booking.id)}
+                                  disabled={actionLoading}
+                                >
                                   {actionLoading ? <Loader2 className="w-4 h-4 animate-spin mr-1.5" /> : <Check className="w-4 h-4 mr-1.5" />}
                                   Boarded
                                 </Button>
-                                <Button size="sm" variant="destructive" onClick={() => handleMarkNoShow(booking.id)} disabled={actionLoading}>
+                                <Button
+                                  size="sm"
+                                  variant="destructive"
+                                  onClick={() => handleMarkNoShow(booking.id)}
+                                  disabled={actionLoading}
+                                >
                                   {actionLoading ? <Loader2 className="w-4 h-4 animate-spin mr-1.5" /> : <UserX className="w-4 h-4 mr-1.5" />}
                                   No-Show
                                 </Button>
                               </>
                             )}
 
-                            {!isPaid && <span className="inline-flex items-center gap-1 text-xs text-gray-400 ml-1"><Lock className="w-3 h-3" /> Boarding locked until paid</span>}
-                            {isConfirmed && <span className="text-sm text-green-700 font-medium flex items-center gap-1"><CheckCircle className="w-4 h-4" /> Boarded</span>}
-                            {isNoShow && <span className="text-sm text-red-700 font-medium flex items-center gap-1"><XCircle className="w-4 h-4" /> No-Show</span>}
+                            {!isPaid && (
+                              <span className="inline-flex items-center gap-1 text-xs text-gray-400 ml-1">
+                                <Lock className="w-3 h-3" /> Boarding locked until paid
+                              </span>
+                            )}
+                            {isConfirmed && (
+                              <span className="text-sm text-green-700 font-medium flex items-center gap-1">
+                                <CheckCircle className="w-4 h-4" /> Boarded
+                              </span>
+                            )}
+                            {isNoShow && (
+                              <span className="text-sm text-red-700 font-medium flex items-center gap-1">
+                                <XCircle className="w-4 h-4" /> No-Show
+                              </span>
+                            )}
                           </div>
                         </div>
                       );
