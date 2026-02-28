@@ -686,8 +686,9 @@ export default function HomePage() {
         </div>
       </section>
 
-      <PromoBanner onCtaClick={()=>router.push("/promotions")}/>
-
+      {/* ── PROMO BANNER ──────────────────────────────────────────────────────── */}
+     {/* <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4"><PromoBanner onCtaClick={()=>router.push("/promotions")}/></div> */}
+          
       {/* ── FEATURED SCHEDULES ────────────────────────────────────────────────── */}
       <section id="schedules-section" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
 
