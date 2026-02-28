@@ -45,6 +45,200 @@ type SortKey   = "time" | "price_asc" | "price_desc" | "seats";
 type GeoStatus = "idle" | "detecting" | "granted" | "denied" | "unavailable";
 
 // ─────────────────────────────────────────────────────────────────────────────
+// LocationAutocomplete
+// Reusable search input with live dropdown sourced from real route city names.
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface LocationAutocompleteProps {
+  value:       string;
+  onChange:    (v: string) => void;
+  onSelect:    (v: string) => void;
+  placeholder: string;
+  icon:        React.ElementType;
+  cities:      string[];           // deduped list from routes
+  exclude?:    string;             // hide the city already selected in the other field
+  id?:         string;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Fuzzy search engine
+// Scoring priority (highest wins):
+//   1. Exact match                          → 1000
+//   2. Starts with query                    → 800
+//   3. Contains query as substring          → 600
+//   4. All query chars appear in order      → 400  (subsequence match)
+//   5. Levenshtein distance ≤ threshold     → 200 − distance  (typo tolerance)
+//   6. No match                             → -1  (excluded)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function levenshtein(a: string, b: string): number {
+  const m = a.length, n = b.length;
+  // Use a single flat array for the DP table to keep it fast
+  const dp = new Uint16Array((m + 1) * (n + 1));
+  for (let i = 0; i <= m; i++) dp[i * (n + 1)] = i;
+  for (let j = 0; j <= n; j++) dp[j] = j;
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      dp[i * (n + 1) + j] = a[i - 1] === b[j - 1]
+        ? dp[(i - 1) * (n + 1) + (j - 1)]
+        : 1 + Math.min(
+            dp[(i - 1) * (n + 1) + j],      // delete
+            dp[i * (n + 1) + (j - 1)],      // insert
+            dp[(i - 1) * (n + 1) + (j - 1)] // replace
+          );
+    }
+  }
+  return dp[m * (n + 1) + n];
+}
+
+function isSubsequence(query: string, target: string): boolean {
+  let qi = 0;
+  for (let i = 0; i < target.length && qi < query.length; i++) {
+    if (target[i] === query[qi]) qi++;
+  }
+  return qi === query.length;
+}
+
+function fuzzyScore(query: string, city: string): number {
+  if (!query) return 500; // show all when empty
+  const q = query.toLowerCase();
+  const c = city.toLowerCase();
+
+  if (c === q)              return 1000;
+  if (c.startsWith(q))      return 800;
+  if (c.includes(q))        return 600 - c.indexOf(q); // earlier = higher score
+  if (isSubsequence(q, c))  return 400;
+
+  // Levenshtein on the first word of city name for speed + better UX
+  const firstWord = c.split(" ")[0];
+  const dist = levenshtein(q, firstWord.slice(0, q.length + 2));
+  const threshold = Math.max(1, Math.floor(q.length / 3)); // 1 typo per 3 chars
+  if (dist <= threshold) return 200 - dist * 20;
+
+  return -1; // no match
+}
+
+interface FuzzyResult { city: string; score: number }
+
+function fuzzySearch(query: string, cities: string[], exclude?: string): string[] {
+  const results: FuzzyResult[] = cities
+    .filter(c => c !== exclude)
+    .map(c => ({ city: c, score: fuzzyScore(query, c) }))
+    .filter(r => r.score >= 0)
+    .sort((a, b) => b.score - a.score);
+  return results.slice(0, 8).map(r => r.city);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+const LocationAutocomplete: React.FC<LocationAutocompleteProps> = ({
+  value, onChange, onSelect, placeholder, icon: Icon, cities, exclude, id,
+}) => {
+  const [open,      setOpen]      = useState(false);
+  const [highlight, setHighlight] = useState(-1);
+  const wrapRef  = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Fuzzy suggestions — tolerates typos, subsequences, partial matches
+  const suggestions = useMemo(
+    () => fuzzySearch(value.trim(), cities, exclude),
+    [cities, value, exclude]
+  );
+
+  // Close on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
+        setOpen(false); setHighlight(-1);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const pick = (city: string) => {
+    onSelect(city); onChange(city); setOpen(false); setHighlight(-1);
+  };
+
+  const handleKey = (e: React.KeyboardEvent) => {
+    if (!open || !suggestions.length) return;
+    if (e.key === "ArrowDown")  { e.preventDefault(); setHighlight(h => Math.min(h + 1, suggestions.length - 1)); }
+    if (e.key === "ArrowUp")    { e.preventDefault(); setHighlight(h => Math.max(h - 1, 0)); }
+    if (e.key === "Enter" && highlight >= 0) { e.preventDefault(); pick(suggestions[highlight]); }
+    if (e.key === "Escape")     { setOpen(false); setHighlight(-1); }
+  };
+
+  // Bold the substring that most closely matches the query
+  const highlight_text = (city: string, query: string) => {
+    if (!query.trim()) return <span>{city}</span>;
+    const idx = city.toLowerCase().indexOf(query.toLowerCase());
+    if (idx !== -1) {
+      return (
+        <>
+          {city.slice(0, idx)}
+          <span className="font-bold text-blue-700">{city.slice(idx, idx + query.length)}</span>
+          {city.slice(idx + query.length)}
+        </>
+      );
+    }
+    // Fuzzy match — bold first matched char of each query char as a hint
+    return <span>{city} <span className="text-[10px] text-gray-400 font-normal ml-1">~match</span></span>;
+  };
+
+  return (
+    <div ref={wrapRef} className="relative">
+      <Icon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none z-10"/>
+      <input
+        ref={inputRef}
+        id={id}
+        type="text"
+        autoComplete="off"
+        placeholder={placeholder}
+        value={value}
+        onChange={e => { onChange(e.target.value); setOpen(true); setHighlight(-1); }}
+        onFocus={() => setOpen(true)}
+        onKeyDown={handleKey}
+        className="w-full pl-9 pr-8 h-11 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white transition-shadow"
+        aria-autocomplete="list"
+        aria-expanded={open && suggestions.length > 0}
+        role="combobox"
+      />
+      {/* Clear button */}
+      {value && (
+        <button onClick={() => { onChange(""); onSelect(""); inputRef.current?.focus(); }}
+          className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 text-gray-400 hover:text-gray-700 transition-colors rounded-md hover:bg-gray-100">
+          <X className="w-3.5 h-3.5"/>
+        </button>
+      )}
+      {/* Dropdown */}
+      {open && suggestions.length > 0 && (
+        <div className="absolute top-full left-0 right-0 mt-1.5 bg-white border border-gray-200 rounded-xl shadow-xl z-50 overflow-hidden">
+          <div className="px-3 pt-2.5 pb-1">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Available cities</p>
+          </div>
+          <ul role="listbox" className="pb-1.5 max-h-52 overflow-y-auto">
+            {suggestions.map((city, i) => (
+              <li key={city} role="option" aria-selected={i === highlight}>
+                <button
+                  onMouseDown={e => e.preventDefault()} // prevent blur before click
+                  onClick={() => pick(city)}
+                  onMouseEnter={() => setHighlight(i)}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-left transition-colors ${
+                    i === highlight ? "bg-blue-50 text-blue-800" : "text-gray-700 hover:bg-gray-50"
+                  }`}>
+                  <MapPin className={`w-3.5 h-3.5 shrink-0 ${i === highlight ? "text-blue-500" : "text-gray-300"}`}/>
+                  <span>{highlight_text(city, value)}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Constants
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -469,6 +663,14 @@ export default function HomePage() {
     router.push(`/book/${id}?passengers=${search.passengers||1}`);
   },[router,search.passengers,user]);
 
+  // ── City list from real route data (no extra Firestore reads) ───────────────
+  const allCities = useMemo(() => {
+    const set = new Set<string>();
+    schedules.forEach(s => { set.add(s.origin); set.add(s.destination); });
+    if (set.size === 0) MALAWI_CITIES.forEach(c => set.add(c)); // fallback while loading
+    return Array.from(set).sort();
+  }, [schedules]);
+
   // ── Derived schedule data ────────────────────────────────────────────────────
   const nearby = useMemo(()=>userCity?schedules.filter(s=>cityMatch(s,userCity)):[], [schedules,userCity]);
 
@@ -616,22 +818,30 @@ export default function HomePage() {
           <div className="mt-12 bg-white/95 backdrop-blur-lg rounded-2xl shadow-2xl p-6 anim-fade-up delay-300">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
               <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">From</label>
-                <div className="relative">
-                  <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"/>
-                  <input type="text" placeholder="Departure city" value={search.from}
-                    onChange={e=>setSearch(p=>({...p,from:e.target.value}))}
-                    className="w-full pl-9 pr-3 h-11 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"/>
-                </div>
+                <label htmlFor="search-from" className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">From</label>
+                <LocationAutocomplete
+                  id="search-from"
+                  value={search.from}
+                  onChange={v => setSearch(p => ({ ...p, from: v }))}
+                  onSelect={v => setSearch(p => ({ ...p, from: v }))}
+                  placeholder="Departure city"
+                  icon={MapPin}
+                  cities={allCities}
+                  exclude={search.to}
+                />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">To</label>
-                <div className="relative">
-                  <Navigation className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"/>
-                  <input type="text" placeholder="Destination city" value={search.to}
-                    onChange={e=>setSearch(p=>({...p,to:e.target.value}))}
-                    className="w-full pl-9 pr-3 h-11 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"/>
-                </div>
+                <label htmlFor="search-to" className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">To</label>
+                <LocationAutocomplete
+                  id="search-to"
+                  value={search.to}
+                  onChange={v => setSearch(p => ({ ...p, to: v }))}
+                  onSelect={v => setSearch(p => ({ ...p, to: v }))}
+                  placeholder="Destination city"
+                  icon={Navigation}
+                  cities={allCities}
+                  exclude={search.from}
+                />
               </div>
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Date</label>
@@ -686,9 +896,8 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ── PROMO BANNER ──────────────────────────────────────────────────────── */}
-     {/* <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4"><PromoBanner onCtaClick={()=>router.push("/promotions")}/></div> */}
-          
+      {/*<PromoBanner onCtaClick={()=>router.push("/promotions")}/>*/}  
+
       {/* ── FEATURED SCHEDULES ────────────────────────────────────────────────── */}
       <section id="schedules-section" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
 
