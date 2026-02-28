@@ -1,19 +1,21 @@
 "use client";
 
-import { FC, useState, useEffect } from "react";
+import { FC, useState, useEffect, useCallback, useMemo } from "react";
 import {
   collection, query, where, onSnapshot, doc,
   updateDoc, getDocs, addDoc, serverTimestamp,
 } from "firebase/firestore";
 import { db } from "@/lib/firebaseConfig";
 import { useAuth } from "@/contexts/AuthContext";
-import { Schedule, Booking, Bus } from "@/types";
+import { Schedule, Booking, Bus, TripStop, buildTripStopSequence } from "@/types";
 import {
   Bus as BusIcon, Calendar, Clock, MapPin, Users,
   CheckCircle, XCircle, Loader2, AlertCircle,
   DollarSign, Bell, Check, UserX, Lock, Banknote,
   ArrowRight, CreditCard, UserPlus, ChevronLeft,
-  ChevronRight, Ticket, Info,
+  ChevronRight, Ticket, Info, Navigation, Flag,
+  PlayCircle, StopCircle, ChevronDown, ArrowRightCircle,
+  Radio, Flame, CalendarClock, ChevronUp,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Modal from "@/components/Modals";
@@ -34,7 +36,238 @@ interface WalkOnFormData {
   sex: "male" | "female" | "other" | "";
   age: string;
   amountPaid: string;
+  originStopId: string;
+  destinationStopId: string;
 }
+
+// ─── Trip Control Panel ───────────────────────────────────────────────────────
+// Renders the start/depart/arrive controls above the manifest.
+
+interface TripControlPanelProps {
+  trip: Schedule;
+  stopSequence: TripStop[];
+  onStartTrip: () => Promise<void>;
+  onDepart: () => Promise<void>;
+  onArriveAtNext: () => Promise<void>;
+  loading: boolean;
+}
+
+const TripControlPanel: FC<TripControlPanelProps> = ({
+  trip, stopSequence, onStartTrip, onDepart, onArriveAtNext, loading,
+}) => {
+  const tripStatus      = trip.tripStatus ?? "scheduled";
+  const currentIdx      = trip.currentStopIndex ?? 0;
+  const currentStop     = stopSequence[currentIdx];
+  const nextStop        = stopSequence[currentIdx + 1] ?? null;
+  const isLastStop      = currentIdx >= stopSequence.length - 1;
+  const isFinalApproach = nextStop && currentIdx === stopSequence.length - 2;
+
+  // ── Not started ──────────────────────────────────────────────────────────
+  if (tripStatus === "scheduled") {
+    return (
+      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-5">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center">
+            <Navigation className="w-5 h-5 text-white" />
+          </div>
+          <div>
+            <p className="font-semibold text-blue-900 text-base">Trip not started</p>
+            <p className="text-sm text-blue-700">
+              {trip.departureLocation} → {trip.arrivalLocation}
+            </p>
+          </div>
+        </div>
+
+        {/* Stop progress preview */}
+        <div className="flex items-center gap-1.5 mb-4 overflow-x-auto pb-1">
+          {stopSequence.map((stop, i) => (
+            <div key={stop.id} className="flex items-center gap-1.5 shrink-0">
+              <div className="flex flex-col items-center gap-0.5">
+                <div className="w-2.5 h-2.5 rounded-full bg-gray-300 border-2 border-gray-400" />
+                <p className="text-[10px] text-gray-500 max-w-[60px] text-center leading-tight">{stop.name}</p>
+              </div>
+              {i < stopSequence.length - 1 && (
+                <div className="w-6 h-0.5 bg-gray-300 mb-3" />
+              )}
+            </div>
+          ))}
+        </div>
+
+        <Button
+          className="w-full bg-blue-600 hover:bg-blue-700 text-white h-11 text-base font-semibold"
+          onClick={onStartTrip}
+          disabled={loading}
+        >
+          {loading
+            ? <Loader2 className="w-5 h-5 animate-spin mr-2" />
+            : <PlayCircle className="w-5 h-5 mr-2" />
+          }
+          Start Trip from {stopSequence[0]?.name}
+        </Button>
+      </div>
+    );
+  }
+
+  // ── Completed ────────────────────────────────────────────────────────────
+  if (tripStatus === "completed") {
+    return (
+      <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-xl p-5">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-green-600 flex items-center justify-center">
+            <Flag className="w-5 h-5 text-white" />
+          </div>
+          <div>
+            <p className="font-semibold text-green-900 text-base">Trip completed</p>
+            <p className="text-sm text-green-700">
+              Arrived at {trip.arrivalLocation}
+              {trip.tripCompletedAt && ` · ${format(new Date(trip.tripCompletedAt), "HH:mm")}`}
+            </p>
+          </div>
+          <CheckCircle className="w-7 h-7 text-green-600 ml-auto" />
+        </div>
+      </div>
+    );
+  }
+
+  // ── Boarding at a stop ───────────────────────────────────────────────────
+  if (tripStatus === "boarding") {
+    return (
+      <div className="bg-gradient-to-r from-green-50 to-teal-50 border border-green-200 rounded-xl p-5">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-10 h-10 rounded-full bg-green-600 flex items-center justify-center animate-pulse">
+            <Users className="w-5 h-5 text-white" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="inline-block w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+              <p className="font-semibold text-green-900 text-base">Boarding open</p>
+            </div>
+            <p className="text-sm text-green-700 font-medium">
+              At: <strong>{currentStop?.name}</strong>
+            </p>
+          </div>
+        </div>
+
+        {/* Route progress */}
+        <StopProgressBar stopSequence={stopSequence} currentIdx={currentIdx} departedStops={trip.departedStops ?? []} />
+
+        {nextStop && (
+          <p className="text-xs text-gray-500 mt-3 mb-4">
+            Next stop: <strong>{nextStop.name}</strong>
+            {isFinalApproach && " (final destination)"}
+          </p>
+        )}
+
+        <Button
+          className={`w-full h-11 text-base font-semibold text-white ${
+            isFinalApproach
+              ? "bg-orange-600 hover:bg-orange-700"
+              : "bg-teal-600 hover:bg-teal-700"
+          }`}
+          onClick={onDepart}
+          disabled={loading}
+        >
+          {loading
+            ? <Loader2 className="w-5 h-5 animate-spin mr-2" />
+            : <ArrowRightCircle className="w-5 h-5 mr-2" />
+          }
+          Depart {currentStop?.name}
+          {isFinalApproach && " → Final stop"}
+        </Button>
+      </div>
+    );
+  }
+
+  // ── In transit ───────────────────────────────────────────────────────────
+  if (tripStatus === "in_transit") {
+    return (
+      <div className="bg-gradient-to-r from-blue-50 to-cyan-50 border border-blue-200 rounded-xl p-5">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center">
+            <BusIcon className="w-5 h-5 text-white" />
+          </div>
+          <div>
+            <p className="font-semibold text-blue-900 text-base">🚌 In Transit</p>
+            <p className="text-sm text-blue-700">
+              Heading to: <strong>{nextStop?.name ?? trip.arrivalLocation}</strong>
+            </p>
+          </div>
+        </div>
+
+        <StopProgressBar stopSequence={stopSequence} currentIdx={currentIdx} departedStops={trip.departedStops ?? []} inTransit />
+
+        <Button
+          className={`w-full mt-4 h-11 text-base font-semibold text-white ${
+            isLastStop || !nextStop
+              ? "bg-green-700 hover:bg-green-800"
+              : "bg-blue-600 hover:bg-blue-700"
+          }`}
+          onClick={onArriveAtNext}
+          disabled={loading || !nextStop}
+        >
+          {loading
+            ? <Loader2 className="w-5 h-5 animate-spin mr-2" />
+            : isLastStop || (nextStop && currentIdx === stopSequence.length - 2)
+            ? <Flag className="w-5 h-5 mr-2" />
+            : <MapPin className="w-5 h-5 mr-2" />
+          }
+          {nextStop
+            ? currentIdx === stopSequence.length - 2
+              ? `Arrived at ${nextStop.name} — Complete Trip`
+              : `Arrived at ${nextStop.name}`
+            : "No more stops"
+          }
+        </Button>
+      </div>
+    );
+  }
+
+  return null;
+};
+
+// ─── Stop Progress Bar ────────────────────────────────────────────────────────
+
+const StopProgressBar: FC<{
+  stopSequence: TripStop[];
+  currentIdx: number;
+  departedStops: string[];
+  inTransit?: boolean;
+}> = ({ stopSequence, currentIdx, departedStops, inTransit = false }) => (
+  <div className="flex items-center gap-1 overflow-x-auto pb-1">
+    {stopSequence.map((stop, i) => {
+      const departed = departedStops.includes(stop.id);
+      const isCurrent = i === currentIdx;
+      const isAhead = i > currentIdx;
+
+      return (
+        <div key={stop.id} className="flex items-center gap-1 shrink-0">
+          <div className="flex flex-col items-center gap-0.5">
+            <div className={`w-3 h-3 rounded-full border-2 transition-all ${
+              departed
+                ? "bg-green-500 border-green-600"
+                : isCurrent && !inTransit
+                ? "bg-blue-500 border-blue-600 scale-125"
+                : isCurrent && inTransit
+                ? "bg-blue-300 border-blue-400"
+                : "bg-gray-200 border-gray-300"
+            }`} />
+            <p className={`text-[9px] max-w-[52px] text-center leading-tight ${
+              departed ? "text-green-700 font-medium" :
+              isCurrent ? "text-blue-700 font-semibold" : "text-gray-400"
+            }`}>
+              {stop.name}
+            </p>
+          </div>
+          {i < stopSequence.length - 1 && (
+            <div className={`w-5 h-0.5 mb-3 transition-all ${
+              departed ? "bg-green-400" : "bg-gray-200"
+            }`} />
+          )}
+        </div>
+      );
+    })}
+  </div>
+);
 
 // ─── Walk-on Booking Modal ────────────────────────────────────────────────────
 
@@ -44,35 +277,48 @@ interface WalkOnModalProps {
   trip: Schedule | null;
   bus: Bus | null;
   existingBookings: Booking[];
+  stopSequence: TripStop[];
+  currentStopIndex: number;
   onConfirm: (seatNumber: string, data: WalkOnFormData, amount: number) => Promise<void>;
   loading: boolean;
 }
 
 const WalkOnBookingModal: FC<WalkOnModalProps> = ({
-  isOpen, onClose, trip, bus, existingBookings, onConfirm, loading,
+  isOpen, onClose, trip, bus, existingBookings, stopSequence, currentStopIndex, onConfirm, loading,
 }) => {
   const [step, setStep] = useState<WalkOnStep>("seat");
   const [selectedSeat, setSelectedSeat] = useState<string | null>(null);
   const [form, setForm] = useState<WalkOnFormData>({
     firstName: "", lastName: "", phone: "",
-    sex: "", age: "", amountPaid: "",
+    sex: "", age: "", amountPaid: String(trip?.price || ""),
+    originStopId: "", destinationStopId: "",
   });
   const [errors, setErrors] = useState<Partial<Record<keyof WalkOnFormData, string>>>({});
+
+  // Remaining stops the passenger can travel to from the current boarding stop
+  const boardingStop     = stopSequence[currentStopIndex];
+  const remainingStops   = stopSequence.slice(currentStopIndex + 1);
 
   useEffect(() => {
     if (isOpen) {
       setStep("seat");
       setSelectedSeat(null);
-      setForm({ firstName: "", lastName: "", phone: "", sex: "", age: "", amountPaid: String(trip?.price || "") });
+      setForm({
+        firstName: "", lastName: "", phone: "", sex: "", age: "",
+        amountPaid: String(trip?.price || ""),
+        // Origin is always current stop — conductor can't change this
+        originStopId: boardingStop?.id ?? "__origin__",
+        destinationStopId: remainingStops[remainingStops.length - 1]?.id ?? "__destination__",
+      });
       setErrors({});
     }
   }, [isOpen, trip?.price]);
 
   if (!trip || !bus) return null;
 
-  const fareAmount = trip.price || 0;
+  const fareAmount   = trip.price || 0;
   const parsedAmount = parseFloat(form.amountPaid);
-  const change = parsedAmount > fareAmount ? parsedAmount - fareAmount : 0;
+  const change       = parsedAmount > fareAmount ? parsedAmount - fareAmount : 0;
 
   const departure = trip.departureDateTime instanceof Date
     ? trip.departureDateTime
@@ -81,12 +327,13 @@ const WalkOnBookingModal: FC<WalkOnModalProps> = ({
   const validateDetails = () => {
     const errs: Partial<Record<keyof WalkOnFormData, string>> = {};
     if (!form.firstName.trim()) errs.firstName = "Required";
-    if (!form.lastName.trim()) errs.lastName = "Required";
-    if (!form.phone.trim()) errs.phone = "Required";
-    if (!form.sex) errs.sex = "Required";
-    if (!form.age.trim()) errs.age = "Required";
+    if (!form.lastName.trim())  errs.lastName  = "Required";
+    if (!form.phone.trim())     errs.phone     = "Required";
+    if (!form.sex)              errs.sex       = "Required";
+    if (!form.age.trim())       errs.age       = "Required";
     else if (isNaN(Number(form.age)) || Number(form.age) < 1 || Number(form.age) > 120)
       errs.age = "Enter a valid age";
+    if (!form.destinationStopId) errs.destinationStopId = "Required";
     setErrors(errs);
     return Object.keys(errs).length === 0;
   };
@@ -130,20 +377,18 @@ const WalkOnBookingModal: FC<WalkOnModalProps> = ({
       </div>
       <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm">
         <div>
-          <p className="text-blue-600 text-xs">From</p>
-          <p className="font-semibold text-blue-900">{trip.departureLocation}</p>
+          <p className="text-blue-600 text-xs">Boarding at</p>
+          <p className="font-semibold text-blue-900">{boardingStop?.name ?? trip.departureLocation}</p>
         </div>
         <div>
-          <p className="text-blue-600 text-xs">To</p>
-          <p className="font-semibold text-blue-900">{trip.arrivalLocation}</p>
+          <p className="text-blue-600 text-xs">Destination</p>
+          <p className="font-semibold text-blue-900">
+            {remainingStops.find(s => s.id === form.destinationStopId)?.name ?? trip.arrivalLocation}
+          </p>
         </div>
         <div>
           <p className="text-blue-600 text-xs">Date</p>
           <p className="font-semibold text-blue-900">{format(departure, "EEE, MMM d yyyy")}</p>
-        </div>
-        <div>
-          <p className="text-blue-600 text-xs">Departure</p>
-          <p className="font-semibold text-blue-900">{format(departure, "HH:mm")}</p>
         </div>
         <div>
           <p className="text-blue-600 text-xs">Bus</p>
@@ -161,7 +406,7 @@ const WalkOnBookingModal: FC<WalkOnModalProps> = ({
     <div className="space-y-4">
       {renderScheduleInfo()}
       <p className="text-sm text-gray-600">
-        Tap an available seat to assign it. Grey = available, coloured = taken.
+        Tap an available seat to assign it.
       </p>
       <div className="bg-gray-50 rounded-xl border p-5">
         <div className="flex justify-center mb-4">
@@ -175,7 +420,7 @@ const WalkOnBookingModal: FC<WalkOnModalProps> = ({
             const booking = existingBookings.find(
               (b) => b.seatNumbers?.includes(seatNum) && b.bookingStatus !== "cancelled"
             );
-            const isTaken = !!booking;
+            const isTaken    = !!booking;
             const isSelected = selectedSeat === seatNum;
 
             let cls = "aspect-square rounded-lg flex items-center justify-center font-semibold text-sm border-2 transition-all duration-150 ";
@@ -237,17 +482,41 @@ const WalkOnBookingModal: FC<WalkOnModalProps> = ({
         <Ticket className="w-5 h-5 flex-shrink-0 text-blue-600" />
         <span>Assigning <strong>Seat {selectedSeat}</strong> — enter passenger details below</span>
       </div>
+
+      {/* Destination stop selector — only remaining stops available */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          Travelling to <span className="text-red-500">*</span>
+        </label>
+        <select
+          value={form.destinationStopId}
+          onChange={e => setForm({ ...form, destinationStopId: e.target.value })}
+          className={`w-full px-3 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white ${
+            errors.destinationStopId ? "border-red-400 bg-red-50" : "border-gray-300"
+          }`}
+        >
+          <option value="">Select destination…</option>
+          {remainingStops.map(stop => (
+            <option key={stop.id} value={stop.id}>{stop.name}</option>
+          ))}
+        </select>
+        <p className="text-xs text-gray-500 mt-1">
+          Boarding from: <strong>{boardingStop?.name}</strong>
+        </p>
+        {errors.destinationStopId && <p className="text-xs text-red-600 mt-1">{errors.destinationStopId}</p>}
+      </div>
+
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">First Name <span className="text-red-500">*</span></label>
-          <input type="text" value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })}
+          <input type="text" value={form.firstName} onChange={e => setForm({ ...form, firstName: e.target.value })}
             className={`w-full px-3 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.firstName ? "border-red-400 bg-red-50" : "border-gray-300"}`}
             placeholder="John" />
           {errors.firstName && <p className="text-xs text-red-600 mt-1">{errors.firstName}</p>}
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Last Name <span className="text-red-500">*</span></label>
-          <input type="text" value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })}
+          <input type="text" value={form.lastName} onChange={e => setForm({ ...form, lastName: e.target.value })}
             className={`w-full px-3 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.lastName ? "border-red-400 bg-red-50" : "border-gray-300"}`}
             placeholder="Banda" />
           {errors.lastName && <p className="text-xs text-red-600 mt-1">{errors.lastName}</p>}
@@ -255,7 +524,7 @@ const WalkOnBookingModal: FC<WalkOnModalProps> = ({
       </div>
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">Phone Number <span className="text-red-500">*</span></label>
-        <input type="tel" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })}
+        <input type="tel" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })}
           className={`w-full px-3 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.phone ? "border-red-400 bg-red-50" : "border-gray-300"}`}
           placeholder="+265 999 000 000" />
         {errors.phone && <p className="text-xs text-red-600 mt-1">{errors.phone}</p>}
@@ -263,7 +532,7 @@ const WalkOnBookingModal: FC<WalkOnModalProps> = ({
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Sex <span className="text-red-500">*</span></label>
-          <select value={form.sex} onChange={(e) => setForm({ ...form, sex: e.target.value as WalkOnFormData["sex"] })}
+          <select value={form.sex} onChange={e => setForm({ ...form, sex: e.target.value as WalkOnFormData["sex"] })}
             className={`w-full px-3 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white ${errors.sex ? "border-red-400 bg-red-50" : "border-gray-300"}`}>
             <option value="">Select…</option>
             <option value="male">Male</option>
@@ -274,7 +543,7 @@ const WalkOnBookingModal: FC<WalkOnModalProps> = ({
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Age <span className="text-red-500">*</span></label>
-          <input type="number" value={form.age} onChange={(e) => setForm({ ...form, age: e.target.value })}
+          <input type="number" value={form.age} onChange={e => setForm({ ...form, age: e.target.value })}
             className={`w-full px-3 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.age ? "border-red-400 bg-red-50" : "border-gray-300"}`}
             placeholder="30" min={1} max={120} />
           {errors.age && <p className="text-xs text-red-600 mt-1">{errors.age}</p>}
@@ -291,6 +560,9 @@ const WalkOnBookingModal: FC<WalkOnModalProps> = ({
         <div>
           <p className="font-semibold text-gray-900">{form.firstName} {form.lastName}</p>
           <p className="text-sm text-gray-500">{form.phone} · {form.sex} · {form.age} yrs</p>
+          <p className="text-xs text-gray-500">
+            {boardingStop?.name} → {remainingStops.find(s => s.id === form.destinationStopId)?.name}
+          </p>
         </div>
       </div>
       <div>
@@ -298,7 +570,7 @@ const WalkOnBookingModal: FC<WalkOnModalProps> = ({
         <div className="relative">
           <Banknote className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
           <input type="number" value={form.amountPaid}
-            onChange={(e) => { setForm({ ...form, amountPaid: e.target.value }); setErrors({}); }}
+            onChange={e => { setForm({ ...form, amountPaid: e.target.value }); setErrors({}); }}
             className={`w-full pl-10 pr-4 py-3 border rounded-xl text-xl font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.amountPaid ? "border-red-400 bg-red-50" : "border-gray-300"}`}
             placeholder={String(fareAmount)} min={0} />
         </div>
@@ -334,8 +606,14 @@ const WalkOnBookingModal: FC<WalkOnModalProps> = ({
           <div><p className="text-gray-500">Phone</p><p className="font-semibold">{form.phone}</p></div>
           <div><p className="text-gray-500">Sex / Age</p><p className="font-semibold capitalize">{form.sex} · {form.age} yrs</p></div>
           <div><p className="text-gray-500">Seat</p><p className="font-semibold">Seat {selectedSeat}</p></div>
-          <div><p className="text-gray-500">Route</p><p className="font-semibold">{trip.departureLocation} → {trip.arrivalLocation}</p></div>
-          <div><p className="text-gray-500">Departure</p><p className="font-semibold">{format(departure, "EEE MMM d, HH:mm")}</p></div>
+          <div>
+            <p className="text-gray-500">Boarding at</p>
+            <p className="font-semibold">{boardingStop?.name}</p>
+          </div>
+          <div>
+            <p className="text-gray-500">Destination</p>
+            <p className="font-semibold">{remainingStops.find(s => s.id === form.destinationStopId)?.name}</p>
+          </div>
           <div><p className="text-gray-500">Amount Paid</p><p className="font-semibold">MWK {parsedAmount.toLocaleString()}</p></div>
           <div>
             <p className="text-gray-500">Change Due</p>
@@ -346,7 +624,7 @@ const WalkOnBookingModal: FC<WalkOnModalProps> = ({
         </div>
       </div>
       <p className="text-sm text-gray-500 text-center">
-        This creates the booking, records cash payment, and marks the passenger as <strong>boarded</strong> — all in one step.
+        Creates the booking, records cash payment, and marks the passenger as <strong>boarded</strong> — all in one step.
       </p>
     </div>
   );
@@ -354,15 +632,20 @@ const WalkOnBookingModal: FC<WalkOnModalProps> = ({
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Walk-on Booking">
       <div className="space-y-5">
+        {/* Step indicator */}
         <div className="flex items-center justify-between px-1">
           {stepLabels.map((label, idx) => {
             const current = stepIndex[step];
-            const done = idx < current;
-            const active = idx === current;
+            const done    = idx < current;
+            const active  = idx === current;
             return (
               <div key={label} className="flex items-center">
                 <div className="flex flex-col items-center gap-1">
-                  <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold border-2 transition-all ${done ? "bg-blue-600 border-blue-600 text-white" : active ? "bg-white border-blue-600 text-blue-600" : "bg-white border-gray-300 text-gray-400"}`}>
+                  <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold border-2 transition-all ${
+                    done ? "bg-blue-600 border-blue-600 text-white" :
+                    active ? "bg-white border-blue-600 text-blue-600" :
+                    "bg-white border-gray-300 text-gray-400"
+                  }`}>
                     {done ? <Check className="w-3.5 h-3.5" /> : idx + 1}
                   </div>
                   <span className={`text-xs font-medium ${active ? "text-blue-700" : done ? "text-blue-500" : "text-gray-400"}`}>{label}</span>
@@ -376,7 +659,7 @@ const WalkOnBookingModal: FC<WalkOnModalProps> = ({
         </div>
 
         <div>
-          {step === "seat" && renderSeatStep()}
+          {step === "seat"    && renderSeatStep()}
           {step === "details" && renderDetailsStep()}
           {step === "payment" && renderPaymentStep()}
           {step === "confirm" && renderConfirmStep()}
@@ -391,7 +674,8 @@ const WalkOnBookingModal: FC<WalkOnModalProps> = ({
             <Button variant="outline" className="flex-1" onClick={onClose} disabled={loading}>Cancel</Button>
           )}
           {step !== "confirm" ? (
-            <Button className="flex-1 bg-blue-600 hover:bg-blue-700 text-white" onClick={handleNext} disabled={step === "seat" && !selectedSeat}>
+            <Button className="flex-1 bg-blue-600 hover:bg-blue-700 text-white" onClick={handleNext}
+              disabled={step === "seat" && !selectedSeat}>
               Continue <ChevronRight className="w-4 h-4 ml-1" />
             </Button>
           ) : (
@@ -429,9 +713,9 @@ const CashCollectionModal: FC<CashCollectionModalProps> = ({
   if (!booking) return null;
 
   const expectedAmount = booking.totalAmount || 0;
-  const parsedAmount = parseFloat(inputAmount);
-  const passenger = booking.passengerDetails?.[0];
-  const change = parsedAmount > expectedAmount ? parsedAmount - expectedAmount : 0;
+  const parsedAmount   = parseFloat(inputAmount);
+  const passenger      = booking.passengerDetails?.[0];
+  const change         = parsedAmount > expectedAmount ? parsedAmount - expectedAmount : 0;
 
   const handleConfirm = async () => {
     if (!inputAmount || isNaN(parsedAmount) || parsedAmount <= 0) {
@@ -479,14 +763,10 @@ const CashCollectionModal: FC<CashCollectionModalProps> = ({
           <label className="block text-sm font-medium text-gray-700 mb-1.5">Amount Received (MWK)</label>
           <div className="relative">
             <Banknote className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-            <input
-              type="number"
-              value={inputAmount}
-              onChange={(e) => { setInputAmount(e.target.value); setAmountError(""); }}
+            <input type="number" value={inputAmount}
+              onChange={e => { setInputAmount(e.target.value); setAmountError(""); }}
               className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl text-lg font-semibold focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
-              placeholder={String(expectedAmount)}
-              min={0}
-            />
+              placeholder={String(expectedAmount)} min={0} />
           </div>
           {amountError && <p className="mt-1.5 text-sm text-red-600 flex items-center gap-1"><AlertCircle className="w-4 h-4" />{amountError}</p>}
           {change > 0 && !amountError && <p className="mt-1.5 text-sm text-green-700 font-medium">💵 Change to give: MWK {change.toLocaleString()}</p>}
@@ -510,6 +790,222 @@ const CashCollectionModal: FC<CashCollectionModalProps> = ({
   );
 };
 
+// ─── Trip Buckets ─────────────────────────────────────────────────────────────
+// Groups the conductor's assigned trips into: Live Now / Today / This Week / Completed
+
+type TripBucket = "live" | "today" | "week" | "completed";
+
+const toDate = (v: any): Date => {
+  if (!v) return new Date();
+  if (v instanceof Date) return v;
+  if (typeof v?.toDate === "function") return v.toDate();
+  return new Date(v);
+};
+
+const isSameDay = (a: Date, b: Date) =>
+  a.getFullYear() === b.getFullYear() &&
+  a.getMonth()    === b.getMonth()    &&
+  a.getDate()     === b.getDate();
+
+function getTripBucket(t: Schedule): TripBucket {
+  const ts  = t.tripStatus ?? "scheduled";
+  const dep = toDate(t.departureDateTime);
+
+  if (ts === "boarding" || ts === "in_transit") return "live";
+  if (ts === "completed") return "completed";
+
+  const now = new Date();
+  if (isSameDay(dep, now)) return "today";
+  return "week";
+}
+
+const BUCKET_CFG: Record<TripBucket, {
+  label: string; icon: React.ReactNode;
+  textCls: string; bgCls: string; borderCls: string; pillCls: string;
+}> = {
+  live:      { label: "Live Now",   icon: <Radio className="w-4 h-4" />,         textCls: "text-green-800",  bgCls: "bg-green-50",  borderCls: "border-green-200", pillCls: "bg-green-200 text-green-900" },
+  today:     { label: "Today",      icon: <Flame className="w-4 h-4" />,          textCls: "text-blue-800",   bgCls: "bg-blue-50",   borderCls: "border-blue-200",  pillCls: "bg-blue-200 text-blue-900"  },
+  week:      { label: "This Week",  icon: <CalendarClock className="w-4 h-4" />,  textCls: "text-slate-700",  bgCls: "bg-slate-50",  borderCls: "border-slate-200", pillCls: "bg-slate-200 text-slate-800" },
+  completed: { label: "Completed",  icon: <CheckCircle className="w-4 h-4" />,    textCls: "text-gray-600",   bgCls: "bg-gray-50",   borderCls: "border-gray-200",  pillCls: "bg-gray-200 text-gray-700"  },
+};
+
+const BUCKET_ORDER: TripBucket[] = ["live", "today", "week", "completed"];
+
+const TripCard: FC<{ trip: Schedule; bus: Bus | undefined; onClick: () => void }> = ({ trip, bus, onClick }) => {
+  const dep = toDate(trip.departureDateTime);
+  const arr = toDate(trip.arrivalDateTime);
+  const ts  = trip.tripStatus ?? "scheduled";
+  const bkt = getTripBucket(trip);
+
+  const accentCls =
+    bkt === "live"      ? "border-l-green-500" :
+    bkt === "today"     ? "border-l-blue-500"  :
+    bkt === "completed" ? "border-l-gray-300"  :
+    "border-l-slate-300";
+
+  const tsBadgeCls =
+    ts === "boarding"   ? "bg-green-100 text-green-800 border-green-200" :
+    ts === "in_transit" ? "bg-blue-100 text-blue-800 border-blue-200"   :
+    ts === "completed"  ? "bg-gray-100 text-gray-500 border-gray-200"   :
+    "bg-slate-100 text-slate-600 border-slate-200";
+
+  const tsLabel =
+    ts === "boarding"   ? "🟢 Boarding" :
+    ts === "in_transit" ? "🚌 In Transit" :
+    ts === "completed"  ? "✓ Completed" :
+    "Scheduled";
+
+  const actionLabel = (ts === "boarding" || ts === "in_transit") ? "Manage Trip" : "View Manifest";
+
+  return (
+    <div onClick={onClick}
+      className={`bg-white rounded-xl border border-l-4 shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer ${accentCls} ${bkt === "completed" ? "opacity-70" : ""}`}
+    >
+      <div className="p-4">
+        {/* Route + date */}
+        <div className="flex items-start justify-between gap-2 mb-3">
+          <div className="flex-1 min-w-0">
+            <p className="font-semibold text-gray-900 truncate">
+              {trip.departureLocation || "TBD"} → {trip.arrivalLocation || "TBD"}
+            </p>
+            <p className="text-xs text-gray-500 mt-0.5 flex items-center gap-1">
+              <BusIcon className="w-3 h-3" /> {bus?.licensePlate ?? "—"} · {bus?.busType ?? "—"}
+            </p>
+          </div>
+          <span className="shrink-0 text-xs font-medium text-gray-500 bg-gray-100 px-2 py-1 rounded-lg whitespace-nowrap">
+            {isSameDay(dep, new Date()) ? "Today" : format(dep, "EEE d MMM")}
+          </span>
+        </div>
+
+        {/* Times */}
+        <div className="flex items-center gap-2 text-sm text-gray-700 mb-3">
+          <Clock className="w-3.5 h-3.5 text-gray-400" />
+          <span className="font-semibold">{format(dep, "HH:mm")}</span>
+          <ArrowRight className="w-3 h-3 text-gray-400" />
+          <span className="font-semibold">{format(arr, "HH:mm")}</span>
+        </div>
+
+        {/* Fill bar */}
+        {bus?.capacity && (() => {
+          const booked = trip.bookedSeats?.length || 0;
+          const pct    = Math.min((booked / bus.capacity) * 100, 100);
+          return (
+            <div className="mb-3">
+              <div className="flex justify-between text-xs text-gray-500 mb-1">
+                <span>{booked} booked</span>
+                <span>{bus.capacity - booked} seats free</span>
+              </div>
+              <div className="w-full bg-gray-100 rounded-full h-1.5">
+                <div className={`h-full rounded-full ${pct > 75 ? "bg-red-400" : pct > 50 ? "bg-amber-400" : "bg-green-400"}`}
+                  style={{ width: `${pct}%` }} />
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* Status + action */}
+        <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+          <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium border ${tsBadgeCls}`}>
+            {tsLabel}
+          </span>
+          <span className="text-xs text-blue-600 font-medium hover:underline">{actionLabel} →</span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const TripBuckets: FC<{
+  trips: Schedule[];
+  buses: Bus[];
+  onSelect: (t: Schedule) => void;
+}> = ({ trips, buses, onSelect }) => {
+  const [collapsed, setCollapsed] = useState<Record<TripBucket, boolean>>({
+    live: false, today: false, week: false, completed: true,
+  });
+  const toggle = (b: TripBucket) => setCollapsed(p => ({ ...p, [b]: !p[b] }));
+
+  const busMap = useMemo(() => new Map(buses.map(b => [b.id, b])), [buses]);
+
+  const bucketed = useMemo(() => {
+    const map: Record<TripBucket, Schedule[]> = { live: [], today: [], week: [], completed: [] };
+    trips.forEach(t => { const b = getTripBucket(t); map[b].push(t); });
+    // Sort each bucket: live/today/week ascending by dep, completed descending
+    const asc  = (a: Schedule, b: Schedule) => toDate(a.departureDateTime).getTime() - toDate(b.departureDateTime).getTime();
+    const desc = (a: Schedule, b: Schedule) => toDate(b.departureDateTime).getTime() - toDate(a.departureDateTime).getTime();
+    map.live.sort(asc); map.today.sort(asc); map.week.sort(asc); map.completed.sort(desc);
+    return map;
+  }, [trips]);
+
+  const totalActive = bucketed.live.length + bucketed.today.length + bucketed.week.length;
+
+  if (trips.length === 0) {
+    return (
+      <section>
+        <h2 className="text-2xl font-semibold mb-4 flex items-center gap-2">
+          <Calendar className="w-6 h-6 text-blue-600" /> Your Trips
+        </h2>
+        <div className="bg-white rounded-2xl p-10 text-center border shadow-sm">
+          <Calendar className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+          <p className="text-xl font-medium text-gray-700">No trips assigned yet</p>
+          <p className="text-gray-500 mt-2 text-sm">Your operator hasn't assigned any upcoming trips to your buses</p>
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-2xl font-semibold flex items-center gap-2">
+          <Calendar className="w-6 h-6 text-blue-600" /> Your Trips
+        </h2>
+        <span className="text-sm text-gray-500">{totalActive} active</span>
+      </div>
+
+      <div className="space-y-4">
+        {BUCKET_ORDER.map(bucket => {
+          const list = bucketed[bucket];
+          if (!list.length) return null;
+          const cfg = BUCKET_CFG[bucket];
+
+          return (
+            <div key={bucket} className="space-y-3">
+              {/* Section header */}
+              <button
+                onClick={() => toggle(bucket)}
+                className={`w-full flex items-center justify-between px-4 py-2.5 rounded-xl border font-medium text-sm transition-all hover:opacity-90 ${cfg.bgCls} ${cfg.borderCls} ${cfg.textCls}`}
+              >
+                <div className="flex items-center gap-2.5">
+                  {cfg.icon}
+                  <span className="font-semibold">{cfg.label}</span>
+                  <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${cfg.pillCls}`}>{list.length}</span>
+                </div>
+                {collapsed[bucket]
+                  ? <ChevronDown className="w-4 h-4 opacity-50" />
+                  : <ChevronUp   className="w-4 h-4 opacity-50" />}
+              </button>
+
+              {!collapsed[bucket] && (
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 pl-1">
+                  {list.map(trip => (
+                    <TripCard
+                      key={trip.id}
+                      trip={trip}
+                      bus={busMap.get(trip.busId)}
+                      onClick={() => onSelect(trip)}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+};
+
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 
 const ConductorDashboard: FC = () => {
@@ -520,24 +1016,34 @@ const ConductorDashboard: FC = () => {
     `${userProfile?.firstName || ""} ${userProfile?.lastName || ""}`.trim() ||
     "Conductor";
 
-  const [myBuses, setMyBuses] = useState<Bus[]>([]);
-  const [myTrips, setMyTrips] = useState<Schedule[]>([]);
+  const [myBuses, setMyBuses]           = useState<Bus[]>([]);
+  const [myTrips, setMyTrips]           = useState<Schedule[]>([]);
   const [selectedTrip, setSelectedTrip] = useState<Schedule | null>(null);
   const [tripBookings, setTripBookings] = useState<Booking[]>([]);
   const [notifications, setNotifications] = useState<string[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading]           = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError]               = useState<string | null>(null);
   const [conductorFirestoreId, setConductorFirestoreId] = useState<string | null>(null);
-  const [cashModalOpen, setCashModalOpen] = useState(false);
+  const [cashModalOpen, setCashModalOpen]       = useState(false);
   const [cashModalBooking, setCashModalBooking] = useState<Booking | null>(null);
-  const [walkOnModalOpen, setWalkOnModalOpen] = useState(false);
+  const [walkOnModalOpen, setWalkOnModalOpen]   = useState(false);
 
+  // Build stop sequence from the selected trip whenever it changes
+  // This is derived from the stops[] array that was copied from the route on materialisation
+  const stopSequence: TripStop[] = selectedTrip ? buildTripStopSequence(selectedTrip) : [];
+  const currentStopIndex = selectedTrip?.currentStopIndex ?? 0;
+
+  // ── Load conductor profile ─────────────────────────────────────────────────
   useEffect(() => {
     if (!authUid) { setError("No conductor authentication found – please log in again"); setLoading(false); return; }
     const run = async () => {
       try {
-        const snap = await getDocs(query(collection(db, "operators"), where("uid", "==", authUid), where("role", "==", "conductor")));
+        const snap = await getDocs(query(
+          collection(db, "operators"),
+          where("uid", "==", authUid),
+          where("role", "==", "conductor")
+        ));
         if (snap.empty) { setError("Conductor profile not found. Please contact support."); setLoading(false); return; }
         const d = snap.docs[0];
         setConductorFirestoreId(d.data().id || d.id);
@@ -546,21 +1052,24 @@ const ConductorDashboard: FC = () => {
     run();
   }, [authUid]);
 
+  // ── Load assigned buses ────────────────────────────────────────────────────
   useEffect(() => {
     if (!conductorFirestoreId) return;
     const unsub = onSnapshot(
       query(collection(db, "buses"), where("conductorIds", "array-contains", conductorFirestoreId), where("status", "==", "active")),
-      (snap) => { setMyBuses(snap.docs.map((d) => ({ id: d.id, ...d.data() })) as Bus[]); setError(null); },
+      (snap) => { setMyBuses(snap.docs.map(d => ({ id: d.id, ...d.data() })) as Bus[]); setError(null); },
       (err: any) => { setError(`Failed to load your buses: ${err.message}`); setMyBuses([]); }
     );
     return () => unsub();
   }, [conductorFirestoreId]);
 
+  // ── Load trips (next 7 days) ───────────────────────────────────────────────
   useEffect(() => {
     if (myBuses.length === 0) { setMyTrips([]); setLoading(false); return; }
-    const now = new Date();
+    const now       = new Date();
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const nextWeekEnd = new Date(todayStart); nextWeekEnd.setDate(nextWeekEnd.getDate() + 7);
+    const nextWeekEnd = new Date(todayStart);
+    nextWeekEnd.setDate(nextWeekEnd.getDate() + 7);
 
     const run = async () => {
       const all: Schedule[] = [];
@@ -568,60 +1077,190 @@ const ConductorDashboard: FC = () => {
         try {
           const snap = await getDocs(query(collection(db, "schedules"), where("busId", "==", bus.id)));
           all.push(...snap.docs
-            .map((d) => { const data = d.data(); return { id: d.id, ...data, departureDateTime: data.departureDateTime?.toDate?.() || new Date(data.departureDateTime), arrivalDateTime: data.arrivalDateTime?.toDate?.() || new Date(data.arrivalDateTime) } as Schedule; })
-            .filter((t) => { const dep = t.departureDateTime instanceof Date ? t.departureDateTime : new Date(t.departureDateTime); return dep >= todayStart && dep < nextWeekEnd && t.status === "active"; })
+            .map(d => {
+              const data = d.data();
+              return {
+                id: d.id, ...data,
+                departureDateTime: data.departureDateTime?.toDate?.() || new Date(data.departureDateTime),
+                arrivalDateTime:   data.arrivalDateTime?.toDate?.()   || new Date(data.arrivalDateTime),
+              } as Schedule;
+            })
+            .filter(t => {
+              const dep = t.departureDateTime instanceof Date ? t.departureDateTime : new Date(t.departureDateTime);
+              // Show scheduled/boarding/in_transit trips regardless of departure time
+              // so conductor can still manage a trip that started earlier today
+              const isLiveTrip = t.tripStatus && t.tripStatus !== "scheduled" && t.tripStatus !== "completed";
+              return (isLiveTrip || (dep >= todayStart && dep < nextWeekEnd)) && t.status === "active";
+            })
           );
         } catch (e) { console.error(e); }
       }
-      all.sort((a, b) => { const aD = a.departureDateTime instanceof Date ? a.departureDateTime : new Date(a.departureDateTime); const bD = b.departureDateTime instanceof Date ? b.departureDateTime : new Date(b.departureDateTime); return aD.getTime() - bD.getTime(); });
-      setMyTrips(all); setLoading(false);
+      all.sort((a, b) => {
+        const aD = a.departureDateTime instanceof Date ? a.departureDateTime : new Date(a.departureDateTime);
+        const bD = b.departureDateTime instanceof Date ? b.departureDateTime : new Date(b.departureDateTime);
+        return aD.getTime() - bD.getTime();
+      });
+      setMyTrips(all);
+      setLoading(false);
     };
     run();
   }, [myBuses]);
 
+  // ── Real-time trip updates (keep selectedTrip in sync with Firestore) ──────
+  // When the conductor taps start/depart/arrive, we update Firestore and the
+  // onSnapshot here refreshes the local selectedTrip so the UI reflects the change.
+  useEffect(() => {
+    if (!selectedTrip?.id) return;
+    const unsub = onSnapshot(
+      doc(db, "schedules", selectedTrip.id),
+      (snap) => {
+        if (snap.exists()) {
+          const data = snap.data();
+          const updated: Schedule = {
+            id: snap.id,
+            ...data,
+            departureDateTime: data.departureDateTime?.toDate?.() || new Date(data.departureDateTime),
+            arrivalDateTime:   data.arrivalDateTime?.toDate?.()   || new Date(data.arrivalDateTime),
+          } as Schedule;
+          setSelectedTrip(updated);
+          // Also update in myTrips list
+          setMyTrips(prev => prev.map(t => t.id === updated.id ? updated : t));
+        }
+      },
+      (err) => console.warn("Schedule watch error:", err)
+    );
+    return () => unsub();
+  }, [selectedTrip?.id]);
+
+  // ── Load bookings for selected trip ───────────────────────────────────────
   useEffect(() => {
     if (!selectedTrip?.id) { setTripBookings([]); return; }
     let initialLoad = true;
     const unsub = onSnapshot(
       query(collection(db, "bookings"), where("scheduleId", "==", selectedTrip.id)),
       (snap) => {
-        const bookings = snap.docs.map((d) => ({ id: d.id, ...d.data(), createdAt: d.data().createdAt?.toDate?.() || new Date() })) as Booking[];
+        const bookings = snap.docs.map(d => ({
+          id: d.id, ...d.data(),
+          createdAt: d.data().createdAt?.toDate?.() || new Date(),
+        })) as Booking[];
         if (!initialLoad) {
-          bookings.filter((b) => !tripBookings.some((p) => p.id === b.id)).forEach((b) => {
-            const name = b.passengerDetails?.[0]?.name || "Passenger";
-            toast(`New booking: ${name} • Seat ${b.seatNumbers?.[0] || "?"}`, { icon: <Bell className="w-5 h-5 text-blue-600" />, duration: 6000 });
-            setNotifications((prev) => [`New booking: ${name}`, ...prev.slice(0, 4)]);
-          });
+          bookings
+            .filter(b => !tripBookings.some(p => p.id === b.id))
+            .forEach(b => {
+              const name = b.passengerDetails?.[0]?.name || "Passenger";
+              toast(`New booking: ${name} • Seat ${b.seatNumbers?.[0] || "?"}`, {
+                icon: <Bell className="w-5 h-5 text-blue-600" />, duration: 6000,
+              });
+              setNotifications(prev => [`New booking: ${name}`, ...prev.slice(0, 4)]);
+            });
         }
-        setTripBookings(bookings); initialLoad = false;
+        setTripBookings(bookings);
+        initialLoad = false;
       },
       () => setError("Failed to load manifest")
     );
     return () => unsub();
   }, [selectedTrip?.id]);
 
-  // ── Actions ───────────────────────────────────────────────────────────────
+  // ── Trip lifecycle actions ─────────────────────────────────────────────────
+
+  const handleStartTrip = useCallback(async () => {
+    if (!selectedTrip) return;
+    setActionLoading(true);
+    try {
+      await updateDoc(doc(db, "schedules", selectedTrip.id), {
+        tripStatus:       "boarding",
+        currentStopIndex: 0,
+        departedStops:    [],
+        tripStartedAt:    new Date(),
+        conductorUid:     authUid ?? "",
+        updatedAt:        new Date(),
+      });
+      toast.success(`Trip started — boarding open at ${stopSequence[0]?.name}`);
+    } catch (err: any) {
+      toast.error(`Failed to start trip: ${err.message}`);
+    } finally {
+      setActionLoading(false);
+    }
+  }, [selectedTrip, stopSequence, authUid]);
+
+  const handleDepart = useCallback(async () => {
+    if (!selectedTrip) return;
+    setActionLoading(true);
+    try {
+      const currentStop    = stopSequence[currentStopIndex];
+      const newDeparted    = [...(selectedTrip.departedStops ?? []), currentStop.id];
+
+      await updateDoc(doc(db, "schedules", selectedTrip.id), {
+        tripStatus:    "in_transit",
+        departedStops: newDeparted,
+        updatedAt:     new Date(),
+      });
+      toast.success(`Departed ${currentStop.name}`);
+    } catch (err: any) {
+      toast.error(`Failed: ${err.message}`);
+    } finally {
+      setActionLoading(false);
+    }
+  }, [selectedTrip, stopSequence, currentStopIndex]);
+
+  const handleArriveAtNext = useCallback(async () => {
+    if (!selectedTrip) return;
+    setActionLoading(true);
+    try {
+      const nextIdx     = currentStopIndex + 1;
+      const nextStop    = stopSequence[nextIdx];
+      const isFinalStop = nextIdx >= stopSequence.length - 1;
+
+      if (isFinalStop) {
+        // Complete the trip
+        await updateDoc(doc(db, "schedules", selectedTrip.id), {
+          tripStatus:       "completed",
+          status:           "completed",
+          isCompleted:      true,
+          currentStopIndex: nextIdx,
+          departedStops:    [...(selectedTrip.departedStops ?? [])],
+          tripCompletedAt:  new Date(),
+          completedAt:      new Date(),
+          updatedAt:        new Date(),
+        });
+        toast.success(`Trip completed — arrived at ${nextStop?.name ?? selectedTrip.arrivalLocation}`);
+      } else {
+        // Arrive at intermediate stop — open boarding
+        await updateDoc(doc(db, "schedules", selectedTrip.id), {
+          tripStatus:       "boarding",
+          currentStopIndex: nextIdx,
+          updatedAt:        new Date(),
+        });
+        toast.success(`Arrived at ${nextStop?.name} — boarding open`);
+      }
+    } catch (err: any) {
+      toast.error(`Failed: ${err.message}`);
+    } finally {
+      setActionLoading(false);
+    }
+  }, [selectedTrip, stopSequence, currentStopIndex]);
+
+  // ── Passenger actions ──────────────────────────────────────────────────────
 
   const handleMarkBoarded = async (bookingId: string) => {
     setActionLoading(true);
     try {
-      const booking = tripBookings.find((b) => b.id === bookingId);
+      const booking = tripBookings.find(b => b.id === bookingId);
       if (!booking) throw new Error("Booking not found");
       await updateDoc(doc(db, "bookings", bookingId), {
         bookingStatus: "confirmed",
         paymentStatus: booking.paymentStatus,
         paymentMethod: booking.paymentMethod || null,
-        paidAmount: booking.totalAmount || null,
-        paidAt: booking.paidAt || null,
-        paidBy: conductorFirestoreId,
-        updatedAt: new Date(),
-        boardedAt: new Date(),
+        paidAmount:    booking.totalAmount || null,
+        paidAt:        booking.paidAt || null,
+        paidBy:        conductorFirestoreId,
+        updatedAt:     new Date(),
+        boardedAt:     new Date(),
       });
-      // FIX: Update local state directly and cleanly — no cast to unknown
-      setTripBookings((prev) =>
-        prev.map((b) => b.id === bookingId ? { ...b, bookingStatus: "confirmed" } : b)
-      );
-      await logPassengerBoarded(user?.uid || "", conductorName, userProfile?.role || "conductor", userProfile?.companyId || "", bookingId, booking.passengerDetails?.[0]?.name || "Passenger", booking.seatNumbers?.[0] || "?");
+      setTripBookings(prev => prev.map(b => b.id === bookingId ? { ...b, bookingStatus: "confirmed" } : b));
+      await logPassengerBoarded(user?.uid || "", conductorName, userProfile?.role || "conductor",
+        userProfile?.companyId || "", bookingId, booking.passengerDetails?.[0]?.name || "Passenger", booking.seatNumbers?.[0] || "?");
       toast.success("Passenger marked as boarded");
     } catch (err: any) { toast.error(`Failed: ${err.message}`); }
     finally { setActionLoading(false); }
@@ -630,23 +1269,21 @@ const ConductorDashboard: FC = () => {
   const handleMarkNoShow = async (bookingId: string) => {
     setActionLoading(true);
     try {
-      const booking = tripBookings.find((b) => b.id === bookingId);
+      const booking = tripBookings.find(b => b.id === bookingId);
       if (!booking) throw new Error("Booking not found");
       await updateDoc(doc(db, "bookings", bookingId), {
         bookingStatus: "no-show",
         paymentStatus: booking.paymentStatus,
         paymentMethod: booking.paymentMethod || null,
-        paidAmount: booking.totalAmount || null,
-        paidAt: booking.paidAt || null,
-        paidBy: conductorFirestoreId,
-        updatedAt: new Date(),
-        noShowAt: new Date(),
+        paidAmount:    booking.totalAmount || null,
+        paidAt:        booking.paidAt || null,
+        paidBy:        conductorFirestoreId,
+        updatedAt:     new Date(),
+        noShowAt:      new Date(),
       });
-      // FIX: Update local state directly and cleanly
-      setTripBookings((prev) =>
-        prev.map((b) => b.id === bookingId ? { ...b, bookingStatus: "no-show" } : b)
-      );
-      await logPassengerNoShow(user?.uid || "", conductorName, userProfile?.role || "conductor", userProfile?.companyId || "", bookingId, booking.passengerDetails?.[0]?.name || "Passenger", booking.seatNumbers?.[0] || "?");
+      setTripBookings(prev => prev.map(b => b.id === bookingId ? { ...b, bookingStatus: "no-show" } : b));
+      await logPassengerNoShow(user?.uid || "", conductorName, userProfile?.role || "conductor",
+        userProfile?.companyId || "", bookingId, booking.passengerDetails?.[0]?.name || "Passenger", booking.seatNumbers?.[0] || "?");
       toast.success("Passenger marked as no-show");
     } catch (err: any) { toast.error(`Failed: ${err.message}`); }
     finally { setActionLoading(false); }
@@ -655,27 +1292,22 @@ const ConductorDashboard: FC = () => {
   const handleCollectCash = async (bookingId: string, amount: number) => {
     setActionLoading(true);
     try {
-      const booking = tripBookings.find((b) => b.id === bookingId);
+      const booking = tripBookings.find(b => b.id === bookingId);
       if (!booking) throw new Error("Booking not found");
       await updateDoc(doc(db, "bookings", bookingId), {
         bookingStatus: booking.bookingStatus,
         paymentStatus: "paid",
         paymentMethod: "cash_on_boarding",
-        paidAmount: amount,
-        paidAt: new Date(),
-        paidBy: conductorFirestoreId,
-        updatedAt: new Date(),
+        paidAmount:    amount,
+        paidAt:        new Date(),
+        paidBy:        conductorFirestoreId,
+        updatedAt:     new Date(),
       });
-      // FIX: Properly update paymentStatus and paymentMethod in local state
-      // Previously cast to `unknown as Booking` which silently lost the update
-      setTripBookings((prev) =>
-        prev.map((b) =>
-          b.id === bookingId
-            ? { ...b, paymentStatus: "paid", paymentMethod: "cash_on_boarding" }
-            : b
-        )
-      );
-      await logPaymentCollected(user?.uid || "", conductorName, userProfile?.role || "conductor", userProfile?.companyId || "", bookingId, booking.passengerDetails?.[0]?.name || "Passenger", amount, "cash_on_boarding");
+      setTripBookings(prev => prev.map(b =>
+        b.id === bookingId ? { ...b, paymentStatus: "paid", paymentMethod: "cash_on_boarding" } : b
+      ));
+      await logPaymentCollected(user?.uid || "", conductorName, userProfile?.role || "conductor",
+        userProfile?.companyId || "", bookingId, booking.passengerDetails?.[0]?.name || "Passenger", amount, "cash_on_boarding");
       toast.success(`MWK ${amount.toLocaleString()} recorded — now mark boarding status`);
     } catch (err: any) { toast.error(`Failed: ${err.message}`); }
     finally { setActionLoading(false); }
@@ -685,59 +1317,68 @@ const ConductorDashboard: FC = () => {
     if (!selectedTrip || !conductorFirestoreId) return;
     setActionLoading(true);
     try {
-      const passengerName = `${data.firstName} ${data.lastName}`.trim();
+      const passengerName    = `${data.firstName} ${data.lastName}`.trim();
+      const boardingStop     = stopSequence[currentStopIndex];
+      const destinationStop  = stopSequence.find(s => s.id === data.destinationStopId);
+
       const docRef = await addDoc(collection(db, "bookings"), {
-        scheduleId: selectedTrip.id,
-        busId: selectedTrip.busId,
-        seatNumbers: [seatNumber],
+        scheduleId:       selectedTrip.id,
+        busId:            selectedTrip.busId,
+        seatNumbers:      [seatNumber],
         passengerDetails: [{
-          name: passengerName,
-          gender: (data.sex || 'other') as 'male' | 'female' | 'other',
-          age: Number(data.age),
-          seatNumber: seatNumber,
+          name:          passengerName,
+          gender:        (data.sex || "other") as "male" | "female" | "other",
+          age:           Number(data.age),
+          seatNumber:    seatNumber,
           contactNumber: data.phone,
         }],
-        contactPhone: data.phone,
-        totalAmount: selectedTrip.price || amount,
-        paidAmount: amount,
-        bookingStatus: "confirmed",
-        paymentStatus: "paid",
-        paymentMethod: "cash_on_boarding",
-        // FIX: Use "bookedBy" AND "createdBy" both set to "conductor"
-        // so both the walk-on badge (createdBy) and any legacy checks (bookedBy) work
-        bookedBy: "conductor",
-        createdBy: "conductor",
-        isWalkOn: true,           // Explicit flag — most reliable walk-on check
-        conductorId: conductorFirestoreId,
-        conductorUid: user?.uid || "",
-        paidAt: new Date(),
-        paidBy: conductorFirestoreId,
-        boardedAt: new Date(),
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
+        contactPhone:     data.phone,
+        totalAmount:      selectedTrip.price || amount,
+        paidAmount:       amount,
+        bookingStatus:    "confirmed",
+        paymentStatus:    "paid",
+        paymentMethod:    "cash_on_boarding",
+        bookedBy:         "conductor",
+        createdBy:        "conductor",
+        isWalkOn:         true,
+        conductorId:      conductorFirestoreId,
+        conductorUid:     authUid ?? "",
+        paidAt:           new Date(),
+        paidBy:           conductorFirestoreId,
+        boardedAt:        new Date(),
+        // Segment data — where this passenger boarded and where they alight
+        originStopId:      boardingStop?.id ?? "__origin__",
+        destinationStopId: data.destinationStopId || "__destination__",
+        originStopName:    boardingStop?.name ?? selectedTrip.departureLocation,
+        destinationStopName: destinationStop?.name ?? selectedTrip.arrivalLocation,
+        createdAt:        serverTimestamp(),
+        updatedAt:        serverTimestamp(),
         departureLocation: selectedTrip.departureLocation,
-        arrivalLocation: selectedTrip.arrivalLocation,
+        arrivalLocation:   selectedTrip.arrivalLocation,
         departureDateTime: selectedTrip.departureDateTime,
-        companyId: userProfile?.companyId || "",
+        companyId:        userProfile?.companyId ?? "",
       });
 
       await updateDoc(doc(db, "schedules", selectedTrip.id), {
         bookedSeats: [...(selectedTrip.bookedSeats || []), seatNumber],
-        updatedAt: new Date(),
+        updatedAt:   new Date(),
       });
 
-      await logPaymentCollected(user?.uid || "", conductorName, userProfile?.role || "conductor", userProfile?.companyId || "", docRef.id, passengerName, amount, "cash_on_boarding");
-      await logPassengerBoarded(user?.uid || "", conductorName, userProfile?.role || "conductor", userProfile?.companyId || "", docRef.id, passengerName, seatNumber);
+      await logPaymentCollected(user?.uid || "", conductorName, userProfile?.role || "conductor",
+        userProfile?.companyId || "", docRef.id, passengerName, amount, "cash_on_boarding");
+      await logPassengerBoarded(user?.uid || "", conductorName, userProfile?.role || "conductor",
+        userProfile?.companyId || "", docRef.id, passengerName, seatNumber);
+
       toast.success(`Walk-on confirmed — ${passengerName}, Seat ${seatNumber}`);
     } catch (err: any) { toast.error(`Failed to create booking: ${err.message}`); }
     finally { setActionLoading(false); }
   };
 
-  // ── Seat map ──────────────────────────────────────────────────────────────
+  // ── Seat map ───────────────────────────────────────────────────────────────
 
   const renderSeatMap = () => {
     if (!selectedTrip || !myBuses.length) return null;
-    const bus = myBuses.find((b) => b.id === selectedTrip.busId);
+    const bus = myBuses.find(b => b.id === selectedTrip.busId);
     if (!bus?.capacity) return null;
 
     return (
@@ -749,8 +1390,8 @@ const ConductorDashboard: FC = () => {
           <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(4, 1fr)" }}>
             {Array.from({ length: bus.capacity }).map((_, i) => {
               const seatNum = (i + 1).toString();
-              const booking = tripBookings.find((b) => b.seatNumbers?.includes(seatNum));
-              let bg = "bg-gray-200 border border-gray-300 cursor-default";
+              const booking = tripBookings.find(b => b.seatNumbers?.includes(seatNum));
+              let bg   = "bg-gray-200 border border-gray-300 cursor-default";
               let text = "text-gray-700";
               let icon = null;
 
@@ -773,7 +1414,7 @@ const ConductorDashboard: FC = () => {
                 <div
                   key={seatNum}
                   title={booking
-                    ? `${booking.passengerDetails?.[0]?.name || "Passenger"} — ${booking.paymentStatus === "paid" ? "Paid, awaiting boarding action" : "Cash due"}`
+                    ? `${booking.passengerDetails?.[0]?.name || "Passenger"} — ${booking.paymentStatus === "paid" ? "Paid" : "Cash due"}`
                     : "Available"}
                   className={`aspect-square rounded-lg flex items-center justify-center font-medium text-sm relative transition-transform ${bg} ${text}`}
                   onClick={() => {
@@ -812,9 +1453,15 @@ const ConductorDashboard: FC = () => {
     );
   }
 
+  // ── Walk-on allowed guard ──────────────────────────────────────────────────
+  // Walk-ons are only allowed when the bus is actively boarding at a stop.
+  // We also block walk-ons if the trip is complete or hasn't started.
+  const walkOnAllowed = selectedTrip?.tripStatus === "boarding" || !selectedTrip?.tripStatus || selectedTrip?.tripStatus === "scheduled";
+
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-6">
       <div className="max-w-5xl mx-auto space-y-8">
+
         <div className="text-center">
           <h1 className="text-3xl font-bold text-gray-900">Welcome, {conductorName}</h1>
           <p className="text-gray-600 mt-2">Your assigned trips & passenger manifest</p>
@@ -829,20 +1476,26 @@ const ConductorDashboard: FC = () => {
 
         {notifications.length > 0 && (
           <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
-            <div className="flex items-center gap-2 mb-2"><Bell className="w-5 h-5 text-amber-600" /><h3 className="font-medium text-amber-800">Recent Updates</h3></div>
+            <div className="flex items-center gap-2 mb-2">
+              <Bell className="w-5 h-5 text-amber-600" />
+              <h3 className="font-medium text-amber-800">Recent Updates</h3>
+            </div>
             <ul className="text-sm text-amber-800 space-y-1">{notifications.map((msg, i) => <li key={i}>• {msg}</li>)}</ul>
           </div>
         )}
 
         {myBuses.length > 0 && (
           <section className="bg-white rounded-xl border p-6">
-            <h2 className="text-lg font-semibold mb-3 flex items-center gap-2"><BusIcon className="w-5 h-5 text-blue-600" />Assigned Buses ({myBuses.length})</h2>
+            <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
+              <BusIcon className="w-5 h-5 text-blue-600" />Assigned Buses ({myBuses.length})
+            </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {myBuses.map((bus) => (
+              {myBuses.map(bus => (
                 <div key={bus.id} className="p-4 bg-blue-50 rounded-lg border border-blue-200">
                   <p className="font-semibold text-blue-900 text-lg">{bus.licensePlate}</p>
                   <div className="text-sm text-blue-700 mt-2 space-y-1">
-                    <p>Type: {bus.busType}</p><p>Capacity: {bus.capacity} seats</p>
+                    <p>Type: {bus.busType}</p>
+                    <p>Capacity: {bus.capacity} seats</p>
                     {bus.amenities?.length > 0 && <p>Amenities: {bus.amenities.join(", ")}</p>}
                   </div>
                 </div>
@@ -851,74 +1504,98 @@ const ConductorDashboard: FC = () => {
           </section>
         )}
 
-        <section>
-          <h2 className="text-2xl font-semibold mb-4 flex items-center gap-2"><Calendar className="w-6 h-6 text-blue-600" />Your Trips (Next 7 Days)</h2>
-          {myTrips.length === 0 ? (
-            <div className="bg-white rounded-2xl p-10 text-center border shadow-sm">
-              <Calendar className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-              <p className="text-xl font-medium text-gray-700">No trips assigned yet</p>
-              <p className="text-gray-500 mt-2">{myBuses.length === 0 ? "You haven't been assigned to any buses yet" : "No active schedules for the next 7 days"}</p>
-            </div>
-          ) : (
-            <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
-              {myTrips.map((trip) => {
-                const bus = myBuses.find((b) => b.id === trip.busId);
-                const departure = trip.departureDateTime instanceof Date ? trip.departureDateTime : new Date(trip.departureDateTime);
-                return (
-                  <div key={trip.id} className="bg-white rounded-2xl border border-gray-200 shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer overflow-hidden" onClick={() => setSelectedTrip(trip)}>
-                    <div className="p-5">
-                      <div className="flex justify-between items-start mb-4">
-                        <div className="flex-1">
-                          <h3 className="font-semibold text-lg text-gray-900 line-clamp-1">{trip.departureLocation || "TBD"} → {trip.arrivalLocation || "TBD"}</h3>
-                          <p className="text-sm text-gray-600 mt-1 flex items-center gap-1.5"><MapPin className="w-4 h-4" />{trip.departureLocation || "N/A"} → {trip.arrivalLocation || "N/A"}</p>
-                        </div>
-                        <span className="px-3 py-1 bg-blue-100 text-blue-800 text-xs rounded-full font-medium whitespace-nowrap">{format(departure, "MMM d")}</span>
-                      </div>
-                      <div className="grid grid-cols-2 gap-4 text-sm">
-                        <div className="flex items-center gap-2"><Clock className="w-4 h-4 text-gray-500" /><span>{format(departure, "HH:mm")}</span></div>
-                        <div className="flex items-center gap-2"><BusIcon className="w-4 h-4 text-gray-500" /><span className="truncate">{bus?.licensePlate || "N/A"}</span></div>
-                      </div>
-                      <div className="mt-5 pt-4 border-t flex justify-between items-center">
-                        <div className="flex items-center gap-2 text-sm"><Users className="w-4 h-4 text-blue-600" /><span>{trip.bookedSeats?.length || 0} booked</span></div>
-                        <Button variant="outline" size="sm" className="text-blue-700 border-blue-200 hover:bg-blue-50" onClick={(e) => { e.stopPropagation(); setSelectedTrip(trip); }}>View Manifest</Button>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </section>
+        <TripBuckets
+          trips={myTrips}
+          buses={myBuses}
+          onSelect={setSelectedTrip}
+        />
 
         {/* ── Manifest Modal ── */}
-        <Modal isOpen={!!selectedTrip} onClose={() => setSelectedTrip(null)} title={`Manifest: ${selectedTrip?.departureLocation || "Trip"} → ${selectedTrip?.arrivalLocation || "Destination"}`}>
+        <Modal
+          isOpen={!!selectedTrip}
+          onClose={() => setSelectedTrip(null)}
+          title={`${selectedTrip?.departureLocation || "Trip"} → ${selectedTrip?.arrivalLocation || "Destination"}`}
+        >
           {selectedTrip && (
             <div className="space-y-6">
+              {/* Trip info */}
               <div className="p-4 bg-gray-50 rounded-lg border">
                 <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div><p className="text-gray-600">Bus</p><p className="font-medium">{myBuses.find((b) => b.id === selectedTrip.busId)?.licensePlate || "N/A"}</p></div>
-                  <div className="text-right"><p className="text-gray-600">Departure</p><p className="font-medium">{format(selectedTrip.departureDateTime instanceof Date ? selectedTrip.departureDateTime : new Date(selectedTrip.departureDateTime), "PPp")}</p></div>
+                  <div>
+                    <p className="text-gray-600">Bus</p>
+                    <p className="font-medium">{myBuses.find(b => b.id === selectedTrip.busId)?.licensePlate || "N/A"}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-gray-600">Departure</p>
+                    <p className="font-medium">{format(
+                      selectedTrip.departureDateTime instanceof Date ? selectedTrip.departureDateTime : new Date(selectedTrip.departureDateTime),
+                      "PPp"
+                    )}</p>
+                  </div>
                 </div>
               </div>
 
+              {/* ── Trip Control Panel ── */}
+              {stopSequence.length > 0 && (
+                <TripControlPanel
+                  trip={selectedTrip}
+                  stopSequence={stopSequence}
+                  onStartTrip={handleStartTrip}
+                  onDepart={handleDepart}
+                  onArriveAtNext={handleArriveAtNext}
+                  loading={actionLoading}
+                />
+              )}
+
+              {/* Stats */}
               <div className="grid grid-cols-4 gap-3 text-center">
-                <div className="bg-blue-50 rounded-lg p-3 border border-blue-100"><p className="text-2xl font-bold text-blue-700">{tripBookings.length}</p><p className="text-xs text-blue-600 mt-0.5">Booked</p></div>
-                <div className="bg-green-50 rounded-lg p-3 border border-green-100"><p className="text-2xl font-bold text-green-700">{tripBookings.filter((b) => b.bookingStatus === "confirmed").length}</p><p className="text-xs text-green-600 mt-0.5">Boarded</p></div>
-                <div className="bg-amber-50 rounded-lg p-3 border border-amber-100"><p className="text-2xl font-bold text-amber-700">{tripBookings.filter((b) => b.paymentStatus !== "paid").length}</p><p className="text-xs text-amber-600 mt-0.5">Cash Due</p></div>
-                {/* FIX: Walk-on count now checks createdBy which is set correctly */}
-                <div className="bg-purple-50 rounded-lg p-3 border border-purple-100"><p className="text-2xl font-bold text-purple-700">{tripBookings.filter((b) => (b as any).bookedBy === "conductor" || b.createdBy === "conductor").length}</p><p className="text-xs text-purple-600 mt-0.5">Walk-ons</p></div>
+                <div className="bg-blue-50 rounded-lg p-3 border border-blue-100">
+                  <p className="text-2xl font-bold text-blue-700">{tripBookings.length}</p>
+                  <p className="text-xs text-blue-600 mt-0.5">Booked</p>
+                </div>
+                <div className="bg-green-50 rounded-lg p-3 border border-green-100">
+                  <p className="text-2xl font-bold text-green-700">{tripBookings.filter(b => b.bookingStatus === "confirmed").length}</p>
+                  <p className="text-xs text-green-600 mt-0.5">Boarded</p>
+                </div>
+                <div className="bg-amber-50 rounded-lg p-3 border border-amber-100">
+                  <p className="text-2xl font-bold text-amber-700">{tripBookings.filter(b => b.paymentStatus !== "paid").length}</p>
+                  <p className="text-xs text-amber-600 mt-0.5">Cash Due</p>
+                </div>
+                <div className="bg-purple-50 rounded-lg p-3 border border-purple-100">
+                  <p className="text-2xl font-bold text-purple-700">
+                    {tripBookings.filter(b => (b as any).bookedBy === "conductor" || b.createdBy === "conductor").length}
+                  </p>
+                  <p className="text-xs text-purple-600 mt-0.5">Walk-ons</p>
+                </div>
               </div>
 
-              <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white h-11 text-base" onClick={() => setWalkOnModalOpen(true)}>
-                <UserPlus className="w-5 h-5 mr-2" /> Walk-on Booking — Board a New Passenger
-              </Button>
+              {/* Walk-on button — only when boarding is open */}
+              {walkOnAllowed && selectedTrip.tripStatus !== "completed" && (
+                <Button
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white h-11 text-base"
+                  onClick={() => setWalkOnModalOpen(true)}
+                >
+                  <UserPlus className="w-5 h-5 mr-2" /> Walk-on Booking — Board a New Passenger
+                </Button>
+              )}
+
+              {/* Walk-on blocked when in transit */}
+              {selectedTrip.tripStatus === "in_transit" && (
+                <div className="flex items-center gap-2 p-3 bg-gray-50 border rounded-lg text-sm text-gray-600">
+                  <Lock className="w-4 h-4" />
+                  Walk-on bookings are paused while the bus is in transit. They will reopen at the next stop.
+                </div>
+              )}
 
               {renderSeatMap()}
 
+              {/* Passenger manifest */}
               <div>
                 <h3 className="font-semibold text-lg mb-3 flex items-center justify-between">
                   <span>Passenger Manifest</span>
-                  <span className="text-sm font-normal text-gray-500">{tripBookings.filter((b) => b.paymentStatus === "paid").length} / {tripBookings.length} paid</span>
+                  <span className="text-sm font-normal text-gray-500">
+                    {tripBookings.filter(b => b.paymentStatus === "paid").length} / {tripBookings.length} paid
+                  </span>
                 </h3>
 
                 {tripBookings.length === 0 ? (
@@ -929,19 +1606,29 @@ const ConductorDashboard: FC = () => {
                   </div>
                 ) : (
                   <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-2">
-                    {tripBookings.map((booking) => {
-                      const isPaid = booking.paymentStatus === "paid";
+                    {tripBookings.map(booking => {
+                      const isPaid      = booking.paymentStatus === "paid";
                       const isConfirmed = booking.bookingStatus === "confirmed";
-                      const isNoShow = booking.bookingStatus === "no-show";
-                      // FIX: Check createdBy (set on new walk-ons) with bookedBy fallback
-                      // for any existing records that only have bookedBy
-                      const isWalkOn = (booking as any).bookedBy === "conductor" || booking.createdBy === "conductor";
-                      const passenger = booking.passengerDetails?.[0];
+                      const isNoShow    = booking.bookingStatus === "no-show";
+                      const isWalkOn    = (booking as any).bookedBy === "conductor" || booking.createdBy === "conductor";
+                      const passenger   = booking.passengerDetails?.[0];
+
+                      // Show segment info if available
+                      const originName = (booking as any).originStopName || (booking as any).departureLocation;
+                      const destName   = (booking as any).destinationStopName || (booking as any).arrivalLocation;
+                      const hasSegment = originName && destName && originName !== destName;
 
                       return (
-                        <div key={booking.id} className={`p-4 rounded-xl border transition-colors ${isConfirmed ? "bg-green-50 border-green-200" : isNoShow ? "bg-red-50 border-red-200" : !isPaid ? "bg-amber-50 border-amber-200" : "bg-white border-gray-200 hover:bg-gray-50"}`}>
+                        <div key={booking.id} className={`p-4 rounded-xl border transition-colors ${
+                          isConfirmed ? "bg-green-50 border-green-200" :
+                          isNoShow    ? "bg-red-50 border-red-200" :
+                          !isPaid     ? "bg-amber-50 border-amber-200" :
+                                        "bg-white border-gray-200 hover:bg-gray-50"
+                        }`}>
                           <div className="flex items-start gap-4">
-                            <div className={`w-12 h-12 rounded-xl flex items-center justify-center font-bold text-white text-lg flex-shrink-0 ${isConfirmed ? "bg-green-600" : isNoShow ? "bg-red-600" : !isPaid ? "bg-amber-500" : "bg-blue-600"}`}>
+                            <div className={`w-12 h-12 rounded-xl flex items-center justify-center font-bold text-white text-lg flex-shrink-0 ${
+                              isConfirmed ? "bg-green-600" : isNoShow ? "bg-red-600" : !isPaid ? "bg-amber-500" : "bg-blue-600"
+                            }`}>
                               {booking.seatNumbers?.[0] || "?"}
                             </div>
                             <div className="flex-1 min-w-0">
@@ -956,6 +1643,11 @@ const ConductorDashboard: FC = () => {
                                 {isNoShow && <XCircle className="w-4 h-4 text-red-600" />}
                               </p>
                               <p className="text-sm text-gray-500">{booking.contactPhone || "No contact"}</p>
+                              {hasSegment && (
+                                <p className="text-xs text-gray-400 flex items-center gap-1 mt-0.5">
+                                  <MapPin className="w-3 h-3" /> {originName} → {destName}
+                                </p>
+                              )}
                               <div className="flex items-center gap-3 mt-1">
                                 <span className="text-sm font-medium text-gray-700">MWK {booking.totalAmount?.toLocaleString() || "?"}</span>
                                 {isPaid ? (
@@ -972,55 +1664,29 @@ const ConductorDashboard: FC = () => {
                             </div>
                           </div>
 
-                          {/* ── Action area ── */}
+                          {/* Action area */}
                           <div className="mt-3 flex flex-wrap items-center gap-2">
-                            {/* Step 1: Collect cash — only shown when unpaid */}
                             {!isPaid && (
-                              <Button
-                                size="sm"
-                                className="bg-amber-600 hover:bg-amber-700 text-white"
+                              <Button size="sm" className="bg-amber-600 hover:bg-amber-700 text-white"
                                 onClick={() => { setCashModalBooking(booking); setCashModalOpen(true); }}
-                                disabled={actionLoading}
-                              >
+                                disabled={actionLoading}>
                                 <Banknote className="w-4 h-4 mr-1.5" /> Collect Cash
                               </Button>
                             )}
-
-                            {/*
-                              FIX: Step 2 — Boarded / No-Show buttons
-                              Shown when:
-                                - paymentStatus === "paid"  (cash collected OR paid online)
-                                - bookingStatus is still pending (not yet confirmed/no-show)
-                              
-                              Previously this worked correctly in logic but the local state
-                              update in handleCollectCash used `unknown as Booking` which
-                              could silently drop the paymentStatus field, keeping isPaid=false
-                              and hiding these buttons even after cash was collected.
-                              The local state update is now a proper spread with explicit fields.
-                            */}
                             {isPaid && !isConfirmed && !isNoShow && (
                               <>
-                                <Button
-                                  size="sm"
-                                  className="bg-green-600 hover:bg-green-700 text-white"
-                                  onClick={() => handleMarkBoarded(booking.id)}
-                                  disabled={actionLoading}
-                                >
+                                <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white"
+                                  onClick={() => handleMarkBoarded(booking.id)} disabled={actionLoading}>
                                   {actionLoading ? <Loader2 className="w-4 h-4 animate-spin mr-1.5" /> : <Check className="w-4 h-4 mr-1.5" />}
                                   Boarded
                                 </Button>
-                                <Button
-                                  size="sm"
-                                  variant="destructive"
-                                  onClick={() => handleMarkNoShow(booking.id)}
-                                  disabled={actionLoading}
-                                >
+                                <Button size="sm" variant="destructive"
+                                  onClick={() => handleMarkNoShow(booking.id)} disabled={actionLoading}>
                                   {actionLoading ? <Loader2 className="w-4 h-4 animate-spin mr-1.5" /> : <UserX className="w-4 h-4 mr-1.5" />}
                                   No-Show
                                 </Button>
                               </>
                             )}
-
                             {!isPaid && (
                               <span className="inline-flex items-center gap-1 text-xs text-gray-400 ml-1">
                                 <Lock className="w-3 h-3" /> Boarding locked until paid
@@ -1057,8 +1723,10 @@ const ConductorDashboard: FC = () => {
             isOpen={walkOnModalOpen}
             onClose={() => setWalkOnModalOpen(false)}
             trip={selectedTrip}
-            bus={myBuses.find((b) => b.id === selectedTrip.busId) || null}
+            bus={myBuses.find(b => b.id === selectedTrip.busId) || null}
             existingBookings={tripBookings}
+            stopSequence={stopSequence}
+            currentStopIndex={currentStopIndex}
             onConfirm={handleWalkOnBooking}
             loading={actionLoading}
           />
@@ -1077,4 +1745,4 @@ const ConductorDashboard: FC = () => {
   );
 };
 
-export default ConductorDashboard;
+export default ConductorDashboard;  

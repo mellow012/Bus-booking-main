@@ -202,20 +202,9 @@ export interface RouteStop {
   name: string;
   distanceFromOrigin: number;
   order: number;
-   address?: string;
+  address?: string;
   pickupPoint?: string; // Specific landmark/location
   estimatedArrival?: number; // minutes from origin
-  contactPerson?: string;
-  contactPhone?: string;
-}
-export interface RouteStop {
-  id: string;
-  name: string;
-  distanceFromOrigin: number;
-  order: number;
-  address?: string;
-  pickupPoint?: string;
-  estimatedArrival?: number;
   contactPerson?: string;
   contactPhone?: string;
 }
@@ -259,15 +248,38 @@ interface RouteOperator {
 
 export type ScheduleStatus = 'pending' | 'published' | 'active' | 'completed' | 'cancelled' | 'archived';
 
+/**
+ * Trip lifecycle status for live trip tracking.
+ * 
+ * scheduled  — default, conductor has not started the trip yet
+ * boarding   — conductor tapped "Start Trip" or "Arrived at [stop]"; walk-ons allowed
+ * in_transit — conductor tapped "Depart [stop]"; bus is moving, no new walk-ons at departed stop
+ * completed  — conductor tapped "Complete Trip" at final destination
+ */
+export type TripStatus = 'scheduled' | 'boarding' | 'in_transit' | 'completed';
+
+/**
+ * A stop as it appears in the full ordered sequence during a live trip.
+ * The conductor dashboard builds this from route.stops + sentinel origin/destination.
+ */
+export interface TripStop {
+  id: string;        // '__origin__' | 'stop-0' | 'stop-1' | '__destination__'
+  name: string;
+  order: number;     // -1 for origin, 999 for destination, route stop order otherwise
+}
+
 export interface Schedule extends FirestoreDocument {
   id: string;
   companyId: string;
   busId: string;
   routeId: string;
   
-  // Route details
+  // Route details — copied from route on materialisation so conductor doesn't need extra fetches
   departureLocation: string;
   arrivalLocation: string;
+  
+  // Intermediate stops — snapshot copied from route.stops on materialisation
+  stops?: RouteStop[];
   
   // Timing
   departureDateTime: Date;
@@ -288,10 +300,48 @@ export interface Schedule extends FirestoreDocument {
   
   // Cancellation info
   cancellationReason?: string;
+
   // For schedules created from templates, this links back to the source template
   templateId?: string;  
   
-  // Operator assignments
+  // ── Trip lifecycle (set by conductor during live trip) ─────────────────────
+  
+  /**
+   * Current live status of the trip.
+   * Defaults to 'scheduled' if not set (trip hasn't started).
+   */
+  tripStatus?: TripStatus;
+  
+  /**
+   * Index into the full stop sequence (origin + intermediate stops + destination).
+   * 0 = at origin, 1 = first intermediate stop, etc.
+   * Only meaningful when tripStatus is 'boarding' or 'in_transit'.
+   */
+  currentStopIndex?: number;
+  
+  /**
+   * Stop IDs that the bus has already DEPARTED from.
+   * Used by the booking flow to block new bookings from these stops.
+   * e.g. ['__origin__', 'stop-0'] means bus has left origin and Ekwendeni.
+   */
+  departedStops?: string[];
+  
+  /**
+   * When the conductor tapped "Start Trip". Immutable once set.
+   */
+  tripStartedAt?: Date;
+  
+  /**
+   * When the conductor tapped "Complete Trip". Immutable once set.
+   */
+  tripCompletedAt?: Date;
+  
+  /**
+   * UID of the conductor who started and is managing this trip.
+   */
+  conductorUid?: string;
+
+  // ── Operator assignments ───────────────────────────────────────────────────
   createdBy: string;  // Operator who created schedule
   assignedOperatorIds?: string[];
   assignedConductorIds?: string[];
@@ -383,7 +433,7 @@ export interface Booking extends FirestoreDocument {
   totalAmount: number;
   bookingStatus: BookingStatus;
   paymentStatus: 'paid' | 'pending' | 'failed' | 'refunded';
-  paidAt?:string
+  paidAt?: string;
   
   // Contact information
   contactEmail: string;
@@ -392,8 +442,8 @@ export interface Booking extends FirestoreDocument {
   // Dates
   bookingDate: Date;
   confirmedDate?: Date;
-  boardedAt?: Date;      // ← NEW: When passenger boarded
-  noShowAt?: Date;       // ← NEW: When passenger no-showed
+  boardedAt?: Date;
+  noShowAt?: Date;
   cancellationDate?: Date;
   refundDate?: Date;
   
@@ -411,8 +461,8 @@ export interface Booking extends FirestoreDocument {
   transactionReference?: string;
   
   // Audit
-  createdBy?: string;    // User who created booking
-  updatedBy?: string;    // User who last updated (e.g., conductor)
+  createdBy?: string;
+  updatedBy?: string;
   
   // Metadata
   metadata?: Record<string, any>;
@@ -475,8 +525,8 @@ export interface Operator {
   email: string;
   role: 'operator';
   companyId: string;
-  region: string;        // Primary location field - "Lilongwe", "Blantyre", "Mzuzu"
-  branch?: string[];       // Alternative/backup field
+  region: string;
+  branch?: string[];
   phoneNumber?: string;
   createdAt: Date;
   updatedAt: Date;
@@ -489,21 +539,6 @@ export interface OperatingHours {
   closed: boolean;
 }
 
-export interface PassengerDetails {
-  id?: string;
-  name: string;
-  age: number;
-  gender: 'male' | 'female' | 'other';
-  seatNumber: string;
-  specialNeeds?: string;
-  ticketType?: 'adult' | 'child' | 'senior' | 'infant';
-  identification?: {
-    type: 'passport' | 'national_id' | 'driver_license' | 'other';
-    number: string;
-  };
-  contactNumber?: string;
-  email?: string;
-}
 export function isCompanyRole(role: UserRole): role is CompanyRole {
   return ['company_admin', 'operator', 'conductor'].includes(role);
 }
@@ -520,7 +555,67 @@ export function isCompanyRoleProfile(profile: UserProfile): profile is CompanyAd
  */
 export function getCompanyId(profile: UserProfile): string | undefined {
   if (isCompanyRoleProfile(profile)) {
-    return profile.companyId;  // TypeScript knows this is string
+    return profile.companyId;
   }
   return undefined;
+}
+
+// ── Trip lifecycle helpers ─────────────────────────────────────────────────────
+
+/**
+ * Build the full ordered stop sequence for a schedule.
+ * Combines sentinel origin/destination with intermediate route stops.
+ * 
+ * Result: [__origin__, ...intermediate stops by order..., __destination__]
+ */
+export function buildTripStopSequence(schedule: Schedule): TripStop[] {
+  const intermediate = (schedule.stops || [])
+    .slice()
+    .sort((a, b) => a.order - b.order)
+    .map(s => ({ id: s.id, name: s.name, order: s.order }));
+
+  return [
+    { id: '__origin__',      name: schedule.departureLocation, order: -1 },
+    ...intermediate,
+    { id: '__destination__', name: schedule.arrivalLocation,   order: 999 },
+  ];
+}
+
+/**
+ * Returns true if new bookings from a given stop are still allowed.
+ * A stop is blocked once the bus has departed from it.
+ */
+export function isStopOpenForBooking(stopId: string, schedule: Schedule): boolean {
+  const departedStops = schedule.departedStops || [];
+  return !departedStops.includes(stopId);
+}
+
+/**
+ * Get the current stop the bus is at (or about to depart from).
+ * Returns null if trip hasn't started or has completed.
+ */
+export function getCurrentTripStop(schedule: Schedule): TripStop | null {
+  if (!schedule.tripStatus || schedule.tripStatus === 'scheduled' || schedule.tripStatus === 'completed') {
+    return null;
+  }
+  const stops = buildTripStopSequence(schedule);
+  const idx = schedule.currentStopIndex ?? 0;
+  return stops[idx] ?? null;
+}
+
+/**
+ * Get the next stop the bus will arrive at.
+ * Returns null if at final stop or trip not started.
+ */
+export function getNextTripStop(schedule: Schedule): TripStop | null {
+  const stops = buildTripStopSequence(schedule);
+  const idx = (schedule.currentStopIndex ?? 0);
+  
+  if (schedule.tripStatus === 'in_transit') {
+    return stops[idx + 1] ?? null;
+  }
+  if (schedule.tripStatus === 'boarding') {
+    return stops[idx + 1] ?? null;
+  }
+  return null;
 }
