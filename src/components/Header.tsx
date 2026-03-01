@@ -141,17 +141,22 @@ const Header: React.FC = () => {
               {/* Icon */}
               <div className="relative">
                 <div className="w-9 h-9 sm:w-10 sm:h-10 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center shadow-md group-hover:shadow-lg group-hover:scale-105 transition-all duration-200">
-                  <BusIcon className="w-4.5 h-4.5 sm:w-5 sm:h-5 text-white"/>
+                  <BusIcon className="w-4 h-4 sm:w-5 sm:h-5 text-white"/>
                 </div>
                 <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-400 rounded-full border-2 border-white animate-pulse"/>
               </div>
-              {/* Name — ALWAYS visible, just scales slightly */}
+              {/* Name — always visible, adapts to scrolled vs hero state */}
               <div>
-                <span className="text-lg sm:text-xl font-extrabold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent group-hover:from-blue-600 group-hover:to-indigo-600 transition-all duration-200 leading-none">
+                <span className={`text-lg sm:text-xl font-extrabold leading-none transition-all duration-300 ${
+                  isScrolled
+                    ? 'text-gray-900 group-hover:text-blue-600'
+                    : 'text-white drop-shadow-sm group-hover:text-blue-200'
+                }`}>
                   TibhukeBus
                 </span>
-                {/* Tagline — hidden on tiny screens to save space */}
-                <p className="hidden sm:block text-[10px] text-gray-400 leading-none mt-0.5 font-medium tracking-wide">
+                <p className={`hidden sm:block text-[10px] leading-none mt-0.5 font-medium tracking-wide transition-all duration-300 ${
+                  isScrolled ? 'text-gray-400' : 'text-blue-200/80'
+                }`}>
                   Smart Travel
                 </p>
               </div>
@@ -164,7 +169,11 @@ const Header: React.FC = () => {
                 return (
                   <Link key={item.href} href={item.href}
                     className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${
-                      active ? 'bg-blue-100 text-blue-700 shadow-sm' : 'text-gray-600 hover:bg-gray-100 hover:text-blue-600'
+                      active
+                        ? 'bg-blue-600/20 text-white shadow-sm ring-1 ring-white/20'
+                        : isScrolled
+                          ? 'text-gray-600 hover:bg-gray-100 hover:text-blue-600'
+                          : 'text-white/80 hover:bg-white/10 hover:text-white'
                     }`}>
                     <item.icon className="w-4 h-4"/>{item.label}
                   </Link>
@@ -187,14 +196,18 @@ const Header: React.FC = () => {
               {!loading && user && (
                 <div className="relative" ref={userMenuRef}>
                   <button onClick={() => setIsUserMenuOpen(v => !v)}
-                    className="flex items-center gap-2 p-1.5 sm:p-2 rounded-xl hover:bg-gray-100 transition-all duration-200 group">
+                    className="flex items-center gap-2 p-1.5 sm:p-2 rounded-xl hover:bg-white/10 transition-all duration-200 group">
                     <UserAvatar user={user} userProfile={userProfile}/>
                     {/* Name: md+ only */}
                     <div className="hidden md:block text-left">
-                      <p className="text-sm font-semibold text-gray-900 group-hover:text-blue-600 leading-tight max-w-[120px] truncate">{displayName}</p>
-                      <p className="text-[11px] text-gray-400 capitalize leading-tight">{userProfile?.role || 'Member'}</p>
+                      <p className={`text-sm font-semibold leading-tight max-w-[120px] truncate transition-colors ${
+                        isScrolled ? 'text-gray-900 group-hover:text-blue-600' : 'text-white'
+                      }`}>{displayName}</p>
+                      <p className={`text-[11px] capitalize leading-tight transition-colors ${
+                        isScrolled ? 'text-gray-400' : 'text-blue-200/80'
+                      }`}>{userProfile?.role || 'Member'}</p>
                     </div>
-                    <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${isUserMenuOpen ? 'rotate-180' : ''}`}/>
+                    <ChevronDown className={`w-4 h-4 transition-all duration-200 ${isUserMenuOpen ? 'rotate-180' : ''} ${isScrolled ? 'text-gray-400' : 'text-white/60'}`}/>
                   </button>
 
                   {/* Dropdown */}
@@ -250,11 +263,17 @@ const Header: React.FC = () => {
               {!loading && !user && (
                 <div className="hidden md:flex items-center gap-2">
                   <Link href="/login"
-                    className="px-4 py-2 text-sm text-gray-700 hover:text-blue-600 font-medium transition-colors">
+                    className={`px-4 py-2 text-sm font-medium transition-colors ${
+                      isScrolled ? 'text-gray-700 hover:text-blue-600' : 'text-white/80 hover:text-white'
+                    }`}>
                     Sign In
                   </Link>
                   <Link href="/register"
-                    className="px-4 py-2 text-sm bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-semibold shadow-md hover:shadow-lg hover:opacity-90 transition-all duration-200">
+                    className={`px-4 py-2 text-sm font-semibold rounded-xl shadow-md hover:shadow-lg hover:opacity-90 transition-all duration-200 ${
+                      isScrolled
+                        ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white'
+                        : 'bg-white text-blue-700 hover:bg-blue-50'
+                    }`}>
                     Get Started
                   </Link>
                 </div>
@@ -262,7 +281,11 @@ const Header: React.FC = () => {
 
               {/* Hamburger — mobile only */}
               <button onClick={() => setIsMenuOpen(v => !v)}
-                className="lg:hidden p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all duration-200"
+                className={`lg:hidden p-2 rounded-xl transition-all duration-200 ${
+                  isScrolled
+                    ? 'text-gray-600 hover:text-blue-600 hover:bg-blue-50'
+                    : 'text-white hover:bg-white/10'
+                }`}
                 aria-label={isMenuOpen ? 'Close menu' : 'Open menu'}>
                 {isMenuOpen ? <X className="w-5 h-5"/> : <Menu className="w-5 h-5"/>}
               </button>
