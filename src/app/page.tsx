@@ -439,97 +439,97 @@ const ScheduleCard = React.memo(({ s, onBook, userCity }: {
     <article className="group bg-white rounded-2xl shadow-sm border border-gray-100 hover:shadow-lg hover:border-blue-100 transition-all duration-300 overflow-hidden flex flex-col">
       <div className={`h-[3px] w-full ${filling?"bg-gradient-to-r from-rose-400 to-orange-400":isLocal?"bg-gradient-to-r from-teal-400 to-emerald-500":"bg-gradient-to-r from-blue-500 to-indigo-500"}`}/>
 
-      <div className="p-5 flex flex-col flex-1">
+      <div className="p-4 sm:p-5 flex flex-col flex-1">
         {/* Company + price */}
-        <div className="flex items-start justify-between gap-3 mb-4">
-          <div className="flex items-center gap-3 min-w-0">
-            {s.companyLogo?(
-              <div className="w-11 h-11 rounded-xl overflow-hidden border border-gray-100 shrink-0">
+        <div className="flex items-start justify-between gap-2 sm:gap-3 mb-3 sm:mb-4">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            {s.companyLogo ? (
+              <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl overflow-hidden border border-gray-100 shrink-0">
                 <img src={s.companyLogo} alt={s.companyName} className="w-full h-full object-cover" loading="lazy"/>
               </div>
-            ):(
-              <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-base shrink-0">
+            ) : (
+              <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-sm sm:text-base shrink-0">
                 {s.companyName.charAt(0)}
               </div>
             )}
             <div className="min-w-0">
-              <p className="font-semibold text-gray-900 text-sm truncate group-hover:text-blue-700 transition-colors">{s.companyName}</p>
-              <div className="flex items-center gap-1.5 mt-0.5">
-                <span className="text-[11px] text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">{s.busType}</span>
-                <span className="flex items-center gap-0.5 text-[11px] text-gray-500">
-                  <Star className="w-3 h-3 text-yellow-400 fill-yellow-400"/>4.6
+              <p className="font-semibold text-gray-900 text-xs sm:text-sm truncate group-hover:text-blue-700 transition-colors">{s.companyName}</p>
+              <div className="flex items-center gap-1 sm:gap-1.5 mt-0.5">
+                <span className="text-[10px] sm:text-[11px] text-gray-500 bg-gray-100 px-1.5 sm:px-2 py-0.5 rounded-full">{s.busType}</span>
+                <span className="flex items-center gap-0.5 text-[10px] sm:text-[11px] text-gray-500">
+                  <Star className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-yellow-400 fill-yellow-400"/>4.6
                 </span>
               </div>
             </div>
           </div>
           <div className="text-right shrink-0">
-            <p className="text-lg font-bold text-blue-700">MWK {s.price.toLocaleString()}</p>
-            <p className="text-[11px] text-gray-400">per person</p>
+            <p className="text-base sm:text-lg font-bold text-blue-700 leading-tight">MWK {s.price.toLocaleString()}</p>
+            <p className="text-[10px] sm:text-[11px] text-gray-400">per person</p>
           </div>
         </div>
 
         {/* Route strip */}
-        <div className="bg-slate-50 border border-slate-100 rounded-xl p-3 mb-3">
+        <div className="bg-slate-50 border border-slate-100 rounded-xl p-2.5 sm:p-3 mb-3">
           <div className="flex items-center">
             <div className="text-center min-w-0 flex-1">
-              <p className="text-sm font-bold text-gray-900 truncate">{s.origin}</p>
-              <p className="text-[11px] text-gray-400 mt-0.5">{s.departureTime}</p>
+              <p className="text-xs sm:text-sm font-bold text-gray-900 truncate">{s.origin}</p>
+              <p className="text-[10px] sm:text-[11px] text-gray-400 mt-0.5">{s.departureTime}</p>
             </div>
-            <div className="flex flex-col items-center gap-0.5 px-3 shrink-0">
+            <div className="flex flex-col items-center gap-0.5 px-2 sm:px-3 shrink-0">
               <div className="flex items-center gap-0.5">
                 <div className="w-1.5 h-1.5 rounded-full bg-blue-300"/>
-                <div className="w-7 h-px bg-blue-200"/>
-                <ArrowRight className="w-3 h-3 text-blue-500"/>
-                <div className="w-7 h-px bg-blue-200"/>
+                <div className="w-5 sm:w-7 h-px bg-blue-200"/>
+                <ArrowRight className="w-2.5 sm:w-3 h-2.5 sm:h-3 text-blue-500"/>
+                <div className="w-5 sm:w-7 h-px bg-blue-200"/>
                 <div className="w-1.5 h-1.5 rounded-full bg-blue-300"/>
               </div>
-              <span className="text-[10px] text-gray-400">{formatDuration(s.duration)}</span>
+              <span className="text-[9px] sm:text-[10px] text-gray-400">{formatDuration(s.duration)}</span>
             </div>
             <div className="text-center min-w-0 flex-1">
-              <p className="text-sm font-bold text-gray-900 truncate">{s.destination}</p>
-              <p className="text-[11px] text-gray-400 mt-0.5">{s.arrivalTime}</p>
+              <p className="text-xs sm:text-sm font-bold text-gray-900 truncate">{s.destination}</p>
+              <p className="text-[10px] sm:text-[11px] text-gray-400 mt-0.5">{s.arrivalTime}</p>
             </div>
           </div>
         </div>
 
         {/* Meta */}
-        <div className="grid grid-cols-2 gap-1.5 mb-3">
+        <div className="grid grid-cols-2 gap-1 sm:gap-1.5 mb-3">
           {[
             { icon: Calendar, label: new Date(s.date).toLocaleDateString("en-GB",{day:"numeric",month:"short"}), cls: "text-blue-500" },
             { icon: Users,    label: `${s.availableSeats} seats`, cls: seatCls, labelCls: seatCls },
             { icon: MapPin,   label: `${s.distance} km`, cls: "text-blue-500" },
             { icon: BusIcon,  label: s.busNumber, cls: "text-blue-500" },
           ].map(({ icon: Icon, label, cls, labelCls }, i) => (
-            <div key={i} className="flex items-center gap-1.5 bg-gray-50 rounded-lg px-2.5 py-1.5">
-              <Icon className={`w-3.5 h-3.5 shrink-0 ${cls}`}/>
-              <span className={`text-xs font-medium truncate ${labelCls||"text-gray-700"}`}>{label}</span>
+            <div key={i} className="flex items-center gap-1 sm:gap-1.5 bg-gray-50 rounded-lg px-2 sm:px-2.5 py-1 sm:py-1.5">
+              <Icon className={`w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0 ${cls}`}/>
+              <span className={`text-[10px] sm:text-xs font-medium truncate ${labelCls||"text-gray-700"}`}>{label}</span>
             </div>
           ))}
         </div>
 
         {/* Amenities */}
-        {s.amenities?.length>0&&(
+        {s.amenities?.length > 0 && (
           <div className="flex flex-wrap gap-1 mb-3">
-            {s.amenities.slice(0,3).map((a,i)=>{ const Icon=AMENITY_ICONS[a]||Shield; return (
-              <span key={i} className="flex items-center gap-1 text-[11px] px-2 py-1 bg-blue-50 text-blue-700 rounded-full">
-                <Icon className="w-3 h-3"/>{a}
+            {s.amenities.slice(0, 3).map((a, i) => { const Icon = AMENITY_ICONS[a] || Shield; return (
+              <span key={i} className="flex items-center gap-0.5 sm:gap-1 text-[10px] sm:text-[11px] px-1.5 sm:px-2 py-0.5 sm:py-1 bg-blue-50 text-blue-700 rounded-full">
+                <Icon className="w-2.5 h-2.5 sm:w-3 sm:h-3"/>{a}
               </span>
             );})}
-            {s.amenities.length>3&&<span className="text-[11px] px-2 py-1 bg-gray-100 text-gray-500 rounded-full">+{s.amenities.length-3}</span>}
+            {s.amenities.length > 3 && <span className="text-[10px] sm:text-[11px] px-1.5 sm:px-2 py-0.5 sm:py-1 bg-gray-100 text-gray-500 rounded-full">+{s.amenities.length-3}</span>}
           </div>
         )}
 
         {/* Badges */}
-        <div className="flex flex-wrap gap-1 mb-3 min-h-[20px]">
-          {filling&&<span className="flex items-center gap-1 text-[11px] px-2 py-1 bg-rose-50 text-rose-600 rounded-full border border-rose-100 font-semibold"><Flame className="w-3 h-3"/>Filling Fast</span>}
-          {isToday(s.date)&&<span className="flex items-center gap-1 text-[11px] px-2 py-1 bg-emerald-50 text-emerald-700 rounded-full border border-emerald-100 font-semibold"><CheckCircle className="w-3 h-3"/>Today</span>}
-          {isLocal&&<span className="flex items-center gap-1 text-[11px] px-2 py-1 bg-teal-50 text-teal-700 rounded-full border border-teal-100 font-semibold"><MapPin className="w-3 h-3"/>Near You</span>}
+        <div className="flex flex-wrap gap-1 mb-3 min-h-[18px]">
+          {filling   && <span className="flex items-center gap-0.5 sm:gap-1 text-[10px] sm:text-[11px] px-1.5 sm:px-2 py-0.5 sm:py-1 bg-rose-50 text-rose-600 rounded-full border border-rose-100 font-semibold"><Flame className="w-2.5 h-2.5 sm:w-3 sm:h-3"/>Filling Fast</span>}
+          {isToday(s.date) && <span className="flex items-center gap-0.5 sm:gap-1 text-[10px] sm:text-[11px] px-1.5 sm:px-2 py-0.5 sm:py-1 bg-emerald-50 text-emerald-700 rounded-full border border-emerald-100 font-semibold"><CheckCircle className="w-2.5 h-2.5 sm:w-3 sm:h-3"/>Today</span>}
+          {isLocal   && <span className="flex items-center gap-0.5 sm:gap-1 text-[10px] sm:text-[11px] px-1.5 sm:px-2 py-0.5 sm:py-1 bg-teal-50 text-teal-700 rounded-full border border-teal-100 font-semibold"><MapPin className="w-2.5 h-2.5 sm:w-3 sm:h-3"/>Near You</span>}
         </div>
 
         {/* CTA */}
         <button onClick={onBook} disabled={s.availableSeats<=0}
-          className="mt-auto w-full h-10 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:bg-gray-100 disabled:text-gray-400 text-white text-sm font-semibold transition-colors flex items-center justify-center gap-2 group/btn">
-          {s.availableSeats<=0?"Fully Booked":<>Book Journey <ArrowRight className="w-4 h-4 group-hover/btn:translate-x-0.5 transition-transform"/></>}
+          className="mt-auto w-full h-10 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:bg-gray-100 disabled:text-gray-400 text-white text-xs sm:text-sm font-semibold transition-colors flex items-center justify-center gap-2 group/btn active:scale-[.98]">
+          {s.availableSeats<=0 ? "Fully Booked" : <>Book Journey <ArrowRight className="w-3.5 h-3.5 group-hover/btn:translate-x-0.5 transition-transform"/></>}
         </button>
       </div>
     </article>
@@ -721,12 +721,20 @@ export default function HomePage() {
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=DM+Sans:wght@400;500;600&display=swap');
         body { font-family: 'DM Sans', sans-serif; }
         .font-display { font-family: 'Plus Jakarta Sans', sans-serif; }
-        @keyframes fadeUp { from{opacity:0;transform:translateY(24px)} to{opacity:1;transform:translateY(0)} }
-        @keyframes scaleIn { from{opacity:0;transform:scale(.95)} to{opacity:1;transform:scale(1)} }
+        @keyframes fadeUp  { from{opacity:0;transform:translateY(24px)} to{opacity:1;transform:translateY(0)} }
+        @keyframes scaleIn { from{opacity:0;transform:scale(.95)}       to{opacity:1;transform:scale(1)} }
         .anim-fade-up  { animation: fadeUp  .7s ease-out both }
         .anim-scale-in { animation: scaleIn .5s ease-out both }
         .delay-100{animation-delay:.1s} .delay-200{animation-delay:.2s}
         .delay-300{animation-delay:.3s} .delay-400{animation-delay:.4s}
+        /* Hide scrollbar on tab row but keep scrollable */
+        .scrollbar-none { -ms-overflow-style:none; scrollbar-width:none; }
+        .scrollbar-none::-webkit-scrollbar { display:none; }
+        /* xs breakpoint (≥480px) */
+        @media (min-width:480px) {
+          .xs\\:flex-row { flex-direction: row; }
+          .xs\\:inline    { display: inline; }
+        }
       `}</style>
 
       {showCityPicker&&(
@@ -752,118 +760,124 @@ export default function HomePage() {
           </svg>
         </div>
 
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-16 pb-20">
-          <div className="grid lg:grid-cols-2 gap-12 items-center">
-            {/* Left: copy */}
-            <div className="anim-fade-up">
-              <div className="inline-flex items-center gap-2 px-4 py-2 bg-blue-500/20 border border-blue-400/30 text-blue-300 rounded-full text-sm font-medium mb-6">
-                <Zap className="w-3.5 h-3.5"/> Malawi's #1 Bus Booking Platform
+        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-10 sm:pt-14 lg:pt-16 pb-16 sm:pb-20">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8 lg:gap-12 items-center">
+            {/* Left: copy — full width on mobile, half on desktop */}
+            <div className="anim-fade-up text-center lg:text-left">
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 sm:px-4 sm:py-2 bg-blue-500/20 border border-blue-400/30 text-blue-300 rounded-full text-xs sm:text-sm font-medium mb-4 sm:mb-6">
+                <Zap className="w-3 h-3 sm:w-3.5 sm:h-3.5"/> Malawi's #1 Bus Booking Platform
               </div>
-              <h1 className="font-display text-4xl sm:text-5xl lg:text-6xl font-extrabold text-white leading-[1.08] tracking-tight mb-6">
+              <h1 className="font-display text-3xl sm:text-5xl lg:text-6xl font-extrabold text-white leading-[1.08] tracking-tight mb-4 sm:mb-6">
                 Travel Anywhere<br/>
                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-300">
                   in Malawi
                 </span>
               </h1>
-              <p className="text-slate-400 text-lg leading-relaxed mb-8 max-w-lg">
+              <p className="text-slate-400 text-base sm:text-lg leading-relaxed mb-6 sm:mb-8 max-w-lg mx-auto lg:mx-0">
                 Find, compare and book bus seats instantly. Real-time availability, secure payments, and routes across the entire country.
               </p>
-              <div className="flex flex-wrap gap-5 mb-8">
+              {/* Trust badges — 3 across on mobile, same on desktop */}
+              <div className="flex justify-center lg:justify-start flex-wrap gap-3 sm:gap-5 mb-6 sm:mb-8">
                 {[
-                  { icon: CheckCircle, label: "Instant Booking",  col: "text-emerald-400" },
-                  { icon: Shield,      label: "Secure Payment",   col: "text-blue-400" },
-                  { icon: Users,       label: "24/7 Support",     col: "text-indigo-400" },
-                ].map(({ icon: Icon, label, col })=>(
-                  <div key={label} className="flex items-center gap-2 text-slate-400">
-                    <Icon className={`w-4 h-4 ${col}`}/><span className="text-sm font-medium">{label}</span>
+                  { icon: CheckCircle, label: "Instant Booking", col: "text-emerald-400" },
+                  { icon: Shield,      label: "Secure Payment",  col: "text-blue-400" },
+                  { icon: Users,       label: "24/7 Support",    col: "text-indigo-400" },
+                ].map(({ icon: Icon, label, col }) => (
+                  <div key={label} className="flex items-center gap-1.5 sm:gap-2 text-slate-400">
+                    <Icon className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${col}`}/>
+                    <span className="text-xs sm:text-sm font-medium">{label}</span>
                   </div>
                 ))}
               </div>
-              <div className="flex flex-wrap gap-3">
+              {/* CTA buttons — stack on tiny screens, row on sm+ */}
+              <div className="flex flex-col xs:flex-row justify-center lg:justify-start gap-3">
                 <button onClick={handleSearch}
-                  className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-xl transition-colors shadow-lg shadow-blue-900/40">
+                  className="flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-xl transition-colors shadow-lg shadow-blue-900/40 text-sm sm:text-base">
                   <Search className="w-4 h-4"/> Find Your Journey
                 </button>
-                <button onClick={()=>setIsTourOpen(true)}
-                  className="flex items-center gap-2 px-6 py-3 bg-white/10 hover:bg-white/15 border border-white/20 text-white font-medium rounded-xl transition-colors">
+                <button onClick={() => setIsTourOpen(true)}
+                  className="flex items-center justify-center gap-2 px-6 py-3 bg-white/10 hover:bg-white/15 border border-white/20 text-white font-medium rounded-xl transition-colors text-sm sm:text-base">
                   <Play className="w-4 h-4"/> Take a Tour
                 </button>
               </div>
             </div>
 
-            {/* Right: illustration */}
+            {/* Right: illustration — stacked below copy on mobile, side by side on lg */}
             <div className="relative flex justify-center anim-fade-up delay-200">
-              <div className="relative w-full max-w-md">
+              <div className="relative w-full max-w-[280px] sm:max-w-sm lg:max-w-md">
                 <img src="/Bus driver-rafiki.svg" alt="Bus illustration"
                   className="w-full h-auto drop-shadow-2xl"
-                  style={{ filter:"hue-rotate(15deg) saturate(1.1) brightness(1.05)" }} loading="lazy"/>
-                {/* Floating badges */}
-                <div className="absolute top-4 -right-4 bg-white rounded-2xl shadow-xl px-4 py-3 flex items-center gap-2.5 anim-scale-in delay-300">
-                  <div className="w-8 h-8 bg-emerald-100 rounded-xl flex items-center justify-center">
-                    <CheckCircle className="w-4 h-4 text-emerald-600"/>
+                  style={{ filter: "hue-rotate(15deg) saturate(1.1) brightness(1.05)" }} loading="lazy"/>
+                {/* Floating badges — hidden on very small screens to avoid overlap */}
+                <div className="absolute top-2 -right-2 sm:top-4 sm:-right-4 bg-white rounded-2xl shadow-xl px-3 sm:px-4 py-2 sm:py-3 flex items-center gap-2 sm:gap-2.5 anim-scale-in delay-300">
+                  <div className="w-7 h-7 sm:w-8 sm:h-8 bg-emerald-100 rounded-xl flex items-center justify-center shrink-0">
+                    <CheckCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-600"/>
                   </div>
-                  <div><p className="text-xs text-gray-500">Instant confirm</p><p className="text-sm font-bold text-gray-900">Booked!</p></div>
+                  <div><p className="text-[10px] sm:text-xs text-gray-500">Instant confirm</p><p className="text-xs sm:text-sm font-bold text-gray-900">Booked!</p></div>
                 </div>
-                <div className="absolute -bottom-2 -left-4 bg-white rounded-2xl shadow-xl px-4 py-3 flex items-center gap-2.5 anim-scale-in delay-400">
-                  <div className="w-8 h-8 bg-blue-100 rounded-xl flex items-center justify-center">
-                    <BusIcon className="w-4 h-4 text-blue-600"/>
+                <div className="absolute -bottom-1 -left-2 sm:-bottom-2 sm:-left-4 bg-white rounded-2xl shadow-xl px-3 sm:px-4 py-2 sm:py-3 flex items-center gap-2 sm:gap-2.5 anim-scale-in delay-400">
+                  <div className="w-7 h-7 sm:w-8 sm:h-8 bg-blue-100 rounded-xl flex items-center justify-center shrink-0">
+                    <BusIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-600"/>
                   </div>
-                  <div><p className="text-xs text-gray-500">Routes available</p><p className="text-sm font-bold text-gray-900">20+ Routes</p></div>
+                  <div><p className="text-[10px] sm:text-xs text-gray-500">Routes available</p><p className="text-xs sm:text-sm font-bold text-gray-900">20+ Routes</p></div>
                 </div>
               </div>
             </div>
           </div>
 
           {/* ── Search box ──────────────────────────────────────────────────────── */}
-          <div className="mt-12 bg-white/95 backdrop-blur-lg rounded-2xl shadow-2xl p-6 anim-fade-up delay-300">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-              <div>
-                <label htmlFor="search-from" className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">From</label>
+          <div className="mt-8 sm:mt-12 bg-white/95 backdrop-blur-lg rounded-2xl shadow-2xl p-4 sm:p-6 anim-fade-up delay-300">
+            {/* From + To on same row on mobile (side by side), all 5 cols on lg */}
+            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
+              <div className="col-span-1">
+                <label htmlFor="search-from" className="block text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1 sm:mb-1.5">From</label>
                 <LocationAutocomplete
                   id="search-from"
                   value={search.from}
                   onChange={v => setSearch(p => ({ ...p, from: v }))}
                   onSelect={v => setSearch(p => ({ ...p, from: v }))}
-                  placeholder="Departure city"
+                  placeholder="Departure"
                   icon={MapPin}
                   cities={allCities}
                   exclude={search.to}
                 />
               </div>
-              <div>
-                <label htmlFor="search-to" className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">To</label>
+              <div className="col-span-1">
+                <label htmlFor="search-to" className="block text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1 sm:mb-1.5">To</label>
                 <LocationAutocomplete
                   id="search-to"
                   value={search.to}
                   onChange={v => setSearch(p => ({ ...p, to: v }))}
                   onSelect={v => setSearch(p => ({ ...p, to: v }))}
-                  placeholder="Destination city"
+                  placeholder="Destination"
                   icon={Navigation}
                   cities={allCities}
                   exclude={search.from}
                 />
               </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Date</label>
+              {/* Date + Passengers side by side on mobile */}
+              <div className="col-span-1">
+                <label className="block text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1 sm:mb-1.5">Date</label>
                 <div className="relative">
-                  <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"/>
+                  <Calendar className="absolute left-2.5 sm:left-3 top-1/2 -translate-y-1/2 w-3.5 sm:w-4 h-3.5 sm:h-4 text-gray-400"/>
                   <input type="date" value={search.date}
-                    onChange={e=>setSearch(p=>({...p,date:e.target.value}))}
-                    className="w-full pl-9 pr-3 h-11 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"/>
+                    onChange={e => setSearch(p => ({ ...p, date: e.target.value }))}
+                    className="w-full pl-8 sm:pl-9 pr-2 sm:pr-3 h-11 border border-gray-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"/>
                 </div>
               </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Passengers</label>
+              <div className="col-span-1">
+                <label className="block text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1 sm:mb-1.5">Passengers</label>
                 <div className="relative">
-                  <Users className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"/>
+                  <Users className="absolute left-2.5 sm:left-3 top-1/2 -translate-y-1/2 w-3.5 sm:w-4 h-3.5 sm:h-4 text-gray-400"/>
                   <input type="number" min="1" value={search.passengers}
-                    onChange={e=>setSearch(p=>({...p,passengers:Math.max(1,parseInt(e.target.value)||1)}))}
-                    className="w-full pl-9 pr-3 h-11 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"/>
+                    onChange={e => setSearch(p => ({ ...p, passengers: Math.max(1, parseInt(e.target.value) || 1) }))}
+                    className="w-full pl-8 sm:pl-9 pr-2 sm:pr-3 h-11 border border-gray-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"/>
                 </div>
               </div>
-              <div className="flex items-end">
+              {/* Search button — full width across both cols on mobile, 1 col on lg */}
+              <div className="col-span-2 lg:col-span-1 flex items-end">
                 <button onClick={handleSearch}
-                  className="w-full h-11 flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition-colors shadow-md shadow-blue-200">
+                  className="w-full h-11 flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition-colors shadow-md shadow-blue-200 text-sm">
                   <Search className="w-4 h-4"/> Search Buses
                 </button>
               </div>
@@ -873,22 +887,22 @@ export default function HomePage() {
       </section>
 
       {/* ── STATS ─────────────────────────────────────────────────────────────── */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-1 py-10">
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           {loading ? Array(4).fill(0).map((_,i)=><StatSkeleton key={i}/>) : (
             [
-              { icon: Navigation, label:"Active Routes",     value: stats.totalRoutes,                  gradient:"from-blue-500 to-cyan-500" },
-              { icon: BusIcon,    label:"Partner Companies", value: stats.totalCompanies,               gradient:"from-violet-500 to-indigo-500" },
-              { icon: Users,      label:"Happy Travellers",  value: `${stats.totalBookings}+`,          gradient:"from-emerald-500 to-teal-500" },
-              { icon: Award,      label:"Customer Rating",   value: stats.avgRating.toFixed(1),         gradient:"from-amber-500 to-orange-500" },
-            ].map(({ icon: Icon, label, value, gradient },i)=>(
-              <div key={i} className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 flex items-center gap-4 hover:shadow-md transition-shadow">
-                <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center shrink-0`}>
-                  <Icon className="w-6 h-6 text-white"/>
+              { icon: Navigation, label:"Active Routes",     value: stats.totalRoutes,         gradient:"from-blue-500 to-cyan-500" },
+              { icon: BusIcon,    label:"Partner Companies", value: stats.totalCompanies,      gradient:"from-violet-500 to-indigo-500" },
+              { icon: Users,      label:"Happy Travellers",  value: `${stats.totalBookings}+`, gradient:"from-emerald-500 to-teal-500" },
+              { icon: Award,      label:"Customer Rating",   value: stats.avgRating.toFixed(1),gradient:"from-amber-500 to-orange-500" },
+            ].map(({ icon: Icon, label, value, gradient }, i) => (
+              <div key={i} className="bg-white rounded-2xl p-3.5 sm:p-5 shadow-sm border border-gray-100 flex items-center gap-3 sm:gap-4 hover:shadow-md transition-shadow">
+                <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center shrink-0`}>
+                  <Icon className="w-5 h-5 sm:w-6 sm:h-6 text-white"/>
                 </div>
-                <div>
-                  <p className="text-2xl font-display font-extrabold text-gray-900">{value}</p>
-                  <p className="text-xs text-gray-500 font-medium mt-0.5">{label}</p>
+                <div className="min-w-0">
+                  <p className="text-xl sm:text-2xl font-display font-extrabold text-gray-900 leading-none">{value}</p>
+                  <p className="text-[10px] sm:text-xs text-gray-500 font-medium mt-0.5 leading-tight">{label}</p>
                 </div>
               </div>
             ))
@@ -896,8 +910,8 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/*<PromoBanner onCtaClick={()=>router.push("/promotions")}/>*/}  
-
+     { /*<PromoBanner onCtaClick={()=>router.push("/promotions")}/>*/}
+            
       {/* ── FEATURED SCHEDULES ────────────────────────────────────────────────── */}
       <section id="schedules-section" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
 
@@ -927,57 +941,58 @@ export default function HomePage() {
 
         {/* Controls */}
         {!loading&&(
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
-            <div className="flex items-center gap-2 flex-wrap">
-              {/* Tabs */}
-              <div className="flex items-center bg-white border border-gray-200 rounded-xl p-1 gap-0.5 shadow-sm">
-                {TABS.map(({ key, label, icon: Icon })=>(
-                  <button key={key} onClick={()=>changeTab(key)}
-                    className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
-                      activeTab===key
-                        ? key==="nearby"?"bg-teal-600 text-white shadow-sm":"bg-blue-600 text-white shadow-sm"
+          <div className="flex flex-col gap-3 mb-5">
+            <div className="flex items-center justify-between gap-2">
+              {/* Tabs — scrollable on mobile */}
+              <div className="flex items-center bg-white border border-gray-200 rounded-xl p-1 gap-0.5 shadow-sm overflow-x-auto max-w-full scrollbar-none">
+                {TABS.map(({ key, label, icon: Icon }) => (
+                  <button key={key} onClick={() => changeTab(key)}
+                    className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3.5 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all whitespace-nowrap shrink-0 ${
+                      activeTab === key
+                        ? key === "nearby" ? "bg-teal-600 text-white shadow-sm" : "bg-blue-600 text-white shadow-sm"
                         : "text-gray-500 hover:text-gray-800 hover:bg-gray-50"
                     }`}>
-                    <Icon className="w-3.5 h-3.5"/>
-                    {label}
-                    <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${
-                      activeTab===key?"bg-white/25 text-white":"bg-gray-100 text-gray-500"
+                    <Icon className="w-3 h-3 sm:w-3.5 sm:h-3.5"/>
+                    <span className="hidden xs:inline">{label}</span>
+                    {/* On tiny screens show icon only + count */}
+                    <span className={`text-[10px] sm:text-xs px-1 sm:px-1.5 py-0.5 rounded-full font-bold ${
+                      activeTab === key ? "bg-white/25 text-white" : "bg-gray-100 text-gray-500"
                     }`}>{tabCounts[key]}</span>
                   </button>
                 ))}
               </div>
 
-              {/* Location pill */}
-              <button onClick={()=>setShowCityPicker(true)}
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium border transition-all ${
-                  userCity?"bg-teal-50 border-teal-200 text-teal-700 hover:bg-teal-100":"bg-white border-gray-200 text-gray-500 hover:bg-gray-50"
-                }`}>
-                {geoStatus==="detecting"?<Loader2 className="w-3.5 h-3.5 animate-spin"/>:<MapPin className="w-3.5 h-3.5"/>}
-                {userCity??"Set location"}
-                <ChevronDown className="w-3 h-3 opacity-50"/>
-              </button>
+              {/* Sort — icon only on small screens */}
+              <div className="relative shrink-0">
+                <button onClick={() => setShowSort(s => !s)}
+                  className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-2 text-sm text-gray-600 bg-white border border-gray-200 rounded-xl hover:border-blue-300 hover:text-blue-700 transition-colors font-medium shadow-sm whitespace-nowrap">
+                  <ArrowUpDown className="w-4 h-4"/>
+                  <span className="hidden sm:inline">{SORT_OPTIONS.find(o => o.key === sortKey)?.label}</span>
+                </button>
+                {showSort && (
+                  <div className="absolute right-0 top-full mt-1.5 bg-white border border-gray-200 rounded-xl shadow-xl z-20 py-1.5 min-w-[180px]">
+                    {SORT_OPTIONS.map(o => (
+                      <button key={o.key} onClick={() => { setSortKey(o.key); setShowSort(false); setPage(1); }}
+                        className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
+                          sortKey === o.key ? "bg-blue-50 text-blue-700 font-semibold" : "text-gray-700 hover:bg-gray-50"
+                        }`}>
+                        {sortKey === o.key && <span className="mr-1.5 text-blue-500">✓</span>}{o.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
 
-            {/* Sort */}
-            <div className="relative shrink-0">
-              <button onClick={()=>setShowSort(s=>!s)}
-                className="flex items-center gap-2 px-3.5 py-2 text-sm text-gray-600 bg-white border border-gray-200 rounded-xl hover:border-blue-300 hover:text-blue-700 transition-colors font-medium shadow-sm whitespace-nowrap">
-                <ArrowUpDown className="w-4 h-4"/>
-                {SORT_OPTIONS.find(o=>o.key===sortKey)?.label}
-              </button>
-              {showSort&&(
-                <div className="absolute right-0 top-full mt-1.5 bg-white border border-gray-200 rounded-xl shadow-xl z-20 py-1.5 min-w-[180px]">
-                  {SORT_OPTIONS.map(o=>(
-                    <button key={o.key} onClick={()=>{setSortKey(o.key);setShowSort(false);setPage(1);}}
-                      className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
-                        sortKey===o.key?"bg-blue-50 text-blue-700 font-semibold":"text-gray-700 hover:bg-gray-50"
-                      }`}>
-                      {sortKey===o.key&&<span className="mr-1.5 text-blue-500">✓</span>}{o.label}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+            {/* Location pill — full row on mobile so it's easy to tap */}
+            <button onClick={() => setShowCityPicker(true)}
+              className={`self-start flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium border transition-all ${
+                userCity ? "bg-teal-50 border-teal-200 text-teal-700 hover:bg-teal-100" : "bg-white border-gray-200 text-gray-500 hover:bg-gray-50"
+              }`}>
+              {geoStatus === "detecting" ? <Loader2 className="w-3.5 h-3.5 animate-spin"/> : <MapPin className="w-3.5 h-3.5"/>}
+              {userCity ?? "Set location"}
+              <ChevronDown className="w-3 h-3 opacity-50"/>
+            </button>
           </div>
         )}
 
@@ -1026,21 +1041,28 @@ export default function HomePage() {
 
         {/* Pagination */}
         {!loading&&totalPages>1&&(
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white border border-gray-100 rounded-2xl px-5 py-3.5 shadow-sm">
-            <p className="text-sm text-gray-500">
-              Showing <span className="font-semibold text-gray-800">{(page-1)*PAGE_SIZE+1}–{Math.min(page*PAGE_SIZE,filtered.length)}</span> of <span className="font-semibold text-gray-800">{filtered.length}</span> schedules
+          <div className="flex items-center justify-between gap-4 bg-white border border-gray-100 rounded-2xl px-4 sm:px-5 py-3 sm:py-3.5 shadow-sm">
+            <p className="text-xs sm:text-sm text-gray-500">
+              <span className="font-semibold text-gray-800">{(page-1)*PAGE_SIZE+1}–{Math.min(page*PAGE_SIZE,filtered.length)}</span>
+              <span className="hidden sm:inline"> of </span>
+              <span className="hidden sm:inline font-semibold text-gray-800">{filtered.length}</span>
+              <span className="sm:hidden text-gray-400"> / {filtered.length}</span>
             </p>
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1 sm:gap-1.5">
               <button onClick={()=>changePage(page-1)} disabled={page===1}
                 className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40">
                 <ChevronLeft className="w-4 h-4"/>
               </button>
-              {Array.from({length:totalPages},(_,i)=>i+1).map(p=>(
-                <button key={p} onClick={()=>changePage(p)}
-                  className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors ${
-                    p===page?"bg-blue-600 text-white":"border border-gray-200 text-gray-600 hover:bg-gray-50"
-                  }`}>{p}</button>
-              ))}
+              {/* Full page numbers on sm+, just current/total on mobile */}
+              <div className="hidden sm:flex items-center gap-1">
+                {Array.from({length:totalPages},(_,i)=>i+1).map(p=>(
+                  <button key={p} onClick={()=>changePage(p)}
+                    className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors ${
+                      p===page?"bg-blue-600 text-white":"border border-gray-200 text-gray-600 hover:bg-gray-50"
+                    }`}>{p}</button>
+                ))}
+              </div>
+              <span className="sm:hidden text-sm font-medium text-gray-700 px-2">{page} / {totalPages}</span>
               <button onClick={()=>changePage(page+1)} disabled={page===totalPages}
                 className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40">
                 <ChevronRight className="w-4 h-4"/>
