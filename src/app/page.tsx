@@ -715,7 +715,7 @@ export default function HomePage() {
   // Render
   // ─────────────────────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 overflow-x-hidden">
       {/* Global styles */}
       <style jsx global>{`
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=DM+Sans:wght@400;500;600&display=swap');
@@ -743,7 +743,7 @@ export default function HomePage() {
       )}
 
       {/* ── HERO ──────────────────────────────────────────────────────────────── */}
-      <section className="relative overflow-hidden bg-gradient-to-br from-slate-900 via-blue-950 to-indigo-950">
+      <section className="relative overflow-hidden bg-gradient-to-br from-slate-900 via-blue-950 to-indigo-950 pt-16">
         {/* Background decoration */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
           <div className="absolute -top-40 -right-40 w-[600px] h-[600px] rounded-full bg-blue-500/10 blur-3xl"/>
@@ -910,8 +910,8 @@ export default function HomePage() {
         </div>
       </section>
 
-     { /*<PromoBanner onCtaClick={()=>router.push("/promotions")}/>*/}
-            
+      <PromoBanner onCtaClick={()=>router.push("/promotions")}/>
+
       {/* ── FEATURED SCHEDULES ────────────────────────────────────────────────── */}
       <section id="schedules-section" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
 
