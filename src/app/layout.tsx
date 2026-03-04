@@ -10,6 +10,7 @@ import { ToastContainer } from "@/components/ToastContainer";
 import { EmailVerificationBannerLayout } from "@/components/EmailVerificationBannerLayout";
 import { FCMInitializer } from "@/components/FCMInitializer";
 import AuthListener from "@/components/AuthListener";
+import { Analytics } from '@vercel/analytics/next';
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -39,6 +40,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </ToastProvider>
           </AuthProvider>
         </NotificationProvider>
+        <Analytics />
       </body>
     </html>
   );

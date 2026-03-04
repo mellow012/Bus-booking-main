@@ -21,6 +21,7 @@
     "@stripe/react-stripe-js": "^3.9.0",
     "@stripe/stripe-js": "^7.8.0",
     "@types/qrcode": "^1.5.5",
+    "@vercel/analytics": "^1.6.1",
     "anchor-pki": "^0.3.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
