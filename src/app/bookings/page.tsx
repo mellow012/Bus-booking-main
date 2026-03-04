@@ -40,10 +40,9 @@ interface SearchFilters {
   busType?:    string | string[];
   priceRange?: { min?: number; max?: number };
   company?:    string;
-  [key: string]: unknown; // 'unknown' instead of 'any' — fixes index signature error
+  [key: string]: unknown;
 }
 
-// ─── Stat card type — Icon typed as React component, not 'unknown' ─────────────
 interface StatCard {
   label: string;
   value: number;
@@ -51,8 +50,40 @@ interface StatCard {
   Icon:  React.FC<{ className?: string }>;
 }
 
+// ─── FIX: Explicit PaymentMethod interface ─────────────────────────────────────
+// Without this, `as const` makes each `methods` array a narrow tuple with literal
+// `id` types, and TypeScript can't reconcile them through flatMap into a single
+// union — causing the "stripe_card is not assignable to tnm" error on line 321.
+interface PaymentMethod {
+  id:               string;
+  provider:         string;
+  label:            string;
+  tagline:          string;
+  numbers:          string;
+  logoText:         string;
+  logoBg:           string;
+  logoFg:           string;
+  badgeBg:          string;
+  badgeFg:          string;
+  phonePlaceholder: string;
+  phoneHint:        string | undefined;
+}
+
+interface PaymentCategory {
+  id:             string;
+  label:          string;
+  description:    string;
+  Icon:           React.FC<{ className?: string }>;
+  iconBg:         string;
+  activeBg:       string;
+  activeBorder:   string;
+  inactiveBorder: string;
+  methods:        PaymentMethod[];   // ← typed array, not a const tuple
+}
+
 // ─── Payment Categories ────────────────────────────────────────────────────────
-const PAYMENT_CATEGORIES = [
+// FIX: typed as PaymentCategory[] instead of `as const` so flatMap works correctly
+const PAYMENT_CATEGORIES: PaymentCategory[] = [
   {
     id: 'mobile_money',
     label: 'Mobile Money',
@@ -75,7 +106,7 @@ const PAYMENT_CATEGORIES = [
         badgeBg: '#FFF0F0',
         badgeFg: '#C00000',
         phonePlaceholder: '+265 99X XXX XXX',
-        phoneHint: 'Use your Airtel number (099 / 077)' as string | undefined,
+        phoneHint: 'Use your Airtel number (099 / 077)',
       },
       {
         id: 'tnm',
@@ -89,7 +120,7 @@ const PAYMENT_CATEGORIES = [
         badgeBg: '#EEF4FF',
         badgeFg: '#003A7A',
         phonePlaceholder: '+265 88X XXX XXX',
-        phoneHint: 'Use your TNM number (088)' as string | undefined,
+        phoneHint: 'Use your TNM number (088)',
       },
     ],
   },
@@ -115,11 +146,11 @@ const PAYMENT_CATEGORIES = [
         badgeBg: '#F0EFFF',
         badgeFg: '#4B44CC',
         phonePlaceholder: '+265 XXX XXX XXX',
-        phoneHint: undefined as string | undefined,
+        phoneHint: undefined,
       },
     ],
   },
-] as const;
+];
 
 // ─── Helper: stop id → name ────────────────────────────────────────────────────
 function resolveStopName(
@@ -139,8 +170,6 @@ function resolveStopName(
 }
 
 // ─── Error Boundary ────────────────────────────────────────────────────────────
-// Explicit prop / state interfaces eliminate the 'unknown' ReactNode error that
-// arises when the constructor uses a generic 'any' props type.
 interface ErrorBoundaryProps {
   children:  React.ReactNode;
   fallback?: React.ComponentType<{ error: Error; retry: () => void }>;
@@ -205,7 +234,6 @@ const PaymentMethodSelector: React.FC<{
 
   return (
     <div className="space-y-4">
-      {/* Booking banner */}
       <div className="rounded-2xl bg-gradient-to-r from-slate-800 to-slate-900 text-white p-5">
         <div className="flex items-center gap-2 mb-3">
           <Shield className="w-4 h-4 text-emerald-400" />
@@ -228,7 +256,6 @@ const PaymentMethodSelector: React.FC<{
 
       {PAYMENT_CATEGORIES.map((cat) => {
         const isOpen  = openCat === cat.id;
-        // Destructure Icon into a local variable so JSX can use it as a component
         const CatIcon = cat.Icon;
         return (
           <div
@@ -318,6 +345,7 @@ const ConfirmAndPayForm: React.FC<{
   formatDate:    (dt: unknown) => string;
   formatTime:    (dt: unknown) => string;
 }> = ({ booking, subMethodId, providerLabel, userDetails, onChange, onSubmit, loading, formatDate, formatTime }) => {
+  // FIX: flatMap now works correctly because methods is PaymentMethod[], not a tuple
   const method = PAYMENT_CATEGORIES.flatMap((c) => c.methods).find((m) => m.id === subMethodId);
 
   return (
@@ -435,7 +463,6 @@ const BookingCard = memo<{
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-all duration-300">
       <div className="p-4 sm:p-6">
-        {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-4">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 sm:w-14 sm:h-14 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg shrink-0">
@@ -459,7 +486,6 @@ const BookingCard = memo<{
           </div>
         </div>
 
-        {/* Journey strip */}
         <div className="flex flex-col sm:flex-row items-center gap-4 p-3 bg-gray-50 rounded-xl mb-4">
           <div className="text-center min-w-[80px]">
             <div className="text-lg sm:text-xl font-bold text-gray-900">{formatTime(booking.schedule.departureDateTime)}</div>
@@ -611,7 +637,6 @@ const BookingsPage: React.FC = () => {
   const routeCache    = React.useRef<Map<string, Route>>(new Map());
   const companyCache  = React.useRef<Map<string, Company>>(new Map());
 
-  // ─── Formatters ───────────────────────────────────────────────────────────────
   const formatTime = useCallback((dateTime: unknown): string => {
     let d: Date;
     if (dateTime instanceof Date)                    d = dateTime;
@@ -643,7 +668,7 @@ const BookingsPage: React.FC = () => {
   ), []);
 
   function isBookingExpired(b: BookingWithDetails) {
-    const arr = b.schedule.arrivalDateTime instanceof Timestamp ? b.schedule.arrivalDateTime.toDate() : new Date(b.schedule.arrivalDateTime as string);
+    const arr = b.schedule.arrivalDateTime instanceof Timestamp ? b.schedule.arrivalDateTime.toDate() : new Date(b.schedule.arrivalDateTime as unknown as string);
     return arr < new Date() && b.bookingStatus !== 'completed' && b.bookingStatus !== 'cancelled'
       && !(b.bookingStatus === 'confirmed' && b.paymentStatus === 'paid');
   }
@@ -655,7 +680,7 @@ const BookingsPage: React.FC = () => {
     else if (af === 'pending')   f = f.filter((b) => b.bookingStatus === 'pending' || (b.bookingStatus === 'confirmed' && b.paymentStatus === 'pending'));
     else if (af === 'cancelled') f = f.filter((b) => b.bookingStatus === 'cancelled');
     else if (af === 'upcoming')  f = f.filter((b) => {
-      const d = b.schedule?.departureDateTime instanceof Timestamp ? b.schedule.departureDateTime.toDate() : new Date(b.schedule?.departureDateTime as string);
+      const d = b.schedule?.departureDateTime instanceof Timestamp ? b.schedule.departureDateTime.toDate() : new Date(b.schedule?.departureDateTime as unknown as string);
       return d > now && b.bookingStatus === 'confirmed' && b.paymentStatus === 'paid';
     });
     if (cf.busType) { const t = Array.isArray(cf.busType) ? cf.busType : [cf.busType]; f = f.filter((b) => b.bus?.busType && t.includes(b.bus.busType)); }
@@ -709,7 +734,7 @@ const BookingsPage: React.FC = () => {
   const handleCancelBooking = useCallback(async (bookingId: string, scheduleId: string, seatNumbers: string[]) => {
     const b = bookings.find((x) => x.id === bookingId);
     if (!b) { setError('Booking not found'); return; }
-    const dep = b.schedule.departureDateTime instanceof Timestamp ? b.schedule.departureDateTime.toDate() : new Date(b.schedule.departureDateTime as string);
+    const dep = b.schedule.departureDateTime instanceof Timestamp ? b.schedule.departureDateTime.toDate() : new Date(b.schedule.departureDateTime as unknown as string);
     if (dep < new Date()) { setError('Cannot cancel a past departure.'); return; }
     const isPaid = b.paymentStatus === 'paid';
     if (isPaid && !window.confirm('This booking has been paid for. Cancelling may affect your refund eligibility. Continue?')) return;
@@ -769,7 +794,6 @@ const BookingsPage: React.FC = () => {
     finally { setActionLoading(null); }
   }, [formatDate, formatTime]);
 
-  // ─── Payment flow ─────────────────────────────────────────────────────────────
   const handleOpenPayment = useCallback((booking: BookingWithDetails) => {
     if (!booking.seatNumbers?.length || !booking.passengerDetails?.length) { setError('Invalid booking data.'); return; }
     setSelectedBooking(booking);
@@ -783,7 +807,6 @@ const BookingsPage: React.FC = () => {
     setMethodModalOpen(false); setConfirmModalOpen(true);
   }, []);
 
-  // ── API routes: /api/payments/paychangu/charge  and  /api/payments/stripe/charge ──
   const handleConfirmAndPay = useCallback(async (e: FormEvent) => {
     e.preventDefault();
     if (userDetails.name.trim().length < 2)                               { setError('Please provide a valid full name'); return; }
@@ -797,10 +820,9 @@ const BookingsPage: React.FC = () => {
       if (!cu) throw new Error('Not authenticated');
       const token = await cu.getIdToken();
 
-      // Route to correct endpoint based on provider
       const apiRoute = selectedProvider === 'stripe'
         ? '/api/payments/stripe/charge'
-        : '/api/payments/paychangu/charge';   // ← renamed from /api/payments/initiate
+        : '/api/payments/paychangu/charge';
 
       const res = await fetch(apiRoute, {
         method: 'POST',
@@ -817,7 +839,7 @@ const BookingsPage: React.FC = () => {
             route:          `${selectedBooking.route.origin}-${selectedBooking.route.destination}`,
             departure:      selectedBooking.schedule.departureDateTime instanceof Timestamp
                               ? selectedBooking.schedule.departureDateTime.toDate().toISOString()
-                              : new Date(selectedBooking.schedule.departureDateTime as string).toISOString(),
+                              : new Date(selectedBooking.schedule.departureDateTime as unknown as string).toISOString(),
             passengerCount: String(selectedBooking.passengerDetails.length),
             seatNumbers:    selectedBooking.seatNumbers.join(','),
             subMethod:      selectedSubId,
@@ -854,7 +876,6 @@ const BookingsPage: React.FC = () => {
     finally { setActionLoading(null); }
   }, [fetchBookings]);
 
-  // ─── Stats ─────────────────────────────────────────────────────────────────────
   const bookingStats = useMemo(() => {
     const now = new Date();
     return {
@@ -863,7 +884,7 @@ const BookingsPage: React.FC = () => {
       pending:   bookings.filter((b) => b.bookingStatus === 'pending' || (b.bookingStatus === 'confirmed' && b.paymentStatus === 'pending')).length,
       cancelled: bookings.filter((b) => b.bookingStatus === 'cancelled').length,
       upcoming:  bookings.filter((b) => {
-        const d = b.schedule?.departureDateTime instanceof Timestamp ? b.schedule.departureDateTime.toDate() : new Date(b.schedule?.departureDateTime as string);
+        const d = b.schedule?.departureDateTime instanceof Timestamp ? b.schedule.departureDateTime.toDate() : new Date(b.schedule?.departureDateTime as unknown as string);
         return d > now && b.bookingStatus === 'confirmed' && b.paymentStatus === 'paid';
       }).length,
     };
@@ -884,7 +905,6 @@ const BookingsPage: React.FC = () => {
 
   const handleStatusFilter = useCallback((s: string) => { setActiveFilter(s); applyFiltersLogic(bookings, s, filters); }, [bookings, filters]);
 
-  // ─── Effects ──────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!user) { router.push('/login'); return; }
     const pv = searchParams.get('payment_verify'), provider = searchParams.get('provider');
@@ -934,7 +954,6 @@ const BookingsPage: React.FC = () => {
     </div>
   );
 
-  // ── Stat cards array — explicitly typed so Icon is React.FC, not 'unknown' ────
   const statCards: StatCard[] = [
     { label: 'All Bookings', value: bookingStats.all,       key: 'all',       Icon: BusIcon      },
     { label: 'Confirmed',    value: bookingStats.confirmed,  key: 'confirmed',  Icon: CheckCircle  },
@@ -979,7 +998,6 @@ const BookingsPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Stat cards — using typed StatCard array eliminates 'unknown' Icon error */}
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mt-6">
               {statCards.map(({ label, value, key, Icon }) => (
                 <button key={key} onClick={() => handleStatusFilter(key)}

@@ -213,7 +213,7 @@ export default function OverviewTab({
   const systemNotices = useMemo((): SystemNotice[] => {
     const notices: SystemNotice[] = [];
     
-    if (!company?.paymentSettings?.gateways?.paychangu && !company?.paymentSettings?.gateways?.stripe) {
+    if (!company?.paymentSettings?.paychanguEnabled && !company?.paymentSettings?.stripeEnabled) {
       notices.push({
         type: "warning",
         message: "No payment gateway connected. Connect PayChangu or Stripe to receive payments.",

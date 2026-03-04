@@ -113,7 +113,7 @@ const getAvailableTabs = (paymentSettings: Company["paymentSettings"] | undefine
   if (
     paymentSettings &&
     Object.keys(paymentSettings).length > 0 &&
-    (paymentSettings.gateways?.paychangu || paymentSettings.gateways?.stripe)
+    (paymentSettings.paychanguEnabled || paymentSettings.stripeEnabled)
   ) {
     if (!base.some(t => t.id === "payments"))
       base.push({ id: "payments" as const, label: "Payments", icon: DollarSign });
