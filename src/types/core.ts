@@ -1,5 +1,4 @@
 import { Timestamp } from 'firebase/firestore';
-import { it } from 'node:test';
 import { PaymentMethod, PaymentProvider } from './payment';
 
 /**
@@ -14,6 +13,34 @@ export interface FirestoreDocument {
   
 }
 
+
+/**
+ * Payment settings for a company.
+ * Secret keys are stored encrypted (AES-256-GCM) — never plaintext.
+ */
+export interface CompanyPaymentSettings {
+  // ── PayChangu (single-merchant mobile money) ───────────────────────────────
+  paychanguEnabled?: boolean;
+  /** Merchant receive number (Airtel/TNM mobile money number) */
+  paychanguReceiveNumber?: string;
+  /** Public key (pub-...) — safe to store plaintext */
+  paychanguPublicKey?: string;
+  /**
+   * AES-256-GCM encrypted secret key (sec-...).
+   * Format: "<iv_hex>:<authTag_hex>:<ciphertext_hex>"
+   * Decrypted server-side only using PAYCHANGU_ENCRYPTION_KEY env var.
+   * Never sent to the browser.
+   */
+  paychanguSecretKeyEnc?: string;
+  paychanguUpdatedAt?: Timestamp | Date;
+
+  // ── Stripe (cards & bank transfers) ───────────────────────────────────────
+  stripeEnabled?: boolean;
+  /** Connected account ID (acct_...) from Stripe OAuth or manual entry */
+  stripeAccountId?: string;
+  /** True once KYC / onboarding is complete in the Stripe dashboard */
+  stripeOnboardingComplete?: boolean;
+}
 
 export interface Company extends FirestoreDocument {
   id: string;
@@ -30,13 +57,8 @@ export interface Company extends FirestoreDocument {
   // Status
   status: 'active' | 'pending' | 'inactive';
   
-  // Settings
-  paymentSettings?: {
-    gateways?: {
-      paychangu?: boolean;
-      stripe?: boolean;
-    };
-  };
+  // Payment configuration (per-company, managed by superadmin)
+  paymentSettings?: CompanyPaymentSettings;
   
   // Operating info
   operatingHours?: Record<string, OperatingHours>;
@@ -459,6 +481,10 @@ export interface Booking extends FirestoreDocument {
   paymentProvider?: PaymentProvider;
   transactionId?: string;
   transactionReference?: string;
+
+  // PayChangu-specific tracking (written by charge route)
+  paychanguReference?: string;   // tx_ref returned by PayChangu
+  paychanguNetwork?: 'AIRTEL' | 'TNM'; // network used for mobile money
   
   // Audit
   createdBy?: string;

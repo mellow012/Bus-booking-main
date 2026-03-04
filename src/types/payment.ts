@@ -21,3 +21,4 @@ export interface Payment extends FirestoreDocument {
   failureReason?: string;
   metadata?: Record<string, any>;
 }
+
