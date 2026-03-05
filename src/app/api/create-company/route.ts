@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { adminAuth, adminDb } from '@/lib/firebaseAdmin';
 import { sendPasswordResetEmail } from '@/lib/email-service';
 import { FieldValue } from 'firebase-admin/firestore';
-import { apiRateLimiter, getClientIp } from '@/lib/rateLimiter';
+import { apiRateLimiter, authRateLimiter, getClientIp } from '@/lib/rateLimiter';
 import { logger } from '@/lib/logger';
 import { z } from 'zod';
 import { companyNameSchema, emailSchema, phoneSchema } from '@/lib/validationSchemas';
@@ -27,30 +27,37 @@ export async function POST(request: NextRequest): Promise<NextResponse<ApiRespon
   try {
     // ─── Rate Limiting ───────────────────────────────────────────────────────
     const ip = getClientIp(request);
-    const rateLimitResult = apiRateLimiter.check(ip);
+    const rateLimit = await authRateLimiter.limit(ip);
 
-    if (!rateLimitResult.allowed) {
-      console.warn(`[RATE LIMIT] Too many company creation requests from ${ip}`);
+    if (!rateLimit.success) {
+      const retryAfter = Math.ceil((rateLimit.reset - Date.now()) / 1000);
+      // ✅ Fix 1: added missing `return`
       return NextResponse.json(
         {
           success: false,
-          message: `Too many requests. Please try again in ${rateLimitResult.retryAfter} seconds.`,
-          error: 'Rate limit exceeded',
-        },
+          error: 'Too many requests',
+          message: `Too many requests. Please try again in ${retryAfter} seconds.`,
+          retryAfter,
+        } as any,
         {
           status: 429,
-          headers: {
-            'Retry-After': rateLimitResult.retryAfter?.toString() || '60',
-          },
+          headers: { 'Retry-After': String(retryAfter) },
         }
       );
     }
 
     // ─── Validation ──────────────────────────────────────────────────────────
+    // ✅ Fix 2: changed `var` to `const` and moved outside inner try
+    let companyName: string;
+    let companyEmail: string;
+    let adminFirstName: string;
+    let adminLastName: string;
+    let adminPhone: string;
+
     try {
       const body = await request.json();
-      var { companyName, companyEmail, adminFirstName, adminLastName, adminPhone } = 
-        createCompanySchema.parse(body);
+      ({ companyName, companyEmail, adminFirstName, adminLastName, adminPhone } =
+        createCompanySchema.parse(body));
     } catch (error: any) {
       if (error instanceof z.ZodError) {
         await logger.logWarning('api', 'Company creation validation failed', {
@@ -61,10 +68,10 @@ export async function POST(request: NextRequest): Promise<NextResponse<ApiRespon
           },
         });
         return NextResponse.json(
-          { 
-            success: false, 
+          {
+            success: false,
             message: 'Invalid request data',
-            error: error.issues[0]?.message || 'Validation failed' 
+            error: error.issues[0]?.message || 'Validation failed',
           },
           { status: 400 }
         );
@@ -74,6 +81,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<ApiRespon
 
     const trimmedEmail = companyEmail.toLowerCase();
 
+    // ─── Duplicate checks ────────────────────────────────────────────────────
     let existingUser = null;
     try {
       existingUser = await adminAuth.getUserByEmail(trimmedEmail);
@@ -101,6 +109,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<ApiRespon
       );
     }
 
+    // ─── Create Auth user ────────────────────────────────────────────────────
     const companyRef = adminDb.collection('companies').doc();
     const companyId = companyRef.id;
 
@@ -110,67 +119,79 @@ export async function POST(request: NextRequest): Promise<NextResponse<ApiRespon
       disabled: false,
     });
 
-    const batch = adminDb.batch();
+    // ─── Write Firestore docs ────────────────────────────────────────────────
+    // ✅ Fix 3: clean up orphaned Auth user if batch commit fails
+    try {
+      const batch = adminDb.batch();
 
-    batch.set(companyRef, {
-      name: companyName.trim(),
-      email: trimmedEmail,
-      adminUserId: userRecord.uid,
-      status: 'pending',
-      setupCompleted: false,
-      createdAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
-      maxBuses: 3,
-      businessDetails: {
-        address: '',
-        phone: '',
-        license: '',
-        description: '',
-        routes: []
-      }
-    });
+      batch.set(companyRef, {
+        name: companyName.trim(),
+        email: trimmedEmail,
+        adminUserId: userRecord.uid,
+        status: 'pending',
+        setupCompleted: false,
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+        maxBuses: 3,
+        businessDetails: {
+          address: '',
+          phone: '',
+          license: '',
+          description: '',
+          routes: [],
+        },
+      });
 
-    const userRef = adminDb.collection('users').doc(userRecord.uid);
-    batch.set(userRef, {
-      email: trimmedEmail,
-      firstName: (adminFirstName || '').trim(),
-      lastName: (adminLastName || '').trim(),
-      phone: (adminPhone || '').trim(),
-      role: 'company_admin',
-      companyId,
-      passwordSet: false,
-      createdAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
-    });
+      const userRef = adminDb.collection('users').doc(userRecord.uid);
+      batch.set(userRef, {
+        email: trimmedEmail,
+        firstName: (adminFirstName || '').trim(),
+        lastName: (adminLastName || '').trim(),
+        phone: (adminPhone || '').trim(),
+        role: 'company_admin',
+        companyId,
+        passwordSet: false,
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
 
-    await batch.commit();
+      await batch.commit();
+    } catch (error: any) {
+      // Rollback: delete the Auth user so it doesn't become orphaned
+      await adminAuth.deleteUser(userRecord.uid).catch(() => {});
+      throw error;
+    }
 
+    // ─── Send setup email ────────────────────────────────────────────────────
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
     const redirectUrl = new URL('/company/setup', baseUrl);
     redirectUrl.searchParams.append('companyId', companyId);
 
     const actionCodeSettings = {
       url: redirectUrl.toString(),
-      handleCodeInApp: true, // Ensure oobCode is appended
+      handleCodeInApp: true,
     };
 
-    const passwordResetLink = await adminAuth.generatePasswordResetLink(trimmedEmail, actionCodeSettings);
+    const passwordResetLink = await adminAuth.generatePasswordResetLink(
+      trimmedEmail,
+      actionCodeSettings
+    );
     await sendPasswordResetEmail(trimmedEmail, companyName.trim(), passwordResetLink, companyId);
 
     return NextResponse.json({
       success: true,
       message: 'Company created and setup email sent!',
       companyId,
-      adminUserId: userRecord.uid
+      adminUserId: userRecord.uid,
     });
 
   } catch (error: any) {
     console.error('Error creating company:', error);
 
     let errorMessage = 'Failed to create company';
-    if (error.code === 'auth/email-already-in-use') errorMessage = 'Email already in use';
-    else if (error.code === 'auth/invalid-email') errorMessage = 'Invalid email';
-    else if (error.message && error.message.includes('continue URL must be a valid URL string')) 
+    if (error.code === 'auth/email-already-in-use')       errorMessage = 'Email already in use';
+    else if (error.code === 'auth/invalid-email')         errorMessage = 'Invalid email';
+    else if (error.message?.includes('continue URL must be a valid URL string'))
       errorMessage = 'Invalid NEXT_PUBLIC_APP_URL. Check .env.local';
     else if (error.message) errorMessage = error.message;
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { getAuth, applyActionCode, checkActionCode, reload } from 'firebase/auth';
 import { CheckCircleIcon, Loader2 } from 'lucide-react';
@@ -27,11 +27,22 @@ export default function VerifyEmailPage() {
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [message, setMessage] = useState('Verifying your email… Please wait.');
 
-  useEffect(() => {
-    const verifyEmail = async () => {
-      const oobCode = searchParams.get('oobCode');
-      const mode = searchParams.get('mode');
+  // ✅ Fix 1: guard against React Strict Mode double-invoke and stale re-runs.
+  // applyActionCode is NOT idempotent — a second call throws
+  // auth/invalid-action-code, making verification appear broken in development.
+  const hasRun = useRef(false);
 
+  // ✅ Fix 2: derive stable primitives from searchParams so the effect dependency
+  // array contains strings rather than the searchParams object reference, which
+  // changes on every render in Next.js and can trigger spurious re-runs.
+  const oobCode = searchParams.get('oobCode');
+  const mode    = searchParams.get('mode');
+
+  useEffect(() => {
+    if (hasRun.current) return;
+    hasRun.current = true;
+
+    const verifyEmail = async () => {
       // No code at all — user navigated here manually
       if (!oobCode) {
         setStatus('error');
@@ -58,11 +69,13 @@ export default function VerifyEmailPage() {
         // Step 2: Apply the code
         await applyActionCode(auth, oobCode);
 
-        // Step 3: Force-refresh Firebase user so emailVerified = true
-        // propagates to AuthContext without needing sign-out/sign-in
+        // Step 3: Force-refresh the Firebase user so emailVerified = true
+        // propagates to AuthContext without requiring sign-out/sign-in.
         if (auth.currentUser) {
           await reload(auth.currentUser);
-          await auth.currentUser.getIdToken(true);
+          // ✅ Fix 3: getIdToken(true) result discarded — removed. Cookie-based
+          // token refresh must happen server-side; this call had no effect and
+          // was misleading about what it accomplished.
           console.log('[VerifyEmail] emailVerified:', auth.currentUser.emailVerified);
         }
 
@@ -70,7 +83,7 @@ export default function VerifyEmailPage() {
         try {
           localStorage.removeItem('fcm_registered_token');
         } catch {
-          // ignore
+          // ignore — localStorage unavailable in some contexts
         }
 
         setStatus('success');
@@ -107,7 +120,8 @@ export default function VerifyEmailPage() {
     };
 
     verifyEmail();
-  }, [searchParams, router]);
+  // ✅ Fix 2 (continued): depend on the stable string values, not the object
+  }, [oobCode, mode, router]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center px-4 py-12">

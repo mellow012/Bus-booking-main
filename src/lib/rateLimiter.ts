@@ -1,113 +1,80 @@
 /**
- * Simple in-memory rate limiter
- * Tracks IP addresses and their request counts
+ * Rate Limiter — Upstash Redis sliding window
+ *
+ * FIX F-06: Replaces in-memory Map with persistent Redis-backed rate limiting.
+ *
+ * FIRST RUN THIS:
+ *   npm install @upstash/redis @upstash/ratelimit
+ *
+ * Then add to your .env.local:
+ *   UPSTASH_REDIS_REST_URL=https://...
+ *   UPSTASH_REDIS_REST_TOKEN=...
+ *
+ * Get both values from: https://console.upstash.com → your Redis DB → REST API
+ *
+ * Usage in an API route:
+ *   import { authRateLimiter, getClientIp } from '@/lib/rateLimiter';
+ *   const { success, reset } = await authRateLimiter.limit(getClientIp(request));
+ *   if (!success) {
+ *     return NextResponse.json(
+ *       { error: 'Too many requests. Please try again later.' },
+ *       { status: 429, headers: { 'Retry-After': String(Math.ceil((reset - Date.now()) / 1000)) } }
+ *     );
+ *   }
  */
 
-interface RateLimitEntry {
-  count: number;
-  resetAt: number;
+import { Ratelimit } from '@upstash/ratelimit';
+import { Redis } from '@upstash/redis';
+
+// ─── Redis client ─────────────────────────────────────────────────────────────
+
+if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) {
+  throw new Error(
+    'Missing UPSTASH_REDIS_REST_URL or UPSTASH_REDIS_REST_TOKEN. ' +
+    'Create a free Redis DB at https://console.upstash.com and add the credentials to .env.local'
+  );
 }
 
-class RateLimiter {
-  private store = new Map<string, RateLimitEntry>();
-  private readonly maxAttempts: number;
-  private readonly windowMs: number; // milliseconds
+const redis = new Redis({
+  url: process.env.UPSTASH_REDIS_REST_URL,
+  token: process.env.UPSTASH_REDIS_REST_TOKEN,
+});
 
-  constructor(maxAttempts: number = 5, windowMs: number = 60000) {
-    this.maxAttempts = maxAttempts;
-    this.windowMs = windowMs;
+// ─── Rate limiter instances ───────────────────────────────────────────────────
 
-    // Cleanup expired entries every 5 minutes
-    setInterval(() => {
-      const now = Date.now();
-      for (const [key, entry] of this.store.entries()) {
-        if (now > entry.resetAt) {
-          this.store.delete(key);
-        }
-      }
-    }, 5 * 60 * 1000);
-  }
+/** Auth endpoints — 5 requests per 60 s per identifier. */
+export const authRateLimiter = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(5, '60 s'),
+  prefix: 'ratelimit:auth',
+});
 
-  /**
-   * Check if a request should be allowed and increment counter
-   * @param key - Unique identifier (usually IP address)
-   * @returns Object with allowed status, remaining attempts, and reset time
-   */
-  check(key: string): {
-    allowed: boolean;
-    remaining: number;
-    resetAt: number;
-    retryAfter?: number;
-  } {
-    const now = Date.now();
-    const entry = this.store.get(key);
+/** Payment endpoints — 10 requests per 60 s per identifier. */
+export const paymentRateLimiter = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(10, '60 s'),
+  prefix: 'ratelimit:payment',
+});
 
-    // Reset if window expired
-    if (!entry || now > entry.resetAt) {
-      this.store.set(key, {
-        count: 1,
-        resetAt: now + this.windowMs,
-      });
-      return {
-        allowed: true,
-        remaining: this.maxAttempts - 1,
-        resetAt: now + this.windowMs,
-      };
-    }
+/** General API endpoints — 30 requests per 60 s per identifier. */
+export const apiRateLimiter = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(30, '60 s'),
+  prefix: 'ratelimit:api',
+});
 
-    // Increment counter
-    entry.count++;
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
-    if (entry.count > this.maxAttempts) {
-      const retryAfter = Math.ceil((entry.resetAt - now) / 1000);
-      return {
-        allowed: false,
-        remaining: 0,
-        resetAt: entry.resetAt,
-        retryAfter,
-      };
-    }
-
-    return {
-      allowed: true,
-      remaining: this.maxAttempts - entry.count,
-      resetAt: entry.resetAt,
-    };
-  }
-
-  /**
-   * Reset rate limit for a specific key
-   */
-  reset(key: string) {
-    this.store.delete(key);
-  }
-
-  /**
-   * Clear all rate limit data (useful for testing)
-   */
-  clear() {
-    this.store.clear();
-  }
-}
-
-// Create singleton instances for different endpoints
-export const authRateLimiter = new RateLimiter(5, 60 * 1000); // 5 attempts per minute
-export const paymentRateLimiter = new RateLimiter(10, 60 * 1000); // 10 attempts per minute
-export const apiRateLimiter = new RateLimiter(30, 60 * 1000); // 30 attempts per minute
-
-/**
- * Helper to extract IP address from request
- */
+/** Extract the real client IP, respecting Vercel / reverse-proxy forwarding headers. */
 export function getClientIp(request: Request): string {
   const forwarded = request.headers.get('x-forwarded-for');
-  if (forwarded) {
-    return forwarded.split(',')[0].trim();
-  }
-
+  if (forwarded) return forwarded.split(',')[0].trim();
   const realIp = request.headers.get('x-real-ip');
-  if (realIp) {
-    return realIp;
-  }
-
+  if (realIp) return realIp;
   return 'unknown';
+}
+
+/** Reset the rate limit for a specific key (e.g. after a successful CAPTCHA). */
+export async function resetRateLimit(prefix: string, key: string): Promise<void> {
+  await redis.del(`${prefix}:${key}`);
 }

@@ -3,29 +3,15 @@ import { collection, updateDoc, deleteDoc, doc, getDocs, query, where } from 'fi
 import { db } from '@/lib/firebaseConfig';
 import { Route } from '@/types';
 import Modal from './Modals';
-import { 
-  Plus, 
-  Edit3, 
-  Trash2, 
-  Search, 
-  MapPin, 
-  Clock, 
-  Navigation,
-  ArrowRight,
-  MapPinned,
-  Route as RouteIcon,
-  CheckCircle,
-  XCircle,
-  DollarSign,
-  Copy,
-  Users,
-  UserCircle,
-  MapPinIcon,
-  AlertCircle,
-  ChevronLeft,
-  ChevronRight
+import {
+  Plus, Edit3, Trash2, Search, MapPin, Clock, Navigation,
+  ArrowRight, MapPinned, Route as RouteIcon, CheckCircle, XCircle,
+  DollarSign, Copy, Users, UserCircle, MapPinIcon, AlertCircle,
+  ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface RoutesTabProps {
   routes: Route[];
@@ -45,7 +31,7 @@ interface Operator {
   region?: string;
   branch?: string;
   role: string;
-  companyId: string;       // Alternative/backup field
+  companyId: string;
   phoneNumber?: string;
   createdAt: Date;
   updatedAt: Date;
@@ -68,488 +54,330 @@ interface OperatorInfo {
   region?: string;
 }
 
-const RoutesTab: FC<RoutesTabProps> = ({ routes, setRoutes, companyId, addRoute, setError, setSuccess }) => {
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [showOperatorModal, setShowOperatorModal] = useState(false);
-  const [editRoute, setEditRoute] = useState<Route | null>(null);
-  const [selectedRouteForOperators, setSelectedRouteForOperators] = useState<Route | null>(null);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive'>('all');
-  const [actionLoading, setActionLoading] = useState(false);
-  const [operators, setOperators] = useState<Operator[]>([]);
-  const [loadingOperators, setLoadingOperators] = useState(false);
-  const [operatorInfo, setOperatorInfo] = useState<Map<string, OperatorInfo>>(new Map());
-  
-  // ✅ NEW: Pagination state
-  const [currentPage, setCurrentPage] = useState(1);
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+/** Chunk an array into sub-arrays of at most `size` elements */
+function chunk<T>(arr: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) chunks.push(arr.slice(i, i + size));
+  return chunks;
+}
+
+// FIX RT-3: exact normalised match instead of bidirectional .includes()
+// "Lilongwe" no longer matches "New Lilongwe Branch"
+function locationsMatch(a: string, b: string): boolean {
+  return a.toLowerCase().trim() === b.toLowerCase().trim();
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
+
+const RoutesTab: FC<RoutesTabProps> = ({
+  routes, setRoutes, companyId, addRoute, setError, setSuccess,
+}) => {
+  const [showAddModal,          setShowAddModal]          = useState(false);
+  const [showEditModal,         setShowEditModal]         = useState(false);
+  const [showOperatorModal,     setShowOperatorModal]     = useState(false);
+  // FIX RT-2: replace window.confirm with a Modal
+  const [deleteConfirmId,       setDeleteConfirmId]       = useState<string | null>(null);
+  const [editRoute,             setEditRoute]             = useState<Route | null>(null);
+  const [selectedRouteForOps,   setSelectedRouteForOps]   = useState<Route | null>(null);
+  const [searchTerm,            setSearchTerm]            = useState('');
+  const [filterStatus,          setFilterStatus]          = useState<'all' | 'active' | 'inactive'>('all');
+  const [actionLoading,         setActionLoading]         = useState(false);
+  const [operators,             setOperators]             = useState<Operator[]>([]);
+  const [loadingOperators,      setLoadingOperators]      = useState(false);
+  const [operatorInfo,          setOperatorInfo]          = useState<Map<string, OperatorInfo>>(new Map());
+  const [currentPage,           setCurrentPage]           = useState(1);
   const itemsPerPage = 6;
-  
-  const initialNewRoute: Omit<Route, 'id' | 'createdAt' | 'updatedAt'> = { 
-    name: '',
-    origin: '', 
-    destination: '', 
-    distance: 0, 
-    duration: 0, 
-    stops: [], 
-    companyId, 
-    status: 'active',
-    isActive: true,
-    baseFare: 0,
-    pricePerKm: 0,
-    assignedOperators: [],
-    assignedOperatorIds: [],
+
+  const initialNewRoute: Omit<Route, 'id' | 'createdAt' | 'updatedAt'> = {
+    name: '', origin: '', destination: '', distance: 0, duration: 0,
+    stops: [], companyId, status: 'active', isActive: true,
+    baseFare: 0, pricePerKm: 0, assignedOperators: [], assignedOperatorIds: [],
   };
-  
   const [newRoute, setNewRoute] = useState(initialNewRoute);
 
-  // Fetch operators for the company
+  // ── Fetch operators ──────────────────────────────────────────────────────────
+
   const fetchOperators = useCallback(async () => {
     if (!companyId) return;
-    
     setLoadingOperators(true);
     try {
-      console.log('[RoutesTab] Fetching operators for company:', companyId);
-      
-      const usersRef = collection(db, 'users');
       const q = query(
-        usersRef,
+        collection(db, 'users'),
         where('companyId', '==', companyId),
-        where('role', '==', 'operator')
+        where('role', '==', 'operator'),
       );
-      
       const snapshot = await getDocs(q);
-      const operatorsList: Operator[] = snapshot.docs.map(doc => {
-        const data = doc.data();
-        console.log('[RoutesTab] Operator found:', {
-          docId: doc.id,
-          uid: data.uid,
-          name: `${data.name}`
-        });
-        
+      setOperators(snapshot.docs.map(d => {
+        const data = d.data();
         return {
-          id: doc.id,
-          uid: data.uid || doc.id,
-          firstName: data.firstName || '',
-          lastName: data.lastName || '',
-          email: data.email || '',
-          region: data.region,
-          branch: data.branch,
-          role: data.role
+          id:          d.id,
+          uid:         data.uid || d.id,
+          firstName:   data.firstName || '',
+          lastName:    data.lastName  || '',
+          email:       data.email     || '',
+          region:      data.region,
+          branch:      data.branch,
+          role:        data.role,
+          companyId:   data.companyId || '',
+          passwordSet: data.passwordSet ?? false,
+          createdAt:   data.createdAt?.toDate?.() ?? new Date(),
+          updatedAt:   data.updatedAt?.toDate?.() ?? new Date(),
         } as Operator;
-      });
-      
-      console.log('[RoutesTab] Total operators fetched:', operatorsList.length);
-      setOperators(operatorsList);
-    } catch (error: any) {
-      console.error('[RoutesTab] Error fetching operators:', error);
+      }));
+    } catch (err: any) {
       setError('Failed to load operators');
     } finally {
       setLoadingOperators(false);
     }
   }, [companyId, setError]);
 
-  // ✅ Fixed: useEffect to fetch operators
+  useEffect(() => { fetchOperators(); }, [fetchOperators]);
+
+  // FIX RT-1: batched operator detail fetch using where('uid','in',[...chunk])
+  // instead of one getDocs() per UID in a sequential loop
   useEffect(() => {
-    fetchOperators();
-  }, [fetchOperators]);
+    const allUids = Array.from(
+      new Set(routes.flatMap(r => r.assignedOperatorIds ?? []))
+    );
+    if (!allUids.length) return;
 
-  // ✅ NEW: Fetch operator details
- useEffect(() => {
-    const fetchOperatorDetails = async () => {
-      const operatorUIDs = new Set<string>();
-      routes.forEach(route => {
-        (route.assignedOperatorIds || []).forEach(uid => operatorUIDs.add(uid));
-      });
-
-      const operatorsMap = new Map<string, OperatorInfo>();
-      for (const uid of operatorUIDs) {
-        try {
-          const userDoc = await getDocs(
-            query(collection(db, 'users'), where('uid', '==', uid))
+    let cancelled = false;
+    (async () => {
+      const map = new Map<string, OperatorInfo>();
+      // Firestore 'in' limit = 10
+      await Promise.all(
+        chunk(allUids, 10).map(async (uids) => {
+          const snap = await getDocs(
+            query(collection(db, 'users'), where('uid', 'in', uids))
           );
-          if (!userDoc.empty) {
-            const data = userDoc.docs[0].data();
-            operatorsMap.set(uid, {
+          snap.docs.forEach(d => {
+            const data = d.data();
+            const uid  = data.uid || d.id;
+            map.set(uid, {
               uid,
-              firstName: data.firstName || data.name?.split(' ')[0] || '',
-              lastName: data.lastName || data.name?.split(' ').slice(1).join(' ') || '',
-              email: data.email || '',
-              region: data.region
+              firstName: data.firstName || data.name?.split(' ')[0]  || '',
+              lastName:  data.lastName  || data.name?.split(' ').slice(1).join(' ') || '',
+              email:     data.email     || '',
+              region:    data.region,
             });
-          }
-        } catch (error) {
-          console.error(`Error fetching operator ${uid}:`, error);
-        }
-      }
-      setOperatorInfo(operatorsMap);
-    };
+          });
+        })
+      );
+      if (!cancelled) setOperatorInfo(new Map(map));
+    })();
 
-    if (routes.length > 0) {
-      fetchOperatorDetails();
-    }
+    return () => { cancelled = true; };
   }, [routes]);
 
-  const stats = useMemo(() => {
-    return {
-      total: routes.length,
-      active: routes.filter(r => r.isActive).length,
-      inactive: routes.filter(r => !r.isActive).length,
-      totalDistance: routes.reduce((sum, r) => sum + r.distance, 0),
-      totalRevenue: routes.reduce((sum, r) => sum + (r.baseFare || 0), 0),
-      withOperators: routes.filter(r => (r.assignedOperatorIds || []).length > 0).length,
-    };
-  }, [routes]);
+  // ── Stats ────────────────────────────────────────────────────────────────────
 
-  const canAssignOperator = useCallback((operator: Operator, routeOrigin: string) => {
-    if (!operator.region && !operator.branch) {
-      return false;
-    }
-    
-    const operatorLocation = (operator.region || operator.branch || '').toLowerCase().trim();
-    const routeLocation = routeOrigin.toLowerCase().trim();
-    
-    return routeLocation.includes(operatorLocation) || operatorLocation.includes(routeLocation);
+  const stats = useMemo(() => ({
+    total:         routes.length,
+    active:        routes.filter(r => r.isActive).length,
+    inactive:      routes.filter(r => !r.isActive).length,
+    totalDistance: routes.reduce((s, r) => s + r.distance, 0),
+    totalRevenue:  routes.reduce((s, r) => s + (r.baseFare || 0), 0),
+    withOperators: routes.filter(r => (r.assignedOperatorIds || []).length > 0).length,
+  }), [routes]);
+
+  // FIX RT-3: exact match
+  const canAssignOperator = useCallback((op: Operator, routeOrigin: string) => {
+    const opLoc = op.region || op.branch;
+    if (!opLoc) return false;
+    return locationsMatch(opLoc, routeOrigin);
   }, []);
 
+  // ── Filtered + paginated routes ───────────────────────────────────────────
+
   const filteredRoutes = useMemo(() => {
-    let filtered = routes.filter(r => 
+    let list = routes.filter(r =>
       r.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       r.origin.toLowerCase().includes(searchTerm.toLowerCase()) ||
       r.destination.toLowerCase().includes(searchTerm.toLowerCase()) ||
       r.stops.some(s => s.name.toLowerCase().includes(searchTerm.toLowerCase()))
     );
-
-    if (filterStatus !== 'all') {
-      filtered = filtered.filter(r => 
-        filterStatus === 'active' ? r.isActive : !r.isActive
-      );
-    }
-
-    return filtered;
+    if (filterStatus !== 'all')
+      list = list.filter(r => filterStatus === 'active' ? r.isActive : !r.isActive);
+    return list;
   }, [routes, searchTerm, filterStatus]);
 
-  // ✅ NEW: Pagination
   const paginatedRoutes = useMemo(() => {
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    const endIndex = startIndex + itemsPerPage;
-    return filteredRoutes.slice(startIndex, endIndex);
+    const start = (currentPage - 1) * itemsPerPage;
+    return filteredRoutes.slice(start, start + itemsPerPage);
   }, [filteredRoutes, currentPage]);
 
   const totalPages = Math.ceil(filteredRoutes.length / itemsPerPage);
 
+  // ── CRUD ──────────────────────────────────────────────────────────────────
+
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newRoute.name.trim()) {
-      setError('Route name is required');
-      return;
-    }
-    if (newRoute.distance <= 0 || newRoute.duration <= 0) {
-      setError('Distance and duration must be positive');
-      return;
-    }
-    if ((newRoute.baseFare || 0) <= 0) {
-      setError('Base fare is required and must be greater than 0');
-      return;
-    }
-    const existingRoute = routes.find(r => r.origin === newRoute.origin && r.destination === newRoute.destination);
-    if (existingRoute) {
-      setError('Route with same origin and destination already exists');
-      return;
-    }
+    if (!newRoute.name.trim())             { setError('Route name is required'); return; }
+    if (newRoute.distance <= 0 || newRoute.duration <= 0) { setError('Distance and duration must be positive'); return; }
+    if ((newRoute.baseFare || 0) <= 0)     { setError('Base fare must be greater than 0'); return; }
+    if (routes.find(r => r.origin === newRoute.origin && r.destination === newRoute.destination))
+      { setError('Route with same origin and destination already exists'); return; }
+
     setActionLoading(true);
     try {
       const result = await addRoute(newRoute);
-      if (result) {
-        setNewRoute(initialNewRoute);
-        setShowAddModal(false);
-        setSuccess('Route added successfully!');
-      }
-    } catch (err: any) {
-      setError(`Failed to add route: ${err.message}`);
-    } finally {
-      setActionLoading(false);
-    }
+      if (result) { setNewRoute(initialNewRoute); setShowAddModal(false); setSuccess('Route added!'); }
+    } catch (err: any) { setError(`Failed to add route: ${err.message}`); }
+    finally { setActionLoading(false); }
   };
 
   const handleEdit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editRoute || !editRoute.name.trim() || editRoute.distance <= 0 || editRoute.duration <= 0) {
-      setError('Please fill all required fields with valid data');
-      return;
-    }
+    if (!editRoute || !editRoute.name.trim() || editRoute.distance <= 0 || editRoute.duration <= 0)
+      { setError('Please fill all required fields'); return; }
     setActionLoading(true);
     try {
-      const docRef = doc(db, 'routes', editRoute.id);
-      const updatedData = { ...editRoute, updatedAt: new Date() };
-      await updateDoc(docRef, updatedData);
-      setRoutes(routes.map(r => r.id === editRoute.id ? updatedData : r));
-      setShowEditModal(false);
-      setEditRoute(null);
-      setSuccess('Route updated successfully!');
-    } catch (err: any) {
-      setError(`Failed to update route: ${err.message}`);
-    } finally {
-      setActionLoading(false);
-    }
+      const updated = { ...editRoute, updatedAt: new Date() };
+      await updateDoc(doc(db, 'routes', editRoute.id), updated);
+      setRoutes(routes.map(r => r.id === editRoute.id ? updated : r));
+      setShowEditModal(false); setEditRoute(null); setSuccess('Route updated!');
+    } catch (err: any) { setError(`Failed to update: ${err.message}`); }
+    finally { setActionLoading(false); }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this route?')) return;
+  // FIX RT-2: delete called after Modal confirm, no window.confirm
+  const confirmDelete = async () => {
+    if (!deleteConfirmId) return;
     setActionLoading(true);
     try {
-      await deleteDoc(doc(db, 'routes', id));
-      setRoutes(routes.filter(r => r.id !== id));
-      setSuccess('Route deleted successfully!');
-    } catch (err: any) {
-      setError(`Failed to delete route: ${err.message}`);
-    } finally {
-      setActionLoading(false);
-    }
+      await deleteDoc(doc(db, 'routes', deleteConfirmId));
+      setRoutes(routes.filter(r => r.id !== deleteConfirmId));
+      setSuccess('Route deleted!');
+    } catch (err: any) { setError(`Failed to delete: ${err.message}`); }
+    finally { setActionLoading(false); setDeleteConfirmId(null); }
   };
 
-  const handleDuplicate = async (route: Route) => {
-    const duplicatedRoute = {
+  const handleDuplicate = (route: Route) => {
+    setNewRoute({
       ...route,
-      name: `${route.name} (Return)`,
-      origin: route.destination,
-      destination: route.origin,
-      stops: [...route.stops].reverse(),
-      assignedOperators: [],
+      name:                `${route.name} (Return)`,
+      origin:              route.destination,
+      destination:         route.origin,
+      stops:               [...route.stops].reverse(),
+      assignedOperators:   [],
       assignedOperatorIds: [],
-      id: undefined,
-      createdAt: undefined,
-      updatedAt: undefined,
-    };
-    
-    setNewRoute(duplicatedRoute as any);
+    } as any);
     setShowAddModal(true);
   };
 
   const handleManageOperators = (route: Route) => {
-    setSelectedRouteForOperators(route);
+    setSelectedRouteForOps(route);
     setShowOperatorModal(true);
-    if (operators.length === 0) {
-      fetchOperators();
-    }
+    if (!operators.length) fetchOperators();
   };
 
-  const handleAssignOperator = async (operator: Operator) => {
-    if (!selectedRouteForOperators) return;
+  const handleAssignOperator = async (op: Operator) => {
+    if (!selectedRouteForOps) return;
+    if (!op.uid)                                        { setError('Operator missing UID'); return; }
+    if (!canAssignOperator(op, selectedRouteForOps.origin)) { setError("Operator region does not match route origin"); return; }
 
-    if (!operator.uid) {
-      setError("Operator missing UID");
-      return;
-    }
+    const ids = selectedRouteForOps.assignedOperatorIds || [];
+    const ops = selectedRouteForOps.assignedOperators   || [];
 
-    if (!canAssignOperator(operator, selectedRouteForOperators.origin)) {
-      setError("Operator region does not match route origin");
-      return;
-    }
-
-    const ids = selectedRouteForOperators.assignedOperatorIds || [];
-    const ops = selectedRouteForOperators.assignedOperators || [];
-
-    if (ids.includes(operator.uid)) {
-      setError("Already assigned");
-      return;
-    }
-
-    if (ids.length >= 2) {
-      setError("Maximum 2 operators per route");
-      return;
-    }
+    if (ids.includes(op.uid))  { setError('Already assigned'); return; }
+    if (ids.length >= 2)       { setError('Maximum 2 operators per route'); return; }
 
     setActionLoading(true);
-
     try {
       const newOp: RouteOperator = {
-        operatorId: operator.uid,
-        operatorName: `${operator.firstName.trim()} ${operator.lastName.trim()}`.trim() || "Unknown Operator",
-        operatorEmail: operator.email || "",
-        region: operator.region || operator.branch || "",
-        assignedAt: new Date(),
+        operatorId:    op.uid,
+        operatorName:  `${op.firstName} ${op.lastName}`.trim() || 'Unknown Operator',
+        operatorEmail: op.email,
+        region:        op.region || op.branch || '',
+        assignedAt:    new Date(),
       };
-
-      const updatedIds = [...ids, operator.uid];
+      const updatedIds = [...ids, op.uid];
       const updatedOps = [...ops, newOp];
-
-      const ref = doc(db, 'routes', selectedRouteForOperators.id);
-
-      console.log("[assign] → writing", {
-        routeId: selectedRouteForOperators.id,
-        newOperator: newOp.operatorName,
-        totalOperators: updatedIds.length,
+      await updateDoc(doc(db, 'routes', selectedRouteForOps.id), {
+        assignedOperatorIds: updatedIds, assignedOperators: updatedOps, updatedAt: new Date(),
       });
-
-      await updateDoc(ref, {
-        assignedOperatorIds: updatedIds,
-        assignedOperators: updatedOps,
-        updatedAt: new Date(),
-      });
-
-      const updatedRoute = {
-        ...selectedRouteForOperators,
-        assignedOperatorIds: updatedIds,
-        assignedOperators: updatedOps,
-      };
-
-      setRoutes(prev => prev.map(r => r.id === selectedRouteForOperators.id ? updatedRoute : r));
-      setSelectedRouteForOperators(updatedRoute);
-
+      const updated = { ...selectedRouteForOps, assignedOperatorIds: updatedIds, assignedOperators: updatedOps };
+      setRoutes(prev => prev.map(r => r.id === selectedRouteForOps.id ? updated : r));
+      setSelectedRouteForOps(updated);
       setSuccess(`Assigned ${newOp.operatorName}`);
-    } catch (err: any) {
-      console.error("[assign] failed:", err);
-      setError(`Failed to assign: ${err.message || "unknown error"}`);
-    } finally {
-      setActionLoading(false);
-    }
+    } catch (err: any) { setError(`Failed to assign: ${err.message}`); }
+    finally { setActionLoading(false); }
   };
 
   const handleRemoveOperator = async (operatorId: string) => {
-    if (!selectedRouteForOperators) return;
-
+    if (!selectedRouteForOps) return;
     setActionLoading(true);
-
     try {
-      const ids = selectedRouteForOperators.assignedOperatorIds || [];
-      const ops = selectedRouteForOperators.assignedOperators || [];
-
-      const updatedIds = ids.filter(id => id !== operatorId);
-      const updatedOps = ops.filter(op => op.operatorId !== operatorId);
-
-      const ref = doc(db, 'routes', selectedRouteForOperators.id);
-
-      await updateDoc(ref, {
-        assignedOperatorIds: updatedIds,
-        assignedOperators: updatedOps,
-        updatedAt: new Date(),
+      const updatedIds = (selectedRouteForOps.assignedOperatorIds || []).filter(id => id !== operatorId);
+      const updatedOps = (selectedRouteForOps.assignedOperators   || []).filter(op => op.operatorId !== operatorId);
+      await updateDoc(doc(db, 'routes', selectedRouteForOps.id), {
+        assignedOperatorIds: updatedIds, assignedOperators: updatedOps, updatedAt: new Date(),
       });
-
-      const updatedRoute = {
-        ...selectedRouteForOperators,
-        assignedOperatorIds: updatedIds,
-        assignedOperators: updatedOps,
-      };
-
-      setRoutes(prev => prev.map(r => r.id === selectedRouteForOperators.id ? updatedRoute : r));
-      setSelectedRouteForOperators(updatedRoute);
-
-      setSuccess("Operator removed");
-    } catch (err: any) {
-      console.error("[remove] failed:", err);
-      setError("Failed to remove operator");
-    } finally {
-      setActionLoading(false);
-    }
+      const updated = { ...selectedRouteForOps, assignedOperatorIds: updatedIds, assignedOperators: updatedOps };
+      setRoutes(prev => prev.map(r => r.id === selectedRouteForOps.id ? updated : r));
+      setSelectedRouteForOps(updated);
+      setSuccess('Operator removed');
+    } catch (err: any) { setError('Failed to remove operator'); }
+    finally { setActionLoading(false); }
   };
 
   const formatDuration = (minutes: number) => {
-    const hours = Math.floor(minutes / 60);
-    const mins = minutes % 60;
-    return hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
+    const h = Math.floor(minutes / 60); const m = minutes % 60;
+    return h > 0 ? `${h}h ${m}m` : `${m}m`;
   };
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // RENDER
+  // ─────────────────────────────────────────────────────────────────────────────
 
   return (
     <div className="space-y-6">
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
-        <div className="bg-white p-5 rounded-xl border shadow-sm">
-          <div className="flex items-center justify-between mb-2">
-            <RouteIcon className="w-8 h-8 text-blue-600" />
-          </div>
-          <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
-          <p className="text-sm text-gray-600">Total Routes</p>
-        </div>
-        
-        <div className="bg-white p-5 rounded-xl border shadow-sm">
-          <div className="flex items-center justify-between mb-2">
-            <CheckCircle className="w-8 h-8 text-green-600" />
-          </div>
-          <p className="text-2xl font-bold text-gray-900">{stats.active}</p>
-          <p className="text-sm text-gray-600">Active Routes</p>
-        </div>
-        
-        <div className="bg-white p-5 rounded-xl border shadow-sm">
-          <div className="flex items-center justify-between mb-2">
-            <XCircle className="w-8 h-8 text-red-600" />
-          </div>
-          <p className="text-2xl font-bold text-gray-900">{stats.inactive}</p>
-          <p className="text-sm text-gray-600">Inactive Routes</p>
-        </div>
-        
-        <div className="bg-white p-5 rounded-xl border shadow-sm">
-          <div className="flex items-center justify-between mb-2">
-            <MapPinned className="w-8 h-8 text-purple-600" />
-          </div>
-          <p className="text-2xl font-bold text-gray-900">{stats.totalDistance.toFixed(0)} km</p>
-          <p className="text-sm text-gray-600">Total Distance</p>
-        </div>
-        
-        <div className="bg-white p-5 rounded-xl border shadow-sm">
-          <div className="flex items-center justify-between mb-2">
-            <DollarSign className="w-8 h-8 text-green-600" />
-          </div>
-          <p className="text-2xl font-bold text-gray-900">MWK {stats.totalRevenue.toLocaleString()}</p>
-          <p className="text-sm text-gray-600">Avg Base Fare</p>
-        </div>
 
-        <div className="bg-white p-5 rounded-xl border shadow-sm">
-          <div className="flex items-center justify-between mb-2">
-            <Users className="w-8 h-8 text-orange-600" />
+      {/* Stats */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
+        {[
+          { icon: <RouteIcon   className="w-8 h-8 text-blue-600"   />, value: stats.total,                                 label: 'Total Routes'   },
+          { icon: <CheckCircle className="w-8 h-8 text-green-600"  />, value: stats.active,                                label: 'Active Routes'  },
+          { icon: <XCircle     className="w-8 h-8 text-red-600"    />, value: stats.inactive,                              label: 'Inactive Routes'},
+          { icon: <MapPinned   className="w-8 h-8 text-purple-600" />, value: `${stats.totalDistance.toFixed(0)} km`,       label: 'Total Distance' },
+          { icon: <DollarSign  className="w-8 h-8 text-green-600"  />, value: `MWK ${stats.totalRevenue.toLocaleString()}`, label: 'Avg Base Fare'  },
+          { icon: <Users       className="w-8 h-8 text-orange-600" />, value: stats.withOperators,                         label: 'With Operators' },
+        ].map(({ icon, value, label }) => (
+          <div key={label} className="bg-white p-5 rounded-xl border shadow-sm">
+            <div className="mb-2">{icon}</div>
+            <p className="text-2xl font-bold text-gray-900">{value}</p>
+            <p className="text-sm text-gray-600">{label}</p>
           </div>
-          <p className="text-2xl font-bold text-gray-900">{stats.withOperators}</p>
-          <p className="text-sm text-gray-600">With Operators</p>
-        </div>
+        ))}
       </div>
 
       {/* Controls */}
       <div className="bg-white rounded-xl shadow-sm border p-4">
         <div className="flex flex-col lg:flex-row gap-4">
           <div className="flex-1 relative">
-            <Search className="w-5 h-5 text-gray-400 absolute left-3 top-1/2 transform -translate-y-1/2" />
-            <input
-              type="text"
-              placeholder="Search routes by name, origin, destination, or stops..."
-              value={searchTerm}
-              onChange={e => {
-                setSearchTerm(e.target.value);
-                setCurrentPage(1); // Reset to first page when searching
-              }}
-              className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
+            <Search className="w-5 h-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input type="text" placeholder="Search routes…" value={searchTerm}
+              onChange={e => { setSearchTerm(e.target.value); setCurrentPage(1); }}
+              className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
           </div>
-          
           <div className="flex gap-2">
-            <select
-              value={filterStatus}
-              onChange={e => {
-                setFilterStatus(e.target.value as any);
-                setCurrentPage(1); // Reset to first page when filtering
-              }}
-              className="px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
+            <select value={filterStatus} onChange={e => { setFilterStatus(e.target.value as any); setCurrentPage(1); }}
+              className="px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
               <option value="all">All Status</option>
               <option value="active">Active Only</option>
               <option value="inactive">Inactive Only</option>
             </select>
-
-            <Button 
-              onClick={() => {
-                setNewRoute(initialNewRoute);
-                setShowAddModal(true);
-              }} 
-              className="bg-blue-600 text-white hover:bg-blue-700 flex items-center gap-2"
-              disabled={actionLoading}
-            >
-              <Plus className="w-4 h-4" />
-              Add Route
+            <Button onClick={() => { setNewRoute(initialNewRoute); setShowAddModal(true); }}
+              className="bg-blue-600 text-white hover:bg-blue-700 flex items-center gap-2" disabled={actionLoading}>
+              <Plus className="w-4 h-4" /> Add Route
             </Button>
           </div>
         </div>
       </div>
 
-      {/* Routes Grid */}
+      {/* Route grid */}
       {paginatedRoutes.length === 0 ? (
         <div className="bg-white rounded-xl shadow-sm border p-12 text-center">
           <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -559,18 +387,10 @@ const RoutesTab: FC<RoutesTabProps> = ({ routes, setRoutes, companyId, addRoute,
             {routes.length === 0 ? 'No routes yet' : 'No routes match your search'}
           </h3>
           <p className="text-gray-500 mb-6">
-            {searchTerm || filterStatus !== 'all'
-              ? 'Try adjusting your search or filters' 
-              : 'Add your first route to start managing your network'}
+            {searchTerm || filterStatus !== 'all' ? 'Try adjusting your search or filters' : 'Add your first route to start managing your network'}
           </p>
           {routes.length === 0 && (
-            <Button 
-              onClick={() => {
-                setNewRoute(initialNewRoute);
-                setShowAddModal(true);
-              }} 
-              className="bg-blue-600 text-white hover:bg-blue-700"
-            >
+            <Button onClick={() => { setNewRoute(initialNewRoute); setShowAddModal(true); }} className="bg-blue-600 text-white hover:bg-blue-700">
               <Plus className="w-4 h-4 mr-2" /> Add First Route
             </Button>
           )}
@@ -580,48 +400,32 @@ const RoutesTab: FC<RoutesTabProps> = ({ routes, setRoutes, companyId, addRoute,
           <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
             {paginatedRoutes.map(route => {
               const opIds = route.assignedOperatorIds || [];
-              
               return (
                 <div key={route.id} className="bg-white rounded-xl shadow-sm border hover:shadow-md transition-all duration-200">
                   <div className="p-6">
-                    {/* Header */}
                     <div className="flex items-start justify-between mb-4">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Navigation className="w-5 h-5 text-blue-600" />
-                          <h3 className="text-lg font-semibold text-gray-900 line-clamp-1">
-                            {route.name}
-                          </h3>
-                        </div>
+                      <div className="flex items-center gap-2">
+                        <Navigation className="w-5 h-5 text-blue-600" />
+                        <h3 className="text-lg font-semibold text-gray-900 line-clamp-1">{route.name}</h3>
                       </div>
-                      <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                        route.isActive 
-                          ? 'bg-green-100 text-green-800' 
-                          : 'bg-gray-100 text-gray-800'
-                      }`}>
+                      <span className={`px-3 py-1 rounded-full text-xs font-medium ${route.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
                         {route.isActive ? 'Active' : 'Inactive'}
                       </span>
                     </div>
 
-                    {/* Route Path */}
+                    {/* Route path */}
                     <div className="mb-4 pb-4 border-b">
                       <div className="flex items-center gap-3">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
-                            <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                            <span className="text-sm font-medium text-gray-900">{route.origin}</span>
-                          </div>
+                        <div className="flex-1 flex items-center gap-2">
+                          <div className="w-3 h-3 bg-green-500 rounded-full" />
+                          <span className="text-sm font-medium text-gray-900">{route.origin}</span>
                         </div>
-                        <ArrowRight className="w-5 h-5 text-gray-400 flex-shrink-0" />
-                        <div className="flex-1 text-right">
-                          <div className="flex items-center justify-end gap-2 mb-1">
-                            <span className="text-sm font-medium text-gray-900">{route.destination}</span>
-                            <div className="w-3 h-3 bg-red-500 rounded-full"></div>
-                          </div>
+                        <ArrowRight className="w-5 h-5 text-gray-400 shrink-0" />
+                        <div className="flex-1 flex items-center justify-end gap-2">
+                          <span className="text-sm font-medium text-gray-900">{route.destination}</span>
+                          <div className="w-3 h-3 bg-red-500 rounded-full" />
                         </div>
                       </div>
-
-                      {/* Stops Indicator */}
                       {route.stops.length > 0 && (
                         <div className="mt-3 flex items-center gap-2">
                           <div className="flex-1 h-px bg-gray-200 relative">
@@ -654,65 +458,52 @@ const RoutesTab: FC<RoutesTabProps> = ({ routes, setRoutes, companyId, addRoute,
                       </div>
                     </div>
 
-                    {/* ✅ NEW: Assigned Operators Display */}
-                   {opIds.length > 0 ? (
-                  <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-100">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Users className="w-4 h-4 text-blue-600" />
-                      <p className="text-xs font-semibold text-blue-900">
-                        Assigned Operators ({opIds.length}/2)
-                      </p>
-                    </div>
-                    <div className="space-y-2">
-                      {opIds.map((uid, i) => {
-                        const op = operatorInfo.get(uid);
-                        const name = op 
-                          ? `${op.firstName} ${op.lastName}`.trim() || "Unknown Operator"
-                          : `Operator ${uid.slice(0,8)}…`;
+                    {/* Operator badges */}
+                    {opIds.length > 0 ? (
+                      <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-100">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Users className="w-4 h-4 text-blue-600" />
+                          <p className="text-xs font-semibold text-blue-900">Assigned Operators ({opIds.length}/2)</p>
+                        </div>
+                        <div className="space-y-2">
+                          {opIds.map((uid, i) => {
+                            const op   = operatorInfo.get(uid);
+                            const name = op ? `${op.firstName} ${op.lastName}`.trim() || 'Unknown Operator' : `Operator ${uid.slice(0,8)}…`;
+                            return (
+                              <div key={i} className="flex items-center gap-2 text-xs">
+                                <UserCircle className="w-3 h-3 text-blue-600" />
+                                <span className="font-medium text-gray-900">{name}</span>
+                                {op?.region && (
+                                  <><span className="text-gray-500">•</span>
+                                  <div className="flex items-center gap-1">
+                                    <MapPinIcon className="w-3 h-3 text-gray-400" />
+                                    <span className="text-gray-600">{op.region}</span>
+                                  </div></>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="mb-4 p-3 bg-yellow-50 rounded-lg border border-yellow-100">
+                        <div className="flex items-center gap-2">
+                          <AlertCircle className="w-4 h-4 text-yellow-600" />
+                          <p className="text-xs text-yellow-800">No operators assigned</p>
+                        </div>
+                      </div>
+                    )}
 
-                        const region = op?.region || '';
-
-                        return (
-                          <div key={i} className="flex items-center gap-2 text-xs">
-                            <UserCircle className="w-3 h-3 text-blue-600" />
-                            <span className="font-medium text-gray-900">{name}</span>
-                            {region && (
-                              <>
-                                <span className="text-gray-500">•</span>
-                                <div className="flex items-center gap-1">
-                                  <MapPinIcon className="w-3 h-3 text-gray-400" />
-                                  <span className="text-gray-600">{region}</span>
-                                </div>
-                              </>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="mb-4 p-3 bg-yellow-50 rounded-lg border border-yellow-100">
-                    <div className="flex items-center gap-2">
-                      <AlertCircle className="w-4 h-4 text-yellow-600" />
-                      <p className="text-xs text-yellow-800">No operators assigned</p>
-                    </div>
-                  </div>
-                )}
-
-                    {/* Stops List */}
+                    {/* Stops */}
                     {route.stops.length > 0 && (
                       <div className="mb-4">
-                        <p className="text-xs font-medium text-gray-700 mb-2">Stops along the way:</p>
+                        <p className="text-xs font-medium text-gray-700 mb-2">Stops:</p>
                         <div className="flex flex-wrap gap-1">
                           {route.stops.slice(0, 3).map((stop, idx) => (
-                            <span key={idx} className="px-2 py-1 bg-blue-50 text-blue-700 text-xs rounded-md">
-                              {stop.name}
-                            </span>
+                            <span key={idx} className="px-2 py-1 bg-blue-50 text-blue-700 text-xs rounded-md">{stop.name}</span>
                           ))}
                           {route.stops.length > 3 && (
-                            <span className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-md">
-                              +{route.stops.length - 3} more
-                            </span>
+                            <span className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-md">+{route.stops.length - 3} more</span>
                           )}
                         </div>
                       </div>
@@ -720,38 +511,21 @@ const RoutesTab: FC<RoutesTabProps> = ({ routes, setRoutes, companyId, addRoute,
 
                     {/* Actions */}
                     <div className="grid grid-cols-4 gap-2 pt-4 border-t">
-                      <button
-                        onClick={() => handleManageOperators(route)}
-                        className="flex items-center justify-center gap-1 px-2 py-2 text-purple-600 bg-purple-50 hover:bg-purple-100 rounded-lg transition-colors text-sm"
-                        title="Manage operators"
-                      >
+                      <button onClick={() => handleManageOperators(route)}
+                        className="flex items-center justify-center px-2 py-2 text-purple-600 bg-purple-50 hover:bg-purple-100 rounded-lg transition-colors" title="Manage operators">
                         <Users className="w-4 h-4" />
                       </button>
-                      <button
-                        onClick={() => { 
-                          setEditRoute(route); 
-                          setShowEditModal(true); 
-                        }} 
-                        className="flex items-center justify-center gap-1 px-2 py-2 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors text-sm"
-                        disabled={actionLoading}
-                        title="Edit route"
-                      >
+                      <button onClick={() => { setEditRoute(route); setShowEditModal(true); }} disabled={actionLoading}
+                        className="flex items-center justify-center px-2 py-2 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors" title="Edit">
                         <Edit3 className="w-4 h-4" />
                       </button>
-                      <button
-                        onClick={() => handleDuplicate(route)} 
-                        className="flex items-center justify-center gap-1 px-2 py-2 text-green-600 bg-green-50 hover:bg-green-100 rounded-lg transition-colors text-sm"
-                        disabled={actionLoading}
-                        title="Duplicate for return trip"
-                      >
+                      <button onClick={() => handleDuplicate(route)} disabled={actionLoading}
+                        className="flex items-center justify-center px-2 py-2 text-green-600 bg-green-50 hover:bg-green-100 rounded-lg transition-colors" title="Duplicate return">
                         <Copy className="w-4 h-4" />
                       </button>
-                      <button
-                        onClick={() => handleDelete(route.id)} 
-                        className="flex items-center justify-center gap-1 px-2 py-2 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors text-sm"
-                        disabled={actionLoading}
-                        title="Delete route"
-                      >
+                      {/* FIX RT-2: sets deleteConfirmId, opens Modal */}
+                      <button onClick={() => setDeleteConfirmId(route.id)} disabled={actionLoading}
+                        className="flex items-center justify-center px-2 py-2 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors" title="Delete">
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
@@ -761,42 +535,25 @@ const RoutesTab: FC<RoutesTabProps> = ({ routes, setRoutes, companyId, addRoute,
             })}
           </div>
 
-          {/* ✅ NEW: Pagination Controls */}
+          {/* Pagination */}
           {totalPages > 1 && (
             <div className="flex items-center justify-between bg-white rounded-xl border p-4">
               <div className="text-sm text-gray-600">
-                Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filteredRoutes.length)} of {filteredRoutes.length} routes
+                Showing {((currentPage - 1) * itemsPerPage) + 1}–{Math.min(currentPage * itemsPerPage, filteredRoutes.length)} of {filteredRoutes.length} routes
               </div>
               <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                  disabled={currentPage === 1}
-                  className="p-2 hover:bg-gray-100 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
-                >
+                <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}
+                  className="p-2 hover:bg-gray-100 rounded-lg disabled:opacity-50">
                   <ChevronLeft className="w-5 h-5" />
                 </button>
-                
-                <div className="flex gap-1">
-                  {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
-                    <button
-                      key={page}
-                      onClick={() => setCurrentPage(page)}
-                      className={`px-3 py-1 rounded-lg text-sm font-medium ${
-                        currentPage === page
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                      }`}
-                    >
-                      {page}
-                    </button>
-                  ))}
-                </div>
-                
-                <button
-                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                  disabled={currentPage === totalPages}
-                  className="p-2 hover:bg-gray-100 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
-                >
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                  <button key={page} onClick={() => setCurrentPage(page)}
+                    className={`px-3 py-1 rounded-lg text-sm font-medium ${currentPage === page ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
+                    {page}
+                  </button>
+                ))}
+                <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}
+                  className="p-2 hover:bg-gray-100 rounded-lg disabled:opacity-50">
                   <ChevronRight className="w-5 h-5" />
                 </button>
               </div>
@@ -805,35 +562,45 @@ const RoutesTab: FC<RoutesTabProps> = ({ routes, setRoutes, companyId, addRoute,
         </>
       )}
 
-      {/* Operator Assignment Modal */}
-      <Modal 
-        isOpen={showOperatorModal} 
-        onClose={() => {
-          setShowOperatorModal(false);
-          setSelectedRouteForOperators(null);
-        }} 
-        title="Manage Route Operators"
-      >
-        {selectedRouteForOperators && (
+      {/* FIX RT-2: Delete confirm modal */}
+      <Modal isOpen={!!deleteConfirmId} onClose={() => setDeleteConfirmId(null)} title="Delete Route">
+        <div className="space-y-4">
+          <p className="text-gray-600">Are you sure you want to delete this route? This action cannot be undone.</p>
+          <div className="flex gap-3 pt-2">
+            <button onClick={() => setDeleteConfirmId(null)} disabled={actionLoading}
+              className="flex-1 px-4 py-2.5 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg">
+              Cancel
+            </button>
+            <button onClick={confirmDelete} disabled={actionLoading}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-white bg-red-600 hover:bg-red-700 rounded-lg disabled:opacity-50">
+              {actionLoading ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Trash2 className="w-4 h-4" />}
+              Delete
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Operator Modal */}
+      <Modal isOpen={showOperatorModal} onClose={() => { setShowOperatorModal(false); setSelectedRouteForOps(null); }} title="Manage Route Operators">
+        {selectedRouteForOps && (
           <div className="space-y-6">
-            {/* Route Info */}
             <div className="p-4 bg-blue-50 rounded-lg border border-blue-100">
-              <h4 className="font-semibold text-gray-900 mb-2">{selectedRouteForOperators.name}</h4>
+              <h4 className="font-semibold text-gray-900 mb-2">{selectedRouteForOps.name}</h4>
               <div className="flex items-center gap-2 text-sm text-gray-600">
                 <MapPinIcon className="w-4 h-4" />
-                <span>{selectedRouteForOperators.origin} → {selectedRouteForOperators.destination}</span>
+                <span>{selectedRouteForOps.origin} → {selectedRouteForOps.destination}</span>
               </div>
               <p className="text-xs text-gray-500 mt-2">
-                Only operators from <span className="font-semibold">{selectedRouteForOperators.origin}</span> region can be assigned
+                Only operators with region exactly matching <span className="font-semibold">"{selectedRouteForOps.origin}"</span> can be assigned
               </p>
             </div>
 
-            {/* Currently Assigned */}
-            {selectedRouteForOperators.assignedOperators && selectedRouteForOperators.assignedOperators.length > 0 && (
+            {/* Assigned */}
+            {(selectedRouteForOps.assignedOperators ?? []).length > 0 && (
               <div>
-                <h4 className="font-semibold text-gray-900 mb-3">Currently Assigned ({selectedRouteForOperators.assignedOperators.length}/2)</h4>
+                <h4 className="font-semibold text-gray-900 mb-3">Currently Assigned ({selectedRouteForOps.assignedOperators!.length}/2)</h4>
                 <div className="space-y-2">
-                  {selectedRouteForOperators.assignedOperators.map((op) => (
+                  {selectedRouteForOps.assignedOperators!.map(op => (
                     <div key={op.operatorId} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
@@ -844,16 +611,13 @@ const RoutesTab: FC<RoutesTabProps> = ({ routes, setRoutes, companyId, addRoute,
                           <div className="flex items-center gap-2 text-xs text-gray-500">
                             <MapPinIcon className="w-3 h-3" />
                             <span>{op.region}</span>
-                            <span>•</span>
+                            <span>·</span>
                             <span>{op.operatorEmail}</span>
                           </div>
                         </div>
                       </div>
-                      <button
-                        onClick={() => handleRemoveOperator(op.operatorId)}
-                        disabled={actionLoading}
-                        className="px-3 py-1 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg text-sm font-medium transition-colors"
-                      >
+                      <button onClick={() => handleRemoveOperator(op.operatorId)} disabled={actionLoading}
+                        className="px-3 py-1 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg text-sm">
                         Remove
                       </button>
                     </div>
@@ -862,29 +626,31 @@ const RoutesTab: FC<RoutesTabProps> = ({ routes, setRoutes, companyId, addRoute,
               </div>
             )}
 
-            {/* Available Operators */}
-            {selectedRouteForOperators.assignedOperators && selectedRouteForOperators.assignedOperators.length < 2 && (
+            {/* Available */}
+            {(selectedRouteForOps.assignedOperators ?? []).length < 2 && (
               <div>
                 <h4 className="font-semibold text-gray-900 mb-3">
-                  Available Operators from {selectedRouteForOperators.origin}
+                  Available Operators from "{selectedRouteForOps.origin}"
                 </h4>
-                
                 {loadingOperators ? (
                   <div className="text-center py-8">
-                    <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
-                    <p className="text-sm text-gray-500 mt-2">Loading operators...</p>
+                    <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto" />
+                    <p className="text-sm text-gray-500 mt-2">Loading…</p>
                   </div>
-                ) : (
-                  <div className="space-y-2 max-h-96 overflow-y-auto">
-                    {operators
-                      .filter(op => {
-                        const isAssigned = selectedRouteForOperators.assignedOperators?.some(
-                          assigned => assigned.operatorId === op.uid
-                        );
-                        const canAssign = canAssignOperator(op, selectedRouteForOperators.origin);
-                        return !isAssigned && canAssign;
-                      })
-                      .map((op) => (
+                ) : (() => {
+                  const available = operators.filter(op => {
+                    const assigned = selectedRouteForOps.assignedOperators?.some(a => a.operatorId === op.uid);
+                    return !assigned && canAssignOperator(op, selectedRouteForOps.origin);
+                  });
+                  return available.length === 0 ? (
+                    <div className="text-center py-8 bg-gray-50 rounded-lg">
+                      <Users className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                      <p className="text-gray-600">No available operators from "{selectedRouteForOps.origin}"</p>
+                      <p className="text-sm text-gray-500 mt-1">Operators must have their region set to exactly "{selectedRouteForOps.origin}"</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2 max-h-96 overflow-y-auto">
+                      {available.map(op => (
                         <div key={op.uid} className="flex items-center justify-between p-3 bg-white border rounded-lg hover:border-blue-300 transition-colors">
                           <div className="flex items-center gap-3">
                             <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center">
@@ -894,362 +660,155 @@ const RoutesTab: FC<RoutesTabProps> = ({ routes, setRoutes, companyId, addRoute,
                               <p className="font-medium text-gray-900">{op.firstName} {op.lastName}</p>
                               <div className="flex items-center gap-2 text-xs text-gray-500">
                                 <MapPinIcon className="w-3 h-3" />
-                                <span>{op.region || op.branch || 'No region set'}</span>
-                                <span>•</span>
+                                <span>{op.region || op.branch || 'No region'}</span>
+                                <span>·</span>
                                 <span>{op.email}</span>
                               </div>
                             </div>
                           </div>
-                          <button
-                            onClick={() => handleAssignOperator(op)}
-                            disabled={actionLoading}
-                            className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
-                          >
+                          <button onClick={() => handleAssignOperator(op)} disabled={actionLoading}
+                            className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 rounded-lg text-sm disabled:opacity-50">
                             Assign
                           </button>
                         </div>
                       ))}
-                    
-                    {operators.filter(op => {
-                      const isAssigned = selectedRouteForOperators.assignedOperators?.some(
-                        assigned => assigned.operatorId === op.uid
-                      );
-                      const canAssign = canAssignOperator(op, selectedRouteForOperators.origin);
-                      return !isAssigned && canAssign;
-                    }).length === 0 && (
-                      <div className="text-center py-8 bg-gray-50 rounded-lg">
-                        <Users className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                        <p className="text-gray-600">No available operators from {selectedRouteForOperators.origin}</p>
-                        <p className="text-sm text-gray-500 mt-1">
-                          Operators must have their region/branch set to {selectedRouteForOperators.origin} to be assigned
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                )}
+                    </div>
+                  );
+                })()}
               </div>
             )}
 
-            {/* Info Box */}
             <div className="p-4 bg-yellow-50 rounded-lg border border-yellow-200">
               <div className="flex items-start gap-3">
                 <AlertCircle className="w-5 h-5 text-yellow-600 mt-0.5" />
                 <div className="text-sm text-yellow-800">
                   <p className="font-semibold mb-1">Region-Based Assignment</p>
-                  <p>Operators can only be assigned to routes from their designated region/branch. This ensures they only manage bookings from their area.</p>
+                  <p>Operator region must exactly match the route origin city.</p>
                 </div>
               </div>
             </div>
 
             <div className="flex justify-end pt-4 border-t">
-              <Button
-                onClick={() => {
-                  setShowOperatorModal(false);
-                  setSelectedRouteForOperators(null);
-                }}
-                variant="outline"
-              >
-                Close
-              </Button>
+              <Button onClick={() => { setShowOperatorModal(false); setSelectedRouteForOps(null); }} variant="outline">Close</Button>
             </div>
           </div>
         )}
       </Modal>
 
-      {/* Add/Edit Modal code remains the same... */}
+      {/* Add Modal */}
       <Modal isOpen={showAddModal} onClose={() => setShowAddModal(false)} title="Add New Route">
         <form onSubmit={handleAdd} className="space-y-6">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Route Name *</label>
-            <input
-              type="text"
-              value={newRoute.name}
-              onChange={e => setNewRoute({ ...newRoute, name: e.target.value })}
-              className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="e.g., Blantyre to Lilongwe Express"
-              required
-            />
+            <input type="text" value={newRoute.name} onChange={e => setNewRoute({ ...newRoute, name: e.target.value })}
+              className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="e.g., Blantyre to Lilongwe Express" required />
           </div>
-          
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Origin *</label>
-              <input
-                type="text"
-                value={newRoute.origin}
-                onChange={e => setNewRoute({ ...newRoute, origin: e.target.value })}
-                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="e.g., Blantyre"
-                required
-              />
+              <input type="text" value={newRoute.origin} onChange={e => setNewRoute({ ...newRoute, origin: e.target.value })}
+                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="e.g., Blantyre" required />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Destination *</label>
-              <input
-                type="text"
-                value={newRoute.destination}
-                onChange={e => setNewRoute({ ...newRoute, destination: e.target.value })}
-                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="e.g., Lilongwe"
-                required
-              />
+              <input type="text" value={newRoute.destination} onChange={e => setNewRoute({ ...newRoute, destination: e.target.value })}
+                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="e.g., Lilongwe" required />
             </div>
           </div>
-          
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Distance (km) *</label>
-              <input
-                type="number"
-                value={newRoute.distance || ''}
-                onChange={e => setNewRoute({ ...newRoute, distance: parseFloat(e.target.value) || 0 })}
-                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="0"
-                required
-                min="1"
-                step="0.1"
-              />
+              <input type="number" value={newRoute.distance || ''} onChange={e => setNewRoute({ ...newRoute, distance: parseFloat(e.target.value) || 0 })}
+                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="0" required min="1" step="0.1" />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Duration (minutes) *</label>
-              <input
-                type="number"
-                value={newRoute.duration || ''}
-                onChange={e => setNewRoute({ ...newRoute, duration: parseInt(e.target.value) || 0 })}
-                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="0"
-                required
-                min="1"
-              />
+              <input type="number" value={newRoute.duration || ''} onChange={e => setNewRoute({ ...newRoute, duration: parseInt(e.target.value) || 0 })}
+                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="0" required min="1" />
             </div>
           </div>
-
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Base Fare (MWK) *</label>
-              <input
-                type="number"
-                value={newRoute.baseFare || ''}
-                onChange={e => setNewRoute({ ...newRoute, baseFare: parseFloat(e.target.value) || 0 })}
-                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="0"
-                required
-                min="1"
-                step="100"
-              />
+              <input type="number" value={newRoute.baseFare || ''} onChange={e => setNewRoute({ ...newRoute, baseFare: parseFloat(e.target.value) || 0 })}
+                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="0" required min="1" step="100" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Price per KM (Optional)
-              </label>
-              <input
-                type="number"
-                value={newRoute.pricePerKm || ''}
-                onChange={e => setNewRoute({ ...newRoute, pricePerKm: parseFloat(e.target.value) || 0 })}
-                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="0"
-                min="0"
-                step="10"
-              />
+              <label className="block text-sm font-medium text-gray-700 mb-2">Price per KM (Optional)</label>
+              <input type="number" value={newRoute.pricePerKm || ''} onChange={e => setNewRoute({ ...newRoute, pricePerKm: parseFloat(e.target.value) || 0 })}
+                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="0" min="0" step="10" />
             </div>
           </div>
-          
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Stops & Pickup Points <span className="text-gray-500 font-normal">(comma-separated, optional)</span>
-            </label>
-            <input
-              type="text"
-              value={newRoute.stops.map(s => s.name).join(',')}
-              onChange={e => setNewRoute({ 
-                ...newRoute, 
-                stops: e.target.value.split(',')
-                  .map(name => name.trim())
-                  .filter(name => name.length > 0)
-                  .map((name, idx) => ({ 
-                    id: `stop-${idx}`, 
-                    name, 
-                    order: idx, 
-                    distanceFromOrigin: 0 
-                  })) 
-              })}
-              className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="e.g., Zomba Bus Station, Balaka Market, Ntcheu Junction"
-            />
+            <label className="block text-sm font-medium text-gray-700 mb-2">Stops <span className="text-gray-400 font-normal">(comma-separated)</span></label>
+            <input type="text" value={newRoute.stops.map(s => s.name).join(',')}
+              onChange={e => setNewRoute({ ...newRoute, stops: e.target.value.split(',').map(n => n.trim()).filter(Boolean).map((name, idx) => ({ id: `stop-${idx}`, name, order: idx, distanceFromOrigin: 0 })) })}
+              className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="e.g., Zomba, Balaka, Ntcheu" />
           </div>
-
-          <div className="flex justify-end space-x-3 pt-6 border-t">
-            <Button 
-              type="button" 
-              onClick={() => setShowAddModal(false)} 
-              variant="outline" 
-              className="bg-gray-100 hover:bg-gray-200"
-              disabled={actionLoading}
-            >
-              Cancel
-            </Button>
-            <Button 
-              type="submit" 
-              disabled={actionLoading} 
-              className="bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
-            >
-              {actionLoading ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
-                  Adding...
-                </>
-              ) : (
-                <>
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add Route
-                </>
-              )}
+          <div className="flex justify-end gap-3 pt-6 border-t">
+            <Button type="button" onClick={() => setShowAddModal(false)} variant="outline" disabled={actionLoading}>Cancel</Button>
+            <Button type="submit" disabled={actionLoading} className="bg-blue-600 text-white hover:bg-blue-700">
+              {actionLoading ? <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />Adding…</> : <><Plus className="w-4 h-4 mr-2" />Add Route</>}
             </Button>
           </div>
         </form>
       </Modal>
 
+      {/* Edit Modal */}
       <Modal isOpen={showEditModal} onClose={() => setShowEditModal(false)} title="Edit Route">
         {editRoute && (
           <form onSubmit={handleEdit} className="space-y-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Route Name *</label>
-              <input
-                type="text"
-                value={editRoute.name}
-                onChange={e => setEditRoute({ ...editRoute, name: e.target.value })}
-                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                required
-              />
+              <input type="text" value={editRoute.name} onChange={e => setEditRoute({ ...editRoute, name: e.target.value })}
+                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" required />
             </div>
-            
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Origin *</label>
-                <input
-                  type="text"
-                  value={editRoute.origin}
-                  onChange={e => setEditRoute({ ...editRoute, origin: e.target.value })}
-                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  required
-                />
+                <input type="text" value={editRoute.origin} onChange={e => setEditRoute({ ...editRoute, origin: e.target.value })}
+                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" required />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Destination *</label>
-                <input
-                  type="text"
-                  value={editRoute.destination}
-                  onChange={e => setEditRoute({ ...editRoute, destination: e.target.value })}
-                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  required
-                />
+                <input type="text" value={editRoute.destination} onChange={e => setEditRoute({ ...editRoute, destination: e.target.value })}
+                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" required />
               </div>
             </div>
-            
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Distance (km) *</label>
-                <input
-                  type="number"
-                  value={editRoute.distance}
-                  onChange={e => setEditRoute({ ...editRoute, distance: parseFloat(e.target.value) || 0 })}
-                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  required
-                  min="1"
-                  step="0.1"
-                />
+                <input type="number" value={editRoute.distance} onChange={e => setEditRoute({ ...editRoute, distance: parseFloat(e.target.value) || 0 })}
+                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" required min="1" step="0.1" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Duration (minutes) *</label>
-                <input
-                  type="number"
-                  value={editRoute.duration}
-                  onChange={e => setEditRoute({ ...editRoute, duration: parseInt(e.target.value) || 0 })}
-                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  required
-                  min="1"
-                />
+                <input type="number" value={editRoute.duration} onChange={e => setEditRoute({ ...editRoute, duration: parseInt(e.target.value) || 0 })}
+                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" required min="1" />
               </div>
             </div>
-
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Base Fare (MWK) *</label>
-                <input
-                  type="number"
-                  value={editRoute.baseFare || ''}
-                  onChange={e => setEditRoute({ ...editRoute, baseFare: parseFloat(e.target.value) || 0 })}
-                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  required
-                  min="1"
-                  step="100"
-                />
+                <input type="number" value={editRoute.baseFare || ''} onChange={e => setEditRoute({ ...editRoute, baseFare: parseFloat(e.target.value) || 0 })}
+                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" required min="1" step="100" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Price per KM (Optional)</label>
-                <input
-                  type="number"
-                  value={editRoute.pricePerKm || ''}
-                  onChange={e => setEditRoute({ ...editRoute, pricePerKm: parseFloat(e.target.value) || 0 })}
-                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  min="0"
-                  step="10"
-                />
+                <input type="number" value={editRoute.pricePerKm || ''} onChange={e => setEditRoute({ ...editRoute, pricePerKm: parseFloat(e.target.value) || 0 })}
+                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" min="0" step="10" />
               </div>
             </div>
-            
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Stops & Pickup Points <span className="text-gray-500 font-normal">(comma-separated, optional)</span>
-              </label>
-              <input
-                type="text"
-                value={editRoute.stops.map(s => s.name).join(',')}
-                onChange={e => setEditRoute({ 
-                  ...editRoute, 
-                  stops: e.target.value.split(',')
-                    .map(name => name.trim())
-                    .filter(name => name.length > 0)
-                    .map((name, idx) => ({ 
-                      id: `stop-${idx}`, 
-                      name, 
-                      order: idx, 
-                      distanceFromOrigin: 0 
-                    })) 
-                })}
-                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
+              <label className="block text-sm font-medium text-gray-700 mb-2">Stops <span className="text-gray-400 font-normal">(comma-separated)</span></label>
+              <input type="text" value={editRoute.stops.map(s => s.name).join(',')}
+                onChange={e => setEditRoute({ ...editRoute, stops: e.target.value.split(',').map(n => n.trim()).filter(Boolean).map((name, idx) => ({ id: `stop-${idx}`, name, order: idx, distanceFromOrigin: 0 })) })}
+                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" />
             </div>
-
-            <div className="flex justify-end space-x-3 pt-6 border-t">
-              <Button 
-                type="button" 
-                onClick={() => {
-                  setShowEditModal(false);
-                  setEditRoute(null);
-                }} 
-                variant="outline" 
-                className="bg-gray-100 hover:bg-gray-200"
-                disabled={actionLoading}
-              >
-                Cancel
-              </Button>
-              <Button 
-                type="submit" 
-                disabled={actionLoading} 
-                className="bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
-              >
-                {actionLoading ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
-                    Updating...
-                  </>
-                ) : (
-                  <>
-                    <Edit3 className="w-4 h-4 mr-2" />
-                    Update Route
-                  </>
-                )}
+            <div className="flex justify-end gap-3 pt-6 border-t">
+              <Button type="button" onClick={() => { setShowEditModal(false); setEditRoute(null); }} variant="outline" disabled={actionLoading}>Cancel</Button>
+              <Button type="submit" disabled={actionLoading} className="bg-blue-600 text-white hover:bg-blue-700">
+                {actionLoading ? <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />Updating…</> : <><Edit3 className="w-4 h-4 mr-2" />Update Route</>}
               </Button>
             </div>
           </form>

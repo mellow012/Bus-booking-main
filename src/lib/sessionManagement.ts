@@ -1,209 +1,197 @@
 /**
- * Session Management Utilities
- * Handles session timeouts, token refresh, and secure session handling
+ * Session Management — Firebase Admin Session Cookies
+ *
+ * FIX F-08: The previous implementation stored session state in an in-memory
+ * JavaScript Map. This silently fails in production because:
+ *   (a) All sessions are wiped on every redeploy — users are silently logged out.
+ *   (b) Behind a load balancer, each pod has isolated state, so a session
+ *       created on pod A is invisible to pod B.
+ *
+ * This implementation uses Firebase Admin SDK session cookies:
+ *   - Sessions are stored as signed, HttpOnly cookies that Firebase verifies.
+ *   - Cookie validity is checked against Firebase's servers (revocation-aware).
+ *   - Revocation is instant via adminAuth.revokeRefreshTokens().
+ *   - No external Redis or database is required.
+ *
+ * FLOW:
+ *   1. Client signs in with Firebase Auth and gets an ID token.
+ *   2. Client POSTs the ID token to POST /api/auth/session.
+ *   3. Server calls createSessionCookie(), sets the result as an HttpOnly cookie.
+ *   4. On subsequent requests, server calls verifySessionCookie() to authenticate.
+ *   5. On logout, server calls revokeAndClearSession() to invalidate everywhere.
+ *
+ * EXAMPLE API ROUTE (App Router):
+ *
+ *   // POST /api/auth/session
+ *   import { createSessionCookie, SESSION_COOKIE_NAME, COOKIE_OPTIONS } from '@/lib/sessionManagement';
+ *   import { cookies } from 'next/headers';
+ *
+ *   export async function POST(request: Request) {
+ *     const { idToken } = await request.json();
+ *     const sessionCookie = await createSessionCookie(idToken);
+ *     if (!sessionCookie) {
+ *       return Response.json({ error: 'Invalid token' }, { status: 401 });
+ *     }
+ *     cookies().set(SESSION_COOKIE_NAME, sessionCookie, COOKIE_OPTIONS);
+ *     return Response.json({ status: 'ok' });
+ *   }
+ *
+ *   // DELETE /api/auth/session (logout)
+ *   import { revokeAndClearSession } from '@/lib/sessionManagement';
+ *   export async function DELETE(request: Request) {
+ *     await revokeAndClearSession(request);
+ *     return Response.json({ status: 'ok' });
+ *   }
  */
 
 import { adminAuth } from './firebaseAdmin';
 import { logger } from './logger';
+import { cookies } from 'next/headers';
+import { NextRequest } from 'next/server';
 
-interface SessionConfig {
-  idleTimeoutMinutes: number; // Logout after inactivity
-  absoluteTimeoutMinutes: number; // Absolute session duration
-  refreshThresholdMinutes: number; // Refresh token before expiry
-}
+// ─── Constants ────────────────────────────────────────────────────────────────
 
-const defaultConfig: SessionConfig = {
-  idleTimeoutMinutes: 30, // 30 minutes
-  absoluteTimeoutMinutes: 480, // 8 hours
-  refreshThresholdMinutes: 5, // Refresh 5 min before expiry
+export const SESSION_COOKIE_NAME = '__session';
+
+/** Session lifetime: 5 days. Firebase supports up to 14 days. */
+const SESSION_DURATION_MS = 5 * 24 * 60 * 60 * 1000;
+
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
+
+export const COOKIE_OPTIONS = {
+  name: SESSION_COOKIE_NAME,
+  httpOnly: true,
+  secure: IS_PRODUCTION,
+  sameSite: 'lax' as const, // 'lax' allows redirect-based OAuth flows
+  path: '/',
+  maxAge: SESSION_DURATION_MS / 1000,
 };
 
-/**
- * Session storage (in production, use database/Redis)
- */
-interface SessionData {
-  userId: string;
+// ─── Session data returned after verification ─────────────────────────────────
+
+export interface VerifiedSession {
+  uid: string;
   email?: string;
+  /** Role from Firebase Auth custom claims — set by Cloud Functions only. */
   role?: string;
-  createdAt: number;
-  lastActivityAt: number;
-  expiresAt: number;
+  /** Company ID from Firebase Auth custom claims. */
+  companyId?: string;
+  /** Seconds until the session cookie expires. */
+  expiresIn: number;
 }
 
-const sessions = new Map<string, SessionData>();
+// ─── Cookie creation ──────────────────────────────────────────────────────────
 
 /**
- * Create a new session
+ * Exchange a Firebase ID token for a long-lived session cookie.
+ * Returns the cookie value string, or null if the ID token is invalid.
+ *
+ * Call this server-side immediately after the client signs in and sends
+ * the ID token to your POST /api/auth/session endpoint.
  */
-export function createSession(
-  sessionId: string,
-  userId: string,
-  email?: string,
-  role?: string,
-  config: SessionConfig = defaultConfig
-): SessionData {
-  const now = Date.now();
-  const session: SessionData = {
-    userId,
-    email,
-    role,
-    createdAt: now,
-    lastActivityAt: now,
-    expiresAt: now + config.absoluteTimeoutMinutes * 60 * 1000,
-  };
-
-  sessions.set(sessionId, session);
-  return session;
-}
-
-/**
- * Get session data
- */
-export function getSession(sessionId: string): SessionData | null {
-  return sessions.get(sessionId) || null;
-}
-
-/**
- * Update last activity time
- */
-export function updateSessionActivity(sessionId: string): boolean {
-  const session = sessions.get(sessionId);
-  if (!session) return false;
-
-  session.lastActivityAt = Date.now();
-  sessions.set(sessionId, session);
-  return true;
-}
-
-/**
- * Check if session is valid
- * Returns {valid: boolean, reason: string|null}
- */
-export function validateSession(
-  sessionId: string,
-  config: SessionConfig = defaultConfig
-): {
-  valid: boolean;
-  reason?: string;
-  isExpiringSoon?: boolean;
-} {
-  const session = sessions.get(sessionId);
-  if (!session) {
-    return { valid: false, reason: 'Session not found' };
+export async function createSessionCookie(idToken: string): Promise<string | null> {
+  try {
+    const sessionCookie = await adminAuth.createSessionCookie(idToken, {
+      expiresIn: SESSION_DURATION_MS,
+    });
+    return sessionCookie;
+  } catch (error: any) {
+    await logger.logError('auth', 'Failed to create session cookie', error, {
+      action: 'session_cookie_create_error',
+    });
+    return null;
   }
+}
 
-  const now = Date.now();
+// ─── Cookie verification ──────────────────────────────────────────────────────
 
-  // Check absolute timeout
-  if (now > session.expiresAt) {
-    sessions.delete(sessionId);
-    return { valid: false, reason: 'Session expired' };
+/**
+ * Verify a session cookie and return the decoded claims.
+ *
+ * Pass checkRevoked = true (default) to detect revoked sessions immediately.
+ * This makes one network call to Firebase; pass false for latency-sensitive
+ * paths where you are willing to accept up to 1-hour stale sessions.
+ *
+ * Returns null if the cookie is missing, expired, or revoked.
+ */
+export async function verifySessionCookie(
+  sessionCookie: string,
+  checkRevoked = true
+): Promise<VerifiedSession | null> {
+  try {
+    const decoded = await adminAuth.verifySessionCookie(sessionCookie, checkRevoked);
+    return {
+      uid: decoded.uid,
+      email: decoded.email,
+      role: decoded.role as string | undefined,
+      companyId: decoded.companyId as string | undefined,
+      expiresIn: Math.floor((decoded.exp * 1000 - Date.now()) / 1000),
+    };
+  } catch {
+    // Cookie expired, revoked, or tampered — treat as unauthenticated
+    return null;
   }
-
-  // Check idle timeout
-  const idleTimeMs = config.idleTimeoutMinutes * 60 * 1000;
-  if (now - session.lastActivityAt > idleTimeMs) {
-    sessions.delete(sessionId);
-    return { valid: false, reason: 'Session idle timeout' };
-  }
-
-  // Check if expires soon (within refresh threshold)
-  const refreshThresholdMs = config.refreshThresholdMinutes * 60 * 1000;
-  const isExpiringSoon = session.expiresAt - now < refreshThresholdMs;
-
-  return { valid: true, isExpiringSoon };
 }
 
 /**
- * End session (logout)
+ * Verify the session cookie from an incoming Next.js request.
+ * Reads the cookie from the request automatically.
  */
-export function endSession(sessionId: string): void {
-  sessions.delete(sessionId);
+export async function verifyRequestSession(
+  request: NextRequest,
+  checkRevoked = true
+): Promise<VerifiedSession | null> {
+  const sessionCookie = request.cookies.get(SESSION_COOKIE_NAME)?.value;
+  if (!sessionCookie) return null;
+  return verifySessionCookie(sessionCookie, checkRevoked);
 }
 
-/**
- * Extend session (refresh)
- */
-export function refreshSession(
-  sessionId: string,
-  config: SessionConfig = defaultConfig
-): boolean {
-  const session = sessions.get(sessionId);
-  if (!session) return false;
-
-  session.expiresAt = Date.now() + config.absoluteTimeoutMinutes * 60 * 1000;
-  session.lastActivityAt = Date.now();
-  sessions.set(sessionId, session);
-  return true;
-}
+// ─── Logout / revocation ──────────────────────────────────────────────────────
 
 /**
- * Get session expiry time in seconds from now
+ * Revoke all Firebase refresh tokens for a user and clear the session cookie.
+ *
+ * This immediately invalidates the session on all devices. Firebase session
+ * cookies are verified against the revocation timestamp on the next check.
  */
-export function getSessionExpiryIn(sessionId: string): number {
-  const session = sessions.get(sessionId);
-  if (!session) return 0;
+export async function revokeAndClearSession(request: NextRequest): Promise<void> {
+  const sessionCookie = request.cookies.get(SESSION_COOKIE_NAME)?.value;
 
-  const secondsRemaining = Math.floor((session.expiresAt - Date.now()) / 1000);
-  return Math.max(0, secondsRemaining);
-}
+  if (sessionCookie) {
+    try {
+      // Verify without checking revocation so we can get the UID even for
+      // an already-revoked cookie (idempotent logout).
+      const decoded = await adminAuth.verifySessionCookie(sessionCookie, false);
+      await adminAuth.revokeRefreshTokens(decoded.uid);
 
-/**
- * Get all sessions for a user (for multi-device management)
- */
-export function getUserSessions(userId: string): SessionData[] {
-  const userSessions: SessionData[] = [];
-  for (const session of sessions.values()) {
-    if (session.userId === userId) {
-      userSessions.push(session);
-    }
-  }
-  return userSessions;
-}
-
-/**
- * Logout all sessions for a user (security: password change, admin action)
- */
-export async function logoutUserAllSessions(userId: string): Promise<void> {
-  const toDelete: string[] = [];
-
-  for (const [sessionId, session] of sessions.entries()) {
-    if (session.userId === userId) {
-      toDelete.push(sessionId);
+      await logger.logSecurityEvent('Session revoked and refresh tokens cleared', undefined, {
+        userId: decoded.uid,
+        action: 'session_revoked',
+      });
+    } catch {
+      // Cookie was already invalid — nothing to revoke
     }
   }
 
-  for (const sessionId of toDelete) {
-    sessions.delete(sessionId);
-  }
-
-  await logger.logSecurityEvent(
-    'All sessions terminated for user',
-    undefined,
-    {
-      userId,
-      action: 'all_sessions_logout',
-      metadata: { sessionCount: toDelete.length },
-    }
-  );
+  // Clear the cookie from the client regardless
+  const cookieStore = await cookies();
+  cookieStore.set(SESSION_COOKIE_NAME, '', {
+    ...COOKIE_OPTIONS,
+    maxAge: 0,
+  });
 }
 
 /**
- * Revoke Firebase refresh token (security measure)
- * Useful for logout, password change, security breach
+ * Revoke all refresh tokens for a user by UID (admin action — no cookie needed).
+ * Use this for password changes, security incidents, or admin-forced logouts.
  */
 export async function revokeRefreshTokens(userId: string): Promise<void> {
   try {
     await adminAuth.revokeRefreshTokens(userId);
-    
-    await logger.logSecurityEvent(
-      'Refresh tokens revoked for user',
-      undefined,
-      {
-        userId,
-        action: 'tokens_revoked',
-      }
-    );
+    await logger.logSecurityEvent('Refresh tokens revoked for user', undefined, {
+      userId,
+      action: 'tokens_revoked',
+    });
   } catch (error: any) {
     await logger.logError('security', 'Failed to revoke tokens', error, {
       userId,
@@ -212,58 +200,8 @@ export async function revokeRefreshTokens(userId: string): Promise<void> {
   }
 }
 
-/**
- * Clean up expired sessions periodically
- * Call this once on app startup
- */
-export function initSessionCleanup(): void {
-  setInterval(() => {
-    const now = Date.now();
-    const toDelete: string[] = [];
-
-    for (const [sessionId, session] of sessions.entries()) {
-      if (now > session.expiresAt) {
-        toDelete.push(sessionId);
-      }
-    }
-
-    for (const sessionId of toDelete) {
-      sessions.delete(sessionId);
-    }
-
-    if (toDelete.length > 0) {
-      console.log(`[Session] Cleaned up ${toDelete.length} expired sessions`);
-    }
-  }, 60 * 1000); // Clean every minute
-}
-
-/**
- * Get session statistics (for monitoring)
- */
-export function getSessionStats(): {
-  totalSessions: number;
-  sessionsByUser: { userId: string; count: number }[];
-  oldestSession: number | null;
-  newestSession: number | null;
-} {
-  const userSessions = new Map<string, number>();
-  let oldest: number | null = null;
-  let newest: number | null = null;
-
-  for (const session of sessions.values()) {
-    userSessions.set(session.userId, (userSessions.get(session.userId) || 0) + 1);
-    
-    if (oldest === null || session.createdAt < oldest) oldest = session.createdAt;
-    if (newest === null || session.createdAt > newest) newest = session.createdAt;
-  }
-
-  return {
-    totalSessions: sessions.size,
-    sessionsByUser: Array.from(userSessions.entries()).map(([userId, count]) => ({
-      userId,
-      count,
-    })),
-    oldestSession: oldest,
-    newestSession: newest,
-  };
-}
+// ─── Session statistics (for monitoring dashboards) ───────────────────────────
+// NOTE: Firebase does not provide a list of active session cookies.
+// For monitoring active sessions, write session metadata to Firestore
+// when creating a session cookie and clean it up on revocation.
+// This is optional and outside the scope of this security fix.

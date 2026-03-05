@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useMemo, memo, ChangeEvent, FormEvent } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, memo, ChangeEvent, FormEvent, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { sendNotification } from '../../contexts/NotificationContext';
 import { NotificationTemplates } from '@/utils/notificationHelper';
@@ -11,7 +11,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '@/lib/firebaseConfig';
 import { useAuth } from '@/contexts/AuthContext';
-import { Booking, Schedule, Bus, Route, Company, UserProfile, PaymentProvider } from '@/types';
+import { Booking, Schedule, Bus, Route, Company, UserProfile, PaymentProvider,NotificationType } from '@/types';
 import {
   Bus as BusIcon, MapPin, Clock, Download, XCircle, CheckCircle, Loader2,
   Search, CreditCard, Armchair, Bell, AlertTriangle, Calendar, Users,
@@ -50,10 +50,6 @@ interface StatCard {
   Icon:  React.FC<{ className?: string }>;
 }
 
-// ─── FIX: Explicit PaymentMethod interface ─────────────────────────────────────
-// Without this, `as const` makes each `methods` array a narrow tuple with literal
-// `id` types, and TypeScript can't reconcile them through flatMap into a single
-// union — causing the "stripe_card is not assignable to tnm" error on line 321.
 interface PaymentMethod {
   id:               string;
   provider:         string;
@@ -78,11 +74,10 @@ interface PaymentCategory {
   activeBg:       string;
   activeBorder:   string;
   inactiveBorder: string;
-  methods:        PaymentMethod[];   // ← typed array, not a const tuple
+  methods:        PaymentMethod[];
 }
 
 // ─── Payment Categories ────────────────────────────────────────────────────────
-// FIX: typed as PaymentCategory[] instead of `as const` so flatMap works correctly
 const PAYMENT_CATEGORIES: PaymentCategory[] = [
   {
     id: 'mobile_money',
@@ -345,7 +340,6 @@ const ConfirmAndPayForm: React.FC<{
   formatDate:    (dt: unknown) => string;
   formatTime:    (dt: unknown) => string;
 }> = ({ booking, subMethodId, providerLabel, userDetails, onChange, onSubmit, loading, formatDate, formatTime }) => {
-  // FIX: flatMap now works correctly because methods is PaymentMethod[], not a tuple
   const method = PAYMENT_CATEGORIES.flatMap((c) => c.methods).find((m) => m.id === subMethodId);
 
   return (
@@ -628,31 +622,32 @@ const BookingsPage: React.FC = () => {
   const [selectedLabel,    setSelectedLabel]    = useState('');
   const [userDetails,      setUserDetails]      = useState({ name: '', email: '', phone: '+265' });
 
-  const cleanupFunctions   = useMemo(() => new Set<() => void>(), []);
-  const statusesMapRef     = React.useRef<Map<string, { bookingStatus: string; paymentStatus: string }>>(new Map());
-  const initialSnapshotRef = React.useRef(true);
+  // ✅ Fix 4: useRef instead of useMemo for a mutable Set
+  const cleanupFunctions   = useRef<Set<() => void>>(new Set());
+  const statusesMapRef     = useRef<Map<string, { bookingStatus: string; paymentStatus: string }>>(new Map());
+  const initialSnapshotRef = useRef(true);
 
-  const scheduleCache = React.useRef<Map<string, Schedule>>(new Map());
-  const busCache      = React.useRef<Map<string, Bus>>(new Map());
-  const routeCache    = React.useRef<Map<string, Route>>(new Map());
-  const companyCache  = React.useRef<Map<string, Company>>(new Map());
+  const scheduleCache = useRef<Map<string, Schedule>>(new Map());
+  const busCache      = useRef<Map<string, Bus>>(new Map());
+  const routeCache    = useRef<Map<string, Route>>(new Map());
+  const companyCache  = useRef<Map<string, Company>>(new Map());
 
   const formatTime = useCallback((dateTime: unknown): string => {
     let d: Date;
-    if (dateTime instanceof Date)                    d = dateTime;
-    else if ((dateTime as any)?.toDate)              d = (dateTime as any).toDate();
-    else if ((dateTime as any)?.seconds)             d = new Date((dateTime as any).seconds * 1000);
-    else if (typeof dateTime === 'string')           d = new Date(dateTime);
+    if (dateTime instanceof Date)          d = dateTime;
+    else if ((dateTime as any)?.toDate)    d = (dateTime as any).toDate();
+    else if ((dateTime as any)?.seconds)   d = new Date((dateTime as any).seconds * 1000);
+    else if (typeof dateTime === 'string') d = new Date(dateTime);
     else return 'N/A';
     return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
   }, []);
 
   const formatDate = useCallback((dateTime: unknown): string => {
     let d: Date;
-    if (dateTime instanceof Date)                    d = dateTime;
-    else if ((dateTime as any)?.toDate)              d = (dateTime as any).toDate();
-    else if ((dateTime as any)?.seconds)             d = new Date((dateTime as any).seconds * 1000);
-    else if (typeof dateTime === 'string')           d = new Date(dateTime);
+    if (dateTime instanceof Date)          d = dateTime;
+    else if ((dateTime as any)?.toDate)    d = (dateTime as any).toDate();
+    else if ((dateTime as any)?.seconds)   d = new Date((dateTime as any).seconds * 1000);
+    else if (typeof dateTime === 'string') d = new Date(dateTime);
     else return 'N/A';
     return d.toLocaleDateString('en-GB', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
   }, []);
@@ -667,27 +662,36 @@ const BookingsPage: React.FC = () => {
     ?? 'bg-gray-100 text-gray-800 border-gray-200'
   ), []);
 
-  function isBookingExpired(b: BookingWithDetails) {
-    const arr = b.schedule.arrivalDateTime instanceof Timestamp ? b.schedule.arrivalDateTime.toDate() : new Date(b.schedule.arrivalDateTime as unknown as string);
-    return arr < new Date() && b.bookingStatus !== 'completed' && b.bookingStatus !== 'cancelled'
+  // ✅ Fix 5: stable ref so fetchBookings closure doesn't go stale
+  const isBookingExpired = useCallback((b: BookingWithDetails) => {
+    const arr = b.schedule.arrivalDateTime instanceof Timestamp
+      ? b.schedule.arrivalDateTime.toDate()
+      : new Date(b.schedule.arrivalDateTime as unknown as string);
+    return arr < new Date()
+      && b.bookingStatus !== 'completed'
+      && b.bookingStatus !== 'cancelled'
       && !(b.bookingStatus === 'confirmed' && b.paymentStatus === 'paid');
-  }
+  }, []);
 
-  const applyFiltersLogic = (src: BookingWithDetails[], af: string, cf: SearchFilters) => {
+  // ✅ Fix 3: stable useCallback so it can be safely referenced in effects
+  const applyFiltersLogic = useCallback((src: BookingWithDetails[], af: string, cf: SearchFilters) => {
     let f = [...src];
     const now = new Date();
     if (af === 'confirmed')      f = f.filter((b) => b.bookingStatus === 'confirmed' && b.paymentStatus === 'paid');
     else if (af === 'pending')   f = f.filter((b) => b.bookingStatus === 'pending' || (b.bookingStatus === 'confirmed' && b.paymentStatus === 'pending'));
     else if (af === 'cancelled') f = f.filter((b) => b.bookingStatus === 'cancelled');
     else if (af === 'upcoming')  f = f.filter((b) => {
-      const d = b.schedule?.departureDateTime instanceof Timestamp ? b.schedule.departureDateTime.toDate() : new Date(b.schedule?.departureDateTime as unknown as string);
+      const d = b.schedule?.departureDateTime instanceof Timestamp
+        ? b.schedule.departureDateTime.toDate()
+        : new Date(b.schedule?.departureDateTime as unknown as string);
       return d > now && b.bookingStatus === 'confirmed' && b.paymentStatus === 'paid';
     });
-    if (cf.busType) { const t = Array.isArray(cf.busType) ? cf.busType : [cf.busType]; f = f.filter((b) => b.bus?.busType && t.includes(b.bus.busType)); }
+    if (cf.busType)    { const t = Array.isArray(cf.busType) ? cf.busType : [cf.busType]; f = f.filter((b) => b.bus?.busType && t.includes(b.bus.busType)); }
     if (cf.priceRange) { f = f.filter((b) => b.schedule?.price !== undefined && b.schedule.price >= ((cf.priceRange as any)?.min ?? 0) && b.schedule.price <= ((cf.priceRange as any)?.max ?? Infinity)); }
     if (cf.company)    f = f.filter((b) => b.company?.name === cf.company);
-    setFilteredBookings(f); setCurrentPage(1);
-  };
+    setFilteredBookings(f);
+    setCurrentPage(1);
+  }, []);
 
   const fetchBookings = useCallback(async (retryCount = 0) => {
     if (!user) return;
@@ -724,17 +728,20 @@ const BookingsPage: React.FC = () => {
         details.push({ ...b, schedule: sc, bus, route, company: co } as BookingWithDetails);
       }
       const valid = details.filter((b) => !isBookingExpired(b));
-      setBookings(valid); applyFiltersLogic(valid, activeFilter, filters);
+      setBookings(valid);
+      applyFiltersLogic(valid, activeFilter, filters);
     } catch {
       if (retryCount < 2) { setTimeout(() => fetchBookings(retryCount + 1), 1000 * 2 ** retryCount); return; }
       setError('Failed to load bookings. Please check your connection and try again.');
     } finally { setLoading(false); }
-  }, [user, activeFilter, filters]);
+  }, [user, activeFilter, filters, isBookingExpired, applyFiltersLogic]);
 
   const handleCancelBooking = useCallback(async (bookingId: string, scheduleId: string, seatNumbers: string[]) => {
     const b = bookings.find((x) => x.id === bookingId);
     if (!b) { setError('Booking not found'); return; }
-    const dep = b.schedule.departureDateTime instanceof Timestamp ? b.schedule.departureDateTime.toDate() : new Date(b.schedule.departureDateTime as unknown as string);
+    const dep = b.schedule.departureDateTime instanceof Timestamp
+      ? b.schedule.departureDateTime.toDate()
+      : new Date(b.schedule.departureDateTime as unknown as string);
     if (dep < new Date()) { setError('Cannot cancel a past departure.'); return; }
     const isPaid = b.paymentStatus === 'paid';
     if (isPaid && !window.confirm('This booking has been paid for. Cancelling may affect your refund eligibility. Continue?')) return;
@@ -742,14 +749,42 @@ const BookingsPage: React.FC = () => {
     try {
       const batch = writeBatch(db);
       const upd: Record<string, unknown> = { updatedAt: serverTimestamp() };
-      if (!isPaid) { upd.bookingStatus = 'cancelled'; upd.cancellationDate = serverTimestamp(); upd.cancellationReason = 'Customer initiated'; sendNotification({ userId: b.userId, ...NotificationTemplates.bookingConfirmed(bookingId, `${b.route.origin} → ${b.route.destination}`), message: `Your booking ${bookingId.slice(-8)} has been cancelled.` }); }
-      else { upd.cancellationRequested = true; upd.cancellationReason = 'Customer requested'; sendNotification({ userId: b.userId, type: 'cancellation_requested', title: 'Cancellation Requested', message: `Cancellation for booking ${bookingId.slice(-8)} is under review.`, data: { bookingId, url: '/bookings' } }); }
+
+      if (!isPaid) {
+        upd.bookingStatus = 'cancelled';
+        upd.cancellationDate = serverTimestamp();
+        upd.cancellationReason = 'Customer initiated';
+        // ✅ Fix 1: use cancellation template, not bookingConfirmed
+        sendNotification({
+          userId: b.userId,
+          type: 'cancellation',
+          title: 'Booking Cancelled',
+          message: `Your booking ${bookingId.slice(-8)} (${b.route.origin} → ${b.route.destination}) has been cancelled.`,
+          data: { bookingId, url: '/bookings' },
+        });
+      } else {
+        upd.cancellationRequested = true;
+        upd.cancellationReason = 'Customer requested';
+        sendNotification({
+          userId: b.userId,
+          type: 'cancellation_requested',
+          title: 'Cancellation Requested',
+          message: `Cancellation for booking ${bookingId.slice(-8)} is under review.`,
+          data: { bookingId, url: '/bookings' },
+        });
+      }
+
       batch.update(doc(db, 'bookings', bookingId), upd);
-      if (!isPaid) batch.update(doc(db, 'schedules', scheduleId), { availableSeats: increment(seatNumbers.length), bookedSeats: arrayRemove(...seatNumbers), updatedAt: serverTimestamp() });
+      if (!isPaid) batch.update(doc(db, 'schedules', scheduleId), {
+        availableSeats: increment(seatNumbers.length),
+        bookedSeats: arrayRemove(...seatNumbers),
+        updatedAt: serverTimestamp(),
+      });
       await batch.commit();
       scheduleCache.current.delete(scheduleId);
       setSuccess(isPaid ? 'Cancellation requested. An admin will review.' : 'Booking cancelled successfully.');
-      setTimeout(() => setSuccess(''), 5000); fetchBookings();
+      setTimeout(() => setSuccess(''), 5000);
+      fetchBookings();
     } catch (err: unknown) { setError(`Failed to cancel: ${err instanceof Error ? err.message : String(err)}`); }
     finally { setActionLoading(null); }
   }, [bookings, fetchBookings]);
@@ -821,7 +856,7 @@ const BookingsPage: React.FC = () => {
       const token = await cu.getIdToken();
 
       const apiRoute = selectedProvider === 'stripe'
-        ? '/api/payments/stripe/charge'
+        ? '/api/payments/stripe/onboarding-link'
         : '/api/payments/paychangu/charge';
 
       const res = await fetch(apiRoute, {
@@ -903,17 +938,24 @@ const BookingsPage: React.FC = () => {
     });
   }, []);
 
-  const handleStatusFilter = useCallback((s: string) => { setActiveFilter(s); applyFiltersLogic(bookings, s, filters); }, [bookings, filters]);
+  const handleStatusFilter = useCallback((s: string) => {
+    setActiveFilter(s);
+    applyFiltersLogic(bookings, s, filters);
+  }, [bookings, filters, applyFiltersLogic]);
 
+  // ✅ Fix 2: complete dependency arrays
   useEffect(() => {
     if (!user) { router.push('/login'); return; }
-    const pv = searchParams.get('payment_verify'), provider = searchParams.get('provider');
-    const successP = searchParams.get('success'), cancelled = searchParams.get('cancelled');
-    const sessionId = searchParams.get('session_id'), txRef = searchParams.get('tx_ref');
+    const pv       = searchParams.get('payment_verify');
+    const provider = searchParams.get('provider');
+    const successP = searchParams.get('success');
+    const cancelled = searchParams.get('cancelled');
+    const sessionId = searchParams.get('session_id');
+    const txRef     = searchParams.get('tx_ref');
     if (successP === 'true' && !pv) { setSuccess('Action completed!'); setTimeout(() => setSuccess(''), 5000); }
     if (cancelled === 'true') { setError('Payment cancelled. You can try again anytime.'); setTimeout(() => setError(''), 5000); }
     if (pv === 'true' && provider) {
-      if (provider === 'stripe' && sessionId) verifyPaymentStatus('stripe', sessionId);
+      if (provider === 'stripe' && sessionId)    verifyPaymentStatus('stripe', sessionId);
       else if (provider === 'paychangu' && txRef) verifyPaymentStatus('paychangu', txRef);
       else setError('Invalid payment verification params');
       const clean = new URL(window.location.href);
@@ -921,14 +963,18 @@ const BookingsPage: React.FC = () => {
       window.history.replaceState({}, '', clean.toString());
     }
     fetchBookings();
-    return () => cleanupFunctions.forEach((fn) => fn());
-  }, [user, router]);
+    return () => { cleanupFunctions.current.forEach((fn) => fn()); };
+  }, [user, router, searchParams, fetchBookings, verifyPaymentStatus]);
 
   useEffect(() => {
     if (!user) return;
     const q = query(collection(db, 'bookings'), where('userId', '==', user.uid), orderBy('updatedAt', 'desc'));
     const unsub = onSnapshot(q, (snap) => {
-      if (initialSnapshotRef.current) { snap.docs.forEach((d) => { const dt = d.data(); statusesMapRef.current.set(d.id, { bookingStatus: dt.bookingStatus || '', paymentStatus: dt.paymentStatus || '' }); }); initialSnapshotRef.current = false; return; }
+      if (initialSnapshotRef.current) {
+        snap.docs.forEach((d) => { const dt = d.data(); statusesMapRef.current.set(d.id, { bookingStatus: dt.bookingStatus || '', paymentStatus: dt.paymentStatus || '' }); });
+        initialSnapshotRef.current = false;
+        return;
+      }
       snap.docChanges().forEach((ch) => {
         if (ch.type !== 'modified') return;
         const id = ch.doc.id; const nd = ch.doc.data();
@@ -939,11 +985,11 @@ const BookingsPage: React.FC = () => {
         statusesMapRef.current.set(id, { bookingStatus: nbs, paymentStatus: nps });
       });
     }, (err) => console.error('Snapshot error:', err));
-    cleanupFunctions.add(unsub);
-    return () => { unsub(); cleanupFunctions.delete(unsub); };
-  }, [user, cleanupFunctions]);
+    cleanupFunctions.current.add(unsub);
+    return () => { unsub(); cleanupFunctions.current.delete(unsub); };
+  }, [user, fetchBookings]);
 
-  useEffect(() => { applyFiltersLogic(bookings, activeFilter, filters); }, [activeFilter, filters, bookings]);
+  useEffect(() => { applyFiltersLogic(bookings, activeFilter, filters); }, [activeFilter, filters, bookings, applyFiltersLogic]);
 
   if (loading) return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">

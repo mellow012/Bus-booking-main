@@ -300,7 +300,7 @@ export default function Register() {
       await signUp(formData.email, formData.password, {
         firstName: formData.firstName.trim(),
         lastName: formData.lastName.trim(),
-        role: 'customer',
+    
       });
       
       setUserEmail(formData.email);

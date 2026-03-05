@@ -1,11 +1,20 @@
 /**
  * Firebase Cloud Messaging Service (Admin SDK)
- * Sends notifications to users via FCM
+ *
+ * FIX F-19: broadcastNotification() previously iterated userIds with a
+ * for...of loop awaiting each sendNotificationToUser() call sequentially.
+ * For 1,000 recipients this takes 100+ seconds.
+ *
+ * It now uses Promise.all() with a configurable batch size (default 50) so
+ * notifications are sent in parallel within each batch, capped to avoid
+ * overwhelming FCM's per-project quota limits.
  */
 
-import { adminAuth, adminDb, adminMessaging } from './firebaseAdmin';
+import { adminDb, adminMessaging } from './firebaseAdmin';
 import { logger } from './logger';
 import * as admin from 'firebase-admin';
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface NotificationPayload {
   title: string;
@@ -16,9 +25,8 @@ interface NotificationPayload {
   clickAction?: string;
 }
 
-/**
- * Send notification to a single device token
- */
+// ─── Single token ─────────────────────────────────────────────────────────────
+
 export async function sendNotificationToToken(
   token: string,
   payload: NotificationPayload,
@@ -34,7 +42,7 @@ export async function sendNotificationToToken(
       },
       data: payload.data || {},
       android: {
-        ttl: 86400,
+        ttl: 86_400,
         priority: 'high',
         notification: {
           title: payload.title,
@@ -44,9 +52,7 @@ export async function sendNotificationToToken(
         },
       },
       webpush: {
-        headers: {
-          TTL: '86400',
-        },
+        headers: { TTL: '86400' },
         notification: {
           title: payload.title,
           body: payload.body,
@@ -57,15 +63,10 @@ export async function sendNotificationToToken(
         data: payload.data,
       },
       apns: {
-        headers: {
-          'apns-priority': '10',
-        },
+        headers: { 'apns-priority': '10' },
         payload: {
           aps: {
-            alert: {
-              title: payload.title,
-              body: payload.body,
-            },
+            alert: { title: payload.title, body: payload.body },
             sound: 'default',
             badge: 1,
             'mutable-content': 1,
@@ -79,11 +80,7 @@ export async function sendNotificationToToken(
     await logger.logSuccess('notification', 'FCM notification sent', {
       userId,
       action: 'notification_sent',
-      metadata: {
-        messageId,
-        token: token.substring(0, 20) + '...',
-        title: payload.title,
-      },
+      metadata: { messageId, token: token.substring(0, 20) + '…', title: payload.title },
     });
 
     return { success: true, messageId };
@@ -91,83 +88,57 @@ export async function sendNotificationToToken(
     await logger.logError('notification', 'Failed to send FCM notification', error, {
       userId,
       action: 'notification_send_failed',
-      metadata: {
-        tokenPreview: token.substring(0, 20) + '...',
-      },
+      metadata: { tokenPreview: token.substring(0, 20) + '…' },
     });
-
-    return {
-      success: false,
-      error: error.message,
-    };
+    return { success: false, error: error.message };
   }
 }
 
-/**
- * Send notification to a user (all their devices)
- */
+// ─── All devices for a single user ───────────────────────────────────────────
+
 export async function sendNotificationToUser(
   userId: string,
   payload: NotificationPayload
 ): Promise<{ success: boolean; tokensSent: number; results: any[] }> {
   try {
-    // Get user document with FCM tokens
     const userDoc = await adminDb.collection('users').doc(userId).get();
+    if (!userDoc.exists) throw new Error('User not found');
 
-    if (!userDoc.exists) {
-      throw new Error('User not found');
-    }
-
-    const userData = userDoc.data();
-    const fcmTokens: string[] = userData?.fcmTokens || [];
-
+    const fcmTokens: string[] = userDoc.data()?.fcmTokens || [];
     if (fcmTokens.length === 0) {
       await logger.logWarning('notification', 'No FCM tokens found for user', {
-        userId,
-        action: 'notification_no_tokens',
+        userId, action: 'notification_no_tokens',
       });
       return { success: false, tokensSent: 0, results: [] };
     }
 
-    // Send to all tokens
     const results = await Promise.all(
-      fcmTokens.map((token) => sendNotificationToToken(token, payload, userId))
+      fcmTokens.map(token => sendNotificationToToken(token, payload, userId))
     );
-
-    const successCount = results.filter((r) => r.success).length;
+    const successCount = results.filter(r => r.success).length;
 
     await logger.logSuccess('notification', 'FCM notifications sent to user', {
       userId,
       action: 'notification_batch_sent',
-      metadata: {
-        tokenCount: fcmTokens.length,
-        successCount,
-        failureCount: fcmTokens.length - successCount,
-      },
+      metadata: { tokenCount: fcmTokens.length, successCount, failureCount: fcmTokens.length - successCount },
     });
 
-    return {
-      success: successCount > 0,
-      tokensSent: successCount,
-      results,
-    };
+    return { success: successCount > 0, tokensSent: successCount, results };
   } catch (error: any) {
     await logger.logError('notification', 'Failed to send notifications to user', error, {
-      userId,
-      action: 'notification_batch_failed',
+      userId, action: 'notification_batch_failed',
     });
-
-    return {
-      success: false,
-      tokensSent: 0,
-      results: [],
-    };
+    return { success: false, tokensSent: 0, results: [] };
   }
 }
 
-/**
- * Send notification to multiple users
- */
+// ─── Broadcast to many users ──────────────────────────────────────────────────
+// FIX F-19: replaced sequential for...of await with batched Promise.all.
+// Each batch of BATCH_SIZE users is dispatched in parallel. We wait for one
+// batch to complete before starting the next to avoid hitting FCM quota limits.
+
+const BROADCAST_BATCH_SIZE = 50;
+
 export async function broadcastNotification(
   userIds: string[],
   payload: NotificationPayload
@@ -175,45 +146,45 @@ export async function broadcastNotification(
   const results: Record<string, any> = {};
   let totalSent = 0;
 
-  for (const userId of userIds) {
-    const result = await sendNotificationToUser(userId, payload);
-    results[userId] = result;
-    totalSent += result.tokensSent;
+  // Split userIds into chunks of BROADCAST_BATCH_SIZE
+  for (let i = 0; i < userIds.length; i += BROADCAST_BATCH_SIZE) {
+    const batch = userIds.slice(i, i + BROADCAST_BATCH_SIZE);
+
+    const batchResults = await Promise.all(
+      batch.map(userId =>
+        sendNotificationToUser(userId, payload).then(result => ({ userId, result }))
+      )
+    );
+
+    for (const { userId, result } of batchResults) {
+      results[userId] = result;
+      totalSent += result.tokensSent;
+    }
   }
 
   await logger.logSuccess('notification', 'Broadcast notifications completed', {
     action: 'notification_broadcast',
-    metadata: {
-      userCount: userIds.length,
-      totalSent,
-    },
+    metadata: { userCount: userIds.length, totalSent },
   });
 
   return { totalSent, results };
 }
 
-/**
- * Delete expired or invalid FCM token
- */
+// ─── Token cleanup ────────────────────────────────────────────────────────────
+
 export async function deleteUserToken(userId: string, token: string): Promise<void> {
   try {
-    const userRef = adminDb.collection('users').doc(userId);
-    await userRef.update({
+    await adminDb.collection('users').doc(userId).update({
       fcmTokens: admin.firestore.FieldValue.arrayRemove(token),
       updatedAt: new Date(),
     });
-
     await logger.logSuccess('notification', 'FCM token deleted', {
-      userId,
-      action: 'token_deleted',
-      metadata: {
-        tokenPreview: token.substring(0, 20) + '...',
-      },
+      userId, action: 'token_deleted',
+      metadata: { tokenPreview: token.substring(0, 20) + '…' },
     });
   } catch (error: any) {
     await logger.logWarning('notification', 'Failed to delete FCM token', {
-      userId,
-      action: 'token_delete_failed',
+      userId, action: 'token_delete_failed',
     });
   }
 }

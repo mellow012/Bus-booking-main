@@ -82,6 +82,7 @@ export type TeamRole = 'operator' | 'conductor';
  */
 export interface UserProfileBase extends FirestoreDocument {
   id: string;
+  uid: string;     // Firebase Auth UID
   email: string;
   name?: string;  // Optional full name (for backward compatibility)
   firstName: string;

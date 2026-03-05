@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { getAuth } from 'firebase-admin/auth';
 import { initializeApp, getApps, cert } from 'firebase-admin/app';
-import { validateCSRFToken, requiresCSRFProtection } from '@/lib/csrfProtection';
+import { validateCSRFRequest, requiresCSRFProtection } from '@/lib/csrfProtection';
 
 if (!getApps().length) {
   const sanitizePrivateKey = (key?: string) =>
@@ -22,10 +22,10 @@ if (!getApps().length) {
 // Add new protected prefixes here — no changes needed elsewhere.
 
 const ROLE_PROTECTED_ROUTES: { prefix: string; roles: string[] }[] = [
-  { prefix: '/company/admin',          roles: ['company_admin'] },
-  { prefix: '/company/operator/dashboard',     roles: ['operator'] },
-  { prefix: '/company/conductor/dashboard',    roles: ['conductor'] },           // NEW
-  { prefix: '/admin',            roles: ['superadmin'] },
+  { prefix: '/company/admin',                   roles: ['company_admin'] },
+  { prefix: '/company/operator/dashboard',      roles: ['operator']      },
+  { prefix: '/company/conductor/dashboard',     roles: ['conductor']     },
+  { prefix: '/admin',                           roles: ['superadmin']    },
 ];
 
 // ─── Public routes (no token required) ───────────────────────────────────────
@@ -36,7 +36,7 @@ const PUBLIC_PREFIXES = [
   '/forgot-password',
   '/reset-password',
   '/company/setup',
-  '/conductor/setup',           // NEW — password-reset landing for conductors
+  '/conductor/setup',
   '/operator/signup',
   '/',
   '/about',
@@ -60,14 +60,11 @@ export async function middleware(req: NextRequest) {
   }
 
   // ─── CSRF Protection for API routes ───────────────────────────────────────
-
-  // Only check CSRF for state-changing requests on API endpoints
   if (pathname.startsWith('/api') && requiresCSRFProtection(method)) {
-    // Whitelist endpoints that don't need CSRF (e.g., public APIs, auth endpoints)
     const csrfExemptPaths = [
-      '/api/csrf-token', // token endpoint itself
+      '/api/csrf-token',
       '/api/auth/login',
-      '/api/auth/send-verification-email', // public endpoint
+      '/api/auth/send-verification-email',
     ];
 
     const isExempt = csrfExemptPaths.some(path =>
@@ -75,29 +72,19 @@ export async function middleware(req: NextRequest) {
     );
 
     if (!isExempt) {
-      // Get CSRF token from header or cookie
-      const headerToken = req.headers.get('x-csrf-token');
-      const cookieToken = req.cookies.get('csrf_token')?.value;
-
-      if (!headerToken) {
-        console.warn(`[CSRF] Missing token on ${method} ${pathname}`);
+      // ✅ Use validateCSRFRequest() — handles header + cookie comparison internally
+      const { valid, error } = validateCSRFRequest(req);
+      if (!valid) {
+        console.warn(`[CSRF] Rejected ${method} ${pathname}: ${error}`);
         return NextResponse.json(
-          { error: 'CSRF token required', success: false },
-          { status: 403 }
-        );
-      }
-
-      // Validate both header token and cookie token are present and match
-      if (!cookieToken || !validateCSRFToken(headerToken)) {
-        console.warn(`[CSRF] Invalid token on ${method} ${pathname}`);
-        return NextResponse.json(
-          { error: 'Invalid CSRF token', success: false },
+          { error: error ?? 'CSRF validation failed', success: false },
           { status: 403 }
         );
       }
     }
   }
 
+  // ─── Auth token check ─────────────────────────────────────────────────────
   const token = req.cookies.get('token')?.value;
 
   if (!token) {
@@ -136,7 +123,7 @@ export const config = {
   matcher: [
     '/company/:path*',
     '/operator/:path*',
-    '/conductor/:path*',         // NEW
+    '/conductor/:path*',
     '/admin/:path*',
     '/dashboard/:path*',
   ],

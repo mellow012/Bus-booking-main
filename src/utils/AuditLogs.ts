@@ -1,25 +1,49 @@
-// ✅ AUDIT LOGS UTILITY
-// Use this utility to log all important actions in your application
+// utils/auditLogs.ts
+//
+// FIX F-13: getAuditLogs() previously fetched the ENTIRE auditLogs collection
+// for a company and then filtered in JavaScript. A company with 100,000 audit
+// events would read all 100,000 documents on every call, causing out-of-memory
+// errors and slow responses.
+//
+// All filters are now pushed into the Firestore query using where() clauses.
+// A hard limit (default 500, max 1000) is always applied at the query level.
+//
+// REQUIRED COMPOSITE INDEXES (add to firestore.indexes.json):
+//   Collection: auditLogs
+//   Fields needed for common filter combinations:
+//     1. companyId ASC, timestamp DESC                          (base query)
+//     2. companyId ASC, action ASC, timestamp DESC              (+ action filter)
+//     3. companyId ASC, userId ASC, timestamp DESC              (+ userId filter)
+//     4. companyId ASC, resourceType ASC, timestamp DESC        (+ resourceType filter)
+//     5. companyId ASC, timestamp ASC, timestamp DESC           (+ date range)
+//
+// Deploy indexes with: firebase deploy --only firestore:indexes
 
-import { collection, addDoc, Timestamp, query, where, getDocs } from "firebase/firestore";
-import { db } from "@/lib/firebaseConfig";
+import {
+  collection, addDoc, Timestamp,
+  query, where, orderBy, limit, getDocs,
+  QueryConstraint,
+} from 'firebase/firestore';
+import { db } from '@/lib/firebaseConfig';
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 export type AuditAction =
-  | "create_schedule"
-  | "update_schedule"
-  | "delete_schedule"
-  | "archive_schedule"
-  | "create_booking"
-  | "update_booking"
-  | "mark_boarded"
-  | "mark_no_show"
-  | "collect_payment"
-  | "generate_report"
-  | "update_payment_status"
-  | "login"
-  | "logout"
-  | "access_dashboard"
-  | "export_data";
+  | 'create_schedule'
+  | 'update_schedule'
+  | 'delete_schedule'
+  | 'archive_schedule'
+  | 'create_booking'
+  | 'update_booking'
+  | 'mark_boarded'
+  | 'mark_no_show'
+  | 'collect_payment'
+  | 'generate_report'
+  | 'update_payment_status'
+  | 'login'
+  | 'logout'
+  | 'access_dashboard'
+  | 'export_data';
 
 export interface AuditLog {
   id?: string;
@@ -28,264 +52,40 @@ export interface AuditLog {
   userName: string;
   userRole: string;
   companyId: string;
-  resourceType: string; // "schedule", "booking", "payment", etc
+  resourceType: string;
   resourceId: string;
   resourceName?: string;
   description: string;
-  changes?: {
-    before?: any;
-    after?: any;
-  };
+  changes?: { before?: any; after?: any };
   ipAddress?: string;
   userAgent?: string;
-  status: "success" | "failed";
+  status: 'success' | 'failed';
   errorMessage?: string;
   metadata?: any;
   timestamp: Date;
 }
 
-/**
- * Log an audit entry
- * @param auditLog - The audit log details
- */
-export const logAudit = async (auditLog: Omit<AuditLog, "id" | "timestamp">) => {
+// ─── Write ────────────────────────────────────────────────────────────────────
+
+export const logAudit = async (
+  auditLog: Omit<AuditLog, 'id' | 'timestamp'>
+): Promise<string | undefined> => {
   try {
-    const auditRef = collection(db, "auditLogs");
-    const docRef = await addDoc(auditRef, {
+    const docRef = await addDoc(collection(db, 'auditLogs'), {
       ...auditLog,
       timestamp: Timestamp.fromDate(new Date()),
     });
-
-    console.log(`[AUDIT] ${auditLog.action} - ${auditLog.description}`, {
-      logId: docRef.id,
-      user: auditLog.userName,
-    });
-
     return docRef.id;
   } catch (error: any) {
-    console.error("[AUDIT ERROR] Failed to log audit:", error);
+    console.error('[AUDIT ERROR] Failed to log audit:', error);
   }
 };
 
-/**
- * Log schedule creation
- */
-export const logScheduleCreated = async (
-  userId: string,
-  userName: string,
-  userRole: string,
-  companyId: string,
-  scheduleId: string,
-  route: string,
-  details?: any
-) => {
-  return logAudit({
-    action: "create_schedule",
-    userId,
-    userName,
-    userRole,
-    companyId,
-    resourceType: "schedule",
-    resourceId: scheduleId,
-    resourceName: route,
-    description: `Created schedule: ${route}`,
-    metadata: details,
-    status: "success",
-  });
-};
+// ─── Read — FIX F-13 ──────────────────────────────────────────────────────────
 
-/**
- * Log schedule update
- */
-export const logScheduleUpdated = async (
-  userId: string,
-  userName: string,
-  userRole: string,
-  companyId: string,
-  scheduleId: string,
-  route: string,
-  beforeData?: any,
-  afterData?: any
-) => {
-  return logAudit({
-    action: "update_schedule",
-    userId,
-    userName,
-    userRole,
-    companyId,
-    resourceType: "schedule",
-    resourceId: scheduleId,
-    resourceName: route,
-    description: `Updated schedule: ${route}`,
-    changes: { before: beforeData, after: afterData },
-    status: "success",
-  });
-};
+const DEFAULT_LIMIT = 500;
+const MAX_LIMIT     = 1_000;
 
-/**
- * Log schedule archived
- */
-export const logScheduleArchived = async (
-  userId: string,
-  userName: string,
-  userRole: string,
-  companyId: string,
-  scheduleId: string,
-  route: string
-) => {
-  return logAudit({
-    action: "archive_schedule",
-    userId,
-    userName,
-    userRole,
-    companyId,
-    resourceType: "schedule",
-    resourceId: scheduleId,
-    resourceName: route,
-    description: `Archived schedule: ${route}`,
-    status: "success",
-  });
-};
-
-/**
- * Log payment collection
- */
-export const logPaymentCollected = async (
-  userId: string,
-  userName: string,
-  userRole: string,
-  companyId: string,
-  bookingId: string,
-  passengerName: string,
-  amount: number,
-  method: string
-) => {
-  return logAudit({
-    action: "collect_payment",
-    userId,
-    userName,
-    userRole,
-    companyId,
-    resourceType: "booking",
-    resourceId: bookingId,
-    resourceName: passengerName,
-    description: `Collected ${method} payment of MWK ${amount} from ${passengerName}`,
-    metadata: { amount, method },
-    status: "success",
-  });
-};
-
-/**
- * Log passenger boarded
- */
-export const logPassengerBoarded = async (
-  userId: string,
-  userName: string,
-  userRole: string,
-  companyId: string,
-  bookingId: string,
-  passengerName: string,
-  seatNumber: string
-) => {
-  return logAudit({
-    action: "mark_boarded",
-    userId,
-    userName,
-    userRole,
-    companyId,
-    resourceType: "booking",
-    resourceId: bookingId,
-    resourceName: passengerName,
-    description: `Marked ${passengerName} (Seat ${seatNumber}) as boarded`,
-    status: "success",
-  });
-};
-
-/**
- * Log passenger no-show
- */
-export const logPassengerNoShow = async (
-  userId: string,
-  userName: string,
-  userRole: string,
-  companyId: string,
-  bookingId: string,
-  passengerName: string,
-  seatNumber: string
-) => {
-  return logAudit({
-    action: "mark_no_show",
-    userId,
-    userName,
-    userRole,
-    companyId,
-    resourceType: "booking",
-    resourceId: bookingId,
-    resourceName: passengerName,
-    description: `Marked ${passengerName} (Seat ${seatNumber}) as no-show`,
-    status: "success",
-  });
-};
-
-/**
- * Log report generation
- */
-export const logReportGenerated = async (
-  userId: string,
-  userName: string,
-  userRole: string,
-  companyId: string,
-  reportDate: Date,
-  scheduleCount: number,
-  bookingCount: number
-) => {
-  return logAudit({
-    action: "generate_report",
-    userId,
-    userName,
-    userRole,
-    companyId,
-    resourceType: "report",
-    resourceId: `report_${reportDate.toISOString()}`,
-    resourceName: `Daily Report - ${reportDate.toLocaleDateString()}`,
-    description: `Generated daily report for ${reportDate.toLocaleDateString()} (${scheduleCount} schedules, ${bookingCount} bookings)`,
-    metadata: { scheduleCount, bookingCount, reportDate },
-    status: "success",
-  });
-};
-
-/**
- * Log failed action
- */
-export const logFailedAction = async (
-  userId: string,
-  userName: string,
-  userRole: string,
-  companyId: string,
-  action: AuditAction,
-  resourceType: string,
-  resourceId: string,
-  errorMessage: string,
-  context?: any
-) => {
-  return logAudit({
-    action,
-    userId,
-    userName,
-    userRole,
-    companyId,
-    resourceType,
-    resourceId,
-    description: `Failed to ${action}: ${errorMessage}`,
-    status: "failed",
-    errorMessage,
-    metadata: context,
-  });
-};
-
-/**
- * Fetch audit logs for company
- */
 export const getAuditLogs = async (
   companyId: string,
   filters?: {
@@ -294,79 +94,125 @@ export const getAuditLogs = async (
     resourceType?: string;
     startDate?: Date;
     endDate?: Date;
+    /** Max records to return. Capped at 1,000. Default: 500. */
     limit?: number;
   }
-) => {
+): Promise<AuditLog[]> => {
   try {
-    let q = query(collection(db, "auditLogs"), where("companyId", "==", companyId));
+    const constraints: QueryConstraint[] = [
+      where('companyId', '==', companyId),
+    ];
 
-    const snapshot = await getDocs(q);
-    let logs = snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data(),
-      timestamp: doc.data().timestamp?.toDate?.() || new Date(),
-    })) as AuditLog[];
-
-    // Apply filters
+    // Push every filter into the Firestore query — never filter in JS
     if (filters?.action) {
-      logs = logs.filter(l => l.action === filters.action);
+      constraints.push(where('action', '==', filters.action));
     }
-
     if (filters?.userId) {
-      logs = logs.filter(l => l.userId === filters.userId);
+      constraints.push(where('userId', '==', filters.userId));
     }
-
     if (filters?.resourceType) {
-      logs = logs.filter(l => l.resourceType === filters.resourceType);
+      constraints.push(where('resourceType', '==', filters.resourceType));
+    }
+    if (filters?.startDate) {
+      constraints.push(where('timestamp', '>=', Timestamp.fromDate(filters.startDate)));
+    }
+    if (filters?.endDate) {
+      constraints.push(where('timestamp', '<=', Timestamp.fromDate(filters.endDate)));
     }
 
-    if (filters?.startDate && filters?.endDate) {
-      logs = logs.filter(
-        l => l.timestamp >= filters.startDate! && l.timestamp <= filters.endDate!
-      );
-    }
+    // Always order and always apply a hard limit — never unbounded reads
+    constraints.push(orderBy('timestamp', 'desc'));
+    const hardLimit = Math.min(filters?.limit ?? DEFAULT_LIMIT, MAX_LIMIT);
+    constraints.push(limit(hardLimit));
 
-    // Sort by timestamp (newest first)
-    logs.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+    const snapshot = await getDocs(query(collection(db, 'auditLogs'), ...constraints));
 
-    // Limit results
-    if (filters?.limit) {
-      logs = logs.slice(0, filters.limit);
-    }
-
-    return logs;
+    return snapshot.docs.map(d => ({
+      id: d.id,
+      ...d.data(),
+      timestamp: d.data().timestamp?.toDate?.() ?? new Date(),
+    })) as AuditLog[];
   } catch (error: any) {
-    console.error("[AUDIT] Error fetching logs:", error);
+    console.error('[AUDIT] Error fetching logs:', error);
     return [];
   }
 };
 
-/**
- * Export usage example:
- *
- * Import in your component:
- * import { logPaymentCollected, logPassengerBoarded } from "@/utils/auditLogs";
- *
- * Use in conductor dashboard when collecting payment:
- * await logPaymentCollected(
- *   user.uid,
- *   conductorName,
- *   userProfile.role,
- *   companyId,
- *   booking.id,
- *   booking.passengerDetails[0].name,
- *   booking.totalAmount,
- *   "cash_on_boarding"
- * );
- *
- * Use when marking boarded:
- * await logPassengerBoarded(
- *   user.uid,
- *   conductorName,
- *   userProfile.role,
- *   companyId,
- *   booking.id,
- *   booking.passengerDetails[0].name,
- *   booking.seatNumbers[0]
- * );
- */
+// ─── Convenience log helpers (unchanged) ─────────────────────────────────────
+
+export const logScheduleCreated = (
+  userId: string, userName: string, userRole: string, companyId: string,
+  scheduleId: string, route: string, details?: any
+) => logAudit({
+  action: 'create_schedule', userId, userName, userRole, companyId,
+  resourceType: 'schedule', resourceId: scheduleId, resourceName: route,
+  description: `Created schedule: ${route}`, metadata: details, status: 'success',
+});
+
+export const logScheduleUpdated = (
+  userId: string, userName: string, userRole: string, companyId: string,
+  scheduleId: string, route: string, beforeData?: any, afterData?: any
+) => logAudit({
+  action: 'update_schedule', userId, userName, userRole, companyId,
+  resourceType: 'schedule', resourceId: scheduleId, resourceName: route,
+  description: `Updated schedule: ${route}`,
+  changes: { before: beforeData, after: afterData }, status: 'success',
+});
+
+export const logScheduleArchived = (
+  userId: string, userName: string, userRole: string, companyId: string,
+  scheduleId: string, route: string
+) => logAudit({
+  action: 'archive_schedule', userId, userName, userRole, companyId,
+  resourceType: 'schedule', resourceId: scheduleId, resourceName: route,
+  description: `Archived schedule: ${route}`, status: 'success',
+});
+
+export const logPaymentCollected = (
+  userId: string, userName: string, userRole: string, companyId: string,
+  bookingId: string, passengerName: string, amount: number, method: string
+) => logAudit({
+  action: 'collect_payment', userId, userName, userRole, companyId,
+  resourceType: 'booking', resourceId: bookingId, resourceName: passengerName,
+  description: `Collected ${method} payment of MWK ${amount} from ${passengerName}`,
+  metadata: { amount, method }, status: 'success',
+});
+
+export const logPassengerBoarded = (
+  userId: string, userName: string, userRole: string, companyId: string,
+  bookingId: string, passengerName: string, seatNumber: string
+) => logAudit({
+  action: 'mark_boarded', userId, userName, userRole, companyId,
+  resourceType: 'booking', resourceId: bookingId, resourceName: passengerName,
+  description: `Marked ${passengerName} (Seat ${seatNumber}) as boarded`, status: 'success',
+});
+
+export const logPassengerNoShow = (
+  userId: string, userName: string, userRole: string, companyId: string,
+  bookingId: string, passengerName: string, seatNumber: string
+) => logAudit({
+  action: 'mark_no_show', userId, userName, userRole, companyId,
+  resourceType: 'booking', resourceId: bookingId, resourceName: passengerName,
+  description: `Marked ${passengerName} (Seat ${seatNumber}) as no-show`, status: 'success',
+});
+
+export const logReportGenerated = (
+  userId: string, userName: string, userRole: string, companyId: string,
+  reportDate: Date, scheduleCount: number, bookingCount: number
+) => logAudit({
+  action: 'generate_report', userId, userName, userRole, companyId,
+  resourceType: 'report', resourceId: `report_${reportDate.toISOString()}`,
+  resourceName: `Daily Report - ${reportDate.toLocaleDateString()}`,
+  description: `Generated daily report for ${reportDate.toLocaleDateString()} (${scheduleCount} schedules, ${bookingCount} bookings)`,
+  metadata: { scheduleCount, bookingCount, reportDate }, status: 'success',
+});
+
+export const logFailedAction = (
+  userId: string, userName: string, userRole: string, companyId: string,
+  action: AuditAction, resourceType: string, resourceId: string,
+  errorMessage: string, context?: any
+) => logAudit({
+  action, userId, userName, userRole, companyId, resourceType, resourceId,
+  description: `Failed to ${action}: ${errorMessage}`,
+  status: 'failed', errorMessage, metadata: context,
+});

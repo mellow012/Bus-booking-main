@@ -583,19 +583,26 @@ const SchedulesTab: FC<SchedulesTabProps> = ({
   // Staff map
   const [staffMap, setStaffMap] = useState<Map<string, string>>(new Map());
   useEffect(() => {
-    if (!companyId) return;
-    (async () => {
-      try {
-        const map = new Map<string, string>();
-        const name = (d: any) => d.name?.trim() || [d.firstName, d.lastName].filter(Boolean).join(' ').trim() || d.email || '?';
-        for (const coll of ['users', 'conductors', 'operators']) {
-          const s = await getDocs(query(collection(db, coll), where('companyId', '==', companyId)));
-          s.docs.forEach(d => { map.set(d.id, name(d.data())); const uid = d.data().uid; if (uid && uid !== d.id) map.set(uid, name(d.data())); });
-        }
-        setStaffMap(new Map(map));
-      } catch {}
-    })();
-  }, [companyId]);
+  if (!companyId) return;
+  (async () => {
+    try {
+      const name = (d: any) => d.name?.trim() || [d.firstName, d.lastName].filter(Boolean).join(' ').trim() || d.email || '?';
+      const [usersSnap, conductorsSnap, operatorsSnap] = await Promise.all([
+        getDocs(query(collection(db, 'users'),      where('companyId', '==', companyId))),
+        getDocs(query(collection(db, 'conductors'), where('companyId', '==', companyId))),
+        getDocs(query(collection(db, 'operators'),  where('companyId', '==', companyId))),
+      ]);
+      const map = new Map<string, string>();
+      [usersSnap, conductorsSnap, operatorsSnap].forEach(snap =>
+        snap.docs.forEach(d => {
+          const n = name(d.data()); map.set(d.id, n);
+          const uid = d.data().uid; if (uid && uid !== d.id) map.set(uid, n);
+        })
+      );
+      setStaffMap(map);
+    } catch {}
+  })();
+}, [companyId]);
 
   // Templates
   const fetchTemplates = useCallback(async () => {
@@ -740,6 +747,7 @@ const SchedulesTab: FC<SchedulesTabProps> = ({
     setMaterLoading(true);
     let created = 0;
     try {
+      const newSchedules: Schedule[] = [];
       const today = new Date(); today.setHours(0,0,0,0);
       const routeCache = new Map<string, Route>();
       let batch = writeBatch(db); let ops = 0;
@@ -761,30 +769,37 @@ const SchedulesTab: FC<SchedulesTabProps> = ({
           const dep = applyTime(date, tpl.departureTime);
           const arr = applyTime(date, tpl.arrivalTime);
           if (arr <= dep) arr.setDate(arr.getDate() + 1);
-          const ref = doc(db, 'schedules', instanceDocId(tpl.id, date));
-          batch.set(ref, {
-            companyId: tpl.companyId, routeId: tpl.routeId, busId: tpl.busId, templateId: tpl.id,
-            departureDateTime: Timestamp.fromDate(dep), arrivalDateTime: Timestamp.fromDate(arr),
-            departureLocation: route?.origin ?? '', arrivalLocation: route?.destination ?? '',
-            stops: route?.stops ?? [],
-            price: tpl.price, availableSeats: tpl.availableSeats, bookedSeats: [],
-            status: 'active', isActive: true,
-            tripStatus: 'scheduled', currentStopIndex: 0, departedStops: [],
-            createdBy: user?.uid ?? '', createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
-          }, { merge: true });
+          const docId = instanceDocId(tpl.id, date);          // ✅ define docId
+const ref = doc(db, 'schedules', docId);
+const instanceData = {                               // ✅ name the data object
+  companyId: tpl.companyId, routeId: tpl.routeId, busId: tpl.busId, templateId: tpl.id,
+  departureDateTime: Timestamp.fromDate(dep), arrivalDateTime: Timestamp.fromDate(arr),
+  departureLocation: route?.origin ?? '', arrivalLocation: route?.destination ?? '',
+  stops: route?.stops ?? [],
+  price: tpl.price, availableSeats: tpl.availableSeats, bookedSeats: [],
+  status: 'active', isActive: true,
+  tripStatus: 'scheduled', currentStopIndex: 0, departedStops: [],
+  createdBy: user?.uid ?? '', createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+};
+batch.set(ref, instanceData, { merge: true });
+newSchedules.push({
+  ...instanceData,                                   // ✅ spread named object
+  id: docId,
+  departureDateTime: dep,
+  arrivalDateTime:   arr,
+  createdAt:         new Date(),
+  updatedAt:         new Date(),
+} as unknown as Schedule);
           ops++; created++;
           if (ops >= 490) await flush();
         }
       }
       await flush();
-      const snap = await getDocs(query(collection(db, 'schedules'), where('companyId', '==', companyId)));
-      setSchedules(snap.docs.map(d => ({
-        id: d.id, ...d.data(),
-        departureDateTime: toDate((d.data() as any).departureDateTime),
-        arrivalDateTime:   toDate((d.data() as any).arrivalDateTime),
-        createdAt:         toDate((d.data() as any).createdAt),
-        updatedAt:         toDate((d.data() as any).updatedAt),
-      })) as Schedule[]);
+      setSchedules(prev => {
+  const existingIds = new Set(prev.map(s => s.id));
+  const fresh = newSchedules.filter(s => !existingIds.has(s.id));
+  return [...fresh, ...prev];
+});
       setSuccess(`Generated ${created} schedule instances for the next ${WINDOW_DAYS} days`);
     } catch (e: any) { setError(`Materialisation failed: ${e.message}`); }
     finally { setMaterLoading(false); }
