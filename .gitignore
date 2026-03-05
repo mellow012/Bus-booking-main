@@ -53,3 +53,4 @@ src/lib/serviceAccountKey.json
 .busbookingapp-50592-firebase-adminsdk-fbsvc-00047ea501e.json
 
 .busbookingapp-50592-firebase-adminsdk-fbsvc-e825220c1d.json
+.functions/src/index.ts
