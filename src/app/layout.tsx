@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import '@/app/globals.css';
+import { NextIntlClientProvider } from 'next-intl';  // ← add
+import { getLocale, getMessages } from 'next-intl/server';  // ← add
 import { AuthProvider } from "@/contexts/AuthContext";
 import { NotificationProvider } from "@/contexts/NotificationContext";
 import { ToastProvider } from "@/contexts/ToastContext";
@@ -15,30 +17,35 @@ const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "TibhukeBus - Multi-Company Bus Booking Platform",
-  description: "Book and pay for bus tickets from multiple companies. Find the best routes, compare prices, book & pay for your journey with ease.",
+  description: "Book and pay for bus tickets from multiple companies.",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const locale = await getLocale();      // ← reads from NEXT_LOCALE cookie
+  const messages = await getMessages();  // ← loads en.json or ny.json
+
   return (
-    <html lang="en">
+    <html lang={locale}>
       <body className={inter.className}>
-        <NotificationProvider>
-          <AuthProvider>
-            <ToastProvider>
-              <div className="min-h-screen flex flex-col">
-                <Header />
-                <main className="flex-grow py-12">
-                  <EmailVerificationBannerLayout />   {/* ← move it here */}
-                  <AuthListener />
-                  {children}
-                </main>
-                <Footer />
-              </div>
-              <FCMInitializer />
-              <ToastContainer />
-            </ToastProvider>
-          </AuthProvider>
-        </NotificationProvider>
+        <NextIntlClientProvider messages={messages}>  {/* ← wrap everything */}
+          <NotificationProvider>
+            <AuthProvider>
+              <ToastProvider>
+                <div className="min-h-screen flex flex-col">
+                  <Header />
+                  <main className="flex-grow py-12">
+                    <EmailVerificationBannerLayout />
+                    <AuthListener />
+                    {children}
+                  </main>
+                  <Footer />
+                </div>
+                <FCMInitializer />
+                <ToastContainer />
+              </ToastProvider>
+            </AuthProvider>
+          </NotificationProvider>
+        </NextIntlClientProvider>
       </body>
     </html>
   );

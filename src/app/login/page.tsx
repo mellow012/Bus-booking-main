@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
+import { useTranslations } from 'next-intl';
 import { EnvelopeIcon, LockClosedIcon, EyeIcon, EyeSlashIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 
 // Types
@@ -32,27 +33,19 @@ const LOCKOUT_DURATION = 15 * 60 * 1000;
 const MIN_PASSWORD_LENGTH = 8;
 
 // Custom hooks
-const useFormValidation = (formData: FormData) => {
+const useFormValidation = (formData: FormData, t: (key: string, opts?: any) => string) => {
   const [errors, setErrors] = useState<FormErrors>({});
   const [touched, setTouched] = useState<Record<string, boolean>>({});
 
   const validateField = (name: string, value: string): string => {
     switch (name) {
       case 'email':
-        if (!value.trim()) {
-          return 'Email address is required';
-        }
-        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
-          return 'Please enter a valid email address';
-        }
+        if (!value.trim()) return t('errorEmailRequired');
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return t('errorInvalidEmail');
         return '';
       case 'password':
-        if (!value) {
-          return 'Password is required';
-        }
-        if (value.length < MIN_PASSWORD_LENGTH) {
-          return `Password must be at least ${MIN_PASSWORD_LENGTH} characters`;
-        }
+        if (!value) return t('errorPasswordRequired');
+        if (value.length < MIN_PASSWORD_LENGTH) return t('errorPasswordMin', { min: MIN_PASSWORD_LENGTH });
         return '';
       default:
         return '';
@@ -61,19 +54,14 @@ const useFormValidation = (formData: FormData) => {
 
   const validateForm = (): ValidationResult => {
     const newErrors: FormErrors = {};
-    
     Object.keys(formData).forEach((key) => {
       if (key !== 'rememberMe') {
         const error = validateField(key, formData[key as keyof FormData] as string);
         if (error) newErrors[key as keyof FormErrors] = error;
       }
     });
-
     setErrors(newErrors);
-    return {
-      isValid: Object.keys(newErrors).length === 0,
-      errors: newErrors
-    };
+    return { isValid: Object.keys(newErrors).length === 0, errors: newErrors };
   };
 
   const handleBlur = (name: string) => {
@@ -82,34 +70,22 @@ const useFormValidation = (formData: FormData) => {
     setErrors(prev => ({ ...prev, [name]: error || undefined }));
   };
 
-  const clearErrors = () => {
-    setErrors({});
-    setTouched({});
-  };
+  const clearErrors = () => { setErrors({}); setTouched({}); };
 
-  return {
-    errors,
-    touched,
-    validateForm,
-    handleBlur,
-    clearErrors
-  };
+  return { errors, touched, validateForm, handleBlur, clearErrors };
 };
 
 const useLoginAttempts = () => {
   const [attemptCount, setAttemptCount] = useState(0);
-  const [lockoutTime, setLockoutTime] = useState<number | null>(null);
-  const [isLockedOut, setIsLockedOut] = useState(false);
+  const [lockoutTime, setLockoutTime]   = useState<number | null>(null);
+  const [isLockedOut, setIsLockedOut]   = useState(false);
 
   useEffect(() => {
     const stored = localStorage.getItem('loginAttempts');
     if (stored) {
       const { count, lockout } = JSON.parse(stored);
       setAttemptCount(count || 0);
-      if (lockout && Date.now() < lockout) {
-        setLockoutTime(lockout);
-        setIsLockedOut(true);
-      }
+      if (lockout && Date.now() < lockout) { setLockoutTime(lockout); setIsLockedOut(true); }
     }
   }, []);
 
@@ -118,9 +94,7 @@ const useLoginAttempts = () => {
     if (lockoutTime && isLockedOut) {
       timer = setInterval(() => {
         if (Date.now() >= lockoutTime) {
-          setIsLockedOut(false);
-          setAttemptCount(0);
-          setLockoutTime(null);
+          setIsLockedOut(false); setAttemptCount(0); setLockoutTime(null);
           localStorage.removeItem('loginAttempts');
         }
       }, 1000);
@@ -131,64 +105,23 @@ const useLoginAttempts = () => {
   const incrementAttempts = () => {
     const newCount = attemptCount + 1;
     setAttemptCount(newCount);
-    
     if (newCount >= MAX_ATTEMPTS) {
       const lockout = Date.now() + LOCKOUT_DURATION;
-      setLockoutTime(lockout);
-      setIsLockedOut(true);
-      localStorage.setItem('loginAttempts', JSON.stringify({ 
-        count: newCount, 
-        lockout 
-      }));
+      setLockoutTime(lockout); setIsLockedOut(true);
+      localStorage.setItem('loginAttempts', JSON.stringify({ count: newCount, lockout }));
     } else {
-      localStorage.setItem('loginAttempts', JSON.stringify({ 
-        count: newCount 
-      }));
+      localStorage.setItem('loginAttempts', JSON.stringify({ count: newCount }));
     }
   };
 
   const resetAttempts = () => {
-    setAttemptCount(0);
-    setLockoutTime(null);
-    setIsLockedOut(false);
+    setAttemptCount(0); setLockoutTime(null); setIsLockedOut(false);
     localStorage.removeItem('loginAttempts');
   };
 
-  const getRemainingTime = () => {
-    if (!lockoutTime) return 0;
-    return Math.max(0, Math.ceil((lockoutTime - Date.now()) / 1000));
-  };
+  const getRemainingTime = () => (lockoutTime ? Math.max(0, Math.ceil((lockoutTime - Date.now()) / 1000)) : 0);
 
-  return {
-    attemptCount,
-    isLockedOut,
-    remainingTime: getRemainingTime(),
-    incrementAttempts,
-    resetAttempts
-  };
-};
-
-// Utility functions
-const getErrorMessage = (error: any): string => {
-  if (error?.code) {
-    switch (error.code) {
-      case 'auth/user-not-found':
-      case 'auth/wrong-password':
-      case 'auth/invalid-credential':
-        return 'Invalid email or password. Please check your credentials and try again.';
-      case 'auth/too-many-requests':
-        return 'Too many failed login attempts. Please try again later or reset your password.';
-      case 'auth/user-disabled':
-        return 'This account has been disabled. Please contact support for assistance.';
-      case 'auth/network-request-failed':
-        return 'Network error. Please check your connection and try again.';
-      case 'auth/invalid-email':
-        return 'Please enter a valid email address.';
-      default:
-        return 'Login failed. Please try again or contact support if the problem persists.';
-    }
-  }
-  return 'An unexpected error occurred. Please try again.';
+  return { attemptCount, isLockedOut, remainingTime: getRemainingTime(), incrementAttempts, resetAttempts };
 };
 
 const formatTime = (seconds: number): string => {
@@ -197,48 +130,23 @@ const formatTime = (seconds: number): string => {
   return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
 };
 
-// API functions
 const handlePostLoginActions = async (user: any) => {
   try {
-    const token = await user.getIdTokenResult();
-    const role = token.claims.role;
+    const token    = await user.getIdTokenResult();
+    const role     = token.claims.role;
     const companyId = token.claims.companyId;
-    
-    // Route based on role
     if (role === 'company_admin' && companyId) {
-      // Activate company for company admin
       const response = await fetch('/api/auth/login', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${await user.getIdToken()}`
-        },
-        body: JSON.stringify({
-          companyId: companyId,
-          action: 'activate_company'
-        })
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${await user.getIdToken()}` },
+        body: JSON.stringify({ companyId, action: 'activate_company' }),
       });
-
-      if (!response.ok) {
-        console.error('Failed to activate company:', await response.text());
-      }
-
+      if (!response.ok) console.error('Failed to activate company:', await response.text());
       return `/company/admin?companyId=${companyId}`;
-    } 
-    else if (role === 'operator' && companyId) {
-      // Redirect operator to operator dashboard
-      return `/company/operator/dashboard?companyId=${companyId}`;
     }
-    else if (role === 'super_admin') {
-      // Redirect super admin
-      return '/admin/dashboard';
-    }
-    else if (role === 'customer') {
-      // Redirect customer
-      return '/dashboard';
-    }
-    
-    // Default fallback
+    if (role === 'operator' && companyId) return `/company/operator/dashboard?companyId=${companyId}`;
+    if (role === 'super_admin') return '/admin/dashboard';
+    if (role === 'customer') return '/dashboard';
     return '/';
   } catch (error) {
     console.error('Post-login actions failed:', error);
@@ -248,67 +156,57 @@ const handlePostLoginActions = async (user: any) => {
 
 // Main component
 export default function Login() {
-  const router = useRouter();
+  const router   = useRouter();
   const { signIn } = useAuth();
-  
-  const [formData, setFormData] = useState<FormData>({
-    email: '',
-    password: '',
-    rememberMe: false,
-  });
-  
+  const t        = useTranslations('login');
+
+  const [formData, setFormData] = useState<FormData>({ email: '', password: '', rememberMe: false });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [generalError, setGeneralError] = useState('');
-  
-  const { errors, touched, validateForm, handleBlur, clearErrors } = useFormValidation(formData);
+
+  const { errors, touched, validateForm, handleBlur, clearErrors } = useFormValidation(formData, t);
   const { attemptCount, isLockedOut, remainingTime, incrementAttempts, resetAttempts } = useLoginAttempts();
+
+  const getErrorMessage = (error: any): string => {
+    if (error?.code) {
+      switch (error.code) {
+        case 'auth/user-not-found':
+        case 'auth/wrong-password':
+        case 'auth/invalid-credential': return t('errorInvalid');
+        case 'auth/too-many-requests':  return t('errorTooMany');
+        case 'auth/user-disabled':      return t('errorDisabled');
+        case 'auth/network-request-failed': return t('errorNetwork');
+        case 'auth/invalid-email':      return t('errorInvalidEmail');
+        default:                        return t('errorGeneral');
+      }
+    }
+    return t('errorUnexpected');
+  };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: type === 'checkbox' ? checked : value
-    }));
-    
-    if (errors[name as keyof FormErrors]) {
-      clearErrors();
-    }
-    if (generalError) {
-      setGeneralError('');
-    }
+    setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
+    if (errors[name as keyof FormErrors]) clearErrors();
+    if (generalError) setGeneralError('');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (isLockedOut) {
-      setGeneralError(`Account temporarily locked. Try again in ${formatTime(remainingTime)}.`);
-      return;
-    }
-
+    if (isLockedOut) { setGeneralError(t('lockedBody', { time: formatTime(remainingTime) })); return; }
     const validation = validateForm();
-    if (!validation.isValid) {
-      return;
-    }
-
-    setIsSubmitting(true);
-    setGeneralError('');
-
+    if (!validation.isValid) return;
+    setIsSubmitting(true); setGeneralError('');
     try {
       const auth = getAuth();
       const userCredential = await signInWithEmailAndPassword(auth, formData.email, formData.password);
-      
       resetAttempts();
-      
       const redirectUrl = await handlePostLoginActions(userCredential.user);
       router.push(redirectUrl);
-      
     } catch (error: any) {
       console.error('Login error:', error);
       incrementAttempts();
       setGeneralError(getErrorMessage(error));
-      
       document.getElementById('email')?.focus();
     } finally {
       setIsSubmitting(false);
@@ -320,14 +218,11 @@ export default function Login() {
   };
 
   const renderError = (fieldName: keyof FormErrors) => {
-    const error = errors[fieldName];
-    const isTouched = touched[fieldName];
-    
+    const error = errors[fieldName]; const isTouched = touched[fieldName];
     if (error && isTouched) {
       return (
         <div className="mt-1 flex items-center text-sm text-red-600" role="alert">
-          <ExclamationTriangleIcon className="w-4 h-4 mr-1 flex-shrink-0" />
-          {error}
+          <ExclamationTriangleIcon className="w-4 h-4 mr-1 flex-shrink-0" />{error}
         </div>
       );
     }
@@ -335,14 +230,11 @@ export default function Login() {
   };
 
   const getInputClassName = (fieldName: keyof FormErrors) => {
-    const baseClass = "appearance-none block w-full px-3 py-2.5 pl-10 pr-10 border rounded-lg placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors duration-200";
+    const base = "appearance-none block w-full px-3 py-2.5 pl-10 pr-10 border rounded-lg placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors duration-200";
     const hasError = errors[fieldName] && touched[fieldName];
-    
-    if (hasError) {
-      return `${baseClass} border-red-300 text-red-900 placeholder-red-300 focus:ring-red-500 focus:border-red-500`;
-    }
-    
-    return `${baseClass} border-gray-300 focus:ring-blue-500 focus:border-blue-500`;
+    return hasError
+      ? `${base} border-red-300 text-red-900 placeholder-red-300 focus:ring-red-500 focus:border-red-500`
+      : `${base} border-gray-300 focus:ring-blue-500 focus:border-blue-500`;
   };
 
   return (
@@ -353,32 +245,26 @@ export default function Login() {
             <span className="text-white font-bold text-3xl">TB</span>
           </div>
         </div>
-        
         <h1 className="mt-6 text-center text-4xl font-extrabold text-gray-900 tracking-tight">
-          Sign in to your account
+          {t('title')}
         </h1>
         <p className="mt-2 text-center text-sm text-gray-600">
-          New customer?{' '}
-          <Link 
-            href="/register" 
-            className="font-medium text-blue-600 hover:text-blue-500 focus:outline-none focus:underline transition-colors duration-200"
-          >
-            Create an account
+          {t('newCustomer')}{' '}
+          <Link href="/register" className="font-medium text-blue-600 hover:text-blue-500 focus:outline-none focus:underline transition-colors duration-200">
+            {t('createAccount')}
           </Link>
         </p>
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
         <div className="bg-white py-10 px-6 shadow-xl rounded-2xl sm:px-12">
-          
+
           {isLockedOut && (
             <div className="mb-6 bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3 rounded-lg flex items-start">
               <ExclamationTriangleIcon className="w-5 h-5 mr-2 flex-shrink-0 mt-0.5" />
               <div>
-                <p className="font-medium">Account Temporarily Locked</p>
-                <p className="text-sm mt-1">
-                  Too many failed attempts. Try again in {formatTime(remainingTime)}.
-                </p>
+                <p className="font-medium">{t('lockedTitle')}</p>
+                <p className="text-sm mt-1">{t('lockedBody', { time: formatTime(remainingTime) })}</p>
               </div>
             </div>
           )}
@@ -386,19 +272,16 @@ export default function Login() {
           {attemptCount > 0 && attemptCount < MAX_ATTEMPTS && !isLockedOut && (
             <div className="mb-6 bg-orange-50 border border-orange-200 text-orange-800 px-4 py-3 rounded-lg flex items-center">
               <ExclamationTriangleIcon className="w-5 h-5 mr-2 flex-shrink-0" />
-              <p className="text-sm">
-                {MAX_ATTEMPTS - attemptCount} attempt{MAX_ATTEMPTS - attemptCount !== 1 ? 's' : ''} remaining before account lockout.
-              </p>
+              <p className="text-sm">{t('attemptsRemaining', { count: MAX_ATTEMPTS - attemptCount })}</p>
             </div>
           )}
 
           <form className="space-y-6" onSubmit={handleSubmit} noValidate>
-            
             {generalError && (
               <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex items-start" role="alert">
                 <ExclamationTriangleIcon className="w-5 h-5 mr-2 flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="font-medium">Sign In Failed</p>
+                  <p className="font-medium">{t('errorTitle')}</p>
                   <p className="text-sm mt-1">{generalError}</p>
                 </div>
               </div>
@@ -406,23 +289,14 @@ export default function Login() {
 
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-                <EnvelopeIcon className="w-4 h-4 inline mr-1" />
-                Email address
+                <EnvelopeIcon className="w-4 h-4 inline mr-1" />{t('emailLabel')}
               </label>
               <div className="relative">
                 <input
-                  id="email"
-                  name="email"
-                  type="email"
-                  autoComplete="email"
-                  required
+                  id="email" name="email" type="email" autoComplete="email" required
                   aria-invalid={errors.email && touched.email ? 'true' : 'false'}
-                  aria-describedby={errors.email && touched.email ? 'email-error' : undefined}
-                  value={formData.email}
-                  onChange={handleInputChange}
-                  onBlur={() => handleBlur('email')}
-                  className={getInputClassName('email')}
-                  placeholder="Enter your email address"
+                  value={formData.email} onChange={handleInputChange} onBlur={() => handleBlur('email')}
+                  className={getInputClassName('email')} placeholder={t('emailPlaceholder')}
                   disabled={isSubmitting || isLockedOut}
                 />
                 <EnvelopeIcon className="w-5 h-5 text-gray-400 absolute top-2.5 left-3 pointer-events-none" />
@@ -435,38 +309,22 @@ export default function Login() {
 
             <div>
               <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
-                <LockClosedIcon className="w-4 h-4 inline mr-1" />
-                Password
+                <LockClosedIcon className="w-4 h-4 inline mr-1" />{t('passwordLabel')}
               </label>
               <div className="relative">
                 <input
-                  id="password"
-                  name="password"
-                  type={showPassword ? 'text' : 'password'}
-                  autoComplete="current-password"
-                  required
+                  id="password" name="password" type={showPassword ? 'text' : 'password'}
+                  autoComplete="current-password" required
                   aria-invalid={errors.password && touched.password ? 'true' : 'false'}
-                  aria-describedby={errors.password && touched.password ? 'password-error' : undefined}
-                  value={formData.password}
-                  onChange={handleInputChange}
-                  onBlur={() => handleBlur('password')}
-                  className={getInputClassName('password')}
-                  placeholder="Enter your password"
+                  value={formData.password} onChange={handleInputChange} onBlur={() => handleBlur('password')}
+                  className={getInputClassName('password')} placeholder={t('passwordPlaceholder')}
                   disabled={isSubmitting || isLockedOut}
                 />
                 <LockClosedIcon className="w-5 h-5 text-gray-400 absolute top-2.5 left-3 pointer-events-none" />
-                <button
-                  type="button"
-                  className="absolute top-2.5 right-3 text-gray-400 hover:text-gray-600 focus:outline-none focus:text-gray-600 transition-colors duration-200"
-                  onClick={() => setShowPassword(!showPassword)}
-                  aria-label={showPassword ? 'Hide password' : 'Show password'}
-                  disabled={isSubmitting || isLockedOut}
-                >
-                  {showPassword ? (
-                    <EyeSlashIcon className="w-5 h-5" />
-                  ) : (
-                    <EyeIcon className="w-5 h-5" />
-                  )}
+                <button type="button" onClick={() => setShowPassword(!showPassword)}
+                  className="absolute top-2.5 right-3 text-gray-400 hover:text-gray-600 focus:outline-none transition-colors duration-200"
+                  aria-label={showPassword ? 'Hide password' : 'Show password'} disabled={isSubmitting || isLockedOut}>
+                  {showPassword ? <EyeSlashIcon className="w-5 h-5" /> : <EyeIcon className="w-5 h-5" />}
                 </button>
               </div>
               {renderError('password')}
@@ -474,59 +332,36 @@ export default function Login() {
 
             <div className="flex items-center justify-between">
               <div className="flex items-center">
-                <input
-                  id="rememberMe"
-                  name="rememberMe"
-                  type="checkbox"
-                  checked={formData.rememberMe}
+                <input id="rememberMe" name="rememberMe" type="checkbox" checked={formData.rememberMe}
                   onChange={handleInputChange}
                   className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded transition-colors duration-200"
                   disabled={isSubmitting || isLockedOut}
                 />
                 <label htmlFor="rememberMe" className="ml-2 block text-sm text-gray-700 cursor-pointer">
-                  Remember me
+                  {t('rememberMe')}
                 </label>
               </div>
-
-              <button
-                type="button"
-                onClick={handleForgotPassword}
-                className="text-sm font-medium text-blue-600 hover:text-blue-500 focus:outline-none focus:underline transition-colors duration-200"
-                disabled={isSubmitting}
-              >
-                Forgot password?
+              <button type="button" onClick={handleForgotPassword} disabled={isSubmitting}
+                className="text-sm font-medium text-blue-600 hover:text-blue-500 focus:outline-none focus:underline transition-colors duration-200">
+                {t('forgotPassword')}
               </button>
             </div>
 
             <div>
-              <Button
-                type="submit"
-                disabled={isSubmitting || isLockedOut}
-                className="w-full flex justify-center items-center py-2.5 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
-                aria-label={isSubmitting ? 'Signing in...' : 'Sign in to your account'}
-              >
+              <Button type="submit" disabled={isSubmitting || isLockedOut}
+                className="w-full flex justify-center items-center py-2.5 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200">
                 {isSubmitting ? (
-                  <>
-                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
-                      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" className="opacity-25" />
-                      <path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" className="opacity-75" />
-                    </svg>
-                    Signing in...
-                  </>
-                ) : (
-                  'Sign in'
-                )}
+                  <><svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" className="opacity-25" /><path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" className="opacity-75" /></svg>{t('submitting')}</>
+                ) : t('submitButton')}
               </Button>
             </div>
           </form>
 
           <div className="mt-6 text-center">
             <p className="text-xs text-gray-500">
-              Having trouble signing in?{' '}
-              <Link 
-                href="/contact" 
-                className="text-blue-600 hover:text-blue-500 focus:outline-none focus:underline transition-colors duration-200"
-              >
+              {t('troubleSignIn')}{' '}
+              <Link href="/contact" className="text-blue-600 hover:text-blue-500 focus:outline-none focus:underline transition-colors duration-200">
+                {/* common.contactSupport */}
                 Contact support
               </Link>
             </p>

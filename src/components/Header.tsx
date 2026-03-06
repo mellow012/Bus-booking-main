@@ -1,20 +1,15 @@
 'use client';
 
-// FIX H-1: import path '@/contexts/NotificationContext' (was relative '../contexts/…')
-// FIX H-2: console.log role-info gated to NODE_ENV === 'development'
-// FIX H-3: notificationUserId falls back userProfile.id → userProfile.uid → user.uid
-
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter, usePathname } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import {
   Menu, X, User, LogOut, Search, Calendar,
   Shield, ChevronDown, HomeIcon, BusIcon,
 } from 'lucide-react';
-import { NotificationBell } from '@/contexts/NotificationContext'; // FIX H-1
-
-// ─── Sub-components ───────────────────────────────────────────────────────────
+import { NotificationBell } from '@/contexts/NotificationContext';
 
 const UserAvatar = ({ user, userProfile }: { user: any; userProfile: any }) => {
   if (userProfile?.avatar) {
@@ -35,23 +30,23 @@ const UserSkeleton = () => (
   </div>
 );
 
-const navigationItems = [
-  { href: '/',          label: 'Home',         icon: HomeIcon },
-  { href: '/search',    label: 'Search Buses', icon: Search   },
-  { href: '/schedules', label: 'Schedules',    icon: Calendar },
-];
-
-// ─── Header ───────────────────────────────────────────────────────────────────
-
 const Header: React.FC = () => {
   const { user, userProfile, signOut, loading } = useAuth();
   const router   = useRouter();
   const pathname = usePathname();
+  const t        = useTranslations('nav');
 
   const [isMenuOpen,     setIsMenuOpen]     = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isScrolled,     setIsScrolled]     = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
+
+  // ── navigation items use translations ──────────────────────────────────────
+  const navigationItems = [
+    { href: '/',          label: t('home'),        icon: HomeIcon },
+    { href: '/search',    label: t('searchBuses'), icon: Search   },
+    { href: '/schedules', label: t('schedules'),   icon: Calendar },
+  ];
 
   const isAdminPage =
     pathname.startsWith('/admin') ||
@@ -97,7 +92,6 @@ const Header: React.FC = () => {
   const isActivePage = (href: string) =>
     href === '/' ? pathname === '/' : pathname.startsWith(href);
 
-  // Role resolution
   const normalizedRole = String(userProfile?.role ?? '').trim().toLowerCase();
   const isSuperAdmin   = normalizedRole === 'superadmin';
   const isCompanyAdmin = normalizedRole === 'company_admin' || normalizedRole === 'admin' || normalizedRole.includes('companyadmin');
@@ -106,7 +100,7 @@ const Header: React.FC = () => {
   const isCustomer     = user && userProfile && !isSuperAdmin && !isCompanyAdmin && !isOperator && !isConductor;
 
   const adminRoute = isSuperAdmin ? '/admin' : isCompanyAdmin ? '/company/admin' : isOperator ? '/company/operator/dashboard' : null;
-  const adminLabel = isOperator ? 'Operator Panel' : 'Admin Panel';
+  const adminLabel = isOperator ? t('operatorPanel') : t('adminPanel');
 
   const displayName = (() => {
     const fn = userProfile?.firstName?.trim();
@@ -117,11 +111,9 @@ const Header: React.FC = () => {
     return 'User';
   })();
 
-  // FIX H-3: bell userId fallback chain
   const notificationUserId: string | undefined =
     userProfile?.id ?? userProfile?.uid ?? user?.uid;
 
-  // FIX H-2: dev-only logging
   useEffect(() => {
     if (!user || process.env.NODE_ENV !== 'development') return;
     console.log('[Header] Role info:', { role: userProfile?.role, normalizedRole, isConductor, isOperator, isCompanyAdmin, isSuperAdmin, isCustomer, displayName });
@@ -146,7 +138,7 @@ const Header: React.FC = () => {
             </div>
             <div>
               <span className="text-lg sm:text-2xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent group-hover:from-blue-600 group-hover:to-indigo-600 transition-all duration-300">TibhukeBus</span>
-              <div className="hidden sm:block text-xs text-gray-500 -mt-1">Smart Travel</div>
+              <div className="hidden sm:block text-xs text-gray-500 -mt-1">{t('smartTravel')}</div>
             </div>
           </Link>
 
@@ -165,8 +157,6 @@ const Header: React.FC = () => {
 
           {/* Actions */}
           <div className="flex items-center space-x-2 sm:space-x-4">
-
-            {/* FIX H-1 + H-3 */}
             {user && notificationUserId && (
               <NotificationBell userId={notificationUserId} className="relative" />
             )}
@@ -178,7 +168,7 @@ const Header: React.FC = () => {
                   <UserAvatar user={user} userProfile={userProfile} />
                   <div className="hidden md:block text-left">
                     <div className="text-sm font-semibold text-gray-900 group-hover:text-blue-600">{displayName}</div>
-                    <div className="text-xs text-gray-500 capitalize">{userProfile?.role || 'Member'}</div>
+                    <div className="text-xs text-gray-500 capitalize">{userProfile?.role || t('member')}</div>
                   </div>
                   <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform duration-200 ${isUserMenuOpen ? 'rotate-180' : ''}`} />
                 </button>
@@ -197,17 +187,17 @@ const Header: React.FC = () => {
                     <div className="py-2">
                       {isCustomer && (
                         <Link href="/bookings" onClick={() => setIsUserMenuOpen(false)} className="flex items-center space-x-3 px-4 py-2 text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors duration-200">
-                          <Calendar className="w-4 h-4" /><span>My Bookings</span>
+                          <Calendar className="w-4 h-4" /><span>{t('myBookings')}</span>
                         </Link>
                       )}
                       {(isCustomer || isOperator) && (
                         <Link href="/profile" onClick={() => setIsUserMenuOpen(false)} className="flex items-center space-x-3 px-4 py-2 text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors duration-200">
-                          <User className="w-4 h-4" /><span>Profile</span>
+                          <User className="w-4 h-4" /><span>{t('profile')}</span>
                         </Link>
                       )}
                       {isConductor ? (
                         <Link href="/company/conductor/dashboard" onClick={() => setIsUserMenuOpen(false)} className="flex items-center space-x-3 px-4 py-2 text-blue-700 font-medium hover:bg-blue-50 transition-colors duration-200">
-                          <BusIcon className="w-4 h-4" /><span>Conductor Dashboard</span>
+                          <BusIcon className="w-4 h-4" /><span>{t('conductorDashboard')}</span>
                         </Link>
                       ) : (isSuperAdmin || isCompanyAdmin || isOperator) && adminRoute ? (
                         <Link href={adminRoute} onClick={() => setIsUserMenuOpen(false)} className="flex items-center space-x-3 px-4 py-2 text-purple-700 font-medium hover:bg-purple-50 transition-colors duration-200">
@@ -217,7 +207,7 @@ const Header: React.FC = () => {
                     </div>
                     <div className="border-t border-gray-100 py-2">
                       <button onClick={handleLogout} className="flex items-center space-x-3 w-full px-4 py-2 text-red-600 hover:bg-red-50 transition-colors duration-200">
-                        <LogOut className="w-4 h-4" /><span>Sign Out</span>
+                        <LogOut className="w-4 h-4" /><span>{t('signOut')}</span>
                       </button>
                     </div>
                   </div>
@@ -227,8 +217,8 @@ const Header: React.FC = () => {
 
             {!loading && !user && (
               <div className="hidden md:flex items-center space-x-3">
-                <Link href="/login" className="px-4 py-2 text-gray-700 hover:text-blue-600 font-medium transition-colors duration-200">Sign In</Link>
-                <Link href="/register" className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-medium shadow-lg hover:shadow-xl transition-all duration-200">Get Started</Link>
+                <Link href="/login" className="px-4 py-2 text-gray-700 hover:text-blue-600 font-medium transition-colors duration-200">{t('signIn')}</Link>
+                <Link href="/register" className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-medium shadow-lg hover:shadow-xl transition-all duration-200">{t('getStarted')}</Link>
               </div>
             )}
 
@@ -267,7 +257,7 @@ const Header: React.FC = () => {
                 </div>
                 {isConductor ? (
                   <Link href="/company/conductor/dashboard" onClick={() => setIsMenuOpen(false)} className="flex items-center space-x-3 p-3 bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-700 rounded-xl font-medium">
-                    <BusIcon className="w-5 h-5" /><span>Conductor Dashboard</span>
+                    <BusIcon className="w-5 h-5" /><span>{t('conductorDashboard')}</span>
                   </Link>
                 ) : (
                   <>
@@ -278,24 +268,24 @@ const Header: React.FC = () => {
                     )}
                     {isCustomer && (
                       <Link href="/bookings" onClick={() => setIsMenuOpen(false)} className="flex items-center space-x-3 p-3 text-gray-700 hover:bg-gray-100 rounded-xl">
-                        <Calendar className="w-5 h-5" /><span>My Bookings</span>
+                        <Calendar className="w-5 h-5" /><span>{t('myBookings')}</span>
                       </Link>
                     )}
                     {(isCustomer || isOperator) && (
                       <Link href="/profile" onClick={() => setIsMenuOpen(false)} className="flex items-center space-x-3 p-3 text-gray-700 hover:bg-gray-100 rounded-xl">
-                        <User className="w-5 h-5" /><span>Profile</span>
+                        <User className="w-5 h-5" /><span>{t('profile')}</span>
                       </Link>
                     )}
                   </>
                 )}
                 <button onClick={handleLogout} className="flex items-center space-x-3 w-full p-3 text-red-600 hover:bg-red-50 rounded-xl">
-                  <LogOut className="w-5 h-5" /><span>Sign Out</span>
+                  <LogOut className="w-5 h-5" /><span>{t('signOut')}</span>
                 </button>
               </div>
             ) : (
               <div className="pt-4 border-t border-gray-200 space-y-3">
-                <Link href="/login" onClick={() => setIsMenuOpen(false)} className="flex items-center justify-center p-3 text-gray-700 hover:bg-gray-100 rounded-xl font-medium">Sign In</Link>
-                <Link href="/register" onClick={() => setIsMenuOpen(false)} className="flex items-center justify-center p-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-medium shadow-lg">Get Started</Link>
+                <Link href="/login" onClick={() => setIsMenuOpen(false)} className="flex items-center justify-center p-3 text-gray-700 hover:bg-gray-100 rounded-xl font-medium">{t('signIn')}</Link>
+                <Link href="/register" onClick={() => setIsMenuOpen(false)} className="flex items-center justify-center p-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-medium shadow-lg">{t('getStarted')}</Link>
               </div>
             )}
           </div>
