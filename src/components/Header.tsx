@@ -10,6 +10,7 @@ import {
   Shield, ChevronDown, HomeIcon, BusIcon,
 } from 'lucide-react';
 import { NotificationBell } from '@/contexts/NotificationContext';
+import LanguageSwitcher from './LanguageSwitcher';
 
 const UserAvatar = ({ user, userProfile }: { user: any; userProfile: any }) => {
   if (userProfile?.avatar) {
@@ -160,6 +161,7 @@ const Header: React.FC = () => {
             {user && notificationUserId && (
               <NotificationBell userId={notificationUserId} className="relative" />
             )}
+            <LanguageSwitcher />
 
             {user && (
               <div className="relative" ref={userMenuRef}>
