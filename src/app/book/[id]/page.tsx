@@ -315,9 +315,10 @@ export default function BookBus() {
         throw new Error("Schedule data is incomplete");
       if ((scheduleData.availableSeats || 0) < passengers)
         throw new Error(`Not enough seats. Only ${scheduleData.availableSeats || 0} available.`);
-      const depTime = (scheduleData.departureDateTime as any)?.toDate
-        ? (scheduleData.departureDateTime as any).toDate()
-        : new Date(scheduleData.departureDateTime);
+      // ✅ After
+const depTime = (scheduleData.departureDateTime as any)?.toDate
+  ? (scheduleData.departureDateTime as any).toDate()
+  : new Date(scheduleData.departureDateTime as any);  // ← cast to any first
       if (depTime < new Date()) throw new Error("This schedule has already departed");
       setSchedule(scheduleData);
       const [busDoc, routeDoc, companyDoc] = await Promise.all([

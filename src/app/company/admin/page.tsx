@@ -473,16 +473,17 @@ export default function AdminDashboard() {
             schedules={schedules}
             user={user}
             userProfile={userProfile}
-            setSchedules={(newSchedules) => {
-              const updated = Array.isArray(newSchedules)
-                ? newSchedules.map(s => ({
-                    ...s,
-                    departureDateTime: s.departureDateTime instanceof Date ? s.departureDateTime : new Date(s.departureDateTime),
-                    arrivalDateTime:   s.arrivalDateTime   instanceof Date ? s.arrivalDateTime   : new Date(s.arrivalDateTime),
-                  }))
-                : schedules;
-              updateDashboardData("schedules", updated);
-            }}
+            // ✅ After
+setSchedules={(newSchedules) => {
+  const updated = Array.isArray(newSchedules)
+    ? newSchedules.map(s => ({
+        ...s,
+        departureDateTime: s.departureDateTime instanceof Date ? s.departureDateTime : ((d: any) => d?.toDate?.() ?? new Date(d))(s.departureDateTime),
+        arrivalDateTime:   s.arrivalDateTime   instanceof Date ? s.arrivalDateTime   : ((d: any) => d?.toDate?.() ?? new Date(d))(s.arrivalDateTime),
+      }))
+    : schedules;
+  updateDashboardData("schedules", updated);
+}}
             routes={routes}
             buses={buses}
             addSchedule={async (data) => addItem("schedules", {
@@ -518,18 +519,15 @@ export default function AdminDashboard() {
       case "bookings": {
         const isCompany = (c: Company | null | undefined): c is Company => !!c;
         return (
-          <BookingsTab
-            bookings={bookings}
-            setBookings={setBookings}
-            user={user}
-            userProfile={userProfile}
-            schedules={schedules}
-            routes={routes}
-            companyId={companyId}
-            role="company_admin"
-            companies={[dashboardData.company].filter(isCompany)}
-            {...commonProps}
-          />
+          // ✅ After — only pass what BookingsTabProps actually declares
+        <BookingsTab
+          schedules={schedules}
+          routes={routes}
+          buses={buses}
+          companyId={companyId}
+          user={user}
+          userProfile={userProfile}
+        />
         );
       }
 

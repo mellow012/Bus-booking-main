@@ -249,12 +249,11 @@ const BusDetailsPage: React.FC = () => {
                 <div className="flex items-center space-x-2">
               <Clock className="w-5 h-5 text-green-600" />
                   {/* The schedule state now holds Date objects, so we remove .toDate() */}
-                  <p>Departs: {new Date(schedule.departureDateTime).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })}</p>
-                </div>
+<p>Departs: {((d => d?.toDate?.() ?? new Date(d as any))(schedule.departureDateTime as any)).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })}</p>                </div>
                 <div className="flex items-center space-x-2">
                   <Clock className="w-5 h-5 text-green-600" />
                   {/* The schedule state now holds Date objects, so we remove .toDate() */}
-                  <p>Arrives: {new Date(schedule.arrivalDateTime).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })}</p>
+                  <p>Arrives: {((d => d?.toDate?.() ?? new Date(d as any))(schedule.arrivalDateTime as any)).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })}</p>
                 </div>
                 <div className="flex items-center space-x-2">
                   <Currency className="w-5 h-5 text-red-600" />

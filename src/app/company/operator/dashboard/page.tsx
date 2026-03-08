@@ -451,8 +451,10 @@ export default function OperatorDashboard() {
               const updatedSchedules = Array.isArray(newSchedules)
                 ? newSchedules.map((s) => ({
                     ...s,
-                    departureDateTime: s.departureDateTime instanceof Date ? s.departureDateTime : new Date(s.departureDateTime),
-                    arrivalDateTime: s.arrivalDateTime instanceof Date ? s.arrivalDateTime : new Date(s.arrivalDateTime),
+                    departureDateTime: convertFirestoreDate(s.departureDateTime),
+                    arrivalDateTime: convertFirestoreDate(s.arrivalDateTime),
+                    createdAt: convertFirestoreDate(s.createdAt),
+                    updatedAt: convertFirestoreDate(s.updatedAt),
                   }))
                 : schedules;
               setDashboardData(prev => ({ ...prev, schedules: updatedSchedules }));
@@ -487,27 +489,15 @@ export default function OperatorDashboard() {
 
       case "bookings":
         const isCompany = (item: Company | null | undefined): item is Company => !!item;
-        return (
-          <BookingsTab
-            bookings={bookings}
-            user={user}
-            userProfile={userProfile}
-            setBookings={(newBookings) => {
-              if (typeof newBookings === "function") {
-                setDashboardData(prev => ({ ...prev, bookings: newBookings(prev.bookings) }));
-              } else {
-                setDashboardData(prev => ({ ...prev, bookings: newBookings }));
-              }
-            }}
-            schedules={schedules}
-            routes={routes}
-            companyId={companyId}
-            role="operator"
-            companies={[company].filter(isCompany)} 
-            {...commonProps}
-          />
-        );
-
+       // ✅ After — only pass what BookingsTabProps declares
+<BookingsTab
+  schedules={schedules}
+  routes={routes}
+  buses={buses}
+  companyId={companyId}
+  user={user}
+  userProfile={userProfile}
+/>
       case "profile":
         return (
           <OperatorProfileTab

@@ -2,9 +2,22 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { collection, query, where, getDocs, orderBy, doc, getDoc,limit as firestoreLimit, limitToLast } from 'firebase/firestore'; // <-- 'limit' added here
+import { collection, query, where, getDocs, orderBy, doc, getDoc, limitToLast } from 'firebase/firestore';
 import { db } from '@/lib/firebaseConfig';
 import { Schedule, Route, Bus, Company } from '@/types';
+
+// ─── Helper ───────────────────────────────────────────────────────────────────
+
+const toDate = (v: unknown): Date => {
+  if (v == null) return new Date(0);
+  if (v instanceof Date) return v;
+  const a = v as any;
+  if (typeof a.toDate === 'function') return a.toDate() as Date;
+  if (typeof a === 'string' || typeof a === 'number') return new Date(a);
+  return new Date(0);
+};
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface OpenRoute {
   schedule: Schedule;
@@ -17,6 +30,8 @@ interface AvailableRoutesProps {
   limit?: number;
 }
 
+// ─── Component ────────────────────────────────────────────────────────────────
+
 export default function AvailableRoutes({ limit }: AvailableRoutesProps) {
   const router = useRouter();
   const [openRoutes, setOpenRoutes] = useState<OpenRoute[]>([]);
@@ -24,98 +39,84 @@ export default function AvailableRoutes({ limit }: AvailableRoutesProps) {
   const [error, setError] = useState('');
 
   useEffect(() => {
-  const fetchOpenRoutes = async () => {
-    try {
-      // Initialize Firebase variables (assuming context or global scope for __app_id, etc.)
-      // Note: Since this is a Next.js component, I'm assuming 'db' is correctly initialized elsewhere.
+    const fetchOpenRoutes = async () => {
+      try {
+        const now = new Date();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const nextWeek = new Date(today);
+        nextWeek.setDate(today.getDate() + 7);
 
-      const now = new Date();
-      // Use the start of today for proper date range query
-      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()); 
-      const nextWeek = new Date(today);
-      nextWeek.setDate(today.getDate() + 7);
+        const schedulesQuery = query(
+          collection(db, 'schedules'),
+          where('status', '==', 'active'),
+          where('departureDateTime', '>=', today),
+          where('departureDateTime', '<=', nextWeek),
+          where('availableSeats', '>', 0),
+          orderBy('departureDateTime'),
+          limitToLast(typeof limit === 'number' ? limit : 10),
+        );
 
-      // Construct the Firestore query
-      const schedulesQuery = query(
-        collection(db, 'schedules'),
-        where('status', '==', 'active'),
-        where('departureDateTime', '>=', today), 
-        where('departureDateTime', '<=', nextWeek), 
-        where('availableSeats', '>', 0),
-        orderBy('departureDateTime'),
-        // Use the imported 'limit' function correctly, passing the prop value
-        limitToLast(typeof limit === 'number' ? limit : 10) 
-      );
-      
-      const schedulesSnapshot = await getDocs(schedulesQuery);
-      let schedules = schedulesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Schedule[];
+        const schedulesSnapshot = await getDocs(schedulesQuery);
+        let schedules = schedulesSnapshot.docs.map(d => ({ id: d.id, ...d.data() })) as Schedule[];
 
-      console.log('AvailableRoutes schedules:', schedules.length, schedules);
-
-      // The previous manual slicing is no longer strictly necessary if 'limit' is used in the query,
-      // but keeping the logic intact just in case the query limit is advisory.
-      if (limit) {
-        schedules = schedules.slice(0, limit);
-      }
-
-      const results: OpenRoute[] = [];
-      for (const schedule of schedules) {
-        // Fetch related documents for route, bus, and company
-        const routeDoc = await getDoc(doc(db, 'routes', schedule.routeId));
-        const busDoc = await getDoc(doc(db, 'buses', schedule.busId));
-        const companyDoc = await getDoc(doc(db, 'companies', schedule.companyId));
-
-        if (routeDoc.exists() && busDoc.exists() && companyDoc.exists()) {
-          // Convert Timestamp to Date for processing
-          const departureDateTime = (schedule.departureDateTime as any).toDate ? (schedule.departureDateTime as any).toDate() : schedule.departureDateTime;
-          const arrivalDateTime = (schedule.arrivalDateTime as any).toDate ? (schedule.arrivalDateTime as any).toDate() : schedule.arrivalDateTime;
-
-          results.push({
-            schedule: {
-              ...schedule,
-              departureDateTime, 
-              arrivalDateTime,
-            },
-            route: { id: routeDoc.id, ...routeDoc.data() } as Route,
-            bus: { id: busDoc.id, ...busDoc.data() } as Bus,
-            company: { id: companyDoc.id, ...companyDoc.data() } as Company,
-          });
-        } else {
-          console.log(`Missing data for schedule ${schedule.id}`);
+        if (limit) {
+          schedules = schedules.slice(0, limit);
         }
+
+        const results: OpenRoute[] = [];
+        for (const schedule of schedules) {
+          const routeDoc   = await getDoc(doc(db, 'routes',    schedule.routeId));
+          const busDoc     = await getDoc(doc(db, 'buses',     schedule.busId));
+          const companyDoc = await getDoc(doc(db, 'companies', schedule.companyId));
+
+          if (routeDoc.exists() && busDoc.exists() && companyDoc.exists()) {
+            results.push({
+              schedule: {
+                ...schedule,
+                departureDateTime: toDate(schedule.departureDateTime),
+                arrivalDateTime:   toDate(schedule.arrivalDateTime),
+              },
+              route:   { id: routeDoc.id,   ...routeDoc.data()   } as Route,
+              bus:     { id: busDoc.id,     ...busDoc.data()     } as Bus,
+              company: { id: companyDoc.id, ...companyDoc.data() } as Company,
+            });
+          } else {
+            console.log(`Missing data for schedule ${schedule.id}`);
+          }
+        }
+
+        setOpenRoutes(results);
+      } catch (err) {
+        setError('Failed to load available routes');
+        console.error('AvailableRoutes error:', err);
+      } finally {
+        setLoading(false);
       }
+    };
 
-      console.log('AvailableRoutes results:', results.length, results);
-      setOpenRoutes(results);
-    } catch (err) {
-      setError('Failed to load available routes');
-      console.error('AvailableRoutes error:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+    fetchOpenRoutes();
+  }, [limit]);
 
-  fetchOpenRoutes();
-}, [limit]); 
+  // ── Formatters ──────────────────────────────────────────────────────────────
 
-  const formatTime = (time: string) => {
-    return new Date(`2000-01-01T${time}`).toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true,
-    });
+  const formatDateTime = (v: unknown): string => {
+    const d = toDate(v);
+    if (d.getTime() === 0) return 'N/A';
+    return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
   };
 
   const formatDuration = (minutes: number) => {
     const hours = Math.floor(minutes / 60);
-    const mins = minutes % 60;
+    const mins  = minutes % 60;
     return `${hours}h ${mins}m`;
   };
+
+  // ── Render ──────────────────────────────────────────────────────────────────
 
   if (loading) {
     return (
       <div className="flex items-center justify-center py-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
       </div>
     );
   }
@@ -128,6 +129,8 @@ export default function AvailableRoutes({ limit }: AvailableRoutesProps) {
           {openRoutes.map((result) => (
             <article key={result.schedule.id} className="bg-white rounded-lg shadow-md p-6">
               <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+
+                {/* Company / Bus info */}
                 <div className="lg:col-span-1">
                   <div className="flex items-center space-x-3 mb-3">
                     <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
@@ -142,27 +145,29 @@ export default function AvailableRoutes({ limit }: AvailableRoutesProps) {
                   </div>
                   <div className="space-y-1 text-sm">
                     <div className="flex items-center space-x-2">
-                      <span className="w-2 h-2 bg-green-500 rounded-full" aria-hidden="true"></span>
+                      <span className="w-2 h-2 bg-green-500 rounded-full" aria-hidden="true" />
                       <span className="text-gray-600">{result.bus.busType}</span>
                     </div>
                     <div className="flex items-center space-x-2">
-                      <span className="w-2 h-2 bg-blue-500 rounded-full" aria-hidden="true"></span>
+                      <span className="w-2 h-2 bg-blue-500 rounded-full" aria-hidden="true" />
                       <span className="text-gray-600">{result.bus.capacity} seats</span>
                     </div>
                   </div>
                 </div>
+
+                {/* Route timeline */}
                 <div className="lg:col-span-2">
                   <div className="flex items-center justify-between mb-4">
                     <div className="text-center">
                       <div className="text-2xl font-bold text-gray-900">
-                        {formatTime(result.schedule.departureDateTime.toString().slice(0, 5))}
+                        {formatDateTime(result.schedule.departureDateTime)}
                       </div>
                       <div className="text-sm text-gray-600">{result.route.origin}</div>
                     </div>
                     <div className="flex-1 mx-4">
                       <div className="relative">
                         <div className="absolute inset-0 flex items-center">
-                          <div className="w-full border-t border-gray-300"></div>
+                          <div className="w-full border-t border-gray-300" />
                         </div>
                         <div className="relative flex justify-center text-sm">
                           <span className="bg-white px-2 text-gray-500">
@@ -173,7 +178,7 @@ export default function AvailableRoutes({ limit }: AvailableRoutesProps) {
                     </div>
                     <div className="text-center">
                       <div className="text-2xl font-bold text-gray-900">
-                        {formatTime(result.schedule.arrivalDateTime.toString().slice(0, 5))}
+                        {formatDateTime(result.schedule.arrivalDateTime)}
                       </div>
                       <div className="text-sm text-gray-600">{result.route.destination}</div>
                     </div>
@@ -181,10 +186,7 @@ export default function AvailableRoutes({ limit }: AvailableRoutesProps) {
                   {result.bus.amenities.length > 0 && (
                     <div className="flex flex-wrap gap-2">
                       {result.bus.amenities.slice(0, 4).map((amenity, index) => (
-                        <span
-                          key={index}
-                          className="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded-full"
-                        >
+                        <span key={index} className="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded-full">
                           {amenity}
                         </span>
                       ))}
@@ -196,10 +198,12 @@ export default function AvailableRoutes({ limit }: AvailableRoutesProps) {
                     </div>
                   )}
                 </div>
+
+                {/* Price / CTA */}
                 <div className="lg:col-span-1 flex flex-col justify-between">
                   <div className="text-right mb-4">
                     <div className="text-3xl font-bold text-blue-600">
-                      ${result.schedule.price}
+                      MWK {result.schedule.price}
                     </div>
                     <div className="text-sm text-gray-600">per person</div>
                     <div className="text-sm text-green-600 font-medium">
@@ -214,6 +218,7 @@ export default function AvailableRoutes({ limit }: AvailableRoutesProps) {
                     Select Seats
                   </button>
                 </div>
+
               </div>
             </article>
           ))}

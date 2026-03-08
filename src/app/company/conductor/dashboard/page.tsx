@@ -151,7 +151,8 @@ const TripControlPanel: FC<TripControlPanelProps> = ({
             <p className="font-semibold text-green-900 text-base">Trip completed</p>
             <p className="text-sm text-green-700">
               Arrived at {trip.arrivalLocation}
-              {trip.tripCompletedAt && ` · ${format(new Date(trip.tripCompletedAt), "HH:mm")}`}
+              // ✅ After
+{trip.tripCompletedAt && ` · ${format(toDate(trip.tripCompletedAt), "HH:mm")}`}
             </p>
           </div>
           <CheckCircle className="w-7 h-7 text-green-600 ml-auto" />
@@ -310,7 +311,7 @@ const WalkOnBookingModal: FC<WalkOnModalProps> = ({
   const fareAmount   = trip.price || 0;
   const parsedAmount = parseFloat(form.amountPaid);
   const change       = parsedAmount > fareAmount ? parsedAmount - fareAmount : 0;
-  const departure    = trip.departureDateTime instanceof Date ? trip.departureDateTime : new Date(trip.departureDateTime);
+  const departure    = toDate(trip.departureDateTime);
 
   const validateDetails = () => {
     const errs: Partial<Record<keyof WalkOnFormData, string>> = {};
