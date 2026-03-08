@@ -1,56 +1,36 @@
 'use client';
+// app/verify-email/page.tsx
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { getAuth, applyActionCode, checkActionCode, reload } from 'firebase/auth';
 import { CheckCircleIcon, Loader2 } from 'lucide-react';
 import { ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 import { Button } from '@/components/ui/button';
 
-/**
- * Handles Firebase custom action URL:
- *   https://yourdomain.com/verify-email?mode=verifyEmail&oobCode=XXX&apiKey=YYY
- *
- * REQUIRES: Firebase Console → Auth → Templates → Email verification →
- * "Customize action URL" = https://yourdomain.com/verify-email
- *
- * The auth/invalid-action-code error happens when:
- *  1. The oobCode was already consumed (user clicked link twice)
- *  2. The link went to the WRONG page first (/company/setup) and the code
- *     expired or was invalidated before the user reached this page
- *  3. The Firebase Console action URL is wrong — fix that first
- */
-
 export default function VerifyEmailPage() {
-  const router = useRouter();
+  const router       = useRouter();
   const searchParams = useSearchParams();
-  const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
+
+  const [status,  setStatus]  = useState<'loading' | 'success' | 'error'>('loading');
   const [message, setMessage] = useState('Verifying your email… Please wait.');
 
-  // ✅ Fix 1: guard against React Strict Mode double-invoke and stale re-runs.
-  // applyActionCode is NOT idempotent — a second call throws
-  // auth/invalid-action-code, making verification appear broken in development.
-  const hasRun = useRef(false);
-
-  // ✅ Fix 2: derive stable primitives from searchParams so the effect dependency
-  // array contains strings rather than the searchParams object reference, which
-  // changes on every render in Next.js and can trigger spurious re-runs.
   const oobCode = searchParams.get('oobCode');
   const mode    = searchParams.get('mode');
 
   useEffect(() => {
-    if (hasRun.current) return;
-    hasRun.current = true;
+    // Strict Mode guard via sessionStorage (survives unmount/remount unlike useRef).
+    // applyActionCode is one-time — a second call burns the code and shows an error.
+    if (!oobCode) {
+      setStatus('error');
+      setMessage('No verification code found. Please use the link sent to your email.');
+      return;
+    }
+
+    const guardKey = `oob_applied_${oobCode}`;
+    if (sessionStorage.getItem(guardKey)) return;
 
     const verifyEmail = async () => {
-      // No code at all — user navigated here manually
-      if (!oobCode) {
-        setStatus('error');
-        setMessage('No verification code found. Please use the link sent to your email.');
-        return;
-      }
-
-      // Wrong action type (e.g. password reset link landed here)
       if (mode && mode !== 'verifyEmail') {
         setStatus('error');
         setMessage('This link is not for email verification.');
@@ -60,52 +40,62 @@ export default function VerifyEmailPage() {
       const auth = getAuth();
 
       try {
-        // Step 1: Validate before applying — gives a clear error if stale/used
         const info = await checkActionCode(auth, oobCode);
         if (info.operation !== 'VERIFY_EMAIL') {
           throw Object.assign(new Error('Wrong action type'), { code: 'auth/invalid-action-code' });
         }
 
-        // Step 2: Apply the code
+        // Mark BEFORE applying so Strict Mode second run is blocked even mid-async
+        sessionStorage.setItem(guardKey, '1');
+
         await applyActionCode(auth, oobCode);
 
-        // Step 3: Force-refresh the Firebase user so emailVerified = true
-        // propagates to AuthContext without requiring sign-out/sign-in.
         if (auth.currentUser) {
           await reload(auth.currentUser);
-          // ✅ Fix 3: getIdToken(true) result discarded — removed. Cookie-based
-          // token refresh must happen server-side; this call had no effect and
-          // was misleading about what it accomplished.
-          console.log('[VerifyEmail] emailVerified:', auth.currentUser.emailVerified);
+
+          let attempts = 0;
+          while (!auth.currentUser.emailVerified && attempts < 10) {
+            await new Promise(r => setTimeout(r, 500));
+            await reload(auth.currentUser);
+            attempts++;
+          }
+
+          console.log('[VerifyEmail] emailVerified after reload:', auth.currentUser.emailVerified);
+
+          // Refresh session cookie — the old one has email_verified:false baked in
+          try {
+            const idToken = await auth.currentUser.getIdToken(true);
+            const res = await fetch('/api/auth/session', {
+              method:  'POST',
+              headers: { Authorization: `Bearer ${idToken}` },
+            });
+            if (res.ok) {
+              console.log('[VerifyEmail] Session cookie refreshed with email_verified:true');
+            } else {
+              console.warn('[VerifyEmail] Session refresh failed:', res.status);
+            }
+          } catch (sessionErr) {
+            console.warn('[VerifyEmail] Session refresh error:', sessionErr);
+          }
         }
 
-        // Step 4: Clear FCM token cache — re-registers on verified account
-        try {
-          localStorage.removeItem('fcm_registered_token');
-        } catch {
-          // ignore — localStorage unavailable in some contexts
-        }
+        try { localStorage.removeItem('fcm_registered_token'); } catch { /* ignore */ }
 
         setStatus('success');
-        setMessage('Your email has been verified! Redirecting you now…');
-
-        // Redirect to / — AuthContext handles role-based routing from there
-        setTimeout(() => router.push('/'), 3000);
+        setMessage('Your email has been verified! Redirecting you now...');
+        setTimeout(() => router.push('/'), 2500);
 
       } catch (err: any) {
         console.error('[VerifyEmail] Error:', err.code, err.message);
+        sessionStorage.removeItem(guardKey);
         setStatus('error');
 
         switch (err.code) {
           case 'auth/expired-action-code':
-            setMessage(
-              'This verification link has expired (valid for 3 days). Please request a new one.'
-            );
+            setMessage('This verification link has expired (valid for 3 days). Please request a new one.');
             break;
           case 'auth/invalid-action-code':
-            setMessage(
-              'This link is invalid or has already been used. If you verified recently, try signing in. Otherwise, request a new verification email.'
-            );
+            setMessage('This link has already been used or is invalid. If you just verified, try signing in. Otherwise, request a new verification email.');
             break;
           case 'auth/user-disabled':
             setMessage('Your account has been disabled. Please contact support.');
@@ -120,7 +110,6 @@ export default function VerifyEmailPage() {
     };
 
     verifyEmail();
-  // ✅ Fix 2 (continued): depend on the stable string values, not the object
   }, [oobCode, mode, router]);
 
   return (
@@ -128,9 +117,7 @@ export default function VerifyEmailPage() {
       <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8 text-center border border-gray-100">
 
         <div className="mb-6 flex justify-center">
-          {status === 'loading' && (
-            <Loader2 className="h-16 w-16 text-blue-600 animate-spin" />
-          )}
+          {status === 'loading' && <Loader2 className="h-16 w-16 text-blue-600 animate-spin" />}
           {status === 'success' && (
             <div className="p-4 bg-green-100 rounded-full">
               <CheckCircleIcon className="h-12 w-12 text-green-600" />
@@ -145,8 +132,7 @@ export default function VerifyEmailPage() {
 
         <h1 className={`text-2xl sm:text-3xl font-bold mb-3 ${
           status === 'success' ? 'text-green-700' :
-          status === 'error'   ? 'text-red-700'   :
-                                  'text-gray-900'
+          status === 'error'   ? 'text-red-700'   : 'text-gray-900'
         }`}>
           {status === 'loading' && 'Verifying Your Email'}
           {status === 'success' && 'Email Verified!'}
@@ -155,42 +141,31 @@ export default function VerifyEmailPage() {
 
         <p className="text-gray-600 mb-8 leading-relaxed">{message}</p>
 
-        <div className="space-y-4">
+        <div className="space-y-3">
           {status === 'success' && (
             <>
-              <p className="text-sm text-gray-500">Redirecting automatically in 3 seconds…</p>
-              <Button
-                onClick={() => router.push('/')}
-                className="w-full bg-green-600 hover:bg-green-700 text-white h-11"
-              >
-                Go Now
+              <p className="text-sm text-gray-500">Redirecting automatically...</p>
+              <Button onClick={() => router.push('/')} className="w-full bg-green-600 hover:bg-green-700 text-white h-11">
+                Continue to App
               </Button>
             </>
           )}
-
           {status === 'error' && (
             <>
-              <Button
-                onClick={() => router.push('/login')}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white h-11"
-              >
+              <Button onClick={() => router.push('/login')} className="w-full bg-blue-600 hover:bg-blue-700 text-white h-11">
                 Go to Login
               </Button>
-              <Button
-                onClick={() => router.push('/login?resend=true')}
-                variant="outline"
-                className="w-full h-11"
-              >
+              <Button onClick={() => router.push('/login?resend=true')} variant="outline" className="w-full h-11">
                 Request New Verification Email
               </Button>
             </>
           )}
-
           {status === 'loading' && (
-            <p className="text-sm text-gray-500">This should only take a few seconds…</p>
+            <p className="text-sm text-gray-500">This should only take a few seconds...</p>
           )}
         </div>
+
       </div>
     </div>
   );
-}
+} 

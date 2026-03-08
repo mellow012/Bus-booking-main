@@ -1,15 +1,25 @@
+// hooks/useEmailVerification.ts
+// ─────────────────────────────────────────────────────────────────────────────
+// Provides email verification actions for components.
+//
+// IMPORTANT — single source of truth for emailVerified:
+//   Always read user.emailVerified from Firebase Auth (via useAuth().user),
+//   never userProfile.emailVerified from Firestore. Auth is updated immediately
+//   when the user clicks the verification link; Firestore lags until
+//   AuthContext.syncEmailVerifiedToFirestore() writes it back.
+//
+// This hook handles:
+//   - Sending / resending verification emails via the API route
+//   - Checking verification status server-side (for polling on /verify-email)
+//   - Refreshing the Firebase user object to pick up emailVerified changes
+//
+// Window focus listening is handled in AuthContext to avoid duplicate
+// reload() calls. Do NOT add another focus listener here.
+// ─────────────────────────────────────────────────────────────────────────────
+
 import { useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { reload } from 'firebase/auth';
-import { getAuth } from 'firebase/auth';
-
-/**
- * FIXES:
- * - refreshEmailVerificationStatus now calls reload() on the Firebase user
- *   before reading emailVerified, so it reflects server-side truth.
- * - Added refreshAndSync which forces token refresh AND reloads the user
- *   object — use this after the user returns from clicking the email link.
- */
+import { getAuth, reload } from 'firebase/auth';
 
 interface VerificationStatus {
   isVerified: boolean;
@@ -21,9 +31,12 @@ interface VerificationStatus {
 export const useEmailVerification = () => {
   const { user } = useAuth();
 
+  // ─── Send / resend verification email ──────────────────────────────────────
+
   const sendVerificationEmail = useCallback(async (): Promise<{
     success: boolean;
     message: string;
+    alreadyVerified?: boolean;
     verificationLink?: string;
   }> => {
     if (!user) throw new Error('User not authenticated');
@@ -33,7 +46,7 @@ export const useEmailVerification = () => {
       const response = await fetch('/api/auth/send-verification-email', {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${token}`,
+          Authorization:  `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
       });
@@ -45,15 +58,20 @@ export const useEmailVerification = () => {
       }
 
       return {
-        success: true,
-        message: data.message,
+        success:          true,
+        message:          data.message,
+        alreadyVerified:  data.alreadyVerified ?? false,
         verificationLink: data.verificationLink,
       };
     } catch (error: any) {
-      console.error('[useEmailVerification] Error sending email:', error);
+      console.error('[useEmailVerification] sendVerificationEmail error:', error);
       throw error;
     }
   }, [user]);
+
+  // ─── Check verification status server-side ─────────────────────────────────
+  // Calls the Admin SDK which always has the current server-side state.
+  // Use this for polling on the /verify-email page.
 
   const checkVerificationStatus = useCallback(async (): Promise<VerificationStatus> => {
     if (!user) {
@@ -64,10 +82,7 @@ export const useEmailVerification = () => {
       const token = await user.getIdToken();
       const response = await fetch('/api/auth/check-verification', {
         method: 'GET',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
+        headers: { Authorization: `Bearer ${token}` },
       });
 
       const data = await response.json();
@@ -78,44 +93,36 @@ export const useEmailVerification = () => {
 
       return {
         isVerified: data.emailVerified,
-        email: data.email,
-        loading: false,
-        error: null,
+        email:      data.email,
+        loading:    false,
+        error:      null,
       };
     } catch (error: any) {
-      console.error('[useEmailVerification] Error checking status:', error);
+      console.error('[useEmailVerification] checkVerificationStatus error:', error);
       return {
         isVerified: false,
-        email: user.email || '',
-        loading: false,
-        error: error.message,
+        email:      user.email || '',
+        loading:    false,
+        error:      error.message,
       };
     }
   }, [user]);
 
-  /**
-   * Reload the Firebase user object AND force a token refresh.
-   * Call this when the user returns to the app after clicking the verification
-   * link — e.g. on window focus, after polling, or on a "I've verified" button.
-   *
-   * Returns true if emailVerified is now true.
-   */
+  // ─── Refresh Firebase user object ─────────────────────────────────────────
+  // Call this when you need to force-check emailVerified without waiting for
+  // the next onAuthStateChanged event (e.g. a "Check again" button).
+  //
+  // Note: AuthContext already calls reload() on window focus. Only call this
+  // manually for explicit user-triggered actions to avoid redundant network calls.
+
   const refreshEmailVerificationStatus = useCallback(async (): Promise<boolean> => {
     if (!user) return false;
 
     try {
-      const auth = getAuth();
-      const currentUser = auth.currentUser;
-
+      const currentUser = getAuth().currentUser;
       if (!currentUser) return false;
 
-      // reload() fetches the latest user data from Firebase Auth servers
-      // This is what actually updates emailVerified on the user object
       await reload(currentUser);
-
-      // Force-refresh the ID token so the new emailVerified claim propagates
-      await currentUser.getIdToken(true);
-
       console.log('[useEmailVerification] Refreshed — emailVerified:', currentUser.emailVerified);
       return currentUser.emailVerified;
     } catch (error) {
@@ -128,7 +135,8 @@ export const useEmailVerification = () => {
     sendVerificationEmail,
     checkVerificationStatus,
     refreshEmailVerificationStatus,
+    // Always read from Firebase Auth — never from userProfile
     isVerified: user?.emailVerified ?? false,
-    email: user?.email ?? '',
+    email:      user?.email ?? '',
   };
 };

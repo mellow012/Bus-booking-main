@@ -1,20 +1,5 @@
 'use client';
-// FIX F-21: notificationHelper.ts has been DELETED.
-// This file is now the single canonical source for:
-//   - sendNotification()
-//   - sendBulkNotification()
-//   - NotificationTemplates
-//   - NotificationProvider / useNotifications
-//   - NotificationBell
-//
-// Any file that previously imported from notificationHelper.ts must be updated
-// to import from this file instead:
-//   import { sendNotification, NotificationTemplates } from '@/contexts/NotificationContext';
-//
-// FIX F-25: Notification type union is now consistent. The type field uses the
-// same literal union everywhere — in the Notification type definition, in
-// sendNotification params, and in NotificationTemplates. Previously the type
-// definition used one set of values and the send-side used a different set.
+// contexts/NotificationContext.tsx
 
 import React, {
   createContext, useContext, useEffect, useState,
@@ -30,8 +15,6 @@ import { Notification } from '@/types/index';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-// FIX F-25: Aligned with all emitted values from NotificationTemplates.
-// Add any new notification type here AND to your Notification type in types/index.ts.
 export type NotificationType =
   | 'booking'
   | 'payment'
@@ -39,7 +22,7 @@ export type NotificationType =
   | 'system'
   | 'promotion'
   | 'alert'
-  | 'cancellation' // retained for legacy Firestore documents
+  | 'cancellation'
   | 'cancellation_requested';
 
 export interface SendNotificationParams {
@@ -59,6 +42,7 @@ interface NotificationContextType {
   markAllAsRead: () => Promise<void>;
   clearAll: () => Promise<void>;
   isLoading: boolean;
+  error: string | null;
   sendNotification: (params: SendNotificationParams) => Promise<void>;
 }
 
@@ -74,41 +58,69 @@ export const useNotifications = () => {
 
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
-interface NotificationProviderProps {
-  children: ReactNode;
-  userId?: string;
-}
-
-export const NotificationProvider: React.FC<NotificationProviderProps> = ({ children, userId }) => {
+export const NotificationProvider: React.FC<{ children: ReactNode; userId?: string }> = ({
+  children,
+  userId,
+}) => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading]         = useState(true);
+  const [error, setError]                 = useState<string | null>(null);
 
   useEffect(() => {
     if (!userId) {
       setNotifications([]);
       setIsLoading(false);
+      setError(null);
       return;
     }
 
     setIsLoading(true);
+    setError(null);
+
+    // This query requires a Firestore composite index:
+    //   Collection: notifications
+    //   Fields: userId (ASC), createdAt (DESC)
+    //
+    // If you see a "requires an index" error in the console, click the link
+    // Firebase provides in the error message — it creates the index automatically.
+    // Until the index is built (takes ~1 minute), notifications will not load.
     const q = query(
       collection(db, 'notifications'),
       where('userId', '==', userId),
       orderBy('createdAt', 'desc')
     );
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map(d => ({
-        id: d.id,
-        ...d.data(),
-        createdAt: d.data().createdAt?.toDate() || new Date(),
-      } as Notification));
-      setNotifications(data);
-      setIsLoading(false);
-    }, (error) => {
-      console.error('Error fetching notifications:', error);
-      setIsLoading(false);
-    });
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const data = snapshot.docs.map(d => ({
+          id: d.id,
+          ...d.data(),
+          createdAt: d.data().createdAt?.toDate?.() ?? new Date(),
+        } as Notification));
+        setNotifications(data);
+        setIsLoading(false);
+        setError(null);
+      },
+      (err) => {
+        console.error('[NotificationProvider] Firestore error:', err.code, err.message);
+
+        // Surface the missing-index error so it's visible during development
+        if (err.code === 'failed-precondition' || err.message.includes('index')) {
+          setError('index_required');
+          console.warn(
+            '[NotificationProvider] Missing Firestore index.\n' +
+            'Go to Firebase Console → Firestore → Indexes and create:\n' +
+            '  Collection: notifications\n' +
+            '  Fields: userId (Ascending), createdAt (Descending)\n' +
+            'Or click the link in the error message above to create it automatically.'
+          );
+        } else {
+          setError(err.message);
+        }
+        setIsLoading(false);
+      }
+    );
 
     return () => unsubscribe();
   }, [userId]);
@@ -116,21 +128,23 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
   const markAsRead = useCallback(async (id: string) => {
     try {
       await updateDoc(doc(db, 'notifications', id), { isRead: true, readAt: new Date() });
-    } catch (error) {
-      console.error('Error marking notification as read:', error);
+    } catch (err) {
+      console.error('[NotificationProvider] markAsRead failed:', err);
     }
   }, []);
 
   const markAllAsRead = useCallback(async () => {
-    if (!userId || notifications.length === 0) return;
+    if (!userId) return;
+    const unread = notifications.filter(n => !n.isRead);
+    if (unread.length === 0) return;
     try {
       const batch = writeBatch(db);
-      notifications
-        .filter(n => !n.isRead)
-        .forEach(n => batch.update(doc(db, 'notifications', n.id), { isRead: true, readAt: new Date() }));
+      unread.forEach(n =>
+        batch.update(doc(db, 'notifications', n.id), { isRead: true, readAt: new Date() })
+      );
       await batch.commit();
-    } catch (error) {
-      console.error('Error marking all notifications as read:', error);
+    } catch (err) {
+      console.error('[NotificationProvider] markAllAsRead failed:', err);
     }
   }, [userId, notifications]);
 
@@ -140,52 +154,58 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
       const batch = writeBatch(db);
       notifications.forEach(n => batch.delete(doc(db, 'notifications', n.id)));
       await batch.commit();
-    } catch (error) {
-      console.error('Error clearing notifications:', error);
+    } catch (err) {
+      console.error('[NotificationProvider] clearAll failed:', err);
     }
   }, [userId, notifications]);
 
-  // Bound version for context consumers
   const sendNotificationCtx = useCallback(async (params: SendNotificationParams) => {
     await sendNotification(params);
   }, []);
 
-  const unreadCount = notifications.filter(n => !n.isRead).length;
-
   return (
     <NotificationContext.Provider value={{
-      notifications, unreadCount,
-      markAsRead, markAllAsRead, clearAll,
-      isLoading, sendNotification: sendNotificationCtx,
+      notifications,
+      unreadCount: notifications.filter(n => !n.isRead).length,
+      markAsRead,
+      markAllAsRead,
+      clearAll,
+      isLoading,
+      error,
+      sendNotification: sendNotificationCtx,
     }}>
       {children}
     </NotificationContext.Provider>
   );
 };
 
-// ─── NotificationBell UI ──────────────────────────────────────────────────────
+// ─── NotificationBell ─────────────────────────────────────────────────────────
 
-export const NotificationBell: React.FC<{ userId: string; className?: string }> = ({ userId, className }) => {
-  const { notifications, markAsRead, markAllAsRead, clearAll, unreadCount, isLoading } = useNotifications();
-  const [isOpen, setIsOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
+export const NotificationBell: React.FC<{ userId: string; className?: string }> = ({
+  userId,
+  className,
+}) => {
+  const { notifications, markAsRead, markAllAsRead, clearAll, unreadCount, isLoading, error } =
+    useNotifications();
+  const [isOpen,    setIsOpen]    = useState(false);
+  const dropdownRef               = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
+    const handler = (e: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
         setIsOpen(false);
       }
     };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
   }, []);
 
   return (
-    <div className={`relative ${className}`} ref={dropdownRef}>
+    <div className={`relative ${className ?? ''}`} ref={dropdownRef}>
       <button
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => setIsOpen(prev => !prev)}
         className="relative p-2 rounded-xl hover:bg-gray-100 transition-colors"
-        aria-label="Notifications"
+        aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ''}`}
       >
         <Bell className="w-6 h-6 text-gray-600 hover:text-blue-600" />
         {unreadCount > 0 && (
@@ -196,52 +216,93 @@ export const NotificationBell: React.FC<{ userId: string; className?: string }> 
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-80 bg-white shadow-lg rounded-lg z-50 border border-gray-200">
-          <div className="p-4 border-b border-gray-100 flex justify-between items-center">
-            <h3 className="font-semibold">Notifications</h3>
-            <div className="flex gap-2">
+        <div className="absolute right-0 mt-2 w-80 bg-white shadow-xl rounded-xl z-50 border border-gray-200 overflow-hidden">
+          {/* Header */}
+          <div className="px-4 py-3 border-b border-gray-100 flex justify-between items-center">
+            <h3 className="font-semibold text-gray-900">Notifications</h3>
+            <div className="flex gap-1">
               {unreadCount > 0 && (
-                <button onClick={markAllAsRead} className="p-1 hover:bg-blue-100 rounded" title="Mark all read">
+                <button
+                  onClick={markAllAsRead}
+                  className="p-1.5 hover:bg-blue-100 rounded-lg transition-colors"
+                  title="Mark all as read"
+                >
                   <CheckCheck className="w-4 h-4 text-blue-600" />
                 </button>
               )}
-              <button onClick={clearAll} className="p-1 hover:bg-red-100 rounded" title="Clear all">
-                <Trash2 className="w-4 h-4 text-red-600" />
+              <button
+                onClick={clearAll}
+                className="p-1.5 hover:bg-red-100 rounded-lg transition-colors"
+                title="Clear all"
+              >
+                <Trash2 className="w-4 h-4 text-red-500" />
               </button>
-              <button onClick={() => setIsOpen(false)} className="p-1 hover:bg-gray-100 rounded">
-                <X className="w-4 h-4 text-gray-600" />
+              <button
+                onClick={() => setIsOpen(false)}
+                className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <X className="w-4 h-4 text-gray-500" />
               </button>
             </div>
           </div>
 
-          <div className="max-h-64 overflow-y-auto">
+          {/* Body */}
+          <div className="max-h-80 overflow-y-auto">
             {isLoading ? (
-              <div className="p-4 text-center text-gray-500">Loading…</div>
+              <div className="p-6 text-center">
+                <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+                <p className="text-sm text-gray-500">Loading notifications…</p>
+              </div>
+            ) : error === 'index_required' ? (
+              <div className="p-4 text-center">
+                <p className="text-sm text-amber-600 font-medium mb-1">Index building…</p>
+                <p className="text-xs text-gray-500">
+                  Firestore is creating the required index. This takes about 1 minute.
+                  Check your browser console for the setup link.
+                </p>
+              </div>
+            ) : error ? (
+              <div className="p-4 text-center">
+                <p className="text-sm text-red-500">Failed to load notifications.</p>
+              </div>
             ) : notifications.length === 0 ? (
-              <div className="p-4 text-center text-gray-500">No notifications</div>
+              <div className="p-6 text-center">
+                <Bell className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+                <p className="text-sm text-gray-500">No notifications yet</p>
+              </div>
             ) : (
               notifications.map(n => (
                 <div
                   key={n.id}
                   onClick={() => { markAsRead(n.id); setIsOpen(false); }}
-                  className={`p-3 hover:bg-gray-50 cursor-pointer flex items-start gap-2 ${!n.isRead ? 'bg-blue-50' : ''}`}
+                  className={`px-4 py-3 hover:bg-gray-50 cursor-pointer flex items-start gap-3 border-b border-gray-50 last:border-0 transition-colors ${
+                    !n.isRead ? 'bg-blue-50/60' : ''
+                  }`}
                 >
-                  <div className="text-blue-600 font-bold w-5 shrink-0">
-                    {n.type.charAt(0).toUpperCase()}
-                  </div>
+                  {/* Type indicator dot */}
+                  <div className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${
+                    !n.isRead ? 'bg-blue-500' : 'bg-gray-300'
+                  }`} />
+
                   <div className="flex-1 min-w-0">
-                    <h4 className={`font-medium text-sm truncate ${!n.isRead ? 'text-gray-900' : 'text-gray-600'}`}>
+                    <p className={`text-sm font-medium truncate ${
+                      !n.isRead ? 'text-gray-900' : 'text-gray-600'
+                    }`}>
                       {n.title}
-                    </h4>
-                    <p className={`text-xs ${!n.isRead ? 'text-gray-700' : 'text-gray-500'}`}>{n.message}</p>
-                    <p className="text-xs text-gray-400 mt-0.5">{new Date(n.createdAt).toLocaleString()}</p>
+                    </p>
+                    <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{n.message}</p>
+                    <p className="text-xs text-gray-400 mt-1">
+                      {new Date(n.createdAt).toLocaleString()}
+                    </p>
                   </div>
+
                   {!n.isRead && (
                     <button
                       onClick={e => { e.stopPropagation(); markAsRead(n.id); }}
-                      className="p-1 hover:bg-blue-100 rounded shrink-0"
+                      className="p-1 hover:bg-blue-100 rounded-lg shrink-0 transition-colors"
+                      title="Mark as read"
                     >
-                      <Check className="w-4 h-4 text-blue-600" />
+                      <Check className="w-3.5 h-3.5 text-blue-600" />
                     </button>
                   )}
                 </div>
@@ -254,9 +315,8 @@ export const NotificationBell: React.FC<{ userId: string; className?: string }> 
   );
 };
 
-// ─── Standalone helpers (canonical — imported everywhere) ─────────────────────
+// ─── Standalone helpers ───────────────────────────────────────────────────────
 
-/** Write a single notification document to Firestore. */
 export async function sendNotification({
   userId, type, title, message,
   data = {}, actionUrl, priority = 'medium',
@@ -267,14 +327,13 @@ export async function sendNotification({
   await addDoc(collection(db, 'notifications'), {
     userId, type, title, message,
     data: cleanData,
-    actionUrl: actionUrl || null,
+    actionUrl: actionUrl ?? null,
     priority,
     isRead: false,
     createdAt: Timestamp.now(),
   });
 }
 
-/** Write notification documents for multiple users in parallel. */
 export async function sendBulkNotification({
   userIds, type, title, message,
   data = {}, actionUrl, priority = 'medium',
@@ -295,7 +354,7 @@ export async function sendBulkNotification({
       addDoc(collection(db, 'notifications'), {
         userId: uid, type, title, message,
         data: cleanData,
-        actionUrl: actionUrl || null,
+        actionUrl: actionUrl ?? null,
         priority,
         isRead: false,
         createdAt: Timestamp.now(),
@@ -303,8 +362,6 @@ export async function sendBulkNotification({
     )
   );
 }
-
-// ─── Templates (FIX F-25: types aligned with NotificationType union) ──────────
 
 export const NotificationTemplates = {
   bookingConfirmed: (bookingId: string, route: string) => ({
@@ -317,7 +374,7 @@ export const NotificationTemplates = {
   paymentReceived: (amount: number, bookingId: string) => ({
     type: 'payment' as const,
     title: 'Payment Received',
-    message: `We've received your payment of MWK ${amount.toLocaleString()}.`,
+    message: `We received your payment of MWK ${amount.toLocaleString()}.`,
     actionUrl: `/bookings/${bookingId}`,
     priority: 'medium' as const,
   }),

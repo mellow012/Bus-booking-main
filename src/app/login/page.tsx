@@ -3,7 +3,6 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { useTranslations } from 'next-intl';
@@ -28,13 +27,14 @@ interface ValidationResult {
 }
 
 // Constants
-const MAX_ATTEMPTS = 5;
-const LOCKOUT_DURATION = 15 * 60 * 1000;
+const MAX_ATTEMPTS      = 5;
+const LOCKOUT_DURATION  = 15 * 60 * 1000;
 const MIN_PASSWORD_LENGTH = 8;
 
-// Custom hooks
+// ─── Hooks ────────────────────────────────────────────────────────────────────
+
 const useFormValidation = (formData: FormData, t: (key: string, opts?: any) => string) => {
-  const [errors, setErrors] = useState<FormErrors>({});
+  const [errors,  setErrors]  = useState<FormErrors>({});
   const [touched, setTouched] = useState<Record<string, boolean>>({});
 
   const validateField = (name: string, value: string): string => {
@@ -77,15 +77,18 @@ const useFormValidation = (formData: FormData, t: (key: string, opts?: any) => s
 
 const useLoginAttempts = () => {
   const [attemptCount, setAttemptCount] = useState(0);
-  const [lockoutTime, setLockoutTime]   = useState<number | null>(null);
-  const [isLockedOut, setIsLockedOut]   = useState(false);
+  const [lockoutTime,  setLockoutTime]  = useState<number | null>(null);
+  const [isLockedOut,  setIsLockedOut]  = useState(false);
 
   useEffect(() => {
     const stored = localStorage.getItem('loginAttempts');
     if (stored) {
       const { count, lockout } = JSON.parse(stored);
       setAttemptCount(count || 0);
-      if (lockout && Date.now() < lockout) { setLockoutTime(lockout); setIsLockedOut(true); }
+      if (lockout && Date.now() < lockout) {
+        setLockoutTime(lockout);
+        setIsLockedOut(true);
+      }
     }
   }, []);
 
@@ -94,7 +97,9 @@ const useLoginAttempts = () => {
     if (lockoutTime && isLockedOut) {
       timer = setInterval(() => {
         if (Date.now() >= lockoutTime) {
-          setIsLockedOut(false); setAttemptCount(0); setLockoutTime(null);
+          setIsLockedOut(false);
+          setAttemptCount(0);
+          setLockoutTime(null);
           localStorage.removeItem('loginAttempts');
         }
       }, 1000);
@@ -107,7 +112,8 @@ const useLoginAttempts = () => {
     setAttemptCount(newCount);
     if (newCount >= MAX_ATTEMPTS) {
       const lockout = Date.now() + LOCKOUT_DURATION;
-      setLockoutTime(lockout); setIsLockedOut(true);
+      setLockoutTime(lockout);
+      setIsLockedOut(true);
       localStorage.setItem('loginAttempts', JSON.stringify({ count: newCount, lockout }));
     } else {
       localStorage.setItem('loginAttempts', JSON.stringify({ count: newCount }));
@@ -115,52 +121,35 @@ const useLoginAttempts = () => {
   };
 
   const resetAttempts = () => {
-    setAttemptCount(0); setLockoutTime(null); setIsLockedOut(false);
+    setAttemptCount(0);
+    setLockoutTime(null);
+    setIsLockedOut(false);
     localStorage.removeItem('loginAttempts');
   };
 
-  const getRemainingTime = () => (lockoutTime ? Math.max(0, Math.ceil((lockoutTime - Date.now()) / 1000)) : 0);
+  const getRemainingTime = () =>
+    lockoutTime ? Math.max(0, Math.ceil((lockoutTime - Date.now()) / 1000)) : 0;
 
   return { attemptCount, isLockedOut, remainingTime: getRemainingTime(), incrementAttempts, resetAttempts };
 };
 
 const formatTime = (seconds: number): string => {
-  const minutes = Math.floor(seconds / 60);
+  const minutes         = Math.floor(seconds / 60);
   const remainingSeconds = seconds % 60;
   return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
 };
 
-const handlePostLoginActions = async (user: any) => {
-  try {
-    const token    = await user.getIdTokenResult();
-    const role     = token.claims.role;
-    const companyId = token.claims.companyId;
-    if (role === 'company_admin' && companyId) {
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${await user.getIdToken()}` },
-        body: JSON.stringify({ companyId, action: 'activate_company' }),
-      });
-      if (!response.ok) console.error('Failed to activate company:', await response.text());
-      return `/company/admin?companyId=${companyId}`;
-    }
-    if (role === 'operator' && companyId) return `/company/operator/dashboard?companyId=${companyId}`;
-    if (role === 'super_admin') return '/admin/dashboard';
-    if (role === 'customer') return '/dashboard';
-    return '/';
-  } catch (error) {
-    console.error('Post-login actions failed:', error);
-    return '/';
-  }
-};
+// ─── Component ────────────────────────────────────────────────────────────────
 
-// Main component
 export default function Login() {
-  const router   = useRouter();
+  const router     = useRouter();
+  // FIX: use AuthContext.signIn so the __session cookie is created properly.
+  // Previously the page called Firebase directly and skipped session creation,
+  // which caused middleware to reject every subsequent request.
   const { signIn } = useAuth();
-  const t        = useTranslations('login');
+  const t          = useTranslations('login');
 
-  const [formData, setFormData] = useState<FormData>({ email: '', password: '', rememberMe: false });
+  const [formData,     setFormData]     = useState<FormData>({ email: '', password: '', rememberMe: false });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [generalError, setGeneralError] = useState('');
@@ -173,15 +162,16 @@ export default function Login() {
       switch (error.code) {
         case 'auth/user-not-found':
         case 'auth/wrong-password':
-        case 'auth/invalid-credential': return t('errorInvalid');
-        case 'auth/too-many-requests':  return t('errorTooMany');
-        case 'auth/user-disabled':      return t('errorDisabled');
+        case 'auth/invalid-credential':     return t('errorInvalid');
+        case 'auth/too-many-requests':      return t('errorTooMany');
+        case 'auth/user-disabled':          return t('errorDisabled');
         case 'auth/network-request-failed': return t('errorNetwork');
-        case 'auth/invalid-email':      return t('errorInvalidEmail');
-        default:                        return t('errorGeneral');
+        case 'auth/invalid-email':          return t('errorInvalidEmail');
+        case 'auth/session-failed':         return 'Unable to establish a secure session. Please try again.';
+        default:                            return t('errorGeneral');
       }
     }
-    return t('errorUnexpected');
+    return error?.message || t('errorUnexpected');
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -193,16 +183,24 @@ export default function Login() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isLockedOut) { setGeneralError(t('lockedBody', { time: formatTime(remainingTime) })); return; }
+    if (isLockedOut) {
+      setGeneralError(t('lockedBody', { time: formatTime(remainingTime) }));
+      return;
+    }
+
     const validation = validateForm();
     if (!validation.isValid) return;
-    setIsSubmitting(true); setGeneralError('');
+
+    setIsSubmitting(true);
+    setGeneralError('');
+
     try {
-      const auth = getAuth();
-      const userCredential = await signInWithEmailAndPassword(auth, formData.email, formData.password);
+      // FIX: call AuthContext.signIn — it creates the __session cookie and
+      // lets the route guard in AuthContext handle the redirect. Do NOT push
+      // the router manually here; both systems redirecting causes a race.
+      await signIn(formData.email, formData.password);
       resetAttempts();
-      const redirectUrl = await handlePostLoginActions(userCredential.user);
-      router.push(redirectUrl);
+      // Redirect is handled by AuthContext route guard — no router.push here.
     } catch (error: any) {
       console.error('Login error:', error);
       incrementAttempts();
@@ -218,7 +216,8 @@ export default function Login() {
   };
 
   const renderError = (fieldName: keyof FormErrors) => {
-    const error = errors[fieldName]; const isTouched = touched[fieldName];
+    const error    = errors[fieldName];
+    const isTouched = touched[fieldName];
     if (error && isTouched) {
       return (
         <div className="mt-1 flex items-center text-sm text-red-600" role="alert">
@@ -230,7 +229,7 @@ export default function Login() {
   };
 
   const getInputClassName = (fieldName: keyof FormErrors) => {
-    const base = "appearance-none block w-full px-3 py-2.5 pl-10 pr-10 border rounded-lg placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors duration-200";
+    const base     = "appearance-none block w-full px-3 py-2.5 pl-10 pr-10 border rounded-lg placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors duration-200";
     const hasError = errors[fieldName] && touched[fieldName];
     return hasError
       ? `${base} border-red-300 text-red-900 placeholder-red-300 focus:ring-red-500 focus:border-red-500`
@@ -287,16 +286,21 @@ export default function Login() {
               </div>
             )}
 
+            {/* Email */}
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
                 <EnvelopeIcon className="w-4 h-4 inline mr-1" />{t('emailLabel')}
               </label>
               <div className="relative">
                 <input
-                  id="email" name="email" type="email" autoComplete="email" required
+                  id="email" name="email" type="email"
+                  autoComplete="email" required
                   aria-invalid={errors.email && touched.email ? 'true' : 'false'}
-                  value={formData.email} onChange={handleInputChange} onBlur={() => handleBlur('email')}
-                  className={getInputClassName('email')} placeholder={t('emailPlaceholder')}
+                  value={formData.email}
+                  onChange={handleInputChange}
+                  onBlur={() => handleBlur('email')}
+                  className={getInputClassName('email')}
+                  placeholder={t('emailPlaceholder')}
                   disabled={isSubmitting || isLockedOut}
                 />
                 <EnvelopeIcon className="w-5 h-5 text-gray-400 absolute top-2.5 left-3 pointer-events-none" />
@@ -307,32 +311,44 @@ export default function Login() {
               {renderError('email')}
             </div>
 
+            {/* Password */}
             <div>
               <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
                 <LockClosedIcon className="w-4 h-4 inline mr-1" />{t('passwordLabel')}
               </label>
               <div className="relative">
                 <input
-                  id="password" name="password" type={showPassword ? 'text' : 'password'}
+                  id="password" name="password"
+                  type={showPassword ? 'text' : 'password'}
                   autoComplete="current-password" required
                   aria-invalid={errors.password && touched.password ? 'true' : 'false'}
-                  value={formData.password} onChange={handleInputChange} onBlur={() => handleBlur('password')}
-                  className={getInputClassName('password')} placeholder={t('passwordPlaceholder')}
+                  value={formData.password}
+                  onChange={handleInputChange}
+                  onBlur={() => handleBlur('password')}
+                  className={getInputClassName('password')}
+                  placeholder={t('passwordPlaceholder')}
                   disabled={isSubmitting || isLockedOut}
                 />
                 <LockClosedIcon className="w-5 h-5 text-gray-400 absolute top-2.5 left-3 pointer-events-none" />
-                <button type="button" onClick={() => setShowPassword(!showPassword)}
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
                   className="absolute top-2.5 right-3 text-gray-400 hover:text-gray-600 focus:outline-none transition-colors duration-200"
-                  aria-label={showPassword ? 'Hide password' : 'Show password'} disabled={isSubmitting || isLockedOut}>
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  disabled={isSubmitting || isLockedOut}
+                >
                   {showPassword ? <EyeSlashIcon className="w-5 h-5" /> : <EyeIcon className="w-5 h-5" />}
                 </button>
               </div>
               {renderError('password')}
             </div>
 
+            {/* Remember me / Forgot password */}
             <div className="flex items-center justify-between">
               <div className="flex items-center">
-                <input id="rememberMe" name="rememberMe" type="checkbox" checked={formData.rememberMe}
+                <input
+                  id="rememberMe" name="rememberMe" type="checkbox"
+                  checked={formData.rememberMe}
                   onChange={handleInputChange}
                   className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded transition-colors duration-200"
                   disabled={isSubmitting || isLockedOut}
@@ -341,17 +357,31 @@ export default function Login() {
                   {t('rememberMe')}
                 </label>
               </div>
-              <button type="button" onClick={handleForgotPassword} disabled={isSubmitting}
-                className="text-sm font-medium text-blue-600 hover:text-blue-500 focus:outline-none focus:underline transition-colors duration-200">
+              <button
+                type="button"
+                onClick={handleForgotPassword}
+                disabled={isSubmitting}
+                className="text-sm font-medium text-blue-600 hover:text-blue-500 focus:outline-none focus:underline transition-colors duration-200"
+              >
                 {t('forgotPassword')}
               </button>
             </div>
 
+            {/* Submit */}
             <div>
-              <Button type="submit" disabled={isSubmitting || isLockedOut}
-                className="w-full flex justify-center items-center py-2.5 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200">
+              <Button
+                type="submit"
+                disabled={isSubmitting || isLockedOut}
+                className="w-full flex justify-center items-center py-2.5 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+              >
                 {isSubmitting ? (
-                  <><svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" className="opacity-25" /><path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" className="opacity-75" /></svg>{t('submitting')}</>
+                  <>
+                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" className="opacity-25" />
+                      <path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" className="opacity-75" />
+                    </svg>
+                    {t('submitting')}
+                  </>
                 ) : t('submitButton')}
               </Button>
             </div>
@@ -361,7 +391,6 @@ export default function Login() {
             <p className="text-xs text-gray-500">
               {t('troubleSignIn')}{' '}
               <Link href="/contact" className="text-blue-600 hover:text-blue-500 focus:outline-none focus:underline transition-colors duration-200">
-                {/* common.contactSupport */}
                 Contact support
               </Link>
             </p>
@@ -370,4 +399,4 @@ export default function Login() {
       </div>
     </div>
   );
-}
+}   

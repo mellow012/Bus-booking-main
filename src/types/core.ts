@@ -1,18 +1,50 @@
-import { Timestamp } from 'firebase/firestore';
+// types/index.ts
+// ─────────────────────────────────────────────────────────────────────────────
+// Central type definitions for TibhukeBus.
+//
+// TIMESTAMP STRATEGY:
+//   Firestore timestamps go through three states:
+//     1. Write:  serverTimestamp() returns FieldValue — a sentinel instruction.
+//     2. Pending: before the write resolves, onSnapshot may return null.
+//     3. Read:   Firestore SDK returns a Timestamp object (not a JS Date).
+//
+//   The FirestoreTimestamp union covers all three states. Use the toDate()
+//   helper in lib/utils.ts to safely convert to a JS Date for display.
+//
+//   NEVER cast serverTimestamp() as unknown as Date — TypeScript will accept
+//   it but the runtime value is wrong and will crash any Date method call.
+// ─────────────────────────────────────────────────────────────────────────────
+
+import { Timestamp, FieldValue } from 'firebase/firestore';
 import { PaymentMethod, PaymentProvider } from './payment';
 
-/**
- * Base interface for all Firestore documents to ensure consistency.
- */
+// ─── Timestamp union ──────────────────────────────────────────────────────────
 
+/**
+ * The type of any timestamp field on a Firestore document.
+ *
+ *   Date      — plain JS Date (e.g. from manual construction or test fixtures)
+ *   Timestamp — Firestore Timestamp returned when reading a document
+ *   FieldValue — serverTimestamp() sentinel used when writing
+ *   null      — onSnapshot may return null before the server value resolves
+ */
+export type FirestoreTimestamp = Date | Timestamp | FieldValue | null;
+
+// ─── Base document ────────────────────────────────────────────────────────────
+
+/**
+ * Base interface for all Firestore documents.
+ * All timestamp fields use FirestoreTimestamp to correctly represent the full
+ * write → pending → read lifecycle.
+ */
 export interface FirestoreDocument {
   id: string;
-  companyId?: string; 
-  createdAt: Date;
-  updatedAt: Date;
-  
+  companyId?: string;
+  createdAt: FirestoreTimestamp;
+  updatedAt: FirestoreTimestamp;
 }
 
+// ─── Payment settings ─────────────────────────────────────────────────────────
 
 /**
  * Payment settings for a company.
@@ -32,7 +64,7 @@ export interface CompanyPaymentSettings {
    * Never sent to the browser.
    */
   paychanguSecretKeyEnc?: string;
-  paychanguUpdatedAt?: Timestamp | Date;
+  paychanguUpdatedAt?: FirestoreTimestamp;
 
   // ── Stripe (cards & bank transfers) ───────────────────────────────────────
   stripeEnabled?: boolean;
@@ -42,139 +74,124 @@ export interface CompanyPaymentSettings {
   stripeOnboardingComplete?: boolean;
 }
 
+// ─── Company ──────────────────────────────────────────────────────────────────
+
 export interface Company extends FirestoreDocument {
   id: string;
   name: string;
   email: string;
   ownerId: string;
   contact: string;
-  
-  // Details
+
   address?: string;
   description?: string;
   logo?: string;
-  
-  // Status
+
   status: 'active' | 'pending' | 'inactive';
-  
-  // Payment configuration (per-company, managed by superadmin)
+
   paymentSettings?: CompanyPaymentSettings;
-  
-  // Operating info
+
   operatingHours?: Record<string, OperatingHours>;
   branches?: string[];
-  
-  // Social/contact
+
   socials?: {
     whatsapp?: string;
     website?: string;
   };
-  
-  // Metadata
+
   metadata?: Record<string, any>;
 }
-export type UserRole = 'customer' | 'company_admin' | 'operator' | 'conductor' | 'superadmin';
-export type CompanyRole = 'company_admin' | 'operator' | 'conductor';
-export type TeamRole = 'operator' | 'conductor';
+
+// ─── User roles ───────────────────────────────────────────────────────────────
+
+export type UserRole     = 'customer' | 'company_admin' | 'operator' | 'conductor' | 'superadmin';
+export type CompanyRole  = 'company_admin' | 'operator' | 'conductor';
+export type TeamRole     = 'operator' | 'conductor';
+
+// ─── User profile base ────────────────────────────────────────────────────────
 
 /**
- * Base user profile - common fields for all roles
+ * Fields common to all user roles.
+ * Date-like fields that are only ever set by the application (not Firestore)
+ * stay as `Date`. Fields written via serverTimestamp() use FirestoreTimestamp.
  */
 export interface UserProfileBase extends FirestoreDocument {
   id: string;
-  uid: string;     // Firebase Auth UID
+  uid: string;
   email: string;
-  name?: string;  // Optional full name (for backward compatibility)
+  name?: string;
   firstName: string;
   lastName: string;
   phone?: string;
-  
-  // Profile status
-  isActive: boolean;
-  emailVerified: boolean;
-  passwordSet: boolean;
+
+  isActive?: boolean;
+  emailVerified?: boolean;
+  passwordSet?: boolean;
   setupCompleted?: boolean;
-  
-  // Personal info
+
   sex?: string;
   nationalId?: string;
   dateOfBirth?: Date;
   currentAddress?: string;
   profilePicture?: string;
-  
-  // Security
+
   resetToken?: string;
   resetTokenExpiry?: Date;
-  lastLogin?: Date;
-  
-  // Metadata
+  lastLogin?: FirestoreTimestamp;
+
   metadata?: Record<string, any>;
 }
 
-/**
- * Customer profile (no companyId needed)
- */
+// ─── Role-specific profiles ───────────────────────────────────────────────────
+
 export interface CustomerProfile extends UserProfileBase {
   role: 'customer';
-  companyId?: never;  // Explicitly not needed
+  companyId?: never;
 }
 
-/**
- * Company admin profile (companyId required)
- */
 export interface CompanyAdminProfile extends UserProfileBase {
   role: 'company_admin';
-  companyId: string;  // REQUIRED
+  companyId: string;
 }
 
-/**
- * Operator profile (companyId required)
- */
 export interface OperatorProfile extends UserProfileBase {
   role: 'operator';
-  companyId: string;  // REQUIRED
-  region?: string;    // Primary location
-  branch?: string[];  // Backup location list
+  companyId: string;
+  region?: string;
+  branch?: string[];
 }
 
-/**
- * Conductor profile (companyId required)
- */
 export interface ConductorProfile extends UserProfileBase {
   role: 'conductor';
-  companyId: string;  // REQUIRED
-  name?: string;      // From Admin SDK
+  companyId: string;
+  name?: string;
 }
 
-/**
- * SuperAdmin profile (no companyId needed)
- */
 export interface SuperAdminProfile extends UserProfileBase {
   role: 'superadmin';
-  companyId?: never;  // Explicitly not needed
+  companyId?: never;
 }
 
 /**
- * Union type for all user profiles
- * 
+ * Discriminated union of all user profile shapes.
+ *
  * Usage:
- *   const profile: UserProfile = {...}
  *   if (profile.role === 'company_admin') {
- *     // TypeScript knows profile.companyId is string (required)
- *     console.log(profile.companyId);
+ *     profile.companyId // string — TypeScript knows it's required here
  *   }
  */
-export type UserProfile = 
-  | CustomerProfile 
-  | CompanyAdminProfile 
-  | OperatorProfile 
-  | ConductorProfile 
+export type UserProfile =
+  | CustomerProfile
+  | CompanyAdminProfile
+  | OperatorProfile
+  | ConductorProfile
   | SuperAdminProfile;
 
+// ─── Bus ──────────────────────────────────────────────────────────────────────
 
-export type BusType = 'AC' | 'Non-AC' | 'Sleeper' | 'Semi-Sleeper' | 'Luxury' | 'Economy' | 'Minibus';
+export type BusType   = 'AC' | 'Non-AC' | 'Sleeper' | 'Semi-Sleeper' | 'Luxury' | 'Economy' | 'Minibus';
 export type BusStatus = 'active' | 'inactive' | 'maintenance';
-export type FuelType = 'diesel' | 'petrol' | 'electric' | 'hybrid';
+export type FuelType  = 'diesel' | 'petrol' | 'electric' | 'hybrid';
 
 export interface InsuranceDetails {
   provider: string;
@@ -192,33 +209,29 @@ export interface RegistrationDetails {
 export interface Bus extends FirestoreDocument {
   id: string;
   companyId: string;
-  
-  // Basic info
+
   licensePlate: string;
   busType: BusType;
   capacity: number;
   amenities: string[];
   images?: string[];
   status: BusStatus;
-  
-  // Registration & legal
+
   registrationDetails: RegistrationDetails;
-  insuranceDetails: InsuranceDetails;  // ← Single source of truth
-  
-  // Vehicle specs
+  insuranceDetails: InsuranceDetails;
+
   fuelType: FuelType;
   yearOfManufacture: number;
-  
-  // Maintenance
+
   lastMaintenanceDate: Date;
   nextMaintenanceDate: Date;
-  
-  // Crew assignments
+
   conductorIds?: string[];
-  
-  // Metadata
+
   metadata?: Record<string, any>;
 }
+
+// ─── Route ────────────────────────────────────────────────────────────────────
 
 export interface RouteStop {
   id: string;
@@ -226,8 +239,8 @@ export interface RouteStop {
   distanceFromOrigin: number;
   order: number;
   address?: string;
-  pickupPoint?: string; // Specific landmark/location
-  estimatedArrival?: number; // minutes from origin
+  pickupPoint?: string;
+  estimatedArrival?: number;
   contactPerson?: string;
   contactPhone?: string;
 }
@@ -236,28 +249,23 @@ export interface Route extends FirestoreDocument {
   id: string;
   name: string;
   companyId: string;
-  
-  // Route details
+
   origin: string;
   destination: string;
   distance: number;
   duration: number;
   stops: RouteStop[];
-  
-  // Status
+
   status: 'active' | 'inactive';
   isActive: boolean;
-  
-  // Pricing
+
   baseFare: number;
   pricePerKm?: number;
-  
-  // Assignments
+
   assignedOperators?: RouteOperator[];
   assignedOperatorIds?: string[];
   associatedBusIds?: string[];
-  
-  // Metadata
+
   metadata?: Record<string, any>;
 }
 
@@ -266,29 +274,33 @@ interface RouteOperator {
   operatorName: string;
   operatorEmail: string;
   region: string;
-  assignedAt: Date;
+  assignedAt: FirestoreTimestamp;
 }
 
-export type ScheduleStatus = 'pending' | 'published' | 'active' | 'completed' | 'cancelled' | 'archived';
+// ─── Schedule ─────────────────────────────────────────────────────────────────
+
+export type ScheduleStatus =
+  | 'pending'
+  | 'published'
+  | 'active'
+  | 'completed'
+  | 'cancelled'
+  | 'archived';
 
 /**
  * Trip lifecycle status for live trip tracking.
- * 
- * scheduled  — default, conductor has not started the trip yet
- * boarding   — conductor tapped "Start Trip" or "Arrived at [stop]"; walk-ons allowed
- * in_transit — conductor tapped "Depart [stop]"; bus is moving, no new walk-ons at departed stop
+ *
+ * scheduled  — default; conductor has not started the trip yet
+ * boarding   — conductor tapped "Start Trip" or "Arrived at [stop]"
+ * in_transit — conductor tapped "Depart [stop]"; bus is moving
  * completed  — conductor tapped "Complete Trip" at final destination
  */
 export type TripStatus = 'scheduled' | 'boarding' | 'in_transit' | 'completed';
 
-/**
- * A stop as it appears in the full ordered sequence during a live trip.
- * The conductor dashboard builds this from route.stops + sentinel origin/destination.
- */
 export interface TripStop {
-  id: string;        // '__origin__' | 'stop-0' | 'stop-1' | '__destination__'
+  id: string;
   name: string;
-  order: number;     // -1 for origin, 999 for destination, route stop order otherwise
+  order: number;
 }
 
 export interface Schedule extends FirestoreDocument {
@@ -296,131 +308,75 @@ export interface Schedule extends FirestoreDocument {
   companyId: string;
   busId: string;
   routeId: string;
-  
-  // Route details — copied from route on materialisation so conductor doesn't need extra fetches
+
   departureLocation: string;
   arrivalLocation: string;
-  
-  // Intermediate stops — snapshot copied from route.stops on materialisation
+
   stops?: RouteStop[];
-  
-  // Timing
-  departureDateTime: Date;
-  arrivalDateTime: Date;
-  
-  // Pricing & availability
+
+  departureDateTime: FirestoreTimestamp;
+  arrivalDateTime: FirestoreTimestamp;
+
   price: number;
   availableSeats: number;
-  bookedSeats: string[];  // Seat numbers
-  
-  // Status
+  bookedSeats: string[];
+
   status: ScheduleStatus;
   isActive: boolean;
-  
-  // Completion tracking
+
   completed?: boolean;
-  completedAt?: Date;
-  
-  // Cancellation info
+  completedAt?: FirestoreTimestamp;
+
   cancellationReason?: string;
 
-  // For schedules created from templates, this links back to the source template
-  templateId?: string;  
-  
-  // ── Trip lifecycle (set by conductor during live trip) ─────────────────────
-  
-  /**
-   * Current live status of the trip.
-   * Defaults to 'scheduled' if not set (trip hasn't started).
-   */
+  templateId?: string;
+
   tripStatus?: TripStatus;
-  
-  /**
-   * Index into the full stop sequence (origin + intermediate stops + destination).
-   * 0 = at origin, 1 = first intermediate stop, etc.
-   * Only meaningful when tripStatus is 'boarding' or 'in_transit'.
-   */
   currentStopIndex?: number;
-  
-  /**
-   * Stop IDs that the bus has already DEPARTED from.
-   * Used by the booking flow to block new bookings from these stops.
-   * e.g. ['__origin__', 'stop-0'] means bus has left origin and Ekwendeni.
-   */
   departedStops?: string[];
-  
-  /**
-   * When the conductor tapped "Start Trip". Immutable once set.
-   */
-  tripStartedAt?: Date;
-  
-  /**
-   * When the conductor tapped "Complete Trip". Immutable once set.
-   */
-  tripCompletedAt?: Date;
-  
-  /**
-   * UID of the conductor who started and is managing this trip.
-   */
+  tripStartedAt?: FirestoreTimestamp;
+  tripCompletedAt?: FirestoreTimestamp;
   conductorUid?: string;
 
-  // ── Operator assignments ───────────────────────────────────────────────────
-  createdBy: string;  // Operator who created schedule
+  createdBy: string;
   assignedOperatorIds?: string[];
   assignedConductorIds?: string[];
-  
-  // Metadata
+
   metadata?: Record<string, any>;
 }
 
-export type DayOfWeek = 0 | 1 | 2 | 3 | 4 | 5 | 6; // 0 = Sunday … 6 = Saturday
+// ─── Schedule template ────────────────────────────────────────────────────────
 
-/**
- * A ScheduleTemplate defines a RECURRING service pattern.
- *
- * One template covers an entire route+time combination.
- * Real `schedules` documents are "materialised" from templates inside a
- * rolling 14-day window via the "Generate Schedules" action in the UI
- * (or optionally a Cloud Function cron).
- *
- * Materialised schedule docs carry a `templateId` field so they can be
- * traced back to the source template.  Bookings still reference the real
- * `scheduleId`, so nothing in the booking flow changes.
- */
+export type DayOfWeek = 0 | 1 | 2 | 3 | 4 | 5 | 6;
+
 export interface ScheduleTemplate {
   id: string;
   companyId: string;
 
-  // What ─────────────────────────────────────────────────────────────────────
   routeId: string;
-  busId:   string;
+  busId: string;
 
-  // When (stored as "HH:MM" 24-hour strings; date is computed on materialise)
-  departureTime: string; // e.g. "07:00"
-  arrivalTime:   string; // e.g. "14:00"
+  departureTime: string;
+  arrivalTime: string;
 
-  // Recurrence ───────────────────────────────────────────────────────────────
-  daysOfWeek: DayOfWeek[]; // empty array = every day
-  validFrom:  Date;         // first date this template applies
-  validUntil: Date | null;  // null = indefinite
+  daysOfWeek: DayOfWeek[];
+  validFrom: FirestoreTimestamp;
+  validUntil: FirestoreTimestamp;
 
-  // Pricing & capacity ───────────────────────────────────────────────────────
-  price:          number;
+  price: number;
   availableSeats: number;
 
-  // Status ───────────────────────────────────────────────────────────────────
-  status:   'active' | 'inactive';
+  status: 'active' | 'inactive';
   isActive: boolean;
 
-  // Audit ────────────────────────────────────────────────────────────────────
   createdBy: string;
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt: FirestoreTimestamp;
+  updatedAt: FirestoreTimestamp;
 
   metadata?: Record<string, unknown>;
 }
 
-// ──────
+// ─── Booking ──────────────────────────────────────────────────────────────────
 
 export interface PassengerDetails {
   id?: string;
@@ -435,7 +391,7 @@ export interface PassengerDetails {
     number: string;
   };
   contactNumber?: string;
-  email?: string; 
+  email?: string;
 }
 
 export type BookingStatus = 'pending' | 'confirmed' | 'completed' | 'cancelled' | 'no-show';
@@ -447,56 +403,46 @@ export interface Booking extends FirestoreDocument {
   scheduleId: string;
   companyId: string;
   routeId: string;
-  
-  // Passenger information
+
   passengerDetails: PassengerDetails[];
   seatNumbers: string[];
-  
-  // Booking details
+
   totalAmount: number;
   bookingStatus: BookingStatus;
   paymentStatus: 'paid' | 'pending' | 'failed' | 'refunded';
   paidAt?: string;
-  
-  // Contact information
+
   contactEmail: string;
   contactPhone: string;
-  
-  // Dates
-  bookingDate: Date;
-  confirmedDate?: Date;
-  boardedAt?: Date;
-  noShowAt?: Date;
-  cancellationDate?: Date;
-  refundDate?: Date;
-  
-  // Cancellation/Refund
+
+  bookingDate: FirestoreTimestamp;
+  confirmedDate?: FirestoreTimestamp;
+  boardedAt?: FirestoreTimestamp;
+  noShowAt?: FirestoreTimestamp;
+  cancellationDate?: FirestoreTimestamp;
+  refundDate?: FirestoreTimestamp;
+
   cancellationReason?: string;
   refundAmount?: number;
-  
-  // Payment tracking (reference to Payment document)
+
   paymentId?: string;
-  paymentInitiatedAt?: Date;
-  paymentCompletedAt?: Date;
+  paymentInitiatedAt?: FirestoreTimestamp;
+  paymentCompletedAt?: FirestoreTimestamp;
   paymentMethod?: PaymentMethod;
   paymentProvider?: PaymentProvider;
   transactionId?: string;
   transactionReference?: string;
 
-  // PayChangu-specific tracking (written by charge route)
-  paychanguReference?: string;   // tx_ref returned by PayChangu
-  paychanguNetwork?: 'AIRTEL' | 'TNM'; // network used for mobile money
-  
-  // Audit
+  paychanguReference?: string;
+  paychanguNetwork?: 'AIRTEL' | 'TNM';
+
   createdBy?: string;
   updatedBy?: string;
-  
-  // Metadata
+
   metadata?: Record<string, any>;
 }
 
-  
-
+// ─── Supporting types ─────────────────────────────────────────────────────────
 
 export interface Location extends FirestoreDocument {
   name: string;
@@ -512,26 +458,23 @@ export interface Amenity extends FirestoreDocument {
   icon?: string;
   isActive: boolean;
 }
+
 export interface GroupRequest extends FirestoreDocument {
   id: string;
   userId: string;
   companyId: string;
-  
-  // Organizer details
+
   organizerName: string;
   organizerPhone: string;
-  
-  // Request details
+
   routeId: string;
   scheduleId: string;
   seatsRequested: number;
-  seatsBooked: string[];  // Seat numbers
-  
-  // Pricing
+  seatsBooked: string[];
+
   totalPrice: number;
   customPrice?: number;
-  
-  // Status & communication
+
   status: 'pending' | 'approved' | 'rejected' | 'confirmed' | 'cancelled';
   notes: string;
   companyResponse?: string;
@@ -555,8 +498,8 @@ export interface Operator {
   region: string;
   branch?: string[];
   phoneNumber?: string;
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt: FirestoreTimestamp;
+  updatedAt: FirestoreTimestamp;
   passwordSet: boolean;
 }
 
@@ -566,35 +509,24 @@ export interface OperatingHours {
   closed: boolean;
 }
 
+// ─── Type guards ──────────────────────────────────────────────────────────────
+
 export function isCompanyRole(role: UserRole): role is CompanyRole {
   return ['company_admin', 'operator', 'conductor'].includes(role);
 }
 
-/**
- * Type guard to check if profile is company role type
- */
-export function isCompanyRoleProfile(profile: UserProfile): profile is CompanyAdminProfile | OperatorProfile | ConductorProfile {
+export function isCompanyRoleProfile(
+  profile: UserProfile
+): profile is CompanyAdminProfile | OperatorProfile | ConductorProfile {
   return isCompanyRole(profile.role);
 }
 
-/**
- * Get companyId from any user profile with proper type safety
- */
 export function getCompanyId(profile: UserProfile): string | undefined {
-  if (isCompanyRoleProfile(profile)) {
-    return profile.companyId;
-  }
-  return undefined;
+  return isCompanyRoleProfile(profile) ? profile.companyId : undefined;
 }
 
-// ── Trip lifecycle helpers ─────────────────────────────────────────────────────
+// ─── Trip lifecycle helpers ───────────────────────────────────────────────────
 
-/**
- * Build the full ordered stop sequence for a schedule.
- * Combines sentinel origin/destination with intermediate route stops.
- * 
- * Result: [__origin__, ...intermediate stops by order..., __destination__]
- */
 export function buildTripStopSequence(schedule: Schedule): TripStop[] {
   const intermediate = (schedule.stops || [])
     .slice()
@@ -602,47 +534,35 @@ export function buildTripStopSequence(schedule: Schedule): TripStop[] {
     .map(s => ({ id: s.id, name: s.name, order: s.order }));
 
   return [
-    { id: '__origin__',      name: schedule.departureLocation, order: -1 },
+    { id: '__origin__',      name: schedule.departureLocation, order: -1  },
     ...intermediate,
     { id: '__destination__', name: schedule.arrivalLocation,   order: 999 },
   ];
 }
 
-/**
- * Returns true if new bookings from a given stop are still allowed.
- * A stop is blocked once the bus has departed from it.
- */
 export function isStopOpenForBooking(stopId: string, schedule: Schedule): boolean {
-  const departedStops = schedule.departedStops || [];
-  return !departedStops.includes(stopId);
+  return !(schedule.departedStops ?? []).includes(stopId);
 }
 
-/**
- * Get the current stop the bus is at (or about to depart from).
- * Returns null if trip hasn't started or has completed.
- */
 export function getCurrentTripStop(schedule: Schedule): TripStop | null {
-  if (!schedule.tripStatus || schedule.tripStatus === 'scheduled' || schedule.tripStatus === 'completed') {
+  if (
+    !schedule.tripStatus ||
+    schedule.tripStatus === 'scheduled' ||
+    schedule.tripStatus === 'completed'
+  ) {
     return null;
   }
   const stops = buildTripStopSequence(schedule);
-  const idx = schedule.currentStopIndex ?? 0;
-  return stops[idx] ?? null;
+  return stops[schedule.currentStopIndex ?? 0] ?? null;
 }
 
-/**
- * Get the next stop the bus will arrive at.
- * Returns null if at final stop or trip not started.
- */
 export function getNextTripStop(schedule: Schedule): TripStop | null {
+  if (
+    schedule.tripStatus !== 'boarding' &&
+    schedule.tripStatus !== 'in_transit'
+  ) {
+    return null;
+  }
   const stops = buildTripStopSequence(schedule);
-  const idx = (schedule.currentStopIndex ?? 0);
-  
-  if (schedule.tripStatus === 'in_transit') {
-    return stops[idx + 1] ?? null;
-  }
-  if (schedule.tripStatus === 'boarding') {
-    return stops[idx + 1] ?? null;
-  }
-  return null;
+  return stops[(schedule.currentStopIndex ?? 0) + 1] ?? null;
 }
