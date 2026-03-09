@@ -1,32 +1,38 @@
 // app/api/payments/paychangu/webhook/route.ts
 //
-// Receives PayChangu payment event webhooks.
-//
-// SIGNATURE VERIFICATION:
-//   PayChangu signs the payload with your secret key via HMAC-SHA256.
-//   The signature is sent in the 'x-paychangu-signature' header.
-//   We verify using timingSafeEqual to prevent timing-based attacks.
-//
-// REQUIRED ENV VARS:
-//   PAYCHANGU_SECRET_KEY — your PayChangu secret key (same one used to initiate payments)
-//
-// FIRESTORE UPDATES:
-//   successful → paymentStatus: 'paid',   bookingStatus: 'confirmed'
-//   failed     → paymentStatus: 'failed', bookingStatus: 'payment_failed'
-//   pending    → no change (wait for final event)
-//
-// NOTE: Always return 200 to PayChangu even on our own processing errors,
-// otherwise PayChangu will keep retrying and flood your logs.
+// Receives PayChangu payment event webhooks (POST),
+// AND handles browser redirects from PayChangu after payment (GET).
 
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebaseAdmin';
 import crypto from 'crypto';
 
+const APP_URL = (process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000').replace(/\/$/, '');
+
+// ── GET — browser redirect from PayChangu after payment ──────────────────────
+// PayChangu sends the user here via GET with ?tx_ref=... after checkout.
+// We just redirect to the bookings page where verify logic runs.
+export async function GET(req: NextRequest) {
+  const { searchParams } = new URL(req.url);
+  const txRef  = searchParams.get('tx_ref')  ?? searchParams.get('reference') ?? '';
+  const status = searchParams.get('status')  ?? '';
+
+  const qs = new URLSearchParams({
+    payment_verify: 'true',
+    provider:       'paychangu',
+    tx_ref:         txRef,
+    ...(status && { status }),
+  });
+
+  return NextResponse.redirect(`${APP_URL}/bookings?${qs.toString()}`, 302);
+}
+
+// ── POST — server-to-server webhook from PayChangu ───────────────────────────
 export async function POST(req: NextRequest) {
   try {
     const rawBody = await req.text();
 
-    // ── Verify signature ──────────────────────────────────────────────────────
+    // Verify signature
     const signatureHeader = req.headers.get('x-paychangu-signature') ?? '';
     const secretKey       = process.env.PAYCHANGU_SECRET_KEY;
 
@@ -40,7 +46,6 @@ export async function POST(req: NextRequest) {
       .update(rawBody)
       .digest('hex');
 
-    // timingSafeEqual requires equal-length buffers
     const sigBuffer      = Buffer.from(signatureHeader, 'hex');
     const expectedBuffer = Buffer.from(expectedSig,     'hex');
 
@@ -53,7 +58,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
     }
 
-    // ── Parse event ───────────────────────────────────────────────────────────
+    // Parse event
     const data = JSON.parse(rawBody);
     const { tx_ref, status, reference } = data;
 
@@ -61,17 +66,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ received: true });
     }
 
-    // ── Resolve booking ───────────────────────────────────────────────────────
-    // PayChangu tx_ref = bookingId (set in charge route returnUrl)
+    // Resolve booking
     const bookingRef  = adminDb.collection('bookings').doc(tx_ref);
     const bookingSnap = await bookingRef.get();
 
     if (!bookingSnap.exists) {
-      // Not our booking — acknowledge so PayChangu stops retrying
       return NextResponse.json({ received: true });
     }
 
-    // ── Map PayChangu status → internal statuses ──────────────────────────────
+    // Map status
     const normalised = status?.toLowerCase();
     let paymentStatus: string;
     let bookingStatus: string;
@@ -88,7 +91,6 @@ export async function POST(req: NextRequest) {
         bookingStatus = 'payment_failed';
         break;
       default:
-        // 'pending' or anything unknown — leave bookingStatus unchanged
         paymentStatus = 'pending';
         bookingStatus = bookingSnap.data()?.bookingStatus ?? 'pending';
     }
@@ -96,9 +98,9 @@ export async function POST(req: NextRequest) {
     await bookingRef.update({
       paymentStatus,
       bookingStatus,
-      paychanguReference: reference ?? bookingSnap.data()?.paychanguReference,
-      paymentUpdatedAt:   new Date(),
-      updatedAt:          new Date(),
+      paychanguReference:  reference ?? bookingSnap.data()?.paychanguReference,
+      paymentUpdatedAt:    new Date(),
+      updatedAt:           new Date(),
       ...(normalised === 'successful' || normalised === 'success'
         ? { paymentCompletedAt: new Date() }
         : {}),
@@ -108,7 +110,6 @@ export async function POST(req: NextRequest) {
 
   } catch (err: any) {
     console.error('[paychangu/webhook]', err);
-    // Always 200 — prevents PayChangu from retrying on our own processing errors
     return NextResponse.json({ received: true, warning: err.message });
   }
 }
