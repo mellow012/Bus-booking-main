@@ -1,54 +1,109 @@
+// app/api/payments/paychangu/verify/route.ts
+//
+// Called after PayChangu redirects the user's browser back to the app.
+// PayChangu GETs this URL with ?tx_ref=...&status=...
+//
+// FLOW:
+//   1. Quick-fail on bad status param
+//   2. Look up booking by paychanguReference field (tx_ref is PayChangu's ref)
+//   3. Idempotency: skip if already paid
+//   4. Server-side verify with PayChangu API
+//   5. Update Firestore
+//   6. Redirect browser to /bookings with result params
+
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebaseAdmin";
 
+const PAYCHANGU_API = "https://api.paychangu.com";
+
 export async function GET(req: NextRequest) {
+  const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000").replace(/\/$/, "");
+
   const { searchParams } = new URL(req.url);
-  
-  // PayChangu appends these to your callback_url
-  const txRef = searchParams.get("tx_ref");
+  const txRef  = searchParams.get("tx_ref");
   const status = searchParams.get("status");
 
-  // 1. Quick check on the status returned in the URL
-  if (!txRef || status !== "success") {
-    return NextResponse.redirect(`${process.env.NEXT_PUBLIC_APP_URL}/bookings?error=payment_failed`);
+  // ── Quick-fail on missing ref or obviously bad status ─────────────────────
+  if (!txRef) {
+    return NextResponse.redirect(`${appUrl}/bookings?error=payment_failed`);
+  }
+
+  const SUCCESSFUL_STATUSES = ["success", "successful", "completed"];
+  if (status && !SUCCESSFUL_STATUSES.includes(status.toLowerCase())) {
+    return NextResponse.redirect(
+      `${appUrl}/bookings?error=payment_failed&tx_ref=${txRef}`
+    );
   }
 
   try {
-    // 2. Server-side verification with PayChangu
-    const response = await fetch(`https://api.paychangu.com/verify-payment/${txRef}`, {
-      method: "GET",
+    // ── Look up booking by PayChangu's tx_ref ─────────────────────────────
+    // We stored their reference as paychanguReference in the charge route.
+    const querySnap = await adminDb
+      .collection("bookings")
+      .where("paychanguReference", "==", txRef)
+      .limit(1)
+      .get();
+
+    if (querySnap.empty) {
+      console.error("[paychangu/verify] No booking found for tx_ref:", txRef);
+      return NextResponse.redirect(`${appUrl}/bookings?error=booking_not_found`);
+    }
+
+    const bookingDoc = querySnap.docs[0];
+    const booking    = bookingDoc.data();
+
+    // ── Idempotency: already paid, just redirect ──────────────────────────
+    if (booking.paymentStatus === "paid") {
+      return NextResponse.redirect(
+        `${appUrl}/bookings?payment_verify=true&provider=paychangu&tx_ref=${txRef}&status=success`
+      );
+    }
+
+    // ── Server-side verification ──────────────────────────────────────────
+    // Never trust the status param alone — always verify with PayChangu.
+    const verifyRes = await fetch(`${PAYCHANGU_API}/verify-payment/${txRef}`, {
+      method:  "GET",
       headers: {
-        "Accept": "application/json",
-        "Authorization": `Bearer ${process.env.PAYCHANGU_SECRET_KEY}`,
+        Accept:        "application/json",
+        Authorization: `Bearer ${process.env.PAYCHANGU_SECRET_KEY}`,
       },
     });
 
-    const result = await response.json();
-
-    // 3. Confirm the payment is truly successful in their records
-    if (result.status === "success" && result.data.status === "success") {
-      const bookingId = txRef.split('_')[1]; // Assuming format: pc_BOOKINGID_timestamp
-
-      // 4. Update Firestore
-      const bookingRef = adminDb.collection("bookings").doc(bookingId);
-      const bookingSnap = await bookingRef.get();
-
-      if (bookingSnap.exists) {
-        await bookingRef.update({
-          paymentStatus: "paid",
-          bookingStatus: "confirmed",
-          paychanguRef: txRef,
-          updatedAt: new Date(),
-        });
-      }
-
-      return NextResponse.redirect(`${process.env.NEXT_PUBLIC_APP_URL}/bookings?success=true`);
+    if (!verifyRes.ok) {
+      console.error("[paychangu/verify] PayChangu verify HTTP error:", verifyRes.status);
+      return NextResponse.redirect(`${appUrl}/bookings?error=verification_failed&tx_ref=${txRef}`);
     }
 
-    return NextResponse.redirect(`${process.env.NEXT_PUBLIC_APP_URL}/bookings?error=verification_failed`);
+    const result = await verifyRes.json();
+    const verified =
+      result.status === "success" &&
+      SUCCESSFUL_STATUSES.includes((result.data?.status ?? "").toLowerCase());
 
-  } catch (error) {
-    console.error("PayChangu Verification Error:", error);
-    return NextResponse.redirect(`${process.env.NEXT_PUBLIC_APP_URL}/bookings?error=server_error`);
+    if (!verified) {
+      console.warn("[paychangu/verify] Verification failed:", result);
+      await bookingDoc.ref.update({
+        paymentStatus: "failed",
+        bookingStatus: "payment_failed",
+        updatedAt:     new Date(),
+      });
+      return NextResponse.redirect(`${appUrl}/bookings?error=verification_failed&tx_ref=${txRef}`);
+    }
+
+    // ── Mark paid ─────────────────────────────────────────────────────────
+    await bookingDoc.ref.update({
+      paymentStatus:      "paid",
+      bookingStatus:      "confirmed",
+      paychanguReference: txRef,
+      paymentCompletedAt: new Date(),
+      updatedAt:          new Date(),
+    });
+
+    return NextResponse.redirect(
+      `${appUrl}/bookings?payment_verify=true&provider=paychangu&tx_ref=${txRef}&status=success`
+    );
+
+  } catch (error: any) {
+    console.error("[paychangu/verify] Unhandled error:", error);
+    return NextResponse.redirect(`${appUrl}/bookings?error=server_error`);
   }
 }

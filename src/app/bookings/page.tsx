@@ -956,7 +956,7 @@ const BookingsPage: React.FC = () => {
       let res: Response;
       if (provider === 'paychangu') {
         const params = new URLSearchParams({ provider, tx_ref: txRef });
-        res = await fetch(`/api/payments/verify?${params}`, { headers: { Authorization: `Bearer ${token}` } });
+        res = await fetch(`/api/payments/paychangu/verify?${params}`, { headers: { Authorization: `Bearer ${token}` } });
       } else if (provider === 'flutterwave') {
         const params = new URLSearchParams({ tx_ref: txRef });
         if (transactionId) params.append('transaction_id', transactionId);
