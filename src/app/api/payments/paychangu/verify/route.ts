@@ -69,12 +69,23 @@ export async function GET(req: NextRequest) {
       },
     });
 
+    // Read raw text first so a non-JSON response (HTML error page) doesn't
+    // crash the route — log it so we can see exactly what PayChangu returned.
+    const rawText = await verifyRes.text();
+    console.log("[paychangu/verify] raw response:", verifyRes.status, rawText.slice(0, 300));
+
     if (!verifyRes.ok) {
-      console.error("[paychangu/verify] PayChangu verify HTTP error:", verifyRes.status);
+      console.error("[paychangu/verify] HTTP error:", verifyRes.status);
       return NextResponse.redirect(`${appUrl}/bookings?error=verification_failed&tx_ref=${txRef}`);
     }
 
-    const result = await verifyRes.json();
+    let result: any;
+    try {
+      result = JSON.parse(rawText);
+    } catch {
+      console.error("[paychangu/verify] Non-JSON response from PayChangu:", rawText.slice(0, 500));
+      return NextResponse.redirect(`${appUrl}/bookings?error=verification_failed&tx_ref=${txRef}`);
+    }
     const verified =
       result.status === "success" &&
       SUCCESSFUL_STATUSES.includes((result.data?.status ?? "").toLowerCase());
