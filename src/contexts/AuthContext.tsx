@@ -80,7 +80,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const router   = useRouter();
   const pathname = usePathname();
 
-  // ─── Session helpers ─────────────────────────────────────────────────────
+  // ─── Session helpers ──────────────────────────────────────────────────────
 
   const createServerSession = async (currentUser: User): Promise<boolean> => {
     try {
@@ -108,18 +108,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const syncEmailVerifiedToFirestore = useCallback(async (currentUser: User): Promise<void> => {
     if (!currentUser.emailVerified) return;
-
     try {
       const userDocRef = doc(db, 'users', currentUser.uid);
       const snap = await getDoc(userDocRef);
-
       if (snap.exists() && snap.data()?.emailVerified !== true) {
         syncingEmailVerified.current = true;
         await updateDoc(userDocRef, {
           emailVerified: true,
           updatedAt:     serverTimestamp(),
         });
-        console.info('[AuthContext] Synced emailVerified: true → Firestore');
       }
     } catch (err) {
       console.warn('[AuthContext] syncEmailVerifiedToFirestore failed (non-fatal):', err);
@@ -130,9 +127,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // ─── Profile management ───────────────────────────────────────────────────
 
-  // FIX: accepts an optional uid so callers can pass the fresh uid directly,
-  // avoiding the stale closure problem where user?.uid is still null when
-  // this is first called inside onAuthStateChanged.
   const refreshUserProfile = useCallback(async (uid?: string) => {
     const targetUid = uid ?? user?.uid;
     if (!targetUid) return;
@@ -177,8 +171,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const freshUser = auth.currentUser ?? currentUser;
         setUser(freshUser);
 
-        // FIX: pass freshUser.uid directly so refreshUserProfile doesn't rely
-        // on the user state value, which hasn't updated yet at this point.
         await syncEmailVerifiedToFirestore(freshUser);
         await refreshUserProfile(freshUser.uid);
       } else {
@@ -223,7 +215,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (refreshed?.emailVerified) {
           await syncEmailVerifiedToFirestore(refreshed);
           setUser({ ...refreshed } as User);
-          // FIX: pass uid directly to avoid stale closure
           await refreshUserProfile(refreshed.uid);
         }
       } catch {
@@ -270,28 +261,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (user && userProfile) {
       const emailVerified = user.emailVerified;
 
+      // ── Email not verified → hold on verify-email page ────────────────
       if (!emailVerified && !isPublicRoute && !syncingEmailVerified.current) {
         router.push('/verify-email');
         return;
       }
 
+      // ── Just verified → leave verify-email, go to profile ─────────────
       if (emailVerified && pathname === '/verify-email') {
-        redirectToDashboard(userProfile);
+        // Only redirect if not already heading somewhere via the page itself
+        // (the page does its own redirect after applyActionCode)
+        if (!oobCode) {
+          redirectAfterVerification(userProfile);
+        }
         return;
       }
 
-      // ── Profile completion ─────────────────────────────────────────────
+      // ── Customer: force profile completion before anything else ────────
+      // A customer is considered "setup incomplete" if they haven't saved
+      // their profile yet (setupCompleted flag is the source of truth).
       if (
         emailVerified &&
         userProfile.role === 'customer' &&
         !userProfile.setupCompleted &&
-        !userProfile.nationalId &&
-        !userProfile.sex &&
-        !userProfile.currentAddress &&
         pathname !== '/profile'
       ) {
-        const userDocRef = doc(db, 'users', user.uid);
-        updateDoc(userDocRef, { setupCompleted: true }).catch(() => {});
         router.push('/profile');
         return;
       }
@@ -333,6 +327,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }
   }, [user, userProfile, isInitialized, loading, router, pathname]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // After email verified with no oobCode on verify-email page,
+  // send them where they should go next.
+  const redirectAfterVerification = useCallback((profile: UserProfile) => {
+    if (profile.role === 'customer' && !profile.setupCompleted) {
+      router.push('/profile');
+    } else {
+      redirectToDashboard(profile);
+    }
+  }, [router]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const redirectToDashboard = useCallback((profile: UserProfile) => {
     switch (profile.role) {
@@ -501,8 +505,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         firstName:      profile.firstName.trim(),
         lastName:       profile.lastName.trim(),
         phone:          formatPhoneToE164(profile.phone),
-        // FIX: mark setup complete whenever the user saves their profile so
-        // the route guard stops bouncing them back to /profile.
         setupCompleted: true,
         updatedAt:      serverTimestamp(),
       };
