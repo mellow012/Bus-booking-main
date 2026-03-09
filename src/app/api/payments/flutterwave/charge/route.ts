@@ -11,15 +11,6 @@
 //   → after payment Flutterwave redirects to:
 //       /bookings?payment_verify=true&provider=flutterwave&tx_ref=...&transaction_id=...&status=...
 //
-// WHY THE OLD CODE FAILED:
-//   The previous version called /orchestration/direct-charges which is the v4
-//   BETA API. That endpoint uses a completely different schema including a
-//   `payment_method.type` enum — and 'mobile_money_malawi' is not a valid
-//   value there (nor is it a stable API). v3 Standard Checkout doesn't use
-//   payment_method at all; it accepts a plain `payment_options` string
-//   ("mobilemoney", "card", etc.) and Flutterwave's hosted page handles the
-//   rest. No OAuth / getFlwAccessToken() needed — just Bearer <secret_key>.
-//
 // REQUIRED ENV VARS:
 //   FLW_SECRET_KEY        — FLWSECK_TEST-... or FLWSECK-...
 //   NEXT_PUBLIC_APP_URL   — your app base URL (no trailing slash)
@@ -29,9 +20,6 @@ import { adminDb } from "@/lib/firebaseAdmin";
 
 const FLW_V3_PAYMENTS = "https://api.flutterwave.com/v3/payments";
 
-// Map our subMethodId → payment_options hint for the hosted checkout page.
-// This just pre-selects the right tab; Flutterwave still shows all methods
-// supported for MWK. Omitting it shows all options.
 const SUB_METHOD_TO_PAYMENT_OPTIONS: Record<string, string> = {
   airtel: "mobilemoney",
   tnm:    "mobilemoney",
@@ -43,7 +31,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { bookingId, customerDetails, metadata } = body;
 
-    // ── Validate ─────────────────────────────────────────────────────────────
+    // ── Validate ──────────────────────────────────────────────────────────────
     const customerEmail = (customerDetails?.email as string | undefined)?.toLowerCase().trim();
     const customerName  = (customerDetails?.name  as string | undefined)?.trim();
     const customerPhone = (customerDetails?.phone as string | undefined)?.trim() ?? "";
@@ -60,7 +48,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // ── Secret key ───────────────────────────────────────────────────────────
+    // ── Secret key ────────────────────────────────────────────────────────────
     const secretKey = process.env.FLW_SECRET_KEY;
     if (!secretKey) {
       console.error("[flutterwave/charge] FLW_SECRET_KEY env var is not set");
@@ -69,6 +57,9 @@ export async function POST(req: NextRequest) {
         { status: 500 },
       );
     }
+
+    // ── App base URL ──────────────────────────────────────────────────────────
+    const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000").replace(/\/$/, "");
 
     // ── Amount from Firestore only — never trust client ───────────────────────
     const bookingSnap = await adminDb.collection("bookings").doc(bookingId).get();
@@ -82,17 +73,9 @@ export async function POST(req: NextRequest) {
     }
 
     // ── tx_ref ────────────────────────────────────────────────────────────────
-    // Embed bookingId so the webhook can resolve the booking without an extra
-    // Firestore query (parse: txRef.split("_")[1]).
     const txRef = `bk_${bookingId}_${Date.now()}`;
 
     // ── Build the v3 Standard Checkout payload ────────────────────────────────
-    // Docs: https://developer.flutterwave.com/reference/endpoints/payments/
-    //
-    //  currency "MWK"  → Flutterwave shows Malawi-compatible methods (Airtel, TNM)
-    //  payment_options → pre-selects a tab on the hosted page (cosmetic hint only)
-    //  redirect_url    → Flutterwave appends ?status=&tx_ref=&transaction_id= here
-    //  customer.name   → single full-name string in v3 (not split first/last)
     const routeLabel  = metadata?.route
       ? (metadata.route as string).replace("-", " → ")
       : "Bus Ticket";
@@ -103,7 +86,7 @@ export async function POST(req: NextRequest) {
       amount:          Number(amount),
       currency:        "MWK",
       payment_options: SUB_METHOD_TO_PAYMENT_OPTIONS[subMethod] ?? "mobilemoney,card",
-      redirect_url:    `${process.env.NEXT_PUBLIC_APP_URL}/bookings?payment_verify=true&provider=flutterwave`,
+      redirect_url:    `${appUrl}/bookings?payment_verify=true&provider=flutterwave&booking_id=${bookingId}`,
       customer: {
         email:       customerEmail,
         name:        customerName,
@@ -112,15 +95,14 @@ export async function POST(req: NextRequest) {
       customizations: {
         title:       "TibhukeBus",
         description,
-        // Replace with your actual hosted logo URL, or remove this key entirely.
-        logo:        `${process.env.NEXT_PUBLIC_APP_URL}/logo.png`,
+        logo:        `${appUrl}/logo.png`,
       },
       meta: {
         booking_id:      bookingId,
-        route:           metadata?.route           ?? "",
-        departure:       metadata?.departure        ?? "",
-        passenger_count: metadata?.passengerCount   ?? "1",
-        seat_numbers:    metadata?.seatNumbers      ?? "",
+        route:           metadata?.route          ?? "",
+        departure:       metadata?.departure       ?? "",
+        passenger_count: metadata?.passengerCount  ?? "1",
+        seat_numbers:    metadata?.seatNumbers     ?? "",
         sub_method:      subMethod,
       },
     };
