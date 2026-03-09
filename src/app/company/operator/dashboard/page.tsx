@@ -490,14 +490,17 @@ export default function OperatorDashboard() {
       case "bookings":
         const isCompany = (item: Company | null | undefined): item is Company => !!item;
        // ✅ After — only pass what BookingsTabProps declares
-<BookingsTab
-  schedules={schedules}
-  routes={routes}
-  buses={buses}
-  companyId={companyId}
-  user={user}
-  userProfile={userProfile}
-/>
+       case "bookings":
+            return (
+              <BookingsTab
+                schedules={schedules}
+                routes={routes}
+                buses={buses}
+                companyId={companyId}
+                user={user}
+                userProfile={userProfile}
+              />
+            );
       case "profile":
         return (
           <OperatorProfileTab

@@ -1,4 +1,21 @@
 // app/api/payments/paychangu/charge/route.ts
+//
+// Handles Airtel Money + TNM Mpamba payments via PayChangu hosted checkout.
+// This is the correct provider for MWK mobile money — Flutterwave's sandbox
+// does not simulate mobilemoneymalawi, so PayChangu is used for all mobile
+// money (Airtel / TNM) while Flutterwave handles card payments.
+//
+// REQUIRED ENV VARS (per-company, encrypted in Firestore):
+//   paymentSettings.paychanguEnabled        — boolean
+//   paymentSettings.paychanguSecretKeyEnc   — encrypted secret key
+//
+// FLOW:
+//   POST /api/payments/paychangu/charge
+//   → PayChangu returns a checkout_url
+//   → we return { success: true, checkoutUrl }
+//   → frontend redirects: window.location.href = checkoutUrl
+//   → PayChangu redirects back to:
+//       /bookings?payment_verify=true&provider=paychangu&tx_ref={bookingId}
 
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebaseAdmin";
@@ -11,44 +28,67 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { bookingId, customerDetails, metadata } = body;
 
-    const customerEmail = customerDetails?.email  as string | undefined;
-    const customerName  = customerDetails?.name   as string | undefined;
-    const subMethod     = metadata?.subMethod     as string | undefined;
+    const customerEmail = customerDetails?.email as string | undefined;
+    const customerName  = customerDetails?.name  as string | undefined;
+    const subMethod     = metadata?.subMethod    as string | undefined;
 
+    // ── Validate ─────────────────────────────────────────────────────────────
     const missing: string[] = [];
     if (!bookingId)     missing.push("bookingId");
     if (!customerEmail) missing.push("customerDetails.email");
     if (!customerName)  missing.push("customerDetails.name");
     if (missing.length) {
-      return NextResponse.json({ error: `Missing required fields: ${missing.join(", ")}` }, { status: 400 });
+      return NextResponse.json(
+        { error: `Missing required fields: ${missing.join(", ")}` },
+        { status: 400 },
+      );
     }
 
-    // Fetch booking — amount & companyId from DB, never from client
+    // ── Fetch booking — amount & companyId from DB only ───────────────────────
     const bookingSnap = await adminDb.collection("bookings").doc(bookingId).get();
-    if (!bookingSnap.exists) return NextResponse.json({ error: "Booking not found" }, { status: 404 });
+    if (!bookingSnap.exists) {
+      return NextResponse.json({ error: "Booking not found" }, { status: 404 });
+    }
     const booking   = bookingSnap.data()!;
     const companyId = booking.companyId  as string;
     const amount    = booking.totalAmount as number;
-    if (!amount || !companyId) return NextResponse.json({ error: "Booking is missing amount or company" }, { status: 400 });
+    if (!amount || !companyId) {
+      return NextResponse.json(
+        { error: "Booking is missing amount or company" },
+        { status: 400 },
+      );
+    }
 
-    // Fetch company payment settings
+    // ── Fetch company PayChangu settings ──────────────────────────────────────
     const companySnap = await adminDb.collection("companies").doc(companyId).get();
-    if (!companySnap.exists) return NextResponse.json({ error: "Company not found" }, { status: 404 });
+    if (!companySnap.exists) {
+      return NextResponse.json({ error: "Company not found" }, { status: 404 });
+    }
     const ps = companySnap.data()?.paymentSettings;
 
-    if (!ps?.paychanguEnabled)
-      return NextResponse.json({ error: "PayChangu is not enabled for this company" }, { status: 400 });
-    if (!ps?.paychanguSecretKeyEnc)
-      return NextResponse.json({ error: "PayChangu secret key not configured for this company" }, { status: 400 });
+    if (!ps?.paychanguEnabled) {
+      return NextResponse.json(
+        { error: "PayChangu is not enabled for this company" },
+        { status: 400 },
+      );
+    }
+    if (!ps?.paychanguSecretKeyEnc) {
+      return NextResponse.json(
+        { error: "PayChangu secret key not configured for this company" },
+        { status: 400 },
+      );
+    }
 
-    // Decrypt the secret key — only in memory, never logged or re-persisted
-    // Encrypted blob is in Firestore; PAYCHANGU_ENCRYPTION_KEY is env-only
+    // ── Decrypt secret key — only in memory, never logged ────────────────────
     let secretKey: string;
     try {
       secretKey = decryptSecret(ps.paychanguSecretKeyEnc);
     } catch (e: any) {
       console.error("[paychangu/charge] Decryption failed:", e.message);
-      return NextResponse.json({ error: "Payment gateway configuration error — contact support" }, { status: 500 });
+      return NextResponse.json(
+        { error: "Payment gateway configuration error — contact support" },
+        { status: 500 },
+      );
     }
 
     const paymentService = new PaymentsService({ apiKey: secretKey });
@@ -56,8 +96,10 @@ export async function POST(req: NextRequest) {
     const nameParts   = (customerName as string).trim().split(/\s+/);
     const firstName   = nameParts[0];
     const lastName    = nameParts.slice(1).join(" ") || firstName;
-    const routeLabel  = metadata?.route ? (metadata.route as string).replace("-", " → ") : "Bus Ticket";
-    const description = `${routeLabel} — Booking ${(bookingId as string).slice(-8)}`;
+    const routeLabel  = metadata?.route
+      ? (metadata.route as string).replace("-", " → ")
+      : "Bus Ticket";
+    const description = `${routeLabel} — Booking #${(bookingId as string).slice(-8)}`;
 
     const paymentResponse = await paymentService.initiatePayment({
       amount,
@@ -69,13 +111,17 @@ export async function POST(req: NextRequest) {
       returnUrl:   `${process.env.NEXT_PUBLIC_APP_URL}/bookings?payment_verify=true&provider=paychangu&tx_ref=${bookingId}`,
     });
 
+    // ── Persist payment state ─────────────────────────────────────────────────
     await adminDb.collection("bookings").doc(bookingId).update({
       paymentStatus:      "pending",
+      paymentProvider:    "paychangu",
       paychanguReference: paymentResponse?.data?.tx_ref ?? bookingId,
       paychanguNetwork:   subMethod?.toUpperCase() ?? null,
       paymentInitiatedAt: new Date(),
+      updatedAt:          new Date(),
     });
 
+    // ── Extract checkout URL ──────────────────────────────────────────────────
     const checkoutUrl: string | null =
       paymentResponse?.data?.checkout_url ??
       paymentResponse?.data?.link         ??
@@ -85,13 +131,23 @@ export async function POST(req: NextRequest) {
 
     if (!checkoutUrl) {
       console.error("[paychangu/charge] No checkout URL in response:", paymentResponse);
-      return NextResponse.json({ error: "PayChangu did not return a payment URL" }, { status: 502 });
+      return NextResponse.json(
+        { error: "PayChangu did not return a payment URL" },
+        { status: 502 },
+      );
     }
 
-    return NextResponse.json({ success: true, checkoutUrl, reference: paymentResponse?.data?.tx_ref ?? bookingId });
+    return NextResponse.json({
+      success:     true,
+      checkoutUrl,
+      reference:   paymentResponse?.data?.tx_ref ?? bookingId,
+    });
 
   } catch (err: any) {
     console.error("[paychangu/charge] Unhandled error:", err);
-    return NextResponse.json({ error: err?.response?.data?.message ?? err?.message ?? "Internal server error" }, { status: 500 });
+    return NextResponse.json(
+      { error: err?.response?.data?.message ?? err?.message ?? "Internal server error" },
+      { status: 500 },
+    );
   }
 }

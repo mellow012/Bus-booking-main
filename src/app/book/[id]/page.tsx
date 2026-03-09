@@ -78,20 +78,31 @@ function buildNormalisedStops(route: Route): NormalisedStop[] {
   return stops;
 }
 
+// ✅ New — stop-index based, matches server logic exactly
 function calcSegmentPrice(
   originDist: number, destDist: number,
-  route: Route, schedulePrice: number, isFullTrip: boolean
+  route: Route, schedulePrice: number, isFullTrip: boolean,
+  stops: NormalisedStop[], originId: string, destId: string,
+  segmentPrices?: Record<string, number>
 ): number {
   if (isFullTrip) return schedulePrice;
-  const segmentKm = Math.max(0, destDist - originDist);
-  const totalKm = route.distance || 0;
-  if (route.pricePerKm && route.pricePerKm > 0 && segmentKm > 0)
-    return Math.round((route.baseFare || 0) + segmentKm * route.pricePerKm);
-  if (totalKm > 0 && segmentKm > 0) {
-    const fraction = segmentKm / totalKm;
-    const base = route.baseFare ? route.baseFare * fraction : 0;
-    return Math.round(base + schedulePrice * fraction);
+
+  const key = `${originId}:${destId}`;
+  const price = segmentPrices?.[key];
+  if (typeof price === 'number' && price > 0) return price;
+
+  const oi = stops.findIndex(s => s.id === originId);
+  const di = stops.findIndex(s => s.id === destId);
+  if (oi !== -1 && di !== -1 && di > oi && stops.length > 1) {
+    const raw = ((di - oi) / (stops.length - 1)) * schedulePrice;
+    return Math.max(50, Math.round(raw / 50) * 50);
   }
+
+  const segKm = Math.max(0, destDist - originDist);
+  const totalKm = route.distance || 0;
+  if (totalKm > 0 && segKm > 0)
+    return Math.max(50, Math.round(((segKm / totalKm) * schedulePrice) / 50) * 50);
+
   return schedulePrice;
 }
 
@@ -355,10 +366,12 @@ const depTime = (scheduleData.departureDateTime as any)?.toDate
       setDisplayPrice(0); return;
     }
     const isFullTrip = originStop.id === "__origin__" && destStop.id === "__destination__";
-    setDisplayPrice(calcSegmentPrice(
-      originStop.distanceFromOrigin, destStop.distanceFromOrigin,
-      route, schedule?.price ?? 0, isFullTrip
-    ));
+    const segmentPrices: Record<string, number> = (schedule as any)?.segmentPrices ?? {};
+setDisplayPrice(calcSegmentPrice(
+  originStop.distanceFromOrigin, destStop.distanceFromOrigin,
+  route, schedule?.price ?? 0, isFullTrip,
+  normalisedStops, originStopId, destinationStopId, segmentPrices
+));
   }, [originStopId, destinationStopId, normalisedStops, route, schedule]);
 
   // ── Passenger form helpers ─────────────────────────────────────────────────

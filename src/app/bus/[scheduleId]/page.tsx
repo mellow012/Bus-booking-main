@@ -163,7 +163,7 @@ const BusDetailsPage: React.FC = () => {
         totalAmount,
         bookingStatus: 'pending',
         paymentStatus: 'pending',
-        paymentProvider: 'paychangu', // Defaulting to 'paychangu' for this example
+        paymentProvider: 'flutterwave', // Defaulting to 'flutterwave' for this example
         transactionId: '', // To be updated after payment
         // FIX: Convert Firestore Timestamp to Date object to match the Booking interface
         bookingDate: Timestamp.now().toDate(),
