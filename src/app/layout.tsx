@@ -10,7 +10,6 @@ import Footer from "@/components/Footer";
 import { ToastContainer } from "@/components/ToastContainer";
 import { EmailVerificationBannerLayout } from "@/components/EmailVerificationBannerLayout";
 import { FCMInitializer } from "@/components/FCMInitializer";
-import AuthListener from "@/components/AuthListener";
 import { NotificationProviderWrapper } from "@/components/NotificationProviderWrapper";
 
 const inter = Inter({ subsets: ["latin"] });
