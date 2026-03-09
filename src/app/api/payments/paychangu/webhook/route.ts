@@ -14,17 +14,18 @@ const APP_URL = (process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000').rep
 // We just redirect to the bookings page where verify logic runs.
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-  const txRef  = searchParams.get('tx_ref')  ?? searchParams.get('reference') ?? '';
-  const status = searchParams.get('status')  ?? '';
+  const txRef     = searchParams.get('tx_ref')      ?? searchParams.get('reference') ?? '';
+  const status    = searchParams.get('status')      ?? '';
+  const bookingId = searchParams.get('booking_id')  ?? '';
 
+  // Forward to verify route which handles the Firestore lookup + PayChangu check
   const qs = new URLSearchParams({
-    payment_verify: 'true',
-    provider:       'paychangu',
-    tx_ref:         txRef,
-    ...(status && { status }),
+    ...(txRef     && { tx_ref:     txRef }),
+    ...(bookingId && { booking_id: bookingId }),
+    ...(status    && { status }),
   });
 
-  return NextResponse.redirect(`${APP_URL}/bookings?${qs.toString()}`, 302);
+  return NextResponse.redirect(`${APP_URL}/api/payments/paychangu/verify?${qs.toString()}`, 302);
 }
 
 // ── POST — server-to-server webhook from PayChangu ───────────────────────────

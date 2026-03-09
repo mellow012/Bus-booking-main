@@ -6,8 +6,9 @@
 //   POST /api/payments/paychangu/charge
 //   → PayChangu returns a checkout_url
 //   → frontend redirects: window.location.href = checkoutUrl
-//   → PayChangu POSTs back to /api/payments/paychangu/return
-//   → return route does 302 → /bookings?payment_verify=true&provider=paychangu&tx_ref=...
+//   → PayChangu redirects browser to /api/payments/paychangu/webhook?tx_ref=...&booking_id=...
+//   → webhook GET handler forwards to /api/payments/paychangu/verify
+//   → verify confirms with PayChangu API, updates Firestore, redirects to /bookings
 
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebaseAdmin";
@@ -37,6 +38,7 @@ export async function POST(req: NextRequest) {
 
     const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000").replace(/\/$/, "");
 
+    // ── Fetch booking — amount & companyId from DB only ───────────────────────
     const bookingSnap = await adminDb.collection("bookings").doc(bookingId).get();
     if (!bookingSnap.exists) {
       return NextResponse.json({ error: "Booking not found" }, { status: 404 });
@@ -48,6 +50,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Booking is missing amount or company" }, { status: 400 });
     }
 
+    // Block double-payment
+    if (booking.paymentStatus === "paid") {
+      return NextResponse.json({ error: "This booking has already been paid" }, { status: 409 });
+    }
+
+    // ── Fetch company PayChangu settings ──────────────────────────────────────
     const companySnap = await adminDb.collection("companies").doc(companyId).get();
     if (!companySnap.exists) {
       return NextResponse.json({ error: "Company not found" }, { status: 404 });
@@ -61,12 +69,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "PayChangu secret key not configured" }, { status: 400 });
     }
 
+    // ── Decrypt secret key ────────────────────────────────────────────────────
     let secretKey: string;
     try {
       secretKey = decryptSecret(ps.paychanguSecretKeyEnc);
     } catch (e: any) {
       console.error("[paychangu/charge] Decryption failed:", e.message);
-      return NextResponse.json({ error: "Payment gateway configuration error — contact support" }, { status: 500 });
+      return NextResponse.json(
+        { error: "Payment gateway configuration error — contact support" },
+        { status: 500 },
+      );
     }
 
     const paymentService = new PaymentsService({ apiKey: secretKey });
@@ -74,7 +86,9 @@ export async function POST(req: NextRequest) {
     const nameParts   = (customerName as string).trim().split(/\s+/);
     const firstName   = nameParts[0];
     const lastName    = nameParts.slice(1).join(" ") || firstName;
-    const routeLabel  = metadata?.route ? (metadata.route as string).replace("-", " → ") : "Bus Ticket";
+    const routeLabel  = metadata?.route
+      ? (metadata.route as string).replace("-", " → ")
+      : "Bus Ticket";
     const description = `${routeLabel} — Booking #${(bookingId as string).slice(-8)}`;
 
     const paymentResponse = await paymentService.initiatePayment({
@@ -84,19 +98,30 @@ export async function POST(req: NextRequest) {
       last_name:   lastName,
       description,
       callbackUrl: `${appUrl}/api/payments/paychangu/webhook`,
-      // Points to our POST-accepting return handler instead of directly to /bookings
-      returnUrl:   `${appUrl}/api/payments/paychangu/return`,
+      // booking_id passed through so verify can do a direct doc lookup
+      // instead of relying on paychanguReference matching
+      returnUrl:   `${appUrl}/api/payments/paychangu/webhook?booking_id=${bookingId}`,
     });
+
+    // Log so we can see exactly what tx_ref PayChangu assigns
+    console.log("[paychangu/charge] response data:", JSON.stringify(paymentResponse?.data ?? paymentResponse));
+
+    // ── Persist payment state ─────────────────────────────────────────────────
+    // Store both paychanguTxRef (PayChangu's UUID) and paychanguReference
+    // so the verify route can find the booking either way.
+    const paychanguTxRef = paymentResponse?.data?.tx_ref ?? null;
 
     await adminDb.collection("bookings").doc(bookingId).update({
       paymentStatus:      "pending",
       paymentProvider:    "paychangu",
-      paychanguReference: paymentResponse?.data?.tx_ref ?? bookingId,
+      paychanguReference: paychanguTxRef ?? bookingId,
+      paychanguTxRef:     paychanguTxRef,
       paychanguNetwork:   subMethod?.toUpperCase() ?? null,
       paymentInitiatedAt: new Date(),
       updatedAt:          new Date(),
     });
 
+    // ── Extract checkout URL ──────────────────────────────────────────────────
     const checkoutUrl: string | null =
       paymentResponse?.data?.checkout_url ??
       paymentResponse?.data?.link         ??
@@ -106,13 +131,16 @@ export async function POST(req: NextRequest) {
 
     if (!checkoutUrl) {
       console.error("[paychangu/charge] No checkout URL in response:", paymentResponse);
-      return NextResponse.json({ error: "PayChangu did not return a payment URL" }, { status: 502 });
+      return NextResponse.json(
+        { error: "PayChangu did not return a payment URL" },
+        { status: 502 },
+      );
     }
 
     return NextResponse.json({
       success:   true,
       checkoutUrl,
-      reference: paymentResponse?.data?.tx_ref ?? bookingId,
+      reference: paychanguTxRef ?? bookingId,
     });
 
   } catch (err: any) {
