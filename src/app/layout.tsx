@@ -37,7 +37,6 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                   <Header />
                   <main className="flex-grow py-12">
                     <EmailVerificationBannerLayout />
-                    <AuthListener />
                     {children}
                   </main>
                   <Footer />
