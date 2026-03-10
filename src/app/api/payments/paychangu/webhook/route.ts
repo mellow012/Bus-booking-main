@@ -14,18 +14,34 @@ const APP_URL = (process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000').rep
 // We just redirect to the bookings page where verify logic runs.
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-  const txRef     = searchParams.get('tx_ref')      ?? searchParams.get('reference') ?? '';
-  const status    = searchParams.get('status')      ?? '';
-  const bookingId = searchParams.get('booking_id')  ?? '';
+  const txRef     = searchParams.get('tx_ref')     ?? searchParams.get('reference') ?? '';
+  const status    = searchParams.get('status')     ?? '';
+  const bookingId = searchParams.get('booking_id') ?? '';
 
-  // Forward to verify route which handles the Firestore lookup + PayChangu check
+  // Try to extract bookingId from our custom tx_ref format: pc_{bookingId}_{timestamp}
+  let resolvedBookingId = bookingId;
+  if (!resolvedBookingId && txRef.startsWith('pc_')) {
+    resolvedBookingId = txRef.split('_')[1] ?? '';
+  }
+
   const qs = new URLSearchParams({
-    ...(txRef     && { tx_ref:     txRef }),
-    ...(bookingId && { booking_id: bookingId }),
-    ...(status    && { status }),
+    ...(txRef   && { tx_ref: txRef }),
+    ...(status  && { status }),
   });
 
-  return NextResponse.redirect(`${APP_URL}/api/payments/paychangu/verify?${qs.toString()}`, 302);
+  // If we have a bookingId, use the dynamic route (direct doc lookup, no field queries)
+  if (resolvedBookingId) {
+    return NextResponse.redirect(
+      `${APP_URL}/api/payments/paychangu/verify/${resolvedBookingId}?${qs.toString()}`,
+      302
+    );
+  }
+
+  // Fallback: flat verify route for legacy payments without bookingId
+  return NextResponse.redirect(
+    `${APP_URL}/api/payments/paychangu/verify?${qs.toString()}`,
+    302
+  );
 }
 
 // ── POST — server-to-server webhook from PayChangu ───────────────────────────
