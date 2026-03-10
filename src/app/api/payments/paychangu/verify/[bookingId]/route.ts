@@ -11,10 +11,10 @@ const SUCCESS_STATUSES  = ["success", "successful", "completed"];
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { bookingId: string } }
+  { params }: { params: Promise<{ bookingId: string }> }
 ) {
   const appUrl    = (process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000").replace(/\/$/, "");
-  const { bookingId } = params;
+  const { bookingId } = await params;
   const { searchParams } = new URL(req.url);
   const txRef  = searchParams.get("tx_ref");
   const status = searchParams.get("status");
