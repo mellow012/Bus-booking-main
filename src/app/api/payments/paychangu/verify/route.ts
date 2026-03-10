@@ -1,66 +1,89 @@
 // app/api/payments/paychangu/verify/route.ts
-//
-// Called after PayChangu redirects the user's browser back to the app.
-// PayChangu GETs this URL with ?tx_ref=...&status=...
-//
-// FLOW:
-//   1. Quick-fail on bad status param
-//   2. Look up booking by paychanguReference field (tx_ref is PayChangu's ref)
-//   3. Idempotency: skip if already paid
-//   4. Server-side verify with PayChangu API
-//   5. Update Firestore
-//   6. Redirect browser to /bookings with result params
 
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebaseAdmin";
 
 const PAYCHANGU_API = "https://api.paychangu.com";
+const SUCCESSFUL_STATUSES = ["success", "successful", "completed"];
 
 export async function GET(req: NextRequest) {
   const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000").replace(/\/$/, "");
-
   const { searchParams } = new URL(req.url);
   const txRef  = searchParams.get("tx_ref");
   const status = searchParams.get("status");
 
-  // ── Quick-fail on missing ref or obviously bad status ─────────────────────
   if (!txRef) {
     return NextResponse.redirect(`${appUrl}/bookings?error=payment_failed`);
   }
 
-  const SUCCESSFUL_STATUSES = ["success", "successful", "completed"];
   if (status && !SUCCESSFUL_STATUSES.includes(status.toLowerCase())) {
-    return NextResponse.redirect(
-      `${appUrl}/bookings?error=payment_failed&tx_ref=${txRef}`
-    );
+    return NextResponse.redirect(`${appUrl}/bookings?error=payment_failed&tx_ref=${txRef}`);
   }
 
   try {
-    // ── Look up booking by PayChangu's tx_ref ─────────────────────────────
-    // We stored their reference as paychanguReference in the charge route.
-    const querySnap = await adminDb
-      .collection("bookings")
-      .where("paychanguReference", "==", txRef)
-      .limit(1)
-      .get();
+    // ── Look up booking ───────────────────────────────────────────────────────
+    // Strategy 1: tx_ref is our custom format pc_{bookingId}_{timestamp}
+    // Strategy 2: direct field query on paychanguTxRef / paychanguReference / customTxRef
+    // Strategy 3: scan recent pending PayChangu bookings (last resort)
 
-    if (querySnap.empty) {
+    let bookingDoc: FirebaseFirestore.DocumentSnapshot | FirebaseFirestore.QueryDocumentSnapshot | null = null;
+
+    // Strategy 1 — extract bookingId from custom tx_ref
+    if (txRef.startsWith("pc_")) {
+      const parts = txRef.split("_");
+      const bookingId = parts[1];
+      console.log("[paychangu/verify] Extracted bookingId from tx_ref:", bookingId);
+      if (bookingId) {
+        const snap = await adminDb.collection("bookings").doc(bookingId).get();
+        if (snap.exists) bookingDoc = snap;
+      }
+    }
+
+    // Strategy 2 — field query
+    if (!bookingDoc) {
+      for (const field of ["paychanguTxRef", "paychanguReference", "customTxRef"]) {
+        const snap = await adminDb
+          .collection("bookings")
+          .where(field, "==", txRef)
+          .limit(1)
+          .get();
+        if (!snap.empty) { bookingDoc = snap.docs[0]; break; }
+      }
+    }
+
+    // Strategy 3 — scan recent pending (handles old charge route with no tx_ref stored)
+    if (!bookingDoc) {
+      console.warn("[paychangu/verify] Field queries failed — scanning recent pending bookings");
+      const recentSnap = await adminDb
+        .collection("bookings")
+        .where("paymentProvider", "==", "paychangu")
+        .where("paymentStatus",   "==", "pending")
+        .orderBy("paymentInitiatedAt", "desc")
+        .limit(10)
+        .get();
+
+      for (const doc of recentSnap.docs) {
+        const ref = doc.data()?.paychanguReference ?? doc.data()?.paychanguTxRef;
+        if (ref === txRef) { bookingDoc = doc; break; }
+        if (!ref && !bookingDoc) bookingDoc = doc; // tentative — confirmed by verify below
+      }
+    }
+
+    if (!bookingDoc?.exists) {
       console.error("[paychangu/verify] No booking found for tx_ref:", txRef);
       return NextResponse.redirect(`${appUrl}/bookings?error=booking_not_found`);
     }
 
-    const bookingDoc = querySnap.docs[0];
-    const booking    = bookingDoc.data();
+    const booking = bookingDoc.data()!;
 
-    // ── Idempotency: already paid, just redirect ──────────────────────────
+    // ── Idempotency ───────────────────────────────────────────────────────────
     if (booking.paymentStatus === "paid") {
       return NextResponse.redirect(
         `${appUrl}/bookings?payment_verify=true&provider=paychangu&tx_ref=${txRef}&status=success`
       );
     }
 
-    // ── Server-side verification ──────────────────────────────────────────
-    // Never trust the status param alone — always verify with PayChangu.
+    // ── Server-side verification ──────────────────────────────────────────────
     const verifyRes = await fetch(`${PAYCHANGU_API}/verify-payment/${txRef}`, {
       method:  "GET",
       headers: {
@@ -69,8 +92,6 @@ export async function GET(req: NextRequest) {
       },
     });
 
-    // Read raw text first so a non-JSON response (HTML error page) doesn't
-    // crash the route — log it so we can see exactly what PayChangu returned.
     const rawText = await verifyRes.text();
     console.log("[paychangu/verify] raw response:", verifyRes.status, rawText.slice(0, 300));
 
@@ -83,9 +104,10 @@ export async function GET(req: NextRequest) {
     try {
       result = JSON.parse(rawText);
     } catch {
-      console.error("[paychangu/verify] Non-JSON response from PayChangu:", rawText.slice(0, 500));
+      console.error("[paychangu/verify] Non-JSON response:", rawText.slice(0, 500));
       return NextResponse.redirect(`${appUrl}/bookings?error=verification_failed&tx_ref=${txRef}`);
     }
+
     const verified =
       result.status === "success" &&
       SUCCESSFUL_STATUSES.includes((result.data?.status ?? "").toLowerCase());
@@ -100,7 +122,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.redirect(`${appUrl}/bookings?error=verification_failed&tx_ref=${txRef}`);
     }
 
-    // ── Mark paid ─────────────────────────────────────────────────────────
+    // ── Mark paid ─────────────────────────────────────────────────────────────
     await bookingDoc.ref.update({
       paymentStatus:      "paid",
       bookingStatus:      "confirmed",
