@@ -6,9 +6,9 @@
 //   POST /api/payments/paychangu/charge
 //   → PayChangu returns a checkout_url
 //   → frontend redirects: window.location.href = checkoutUrl
-//   → PayChangu redirects browser to /api/payments/paychangu/webhook?tx_ref=...&booking_id=...
+//   → PayChangu redirects browser to /api/payments/paychangu/webhook?tx_ref=pc_{bookingId}_{ts}
 //   → webhook GET handler forwards to /api/payments/paychangu/verify
-//   → verify confirms with PayChangu API, updates Firestore, redirects to /bookings
+//   → verify extracts bookingId from tx_ref, confirms with PayChangu, updates Firestore
 
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebaseAdmin";
@@ -50,7 +50,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Booking is missing amount or company" }, { status: 400 });
     }
 
-    // Block double-payment
     if (booking.paymentStatus === "paid") {
       return NextResponse.json({ error: "This booking has already been paid" }, { status: 409 });
     }
@@ -91,31 +90,37 @@ export async function POST(req: NextRequest) {
       : "Bus Ticket";
     const description = `${routeLabel} — Booking #${(bookingId as string).slice(-8)}`;
 
+    // ── Custom tx_ref with embedded bookingId ─────────────────────────────────
+    // PayChangu strips query params from returnUrl, so we can't rely on
+    // ?booking_id= surviving the redirect. Instead we embed the bookingId
+    // in the tx_ref itself: pc_{bookingId}_{timestamp}
+    // PayChangu always echoes tx_ref back in the redirect, so verify can
+    // split it to extract bookingId — no query params or field queries needed.
+    const customTxRef = `pc_${bookingId}_${Date.now()}`;
+
     const paymentResponse = await paymentService.initiatePayment({
       amount,
       email:       customerEmail,
       first_name:  firstName,
       last_name:   lastName,
       description,
+      tx_ref:      customTxRef,
       callbackUrl: `${appUrl}/api/payments/paychangu/webhook`,
-      // booking_id passed through so verify can do a direct doc lookup
-      // instead of relying on paychanguReference matching
-      returnUrl:   `${appUrl}/api/payments/paychangu/webhook?booking_id=${bookingId}`,
+      returnUrl:   `${appUrl}/api/payments/paychangu/webhook`,
     });
 
-    // Log so we can see exactly what tx_ref PayChangu assigns
+    // Log full response so we can see what PayChangu sends back
     console.log("[paychangu/charge] response data:", JSON.stringify(paymentResponse?.data ?? paymentResponse));
 
     // ── Persist payment state ─────────────────────────────────────────────────
-    // Store both paychanguTxRef (PayChangu's UUID) and paychanguReference
-    // so the verify route can find the booking either way.
-    const paychanguTxRef = paymentResponse?.data?.tx_ref ?? null;
+    const paychanguTxRef = paymentResponse?.data?.tx_ref ?? customTxRef;
 
     await adminDb.collection("bookings").doc(bookingId).update({
       paymentStatus:      "pending",
       paymentProvider:    "paychangu",
-      paychanguReference: paychanguTxRef ?? bookingId,
+      paychanguReference: paychanguTxRef,
       paychanguTxRef:     paychanguTxRef,
+      customTxRef:        customTxRef,
       paychanguNetwork:   subMethod?.toUpperCase() ?? null,
       paymentInitiatedAt: new Date(),
       updatedAt:          new Date(),
@@ -138,9 +143,10 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json({
-      success:   true,
+      success:     true,
       checkoutUrl,
-      reference: paychanguTxRef ?? bookingId,
+      reference:   paychanguTxRef,
+      customTxRef,
     });
 
   } catch (err: any) {
