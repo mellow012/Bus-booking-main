@@ -104,9 +104,9 @@ export async function POST(req: NextRequest) {
       first_name:  firstName,
       last_name:   lastName,
       description,
-      tx_ref:      customTxRef,
+      // Note: tx_ref not passed — PayChangu SDK doesn't support custom tx_ref
+      // bookingId is embedded in the returnUrl path instead
       callbackUrl: `${appUrl}/api/payments/paychangu/webhook`,
-      // bookingId is in the path — PayChangu cannot strip it unlike query params
       returnUrl:   `${appUrl}/api/payments/paychangu/verify/${bookingId}`,
     });
 
