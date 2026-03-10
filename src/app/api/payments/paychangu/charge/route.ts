@@ -106,7 +106,8 @@ export async function POST(req: NextRequest) {
       description,
       tx_ref:      customTxRef,
       callbackUrl: `${appUrl}/api/payments/paychangu/webhook`,
-      returnUrl:   `${appUrl}/api/payments/paychangu/webhook`,
+      // bookingId is in the path — PayChangu cannot strip it unlike query params
+      returnUrl:   `${appUrl}/api/payments/paychangu/verify/${bookingId}`,
     });
 
     // Log full response so we can see what PayChangu sends back
