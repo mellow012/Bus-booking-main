@@ -114,18 +114,30 @@ export async function POST(req: NextRequest) {
     console.log("[paychangu/charge] response data:", JSON.stringify(paymentResponse?.data ?? paymentResponse));
 
     // ── Persist payment state ─────────────────────────────────────────────────
-    const paychanguTxRef = paymentResponse?.data?.tx_ref ?? customTxRef;
+    // The SDK wraps the response in a .data layer — the logged response IS
+    // paymentResponse.data, so PayChangu's UUID is at .data.data.tx_ref.
+    const paychanguTxRef =
+      paymentResponse?.data?.data?.tx_ref ??  // SDK-wrapped: {data: {data: {tx_ref}}}
+      paymentResponse?.data?.tx_ref       ??  // Direct: {data: {tx_ref}}
+      paymentResponse?.tx_ref             ??  // Flat
+      customTxRef;
+    console.log("[paychangu/charge] storing paychanguTxRef:", paychanguTxRef, "for bookingId:", bookingId);
 
-    await adminDb.collection("bookings").doc(bookingId).update({
-      paymentStatus:      "pending",
-      paymentProvider:    "paychangu",
-      paychanguReference: paychanguTxRef,
-      paychanguTxRef:     paychanguTxRef,
-      customTxRef:        customTxRef,
-      paychanguNetwork:   subMethod?.toUpperCase() ?? null,
-      paymentInitiatedAt: new Date(),
-      updatedAt:          new Date(),
-    });
+    try {
+      await adminDb.collection("bookings").doc(bookingId).update({
+        paymentStatus:      "pending",
+        paymentProvider:    "paychangu",
+        paychanguReference: paychanguTxRef,
+        paychanguTxRef:     paychanguTxRef,
+        customTxRef:        customTxRef,
+        paychanguNetwork:   subMethod?.toUpperCase() ?? null,
+        paymentInitiatedAt: new Date(),
+        updatedAt:          new Date(),
+      });
+      console.log("[paychangu/charge] Firestore update SUCCESS for bookingId:", bookingId);
+    } catch (fsErr: any) {
+      console.error("[paychangu/charge] Firestore update FAILED:", fsErr.message);
+    }
 
     // ── Extract checkout URL ──────────────────────────────────────────────────
     const checkoutUrl: string | null =

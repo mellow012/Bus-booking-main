@@ -8,9 +8,10 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { getAuth, applyActionCode, checkActionCode, reload } from 'firebase/auth';
-import { CheckCircleIcon, Loader2, Mail } from 'lucide-react';
+import { CheckCircleIcon, Loader2,Mail } from 'lucide-react';
 import { ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 import { Button } from '@/components/ui/button';
+import { useEmailVerification } from '@/hooks/useEmailVerification';
 
 export default function VerifyEmailPage() {
   const router       = useRouter();
@@ -21,6 +22,25 @@ export default function VerifyEmailPage() {
 
   const oobCode = searchParams.get('oobCode');
   const mode    = searchParams.get('mode');
+
+  const { sendVerificationEmail } = useEmailVerification();
+  const [resending,     setResending]     = useState(false);
+  const [resendMessage, setResendMessage] = useState('');
+
+  const handleResend = async () => {
+    setResending(true);
+    setResendMessage('');
+    try {
+      await sendVerificationEmail();
+      setResendMessage('Email sent! Check your inbox and spam folder.');
+    } catch (err: any) {
+      setResendMessage(err.message?.includes('too-many-requests')
+        ? 'Too many attempts — please wait a minute.'
+        : 'Failed to resend. Please try again.');
+    } finally {
+      setResending(false);
+    }
+  };
 
   useEffect(() => {
     // ── No oobCode: user just registered, waiting for them to click the link ──
@@ -82,9 +102,12 @@ export default function VerifyEmailPage() {
 
         setStatus('success');
 
-        // Redirect to /profile so the user completes their details.
-        // AuthContext route guard will take over from there.
-        setTimeout(() => router.push('/profile'), 2000);
+        // Use hard navigation instead of router.push so the browser does a
+        // full page reload. This forces AuthContext to reinitialize with the
+        // fresh Firebase user (emailVerified: true). Without this, AuthContext's
+        // in-memory user still has emailVerified: false and the route guard
+        // immediately bounces the user back to /verify-email.
+        setTimeout(() => { window.location.href = '/profile'; }, 2000);
 
       } catch (err: any) {
         console.error('[VerifyEmail] Error:', err.code, err.message);
@@ -137,12 +160,21 @@ export default function VerifyEmailPage() {
           </div>
           <div className="space-y-3">
             <Button
-              onClick={() => router.push('/login?resend=true')}
+              onClick={handleResend}
+              disabled={resending}
               variant="outline"
               className="w-full h-11"
             >
-              Resend Verification Email
+              {resending ? (
+                <span className="flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Sending...
+                </span>
+              ) : 'Resend Verification Email'}
             </Button>
+            {resendMessage && (
+              <p className="text-sm text-center text-gray-600">{resendMessage}</p>
+            )}
             <Button
               onClick={() => router.push('/login')}
               variant="ghost"
@@ -195,7 +227,7 @@ export default function VerifyEmailPage() {
             <>
               <p className="text-sm text-gray-500">Redirecting automatically...</p>
               <Button
-                onClick={() => router.push('/profile')}
+                onClick={() => { window.location.href = '/profile'; }}
                 className="w-full bg-green-600 hover:bg-green-700 text-white h-11"
               >
                 Complete My Profile

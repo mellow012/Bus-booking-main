@@ -186,10 +186,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [refreshUserProfile, syncEmailVerifiedToFirestore]);
 
   // ─── Auto-refresh session cookie when ID token rotates ───────────────────
+  // Also update user state so emailVerified changes (e.g. after applyActionCode)
+  // are reflected immediately without waiting for the next onAuthStateChanged.
 
   useEffect(() => {
     const unsubscribeToken = auth.onIdTokenChanged(async (currentUser) => {
       if (!currentUser) return;
+
+      // Update user state so emailVerified flips in the route guard immediately
+      setUser({ ...currentUser } as User);
+
       try {
         const idToken = await currentUser.getIdToken();
         await fetch("/api/auth/session", {
