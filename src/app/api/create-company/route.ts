@@ -8,12 +8,12 @@ import { z } from 'zod';
 import { companyNameSchema, emailSchema, phoneSchema } from '@/lib/validationSchemas';
 
 const createCompanySchema = z.object({
-  companyName: companyNameSchema,
-  companyEmail: emailSchema,
+  companyName:    companyNameSchema,
+  companyEmail:   emailSchema,
   adminFirstName: z.string().max(50).trim().default(''),
-  adminLastName: z.string().max(50).trim().default(''),
-  adminPhone: z.string().max(20).trim().default(''),
-}).strict();
+  adminLastName:  z.string().max(50).trim().default(''),
+  adminPhone:     z.string().max(20).trim().default(''),
+});
 
 interface ApiResponse {
   success: boolean;
