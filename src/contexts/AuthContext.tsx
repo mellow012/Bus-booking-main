@@ -347,7 +347,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const redirectToDashboard = useCallback((profile: UserProfile) => {
     switch (profile.role) {
       case 'superadmin':
-        router.push('/admin/dashboard');
+        router.push('/admin');
         break;
       case 'company_admin':
         router.push(
