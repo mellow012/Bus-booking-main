@@ -268,15 +268,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const emailVerified = user.emailVerified;
 
       // ── Email not verified → hold on verify-email page ────────────────
-      if (!emailVerified && !isPublicRoute && !syncingEmailVerified.current) {
+      // Superadmins are exempt — they may use internal/dummy emails.
+      const isSuperAdmin = userProfile.role === 'superadmin';
+      if (!emailVerified && !isPublicRoute && !syncingEmailVerified.current && !isSuperAdmin) {
         router.push('/verify-email');
         return;
       }
 
       // ── Just verified → leave verify-email, go to profile ─────────────
-      if (emailVerified && pathname === '/verify-email') {
-        // Only redirect if not already heading somewhere via the page itself
-        // (the page does its own redirect after applyActionCode)
+      if ((emailVerified || isSuperAdmin) && pathname === '/verify-email') {
         if (!oobCode) {
           redirectAfterVerification(userProfile);
         }
@@ -347,7 +347,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const redirectToDashboard = useCallback((profile: UserProfile) => {
     switch (profile.role) {
       case 'superadmin':
-        router.push('/admin');
+        router.push('/admin/dashboard');
         break;
       case 'company_admin':
         router.push(
