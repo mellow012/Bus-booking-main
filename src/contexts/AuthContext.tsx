@@ -21,8 +21,6 @@ import {
 import { UserProfile, UserRole, CompanyRole } from '@/types';
 import { useRouter, usePathname } from 'next/navigation';
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
 const formatPhoneToE164 = (phone?: string): string => {
   if (!phone) return '';
   let p = phone.trim().replace(/[\s\-()]/g, '');
@@ -37,8 +35,6 @@ const formatPhoneToE164 = (phone?: string): string => {
 const COMPANY_ROLES: CompanyRole[] = ['company_admin', 'operator', 'conductor'];
 const _isCompanyRole = (role?: UserRole): role is CompanyRole =>
   COMPANY_ROLES.includes(role as CompanyRole);
-
-// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface AuthContextType {
   user: User | null;
@@ -64,8 +60,6 @@ interface UpdateProfilePayload {
   sex?: string;
   currentAddress?: string;
 }
-
-// ─── Context ──────────────────────────────────────────────────────────────────
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -186,15 +180,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [refreshUserProfile, syncEmailVerifiedToFirestore]);
 
   // ─── Auto-refresh session cookie when ID token rotates ───────────────────
-  // Also update user state so emailVerified changes (e.g. after applyActionCode)
-  // are reflected immediately without waiting for the next onAuthStateChanged.
 
   useEffect(() => {
     const unsubscribeToken = auth.onIdTokenChanged(async (currentUser) => {
       if (!currentUser) return;
 
-      // Update user state so emailVerified flips in the route guard immediately
-      setUser({ ...currentUser } as User);
+      // ✅ Set the real Firebase User object — never spread it, that loses prototype methods
+      setUser(currentUser);
 
       try {
         const idToken = await currentUser.getIdToken();
@@ -220,7 +212,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const refreshed = auth.currentUser;
         if (refreshed?.emailVerified) {
           await syncEmailVerifiedToFirestore(refreshed);
-          setUser({ ...refreshed } as User);
+          // ✅ Set the real Firebase User object — never spread it
+          setUser(refreshed);
           await refreshUserProfile(refreshed.uid);
         }
       } catch {
@@ -258,7 +251,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         pathname === '/company/operator/signup') &&
       !!(oobCode || operatorId);
 
-    // ── Unauthenticated ────────────────────────────────────────────────────
     if (!user && !isSetupPage && !isPublicRoute) {
       router.push('/login');
       return;
@@ -266,26 +258,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     if (user && userProfile) {
       const emailVerified = user.emailVerified;
+      const isSuperAdmin  = userProfile.role === 'superadmin';
 
-      // ── Email not verified → hold on verify-email page ────────────────
-      // Superadmins are exempt — they may use internal/dummy emails.
-      const isSuperAdmin = userProfile.role === 'superadmin';
       if (!emailVerified && !isPublicRoute && !syncingEmailVerified.current && !isSuperAdmin) {
         router.push('/verify-email');
         return;
       }
 
-      // ── Just verified → leave verify-email, go to profile ─────────────
       if ((emailVerified || isSuperAdmin) && pathname === '/verify-email') {
-        if (!oobCode) {
-          redirectAfterVerification(userProfile);
-        }
+        if (!oobCode) redirectAfterVerification(userProfile);
         return;
       }
 
-      // ── Customer: force profile completion before anything else ────────
-      // A customer is considered "setup incomplete" if they haven't saved
-      // their profile yet (setupCompleted flag is the source of truth).
       if (
         emailVerified &&
         userProfile.role === 'customer' &&
@@ -296,13 +280,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
 
-      // ── Auth page redirect ─────────────────────────────────────────────
       if (['/login', '/register'].includes(pathname)) {
         redirectToDashboard(userProfile);
         return;
       }
 
-      // ── Role mismatch guards ───────────────────────────────────────────
       if (
         pathname.startsWith('/company/admin') &&
         (userProfile.role === 'operator' || userProfile.role === 'conductor')
@@ -334,8 +316,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [user, userProfile, isInitialized, loading, router, pathname]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // After email verified with no oobCode on verify-email page,
-  // send them where they should go next.
   const redirectAfterVerification = useCallback((profile: UserProfile) => {
     if (profile.role === 'customer' && !profile.setupCompleted) {
       router.push('/profile');

@@ -54,3 +54,14 @@ src/lib/serviceAccountKey.json
 
 .busbookingapp-50592-firebase-adminsdk-fbsvc-e825220c1d.json
 .functions/src/index.ts
+
+# Playwright
+node_modules/
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+/playwright/.auth/
+
+# Browser binaries (Playwright downloads them automatically)
+/playwright/.local-browsers/
