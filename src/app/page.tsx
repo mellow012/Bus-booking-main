@@ -74,8 +74,28 @@ const cache = {
   get: (k: string) => { const item = cache.data.get(k); return item && item.exp > Date.now() ? item.value : null; }
 };
 
+const CITY_COORDS: Record<string, { lat: number, lng: number }> = {
+  "Blantyre": { lat: -15.7861, lng: 35.0058 },
+  "Lilongwe": { lat: -13.9626, lng: 33.7741 },
+  "Mzuzu": { lat: -11.4656, lng: 34.0207 },
+  "Zomba": { lat: -15.3850, lng: 35.3181 },
+  "Kasungu": { lat: -13.0333, lng: 33.4833 },
+  "Mangochi": { lat: -14.4782, lng: 35.2645 },
+  "Salima": { lat: -13.7804, lng: 34.4587 },
+  "Karonga": { lat: -9.9333, lng: 33.9333 },
+  "Nkhata Bay": { lat: -11.6066, lng: 34.2907 },
+  "Dedza": { lat: -14.3778, lng: 34.3333 },
+};
+
 const nearestCity = (lat: number, lng: number) => {
-  return "Blantyre"; // Fallback simple logic
+  let closest = "Blantyre";
+  let minDiff = Infinity;
+  for (const [city, coords] of Object.entries(CITY_COORDS)) {
+    // Basic Euclidean distance for localized ranking
+    const diff = Math.pow(coords.lat - lat, 2) + Math.pow(coords.lng - lng, 2);
+    if (diff < minDiff) { minDiff = diff; closest = city; }
+  }
+  return closest;
 };
 
 export default function HomePage() {
@@ -504,16 +524,16 @@ export default function HomePage() {
                 <button onClick={() => setShowSort(s => !s)}
                   className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-2 text-sm text-gray-600 bg-white border border-gray-200 rounded-xl hover:border-blue-300 hover:text-blue-700 transition-colors font-medium shadow-sm whitespace-nowrap">
                   <ArrowUpDown className="w-4 h-4"/>
-                  <span className="hidden sm:inline">{SORT_OPTIONS.find(o => o.key === sortKey)?.label}</span>
+                  <span className="hidden sm:inline">{SORT_OPTIONS.find(o => o.value === sortKey)?.label}</span>
                 </button>
                 {showSort && (
                   <div className="absolute right-0 top-full mt-1.5 bg-white border border-gray-200 rounded-xl shadow-xl z-20 py-1.5 min-w-[180px]">
                     {SORT_OPTIONS.map(o => (
-                      <button key={o.key} onClick={() => { setSortKey(o.key); setShowSort(false); setPage(1); }}
+                      <button key={o.value} onClick={() => { setSortKey(o.value as SortKey); setShowSort(false); setPage(1); }}
                         className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
-                          sortKey === o.key ? "bg-blue-50 text-blue-700 font-semibold" : "text-gray-700 hover:bg-gray-50"
+                          sortKey === o.value ? "bg-blue-50 text-blue-700 font-semibold" : "text-gray-700 hover:bg-gray-50"
                         }`}>
-                        {sortKey === o.key && <span className="mr-1.5 text-blue-500">✓</span>}{o.label}
+                        {sortKey === o.value && <span className="mr-1.5 text-blue-500">✓</span>}{o.label}
                       </button>
                     ))}
                   </div>

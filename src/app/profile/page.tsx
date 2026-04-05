@@ -4,11 +4,12 @@ import React, { useState, useEffect, FormEvent, useCallback, useMemo } from 'rea
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { db } from '@/lib/firebaseConfig';
+import { auth } from '@/lib/firebaseConfig';
+import { sendPasswordResetEmail } from 'firebase/auth';
 import {
   doc,
   getDoc,
   updateDoc,
-  deleteDoc,
   Timestamp,
   collection,
   query,
@@ -16,7 +17,8 @@ import {
   orderBy,
   limit,
   getDocs,
-  writeBatch
+  writeBatch,
+  getDocs as _getDocs
 } from 'firebase/firestore';
 import ProfilePageSkeleton from '@/components/SkeletonLoader'
 import { UserProfile } from '@/types';
@@ -24,9 +26,9 @@ import {
   Loader2, AlertCircle, User, MapPin, Edit, Mail, Phone, Shield,
   Calendar, Clock, CreditCard, Activity, Settings, ChevronRight, Star,
   TrendingUp, Users, Bus, CheckCircle, XCircle, AlertTriangle, BookOpen,
-  History, Bell, Download, Share2, Eye, EyeOff, Camera, Award, Trash2,
-  Key, Smartphone, LogOut, RefreshCw, BarChart3, PieChart, Filter,
-  Search, ExternalLink, Copy, FileText, DollarSign, Zap
+  History, Bell, Download, Share2, Eye, EyeOff, Award, Trash2,
+  Key, Smartphone, RefreshCw, BarChart3,
+  Search, ExternalLink, Copy, FileText, DollarSign, Zap, X
 } from 'lucide-react';
 import AlertMessage from '../../components/AlertMessage';
 
@@ -184,73 +186,79 @@ const ProfilePage: React.FC = () => {
       );
 
       const bookingsSnapshot = await getDocs(bookingsQuery);
+      const rawBookings = bookingsSnapshot.docs.map(d => ({ id: d.id, ...d.data() })) as any[];
 
-      const bookingsWithDetails = await Promise.all(
-        bookingsSnapshot.docs.map(async (bookingDoc) => {
-          const bookingData = bookingDoc.data();
+      // ── Batch-fetch unique companies ────────────────────────────────────────
+      const uniqueCompanyIds = [...new Set(rawBookings.map(b => b.companyId).filter(Boolean))];
+      const companyMap: Record<string, string> = {};
+      if (uniqueCompanyIds.length > 0) {
+        await Promise.all(uniqueCompanyIds.map(async id => {
+          try {
+            const snap = await getDoc(doc(db, 'companies', id));
+            if (snap.exists()) companyMap[id] = snap.data().name || 'Unknown Company';
+          } catch { /* ignore */ }
+        }));
+      }
 
-          let companyName = 'Unknown Company';
-          if (bookingData.companyId) {
-            try {
-              const companyDoc = await getDoc(doc(db, 'companies', bookingData.companyId));
-              if (companyDoc.exists()) {
-                companyName = companyDoc.data().name || companyName;
-              }
-            } catch (err) {
-              console.error('Error fetching company:', err);
-            }
+      // ── Batch-fetch unique schedules ────────────────────────────────────────
+      const uniqueScheduleIds = [...new Set(rawBookings.map(b => b.scheduleId).filter(Boolean))];
+      const scheduleMap: Record<string, any> = {};
+      if (uniqueScheduleIds.length > 0) {
+        await Promise.all(uniqueScheduleIds.map(async id => {
+          try {
+            const snap = await getDoc(doc(db, 'schedules', id));
+            if (snap.exists()) scheduleMap[id] = snap.data();
+          } catch { /* ignore */ }
+        }));
+      }
+
+      // ── Batch-fetch unique routes ───────────────────────────────────────────
+      const uniqueRouteIds = [...new Set(
+        Object.values(scheduleMap).map((s: any) => s.routeId).filter(Boolean)
+      )];
+      const routeMap: Record<string, any> = {};
+      if (uniqueRouteIds.length > 0) {
+        await Promise.all(uniqueRouteIds.map(async id => {
+          try {
+            const snap = await getDoc(doc(db, 'routes', id));
+            if (snap.exists()) routeMap[id] = snap.data();
+          } catch { /* ignore */ }
+        }));
+      }
+
+      // ── Assemble enriched bookings ──────────────────────────────────────────
+      const bookingsWithDetails = rawBookings.map(bookingData => {
+        const companyName = companyMap[bookingData.companyId] || 'Unknown Company';
+        let origin = 'Unknown', destination = 'Unknown', departureDate = new Date();
+
+        if (bookingData.scheduleId && scheduleMap[bookingData.scheduleId]) {
+          const sd = scheduleMap[bookingData.scheduleId];
+          if (sd.routeId && routeMap[sd.routeId]) {
+            origin = routeMap[sd.routeId].origin || origin;
+            destination = routeMap[sd.routeId].destination || destination;
+          } else {
+            origin = sd.route?.origin || sd.origin || origin;
+            destination = sd.route?.destination || sd.destination || destination;
           }
+          if (sd.departureDateTime) departureDate = sd.departureDateTime.toDate();
+          else if (sd.departureDate) departureDate = sd.departureDate.toDate();
+          else if (bookingData.bookingDate) departureDate = bookingData.bookingDate.toDate();
+        }
 
-          let origin      = 'Unknown';
-          let destination = 'Unknown';
-          let departureDate = new Date();
-
-          if (bookingData.scheduleId) {
-            try {
-              const scheduleDoc = await getDoc(doc(db, 'schedules', bookingData.scheduleId));
-              if (scheduleDoc.exists()) {
-                const scheduleData = scheduleDoc.data();
-
-                if (scheduleData.routeId) {
-                  const routeDoc = await getDoc(doc(db, 'routes', scheduleData.routeId));
-                  if (routeDoc.exists()) {
-                    const routeData = routeDoc.data();
-                    origin      = routeData.origin      || origin;
-                    destination = routeData.destination || destination;
-                  }
-                } else {
-                  origin      = scheduleData.route?.origin      || scheduleData.origin      || origin;
-                  destination = scheduleData.route?.destination || scheduleData.destination || destination;
-                }
-
-                if (scheduleData.departureDateTime) {
-                  departureDate = scheduleData.departureDateTime.toDate();
-                } else if (scheduleData.departureDate) {
-                  departureDate = scheduleData.departureDate.toDate();
-                } else if (bookingData.bookingDate) {
-                  departureDate = bookingData.bookingDate.toDate();
-                }
-              }
-            } catch (err) {
-              console.error('Error fetching schedule or route:', err);
-            }
-          }
-
-          return {
-            id: bookingDoc.id,
-            ...bookingData,
-            companyName,
-            origin,
-            destination,
-            departureDate,
-            status:           bookingData.bookingStatus || bookingData.status || 'pending',
-            amount:           bookingData.totalAmount || 0,
-            seatNumbers:      bookingData.seatNumbers || [],
-            bookingReference: bookingData.bookingReference || bookingData.transactionReference || '',
-            paymentStatus:    bookingData.paymentDetails?.paymentStatus || 'pending'
-          };
-        })
-      );
+        return {
+          id: bookingData.id,
+          ...bookingData,
+          companyName,
+          origin,
+          destination,
+          departureDate,
+          status: bookingData.bookingStatus || bookingData.status || 'pending',
+          amount: bookingData.totalAmount || 0,
+          seatNumbers: bookingData.seatNumbers || [],
+          bookingReference: bookingData.bookingReference || bookingData.transactionReference || '',
+          paymentStatus: bookingData.paymentDetails?.paymentStatus || 'pending'
+        };
+      });
 
       const now       = new Date();
       const thisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -327,7 +335,7 @@ const ProfilePage: React.FC = () => {
       insights.monthlySpending = Object.entries(monthlyData)
         .sort(([a], [b]) => a.localeCompare(b))
         .slice(-6)
-        .map(([month, amount]) => ({ month, amount }));
+        .map(([month, amount]) => ({ month, amount: amount as number }));
 
       setTravelInsights(insights);
     } catch (err) {
@@ -338,42 +346,14 @@ const ProfilePage: React.FC = () => {
     }
   }, [user]);
 
-  const fetchRouteSuggestions = useCallback(async () => {
-    if (!user) return;
-
-    try {
-      const bookings = recentBookings;
-      if (bookings.length === 0) { setRouteSuggestions([]); return; }
-
-      const uniqueDestinations = [...new Set(bookings.map(b => b.destination))];
-      const suggestions: RouteSuggestion[] = [];
-
-      for (const dest of uniqueDestinations) {
-        const origin          = bookings.find(b => b.destination === dest)?.origin || '';
-        const schedulesQuery  = query(
-          collection(db, 'schedules'),
-          where('origin', '==', origin),
-          where('destination', '==', dest),
-          where('departureDateTime', '>', new Date()),
-          limit(3)
-        );
-        const snapshot = await getDocs(schedulesQuery);
-        snapshot.forEach(d => {
-          const data = d.data();
-          suggestions.push({
-            origin,
-            destination: dest,
-            companyId: data.companyId || '',
-            departureTime: data.departureDateTime?.toDate() || new Date()
-          });
-        });
-      }
-
-      setRouteSuggestions(suggestions.slice(0, 3));
-    } catch (err) {
-      console.error('Error fetching route suggestions:', err);
-    }
-  }, [user, recentBookings]);
+  // Build "book again" shortcuts from recent bookings – no extra Firestore reads needed
+  const bookAgainRoutes = useMemo(() => {
+    const seen = new Set<string>();
+    return recentBookings
+      .filter(b => b.origin !== 'Unknown' && b.destination !== 'Unknown')
+      .filter(b => { const k = `${b.origin}-${b.destination}`; if (seen.has(k)) return false; seen.add(k); return true; })
+      .slice(0, 3);
+  }, [recentBookings]);
 
   // ─── User preferences ─────────────────────────────────────────────────────
   // FIX: removed `notifications` and `security` from the dependency array.
@@ -444,10 +424,6 @@ const ProfilePage: React.FC = () => {
     fetchData();
   }, [user, userProfile, router, fetchBookingData, loadUserPreferences]);
 
-  useEffect(() => {
-    fetchRouteSuggestions();
-  }, [fetchRouteSuggestions]);
-
   // ─── Handlers ─────────────────────────────────────────────────────────────
 
   const handleProfileUpdate = async (e: FormEvent) => {
@@ -461,9 +437,7 @@ const ProfilePage: React.FC = () => {
     if (!formData.phone.match(/^\+265\d{9}$/)) {
       errors.push('Phone must be in +265 format (e.g., +265999123456)');
     }
-    if (!formData.email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      errors.push('Valid email is required');
-    }
+    // Email is read-only — not included in validation or save
 
     if (errors.length > 0) { setError(errors.join('. ')); return; }
 
@@ -509,12 +483,12 @@ const ProfilePage: React.FC = () => {
     }
   };
 
+  // ─── Delete Account Modal state ────────────────────────────────────────────
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+
   const handleAccountDeletion = async () => {
-    if (!user || !confirm('Are you sure you want to delete your account? This action cannot be undone.')) return;
-
-    const confirmText = prompt('Type "DELETE" to confirm account deletion:');
-    if (confirmText !== 'DELETE') return;
-
+    if (!user || deleteConfirmText !== 'DELETE') return;
     setActionLoading(true);
     try {
       const batch = writeBatch(db);
@@ -526,8 +500,47 @@ const ProfilePage: React.FC = () => {
     } catch (err) {
       console.error('Error deleting account:', err);
       setError('Failed to delete account. Please contact support.');
+      setShowDeleteModal(false);
     } finally {
       setActionLoading(false);
+    }
+  };
+
+  // ─── Cancel Booking ───────────────────────────────────────────────────────
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
+
+  const handleCancelBooking = async (bookingId: string) => {
+    if (!user) return;
+    setCancellingId(bookingId);
+    try {
+      await updateDoc(doc(db, 'bookings', bookingId), {
+        bookingStatus: 'cancelled',
+        updatedAt: Timestamp.now(),
+      });
+      setRecentBookings(prev =>
+        prev.map(b => b.id === bookingId ? { ...b, status: 'cancelled' } : b)
+      );
+      setSuccess('Booking cancelled successfully.');
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err) {
+      console.error('Error cancelling booking:', err);
+      setError('Failed to cancel booking. Please try again.');
+    } finally {
+      setCancellingId(null);
+    }
+  };
+
+  // ─── Password Reset ───────────────────────────────────────────────────────
+  const [pwResetSent, setPwResetSent] = useState(false);
+  const handlePasswordReset = async () => {
+    if (!user?.email) return;
+    try {
+      await sendPasswordResetEmail(auth, user.email);
+      setPwResetSent(true);
+      setSuccess(`Password reset email sent to ${user.email}`);
+      setTimeout(() => setSuccess(''), 4000);
+    } catch (err: any) {
+      setError(`Failed to send reset email: ${err.message}`);
     }
   };
 
@@ -687,7 +700,7 @@ const ProfilePage: React.FC = () => {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-8">
           <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100 hover:shadow-xl transition-all">
             <div className="flex items-center justify-between mb-4">
               <div className="p-3 bg-blue-50 rounded-xl"><Bus className="w-6 h-6 text-blue-600" /></div>
@@ -789,13 +802,13 @@ const ProfilePage: React.FC = () => {
                       </div>
 
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Email <span className="text-red-500">*</span></label>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
                         <div className="relative">
-                          <input type="email" value={formData.email}
-                            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                            className="w-full px-4 py-3 pl-12 border border-gray-300 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors" required />
+                          <input type="email" value={formData.email} readOnly
+                            className="w-full px-4 py-3 pl-12 border border-gray-200 rounded-2xl bg-gray-50 text-gray-500 cursor-not-allowed" />
                           <Mail className="w-5 h-5 text-gray-400 absolute top-3.5 left-3" />
                         </div>
+                        <p className="text-xs text-gray-400 mt-1">Contact support to change your email address.</p>
                       </div>
 
                       <div>
@@ -927,24 +940,24 @@ const ProfilePage: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Suggested Routes */}
+                    {/* Book Again Shortcuts */}
                     <div className="mt-8">
-                      <h3 className="text-lg font-bold text-gray-900 mb-4">Suggested Routes</h3>
+                      <h3 className="text-lg font-bold text-gray-900 mb-4">Book Again</h3>
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        {routeSuggestions.length > 0 ? (
-                          routeSuggestions.map((suggestion, index) => (
-                            <div key={index} className="p-4 bg-gray-50 rounded-2xl border border-gray-100 hover:border-blue-200 transition-all">
-                              <p className="text-sm text-gray-600">{suggestion.origin} → {suggestion.destination}</p>
-                              <p className="text-xs text-gray-500">Next: {suggestion.departureTime.toLocaleString()}</p>
+                        {bookAgainRoutes.length > 0 ? (
+                          bookAgainRoutes.map((b) => (
+                            <div key={b.id} className="p-4 bg-gray-50 rounded-2xl border border-gray-100 hover:border-blue-200 transition-all">
+                              <p className="text-sm font-medium text-gray-800">{b.origin} → {b.destination}</p>
+                              <p className="text-xs text-gray-500 mt-1">{b.companyName}</p>
                               <button
-                                onClick={() => router.push(`/schedules?origin=${suggestion.origin}&destination=${suggestion.destination}`)}
-                                className="mt-2 px-3 py-1 text-xs text-blue-600 hover:text-blue-800 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors">
-                                Book Now
+                                onClick={() => router.push(`/schedules?from=${encodeURIComponent(b.origin)}&to=${encodeURIComponent(b.destination)}`)}
+                                className="mt-3 px-3 py-1.5 text-xs text-blue-600 hover:text-blue-800 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors font-medium">
+                                Search Again →
                               </button>
                             </div>
                           ))
                         ) : (
-                          <p className="text-gray-500 col-span-3">No suggestions yet. Book a trip to get personalized routes!</p>
+                          <p className="text-gray-500 col-span-3 text-sm">No recent trips yet. Book a journey to see shortcuts here.</p>
                         )}
                       </div>
                     </div>
@@ -1015,16 +1028,30 @@ const ProfilePage: React.FC = () => {
                               </button>
                             </div>
                           </div>
-                          <div className="flex items-center justify-between pt-4 border-t border-gray-100">
+                          <div className="flex flex-wrap items-center justify-between pt-4 border-t border-gray-100 gap-y-3">
                             <div className="flex items-center space-x-4">
-                              <span className="text-xs text-gray-500">Payment: {booking.paymentStatus}</span>
+                              <span className="text-xs text-gray-500 capitalize">Payment: {booking.paymentStatus}</span>
                             </div>
-                            <div className="flex items-center space-x-2">
-                              {booking.status.toLowerCase() !== 'cancelled' && (
-                                <button className="px-3 py-1 text-xs text-red-600 hover:text-red-800 border border-red-200 rounded-lg hover:bg-red-50 transition-colors">Cancel</button>
+                            <div className="flex flex-wrap items-center gap-2">
+                              {!['cancelled','canceled'].includes(booking.status.toLowerCase()) && (
+                                <button
+                                  onClick={() => handleCancelBooking(booking.id)}
+                                  disabled={cancellingId === booking.id}
+                                  className="px-3 py-1.5 text-xs text-red-600 hover:text-red-800 border border-red-200 rounded-lg hover:bg-red-50 transition-colors disabled:opacity-50 flex items-center gap-1">
+                                  {cancellingId === booking.id ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+                                  Cancel
+                                </button>
                               )}
-                              <button className="px-3 py-1 text-xs text-blue-600 hover:text-blue-800 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors">View Details</button>
-                              <button className="px-3 py-1 text-xs text-green-600 hover:text-green-800 border border-green-200 rounded-lg hover:bg-green-50 transition-colors">Download Ticket</button>
+                              <button
+                                onClick={() => router.push(`/bookings?ref=${booking.bookingReference}`)}
+                                className="px-3 py-1.5 text-xs text-blue-600 hover:text-blue-800 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors">
+                                View Details
+                              </button>
+                              <button
+                                onClick={() => router.push(`/bookings?ref=${booking.bookingReference}&action=download`)}
+                                className="px-3 py-1.5 text-xs text-green-600 hover:text-green-800 border border-green-200 rounded-lg hover:bg-green-50 transition-colors flex items-center gap-1">
+                                <Download className="w-3 h-3" /> Ticket
+                              </button>
                             </div>
                           </div>
                         </div>
@@ -1054,8 +1081,8 @@ const ProfilePage: React.FC = () => {
                       { bg: 'from-green-50 to-emerald-50', border: 'border-green-100', iconBg: 'bg-green-100', icon: <CheckCircle className="w-6 h-6 text-green-600" />, value: `MWK ${bookingStats.totalSpent.toLocaleString()}`, label: 'Total Paid', textColor: 'text-green-900', labelColor: 'text-green-700' },
                       { bg: 'from-blue-50 to-indigo-50', border: 'border-blue-100', iconBg: 'bg-blue-100', icon: <BarChart3 className="w-6 h-6 text-blue-600" />, value: `MWK ${Math.round(travelInsights.averageTripCost).toLocaleString()}`, label: 'Average per Trip', textColor: 'text-blue-900', labelColor: 'text-blue-700' },
                       { bg: 'from-purple-50 to-pink-50', border: 'border-purple-100', iconBg: 'bg-purple-100', icon: <TrendingUp className="w-6 h-6 text-purple-600" />, value: String(bookingStats.thisMonth), label: 'This Month', textColor: 'text-purple-900', labelColor: 'text-purple-700' },
-                    ].map((card, i) => (
-                      <div key={i} className={`bg-gradient-to-br ${card.bg} p-6 rounded-2xl border ${card.border}`}>
+                    ].map((card) => (
+                      <div key={card.label} className={`bg-gradient-to-br ${card.bg} p-6 rounded-2xl border ${card.border}`}>
                         <div className="flex items-center justify-between mb-4">
                           <div className={`p-3 ${card.iconBg} rounded-xl`}>{card.icon}</div>
                           <div className="text-right">
@@ -1070,7 +1097,10 @@ const ProfilePage: React.FC = () => {
                   <div className="mb-8">
                     <div className="flex items-center justify-between mb-6">
                       <h3 className="text-lg font-bold text-gray-900">Payment Methods</h3>
-                      <button className="px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors text-sm">Add Payment Method</button>
+                      <div title="Coming soon" className="relative group">
+                        <button disabled className="px-4 py-2 bg-gray-200 text-gray-400 rounded-xl cursor-not-allowed text-sm opacity-70">Add Payment Method</button>
+                        <span className="absolute -top-8 right-0 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">Coming soon</span>
+                      </div>
                     </div>
                     <div className="space-y-3">
                       <div className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-100">
@@ -1168,9 +1198,9 @@ const ProfilePage: React.FC = () => {
                           <p className="font-medium text-red-900">Delete Account</p>
                           <p className="text-sm text-red-700">Permanently delete your account and all data</p>
                         </div>
-                        <button onClick={handleAccountDeletion} disabled={actionLoading}
+                        <button onClick={() => setShowDeleteModal(true)} disabled={actionLoading}
                           className="px-4 py-2 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center space-x-2">
-                          {actionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                          <Trash2 className="w-4 h-4" />
                           <span>Delete Account</span>
                         </button>
                       </div>
@@ -1190,38 +1220,33 @@ const ProfilePage: React.FC = () => {
                     <h3 className="text-lg font-semibold text-gray-900 mb-4">Password & Authentication</h3>
                     <div className="space-y-4">
                       <div className="p-6 bg-gray-50 rounded-2xl border border-gray-100">
-                        <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center justify-between">
                           <div className="flex items-center space-x-3">
                             <div className="p-2 bg-blue-100 rounded-xl"><Key className="w-5 h-5 text-blue-600" /></div>
                             <div>
                               <p className="font-medium text-gray-900">Password</p>
                               <p className="text-sm text-gray-600">
-                                Last changed: {security.lastPasswordChange ? new Date(security.lastPasswordChange).toLocaleDateString() : 'Never'}
+                                {pwResetSent ? '✓ Reset email sent — check your inbox' : 'Send a password reset link to your email'}
                               </p>
                             </div>
                           </div>
-                          <button className="px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors">Change Password</button>
+                          <button onClick={handlePasswordReset} disabled={pwResetSent}
+                            className="px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-60 text-sm">
+                            {pwResetSent ? 'Email Sent' : 'Change Password'}
+                          </button>
                         </div>
                       </div>
 
                       <div className="p-6 bg-gray-50 rounded-2xl border border-gray-100">
-                        <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center justify-between">
                           <div className="flex items-center space-x-3">
                             <div className="p-2 bg-green-100 rounded-xl"><Smartphone className="w-5 h-5 text-green-600" /></div>
                             <div>
                               <p className="font-medium text-gray-900">Two-Factor Authentication</p>
-                              <p className="text-sm text-gray-600">Add an extra layer of security</p>
+                              <p className="text-sm text-gray-500">Coming soon — we're working on SMS & TOTP 2FA.</p>
                             </div>
                           </div>
-                          <div className="flex items-center space-x-3">
-                            <div className={`flex items-center space-x-2 px-3 py-1 rounded-full text-xs font-medium ${security.twoFactorEnabled ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                              <div className={`w-2 h-2 rounded-full ${security.twoFactorEnabled ? 'bg-green-500' : 'bg-red-500'}`}></div>
-                              <span>{security.twoFactorEnabled ? 'Enabled' : 'Disabled'}</span>
-                            </div>
-                            <button className={`px-4 py-2 rounded-xl transition-colors ${security.twoFactorEnabled ? 'bg-red-600 text-white hover:bg-red-700' : 'bg-green-600 text-white hover:bg-green-700'}`}>
-                              {security.twoFactorEnabled ? 'Disable 2FA' : 'Enable 2FA'}
-                            </button>
-                          </div>
+                          <span className="px-3 py-1 bg-yellow-100 text-yellow-700 text-xs rounded-full font-medium">Coming Soon</span>
                         </div>
                       </div>
                     </div>
@@ -1322,11 +1347,11 @@ const ProfilePage: React.FC = () => {
                 <div className="space-y-4">
                   {[
                     { bg: 'bg-blue-50', border: 'border-blue-100', icon: <MapPin className="w-5 h-5 text-blue-600" />, label: 'Most Visited', labelColor: 'text-blue-900', value: travelInsights.mostVisitedDestination || 'N/A', valueColor: 'text-blue-700' },
-                    { bg: 'bg-green-50', border: 'border-green-100', icon: <Bus className="w-5 h-5 text-green-600" />, label: 'Favorite Company', labelColor: 'text-green-900', value: travelInsights.favoriteCompany || 'N/A', valueColor: 'text-green-700' },
+                    { bg: 'bg-green-50', border: 'border-green-100', icon: <Bus className="w-5 h-5 text-green-600" />, label: 'Fav. Company', labelColor: 'text-green-900', value: travelInsights.favoriteCompany || 'N/A', valueColor: 'text-green-700' },
                     { bg: 'bg-purple-50', border: 'border-purple-100', icon: <Zap className="w-5 h-5 text-purple-600" />, label: 'Travel Frequency', labelColor: 'text-purple-900', value: travelInsights.travelFrequency, valueColor: 'text-purple-700' },
-                    { bg: 'bg-yellow-50', border: 'border-yellow-100', icon: <Star className="w-5 h-5 text-yellow-600" />, label: 'Loyalty Points', labelColor: 'text-yellow-900', value: `${bookingStats.completed * 10} pts`, valueColor: 'text-yellow-700' },
-                  ].map((item, i) => (
-                    <div key={i} className={`flex items-center justify-between p-3 ${item.bg} rounded-2xl border ${item.border}`}>
+                    { bg: 'bg-yellow-50', border: 'border-yellow-100', icon: <DollarSign className="w-5 h-5 text-yellow-600" />, label: 'Avg Trip Cost', labelColor: 'text-yellow-900', value: bookingStats.total > 0 ? `MWK ${Math.round(bookingStats.avgBookingValue).toLocaleString()}` : 'N/A', valueColor: 'text-yellow-700' },
+                  ].map((item) => (
+                    <div key={item.label} className={`flex items-center justify-between p-3 ${item.bg} rounded-2xl border ${item.border}`}>
                       <div className="flex items-center space-x-3">
                         {item.icon}
                         <span className={`text-sm font-medium ${item.labelColor}`}>{item.label}</span>
@@ -1374,22 +1399,50 @@ const ProfilePage: React.FC = () => {
               <h3 className="text-lg font-bold text-gray-900 mb-4">Need Help?</h3>
               <div className="space-y-3">
                 {[
-                  { icon: <FileText className="w-5 h-5 text-blue-600" />, label: 'Help Center' },
-                  { icon: <Phone className="w-5 h-5 text-green-600" />, label: 'Contact Support' },
-                  { icon: <Share2 className="w-5 h-5 text-purple-600" />, label: 'Send Feedback' },
-                ].map((item, i) => (
-                  <button key={i} className="w-full flex items-center space-x-3 p-3 text-left hover:bg-gray-50 rounded-2xl transition-colors">
+                  { icon: <FileText className="w-5 h-5 text-blue-600" />, label: 'Help Center', href: '/' },
+                  { icon: <Phone className="w-5 h-5 text-green-600" />, label: 'Contact Support', href: 'mailto:support@tibhukebus.com' },
+                  { icon: <Share2 className="w-5 h-5 text-purple-600" />, label: 'Send Feedback', href: 'mailto:feedback@tibhukebus.com?subject=TibhukeBus Feedback' },
+                ].map((item) => (
+                  <a key={item.label} href={item.href}
+                    className="w-full flex items-center space-x-3 p-3 text-left hover:bg-gray-50 rounded-2xl transition-colors">
                     {item.icon}
                     <span className="text-sm font-medium text-gray-900">{item.label}</span>
-                  </button>
+                  </a>
                 ))}
               </div>
             </div>
           </div>
         </div>
       </div>
+
+      {/* Delete Account Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-3xl shadow-2xl p-8 w-full max-w-md">
+            <div className="flex items-center space-x-3 mb-4">
+              <div className="p-3 bg-red-100 rounded-2xl"><Trash2 className="w-6 h-6 text-red-600" /></div>
+              <h2 className="text-xl font-bold text-gray-900">Delete Account</h2>
+            </div>
+            <p className="text-gray-600 mb-2 text-sm">This will permanently delete your account and all data. <strong>This cannot be undone.</strong></p>
+            <p className="text-gray-600 mb-4 text-sm">Type <span className="font-mono font-bold text-red-600">DELETE</span> to confirm:</p>
+            <input type="text" value={deleteConfirmText} onChange={(e) => setDeleteConfirmText(e.target.value)}
+              placeholder="Type DELETE to confirm"
+              className="w-full px-4 py-3 border border-gray-300 rounded-2xl mb-6 focus:ring-2 focus:ring-red-400 focus:border-red-400 font-mono transition-colors" />
+            <div className="flex space-x-3">
+              <button onClick={() => { setShowDeleteModal(false); setDeleteConfirmText(''); }}
+                className="flex-1 px-4 py-3 bg-gray-100 text-gray-700 rounded-2xl hover:bg-gray-200 transition-colors font-semibold">Cancel</button>
+              <button onClick={handleAccountDeletion} disabled={deleteConfirmText !== 'DELETE' || actionLoading}
+                className="flex-1 px-4 py-3 bg-red-600 text-white rounded-2xl hover:bg-red-700 transition-colors font-semibold disabled:opacity-40 flex items-center justify-center gap-2">
+                {actionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                Delete Account
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
 
 export default ProfilePage;
+
