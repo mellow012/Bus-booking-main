@@ -24,6 +24,7 @@ import {
   CheckCircle,
   ChevronRight
 } from 'lucide-react';
+import Image from 'next/image';
 
 const Footer: React.FC = () => {
   const currentYear = new Date().getFullYear();
@@ -114,10 +115,15 @@ const Footer: React.FC = () => {
                 aria-label="Go to BooknPay homepage"
               >
                 <div className="relative">
-                  <div className="w-12 h-12 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-2xl flex items-center justify-center shadow-2xl group-hover:shadow-blue-500/25 transition-all duration-300 group-hover:scale-105">
-                    <BusIcon className="w-6 h-6 text-white" />
+                  <div className="w-12 h-12 flex items-center justify-center transition-all duration-300 group-hover:scale-105">
+                    <Image
+                      src="/tibhukebus_logo_transparent.png"
+                      alt="TibhukeBus Logo"
+                      width={48}
+                      height={48}
+                      className="object-contain"
+                    />
                   </div>
-                  <div className="absolute -top-1 -right-1 w-4 h-4 bg-green-400 rounded-full border-2 border-gray-900 animate-pulse"></div>
                 </div>
                 <div>
                   <span className="text-2xl font-bold bg-gradient-to-r from-white to-blue-300 bg-clip-text text-transparent group-hover:from-blue-300 group-hover:to-white transition-all duration-300">

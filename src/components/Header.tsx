@@ -10,6 +10,7 @@ import {
   Shield, ChevronDown, HomeIcon, BusIcon,
 } from 'lucide-react';
 import { NotificationBell } from '@/contexts/NotificationContext';
+import Image from 'next/image';
 import LanguageSwitcher from './LanguageSwitcher';
 
 const UserAvatar = ({ user, userProfile }: { user: any; userProfile: any }) => {
@@ -132,10 +133,16 @@ const Header: React.FC = () => {
           {/* Logo */}
           <Link href="/" className="flex items-center space-x-2.5 group">
             <div className="relative shrink-0">
-              <div className="w-9 h-9 sm:w-10 sm:h-10 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg group-hover:shadow-xl transition-all duration-300 group-hover:scale-105">
-                <BusIcon className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+              <div className="w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center transition-all duration-300 group-hover:scale-105">
+                <Image
+                  src="/tibhukebus_logo_transparent.png"
+                  alt="TibhukeBus Logo"
+                  width={48}
+                  height={48}
+                  className="object-contain"
+                  priority
+                />
               </div>
-              <div className="absolute -top-1 -right-1 w-2.5 h-2.5 sm:w-3 sm:h-3 bg-green-400 rounded-full border-2 border-white animate-pulse" />
             </div>
             <div>
               <span className="text-lg sm:text-2xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent group-hover:from-blue-600 group-hover:to-indigo-600 transition-all duration-300">TibhukeBus</span>

@@ -28,7 +28,8 @@ export const metadata: Metadata = {
     title: "TibhukeBus",
   },
   icons: {
-    apple: "/icons/icon-192.png",
+    icon: "/tibhukebus_logo_transparent.png",
+    apple: "/tibhukebus_logo_transparent.png",
   }
 };
 
