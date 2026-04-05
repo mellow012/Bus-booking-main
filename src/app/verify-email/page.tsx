@@ -102,12 +102,10 @@ export default function VerifyEmailPage() {
 
         setStatus('success');
 
-        // Use hard navigation instead of router.push so the browser does a
-        // full page reload. This forces AuthContext to reinitialize with the
-        // fresh Firebase user (emailVerified: true). Without this, AuthContext's
-        // in-memory user still has emailVerified: false and the route guard
-        // immediately bounces the user back to /verify-email.
-        setTimeout(() => { window.location.href = '/profile'; }, 2000);
+        // Use hard navigation to strip the oobCode from the URL.
+        // This triggers the AuthContext's verified route guard logic,
+        // correctly routing Customers to /profile and Company Staff to their dashboards.
+        setTimeout(() => { window.location.href = '/verify-email'; }, 2000);
 
       } catch (err: any) {
         console.error('[VerifyEmail] Error:', err.code, err.message);
@@ -218,7 +216,7 @@ export default function VerifyEmailPage() {
 
         <p className="text-gray-600 mb-8 leading-relaxed">
           {status === 'loading' && 'Verifying your email… Please wait.'}
-          {status === 'success' && "You're verified! Taking you to complete your profile…"}
+          {status === 'success' && "You're verified! Redirecting you to your dashboard…"}
           {status === 'error'   && message}
         </p>
 
@@ -227,10 +225,10 @@ export default function VerifyEmailPage() {
             <>
               <p className="text-sm text-gray-500">Redirecting automatically...</p>
               <Button
-                onClick={() => { window.location.href = '/profile'; }}
+                onClick={() => { window.location.href = '/verify-email'; }}
                 className="w-full bg-green-600 hover:bg-green-700 text-white h-11"
               >
-                Complete My Profile
+                Continue
               </Button>
             </>
           )}

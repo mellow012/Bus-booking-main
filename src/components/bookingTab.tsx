@@ -366,7 +366,7 @@ const BookingsTab: FC<BookingsTabProps> = ({ schedules, routes, buses, companyId
 
   const [bookings,        setBookings]        = useState<Booking[]>([]);
   const [loadingBookings, setLoadingBookings] = useState(true);
-  const [selectedDate,    setSelectedDate]    = useState(todayStr());
+  const [selectedDate,    setSelectedDate]    = useState<string>("");
   const [statusFilter,    setStatusFilter]    = useState<FilterStatus>("all");
   const [search,          setSearch]          = useState("");
   const [viewMode,        setViewMode]        = useState<ViewMode>("list");
@@ -444,7 +444,8 @@ const BookingsTab: FC<BookingsTabProps> = ({ schedules, routes, buses, companyId
   // ── Filtered bookings ─────────────────────────────────────────────────────
   const filteredBookings = useMemo(() => {
     return bookings.filter(b => {
-      if (!b || !scheduleIdsForDate.has(b.scheduleId)) return false;
+      if (!b) return false;
+      if (selectedDate && !scheduleIdsForDate.has(b.scheduleId)) return false;
       if (statusFilter === "confirmed" && !(b.bookingStatus === "confirmed" && b.paymentStatus === "paid")) return false;
       if (statusFilter === "pending"   && !(b.bookingStatus === "pending" || b.paymentStatus === "pending")) return false;
       if (statusFilter === "cancelled" && b.bookingStatus !== "cancelled") return false;
@@ -580,7 +581,7 @@ const BookingsTab: FC<BookingsTabProps> = ({ schedules, routes, buses, companyId
     const blob = new Blob([csv], { type: "text/csv" });
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement("a");
-    a.href = url; a.download = `bookings-${selectedDate}.csv`; a.click();
+    a.href = url; a.download = `bookings-${selectedDate || 'latest'}.csv`; a.click();
     URL.revokeObjectURL(url);
     success("Export ready", `${filteredBookings.length} bookings exported`);
   }, [filteredBookings, schedules, routes, selectedDate, success]);
@@ -612,10 +613,10 @@ const BookingsTab: FC<BookingsTabProps> = ({ schedules, routes, buses, companyId
             className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
         </div>
         <div className="flex gap-2">
-          {selectedDate !== todayStr() && (
-            <button onClick={() => setSelectedDate(todayStr())}
-              className="flex items-center gap-1.5 px-3 py-2 text-sm text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-xl transition-colors whitespace-nowrap">
-              <RotateCcw className="w-4 h-4" />Today
+          {selectedDate && (
+            <button onClick={() => setSelectedDate("")}
+              className="flex items-center gap-1.5 px-3 py-2 text-sm text-red-600 bg-red-50 hover:bg-red-100 rounded-xl transition-colors whitespace-nowrap">
+              <X className="w-4 h-4" />Clear Date
             </button>
           )}
           <button onClick={handleExport}
@@ -686,19 +687,21 @@ const BookingsTab: FC<BookingsTabProps> = ({ schedules, routes, buses, companyId
         </div>
       </div>
 
-      {/* ── No schedules notice ── */}
-      {scheduleIdsForDate.size === 0 && (
+      {/* ── No bookings notice ── */}
+      {filteredBookings.length === 0 && !loadingBookings && (
         <div className="flex items-start gap-3 p-4 bg-blue-50 border border-blue-100 rounded-2xl">
           <Info className="w-5 h-5 text-blue-400 shrink-0 mt-0.5" />
           <p className="text-sm text-blue-800">
-            No active schedules on {new Date(selectedDate + "T00:00:00").toLocaleDateString("en-MW", { weekday: "long", day: "numeric", month: "long" })}.
+            {selectedDate 
+              ? `No bookings found for the selected date.`
+              : `No bookings found.`}
             Completed trips are in the <strong>Reports</strong> tab on the Schedules page.
           </p>
         </div>
       )}
 
       {/* ─── LIST VIEW ─────────────────────────────────────────────────── */}
-      {viewMode === "list" && scheduleIdsForDate.size > 0 && (
+      {viewMode === "list" && filteredBookings.length > 0 && (
         <div className="bg-white rounded-2xl shadow-sm border overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -782,7 +785,12 @@ const BookingsTab: FC<BookingsTabProps> = ({ schedules, routes, buses, companyId
                           <span className="truncate max-w-[80px]">{seg.to}</span>
                           {partial && <span className="ml-1 px-1 py-0.5 bg-orange-100 text-orange-600 text-[10px] rounded font-medium">seg</span>}
                         </div>
-                        {sc && <p className="text-xs text-gray-400 mt-0.5">{fmtTime(toDate(sc.departureDateTime))}</p>}
+                        {sc && (
+                          <div className="flex items-center gap-1.5 mt-1 text-xs text-gray-400">
+                            <Calendar className="w-3 h-3" />
+                            <span>{fmtDate(toDate(sc.departureDateTime))} · {fmtTime(toDate(sc.departureDateTime))}</span>
+                          </div>
+                        )}
                       </td>
 
                       {/* Seats */}
@@ -853,7 +861,8 @@ const BookingsTab: FC<BookingsTabProps> = ({ schedules, routes, buses, companyId
                   <ChevronLeft className="w-4 h-4" />
                 </button>
                 {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                  const pg = Math.max(0, Math.min(pageIndex - 2 + i, totalPages - 5 + i));
+                  const startPg = totalPages <= 5 ? 0 : Math.max(0, Math.min(pageIndex - 2, totalPages - 5));
+                  const pg = startPg + i;
                   return (
                     <button key={pg} onClick={() => setPageIndex(pg)}
                       className={`w-8 h-8 rounded-lg text-xs font-semibold transition-colors ${
@@ -877,7 +886,7 @@ const BookingsTab: FC<BookingsTabProps> = ({ schedules, routes, buses, companyId
           {bySchedule.size === 0 ? (
             <div className="bg-white rounded-2xl border p-16 text-center">
               <LayoutGrid className="w-12 h-12 text-gray-200 mx-auto mb-3" />
-              <p className="text-sm text-gray-400">No bookings to display for this date</p>
+              <p className="text-sm text-gray-400">No bookings to display</p>
             </div>
           ) : Array.from(bySchedule.entries()).map(([scheduleId, schBookings]) => {
             const sc    = schedules.find(s => s.id === scheduleId);

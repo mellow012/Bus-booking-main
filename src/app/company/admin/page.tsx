@@ -32,7 +32,8 @@ import {
   Menu,
   X,
   ChevronRight,
-  LayoutDashboard
+  LayoutDashboard,
+  LogOut
 } from "lucide-react";
 import AlertMessage from "@/components/AlertMessage";
 import SchedulesTab from "@/components/scheduleTab";
@@ -234,7 +235,7 @@ const useRealtimeBookings = (
 // ── Sidebar ──────────────────────────────────────────────────────────────────
 const Sidebar = ({
   activeSection, setActiveSection, isMobileOpen, setIsMobileOpen,
-  company, availableTabs, pendingCount,
+  company, availableTabs, pendingCount, onSignOut,
 }: {
   activeSection: TabType;
   setActiveSection: (tab: TabType) => void;
@@ -243,6 +244,7 @@ const Sidebar = ({
   company: Company | null;
   availableTabs: TabObject[];
   pendingCount: number;
+  onSignOut: () => void;
 }) => (
   <>
     {isMobileOpen && (
@@ -284,7 +286,15 @@ const Sidebar = ({
           })}
         </nav>
 
-        <div className="p-4 border-t border-gray-200">
+        <div className="p-4 border-t border-gray-200 space-y-2">
+          <button
+            onClick={onSignOut}
+            className="w-full flex items-center space-x-3 px-4 py-2.5 rounded-xl text-red-600 hover:bg-red-50 transition-colors group"
+          >
+            <LogOut className="w-5 h-5 group-hover:scale-110 transition-transform" />
+            <span className="font-medium">Sign Out</span>
+          </button>
+
           <div className="flex items-center space-x-3 px-4 py-3 bg-gray-50 rounded-xl">
             <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
               <User className="w-5 h-5 text-blue-600" />
@@ -302,7 +312,7 @@ const Sidebar = ({
 
 // ── Main dashboard ────────────────────────────────────────────────────────────
 export default function AdminDashboard() {
-  const { user, userProfile, loading: authLoading } = useAuth();
+  const { user, userProfile, loading: authLoading, signOut } = useAuth();
   const router       = useRouter();
   const searchParams = useSearchParams();
   const { alert, showAlert, clearAlert } = useAlert();
@@ -611,6 +621,7 @@ setSchedules={(newSchedules) => {
         company={company}
         availableTabs={availableTabs}
         pendingCount={statistics.pendingBookings}
+        onSignOut={signOut}
       />
 
       <div className="flex-1 flex flex-col min-h-screen">
