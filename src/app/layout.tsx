@@ -29,7 +29,12 @@ export const metadata: Metadata = {
   },
   icons: {
     icon: "/tibhukebus_logo_transparent.png",
+    shortcut: "/tibhukebus_logo_transparent.png",
     apple: "/tibhukebus_logo_transparent.png",
+  },
+  other: {
+    "mobile-web-app-capable": "yes",
+    "apple-mobile-web-app-status-bar-style": "black-translucent",
   }
 };
 

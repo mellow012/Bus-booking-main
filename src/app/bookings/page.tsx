@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo, memo, ChangeEvent, FormEvent, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { sendNotification } from '../../contexts/NotificationContext';
+import { sendNotification, useNotifications } from '../../contexts/NotificationContext';
 import {
   collection, query, where, getDocs, doc, getDoc, orderBy,
   updateDoc, deleteDoc, increment, arrayRemove, Timestamp,
@@ -26,57 +26,57 @@ type PaymentProvider = 'flutterwave' | 'paychangu' | 'cash' | 'local_bank';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface BookingWithDetails extends Booking {
-  schedule:             Schedule;
-  bus:                  Bus;
-  route:                Route;
-  company:              Company;
-  paymentProvider?:     PaymentProvider;
-  originStopId?:        string;
-  destinationStopId?:   string;
-  originStopName?:      string;
+  schedule: Schedule;
+  bus: Bus;
+  route: Route;
+  company: Company;
+  paymentProvider?: PaymentProvider;
+  originStopId?: string;
+  destinationStopId?: string;
+  originStopName?: string;
   destinationStopName?: string;
-  pricePerPerson?:      number;
+  pricePerPerson?: number;
 }
-  
+
 interface SearchFilters {
-  busType?:    string | string[];
+  busType?: string | string[];
   priceRange?: { min?: number; max?: number };
-  company?:    string;
+  company?: string;
   [key: string]: unknown;
 }
 
 interface StatCard {
   label: string;
   value: number;
-  key:   'all' | 'confirmed' | 'pending' | 'cancelled' | 'upcoming';
-  Icon:  React.FC<{ className?: string }>;
+  key: 'all' | 'confirmed' | 'pending' | 'cancelled' | 'upcoming';
+  Icon: React.FC<{ className?: string }>;
 }
 
 interface PaymentMethod {
-  id:               string;
-  provider:         string;   // 'paychangu' | 'flutterwave' | 'cash'
-  label:            string;
-  tagline:          string;
-  numbers:          string;
-  logoText:         string;
-  logoBg:           string;
-  logoFg:           string;
-  badgeBg:          string;
-  badgeFg:          string;
+  id: string;
+  provider: string;   // 'paychangu' | 'flutterwave' | 'cash'
+  label: string;
+  tagline: string;
+  numbers: string;
+  logoText: string;
+  logoBg: string;
+  logoFg: string;
+  badgeBg: string;
+  badgeFg: string;
   phonePlaceholder: string;
-  phoneHint:        string | undefined;
+  phoneHint: string | undefined;
 }
 
 interface PaymentCategory {
-  id:             string;
-  label:          string;
-  description:    string;
-  Icon:           React.FC<{ className?: string }>;
-  iconBg:         string;
-  activeBg:       string;
-  activeBorder:   string;
+  id: string;
+  label: string;
+  description: string;
+  Icon: React.FC<{ className?: string }>;
+  iconBg: string;
+  activeBg: string;
+  activeBorder: string;
   inactiveBorder: string;
-  methods:        PaymentMethod[];
+  methods: PaymentMethod[];
 }
 
 // ─── Payment Categories ───────────────────────────────────────────────────────
@@ -85,94 +85,94 @@ interface PaymentCategory {
 //  Cash          → client-side only, no redirect
 const PAYMENT_CATEGORIES: PaymentCategory[] = [
   {
-    id:             'mobile_money',
-    label:          'Mobile Money',
-    description:    'Instant payment from your mobile wallet',
-    Icon:           Smartphone,
-    iconBg:         'bg-emerald-500',
-    activeBg:       'bg-gradient-to-br from-emerald-50 to-teal-50',
-    activeBorder:   'border-emerald-300',
+    id: 'mobile_money',
+    label: 'Mobile Money',
+    description: 'Instant payment from your mobile wallet',
+    Icon: Smartphone,
+    iconBg: 'bg-emerald-500',
+    activeBg: 'bg-gradient-to-br from-emerald-50 to-teal-50',
+    activeBorder: 'border-emerald-300',
     inactiveBorder: 'border-gray-200',
     methods: [
       {
-        id:               'airtel',
-        provider:         'paychangu',          // ← PayChangu for mobile money
-        label:            'Airtel Money',
-        tagline:          'Fast, secure mobile payments',
-        numbers:          '099 · 077',
-        logoText:         'A',
-        logoBg:           '#EF0000',
-        logoFg:           '#FFFFFF',
-        badgeBg:          '#FFF0F0',
-        badgeFg:          '#C00000',
+        id: 'airtel',
+        provider: 'paychangu',          // ← PayChangu for mobile money
+        label: 'Airtel Money',
+        tagline: 'Fast, secure mobile payments',
+        numbers: '099 · 077',
+        logoText: 'A',
+        logoBg: '#EF0000',
+        logoFg: '#FFFFFF',
+        badgeBg: '#FFF0F0',
+        badgeFg: '#C00000',
         phonePlaceholder: '+265 99X XXX XXX',
-        phoneHint:        'Use your Airtel number (099 / 077)',
+        phoneHint: 'Use your Airtel number (099 / 077)',
       },
       {
-        id:               'tnm',
-        provider:         'paychangu',          // ← PayChangu for mobile money
-        label:            'TNM Mpamba',
-        tagline:          'Reliable TNM mobile payments',
-        numbers:          '088 · 0881',
-        logoText:         'T',
-        logoBg:           '#004B9B',
-        logoFg:           '#FFFFFF',
-        badgeBg:          '#EEF4FF',
-        badgeFg:          '#003A7A',
+        id: 'tnm',
+        provider: 'paychangu',          // ← PayChangu for mobile money
+        label: 'TNM Mpamba',
+        tagline: 'Reliable TNM mobile payments',
+        numbers: '088 · 0881',
+        logoText: 'T',
+        logoBg: '#004B9B',
+        logoFg: '#FFFFFF',
+        badgeBg: '#EEF4FF',
+        badgeFg: '#003A7A',
         phonePlaceholder: '+265 88X XXX XXX',
-        phoneHint:        'Use your TNM number (088)',
+        phoneHint: 'Use your TNM number (088)',
       },
     ],
   },
   {
-    id:             'card_bank',
-    label:          'Card Payment',
-    description:    'Visa, Mastercard & international cards',
-    Icon:           Building2,
-    iconBg:         'bg-blue-600',
-    activeBg:       'bg-gradient-to-br from-blue-50 to-indigo-50',
-    activeBorder:   'border-blue-300',
+    id: 'card_bank',
+    label: 'Card Payment',
+    description: 'Visa, Mastercard & international cards',
+    Icon: Building2,
+    iconBg: 'bg-blue-600',
+    activeBg: 'bg-gradient-to-br from-blue-50 to-indigo-50',
+    activeBorder: 'border-blue-300',
     inactiveBorder: 'border-gray-200',
     methods: [
       {
-        id:               'card',
-        provider:         'flutterwave',         // ← Flutterwave for cards
-        label:            'Card Payment',
-        tagline:          'Visa, Mastercard & Amex — powered by Flutterwave',
-        numbers:          'All major cards',
-        logoText:         'FW',
-        logoBg:           '#F5A623',
-        logoFg:           '#FFFFFF',
-        badgeBg:          '#FFF8EC',
-        badgeFg:          '#B87C0C',
+        id: 'card',
+        provider: 'flutterwave',         // ← Flutterwave for cards
+        label: 'Card Payment',
+        tagline: 'Visa, Mastercard & Amex — powered by Flutterwave',
+        numbers: 'All major cards',
+        logoText: 'FW',
+        logoBg: '#F5A623',
+        logoFg: '#FFFFFF',
+        badgeBg: '#FFF8EC',
+        badgeFg: '#B87C0C',
         phonePlaceholder: '+265 XXX XXX XXX',
-        phoneHint:        undefined,
+        phoneHint: undefined,
       },
     ],
   },
   {
-    id:             'cash',
-    label:          'Cash on Boarding',
-    description:    'Pay the conductor when you board',
-    Icon:           Wallet,
-    iconBg:         'bg-gray-600',
-    activeBg:       'bg-gradient-to-br from-gray-50 to-slate-50',
-    activeBorder:   'border-gray-400',
+    id: 'cash',
+    label: 'Cash on Boarding',
+    description: 'Pay the conductor when you board',
+    Icon: Wallet,
+    iconBg: 'bg-gray-600',
+    activeBg: 'bg-gradient-to-br from-gray-50 to-slate-50',
+    activeBorder: 'border-gray-400',
     inactiveBorder: 'border-gray-200',
     methods: [
       {
-        id:               'cash_on_boarding',
-        provider:         'cash',
-        label:            'Cash on Boarding',
-        tagline:          'Pay when you board — exact change appreciated',
-        numbers:          'No card required',
-        logoText:         'MK',
-        logoBg:           '#4B5563',
-        logoFg:           '#FFFFFF',
-        badgeBg:          '#F3F4F6',
-        badgeFg:          '#374151',
+        id: 'cash_on_boarding',
+        provider: 'cash',
+        label: 'Cash on Boarding',
+        tagline: 'Pay when you board — exact change appreciated',
+        numbers: 'No card required',
+        logoText: 'MK',
+        logoBg: '#4B5563',
+        logoFg: '#FFFFFF',
+        badgeBg: '#F3F4F6',
+        badgeFg: '#374151',
         phonePlaceholder: '',
-        phoneHint:        undefined,
+        phoneHint: undefined,
       },
     ],
   },
@@ -180,13 +180,13 @@ const PAYMENT_CATEGORIES: PaymentCategory[] = [
 
 // ─── Helper: stop id → name ───────────────────────────────────────────────────
 function resolveStopName(
-  stopId:    string | undefined,
+  stopId: string | undefined,
   savedName: string | undefined,
-  route:     Route,
-  fallback:  string,
+  route: Route,
+  fallback: string,
 ): string {
   if (savedName) return savedName;
-  if (stopId === '__origin__')      return route.origin      || fallback;
+  if (stopId === '__origin__') return route.origin || fallback;
   if (stopId === '__destination__') return route.destination || fallback;
   if (stopId && route.stops) {
     const f = route.stops.find((s) => s.id === stopId);
@@ -196,8 +196,8 @@ function resolveStopName(
 }
 
 // ─── Error Boundary ───────────────────────────────────────────────────────────
-interface ErrorBoundaryProps  { children: React.ReactNode; fallback?: React.ComponentType<{ error: Error; retry: () => void }>; }
-interface ErrorBoundaryState  { hasError: boolean; error: Error | null; }
+interface ErrorBoundaryProps { children: React.ReactNode; fallback?: React.ComponentType<{ error: Error; retry: () => void }>; }
+interface ErrorBoundaryState { hasError: boolean; error: Error | null; }
 
 class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
   constructor(props: ErrorBoundaryProps) { super(props); this.state = { hasError: false, error: null }; }
@@ -229,9 +229,9 @@ const DefaultErrorFallback: React.FC<{ error: Error; retry: () => void }> = ({ e
 
 // ─── PaymentMethodSelector ────────────────────────────────────────────────────
 const PaymentMethodSelector: React.FC<{
-  booking:  BookingWithDetails;
+  booking: BookingWithDetails;
   onSelect: (provider: string, subMethodId: string, label: string) => void;
-  loading:  boolean;
+  loading: boolean;
 }> = ({ booking, onSelect, loading }) => {
   const [openCat, setOpenCat] = useState<string | null>(null);
 
@@ -264,7 +264,7 @@ const PaymentMethodSelector: React.FC<{
       </div>
 
       {PAYMENT_CATEGORIES.map((cat) => {
-        const isOpen  = openCat === cat.id;
+        const isOpen = openCat === cat.id;
         const CatIcon = cat.Icon;
         return (
           <div key={cat.id} className={`rounded-2xl border-2 overflow-hidden transition-all duration-200 shadow-sm ${isOpen ? `${cat.activeBorder} shadow-md` : cat.inactiveBorder}`}>
@@ -319,16 +319,16 @@ const PaymentMethodSelector: React.FC<{
 
 // ─── ConfirmAndPayForm ────────────────────────────────────────────────────────
 const ConfirmAndPayForm: React.FC<{
-  booking:       BookingWithDetails;
-  subMethodId:   string;
+  booking: BookingWithDetails;
+  subMethodId: string;
   providerLabel: string;
-  provider:      string;
-  userDetails:   { name: string; email: string; phone: string };
-  onChange:      (d: { name: string; email: string; phone: string }) => void;
-  onSubmit:      (e: FormEvent) => void;
-  loading:       boolean;
-  formatDate:    (dt: unknown) => string;
-  formatTime:    (dt: unknown) => string;
+  provider: string;
+  userDetails: { name: string; email: string; phone: string };
+  onChange: (d: { name: string; email: string; phone: string }) => void;
+  onSubmit: (e: FormEvent) => void;
+  loading: boolean;
+  formatDate: (dt: unknown) => string;
+  formatTime: (dt: unknown) => string;
 }> = ({ booking, subMethodId, providerLabel, provider, userDetails, onChange, onSubmit, loading, formatDate, formatTime }) => {
   const method = PAYMENT_CATEGORIES.flatMap((c) => c.methods).find((m) => m.id === subMethodId);
   const isCash = provider === 'cash';
@@ -440,29 +440,29 @@ const ConfirmAndPayForm: React.FC<{
 
 // ─── BookingCard ──────────────────────────────────────────────────────────────
 const BookingCard = memo<{
-  booking:               BookingWithDetails;
-  onCancel:              (bookingId: string, scheduleId: string, seatNumbers: string[]) => Promise<void>;
-  onDelete:              (bookingId: string) => Promise<void>;
-  onDownload:            (booking: BookingWithDetails, includeQR: boolean) => Promise<void>;
-  onPayment:             (booking: BookingWithDetails) => void;
-  actionLoading:         string | null;
-  formatTime:            (dateTime: unknown) => string;
-  formatDate:            (dateTime: unknown) => string;
-  getStatusColor:        (status: string) => string;
+  booking: BookingWithDetails;
+  onCancel: (bookingId: string, scheduleId: string, seatNumbers: string[]) => Promise<void>;
+  onDelete: (bookingId: string) => Promise<void>;
+  onDownload: (booking: BookingWithDetails, includeQR: boolean) => Promise<void>;
+  onPayment: (booking: BookingWithDetails) => void;
+  actionLoading: string | null;
+  formatTime: (dateTime: unknown) => string;
+  formatDate: (dateTime: unknown) => string;
+  getStatusColor: (status: string) => string;
   getPaymentStatusColor: (status: string) => string;
 }>(({ booking, onCancel, onDelete, onDownload, onPayment, actionLoading,
-      formatTime, formatDate, getStatusColor, getPaymentStatusColor }) => {
+  formatTime, formatDate, getStatusColor, getPaymentStatusColor }) => {
 
-  const handleCancel   = useCallback(() => onCancel(booking.id, booking.scheduleId, booking.seatNumbers), [booking.id, booking.scheduleId, booking.seatNumbers, onCancel]);
-  const handleDelete   = useCallback(() => onDelete(booking.id), [booking.id, onDelete]);
-  const handleDLWithQR = useCallback(() => onDownload(booking, true),  [booking, onDownload]);
-  const handleDLOnly   = useCallback(() => onDownload(booking, false), [booking, onDownload]);
-  const handlePayment  = useCallback(() => onPayment(booking), [booking, onPayment]);
+  const handleCancel = useCallback(() => onCancel(booking.id, booking.scheduleId, booking.seatNumbers), [booking.id, booking.scheduleId, booking.seatNumbers, onCancel]);
+  const handleDelete = useCallback(() => onDelete(booking.id), [booking.id, onDelete]);
+  const handleDLWithQR = useCallback(() => onDownload(booking, true), [booking, onDownload]);
+  const handleDLOnly = useCallback(() => onDownload(booking, false), [booking, onDownload]);
+  const handlePayment = useCallback(() => onPayment(booking), [booking, onPayment]);
 
   const originName = resolveStopName(booking.originStopId, booking.originStopName, booking.route, booking.route?.origin || 'N/A');
   const alightName = resolveStopName(booking.destinationStopId, booking.destinationStopName, booking.route, booking.route?.destination || 'N/A');
-  const isSegment  = originName !== (booking.route?.origin || '') || alightName !== (booking.route?.destination || '');
-  const isCash     = (booking as any).paymentMethod === 'cash_on_boarding';
+  const isSegment = originName !== (booking.route?.origin || '') || alightName !== (booking.route?.destination || '');
+  const isCash = (booking as any).paymentMethod === 'cash_on_boarding';
 
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-all duration-300">
@@ -642,44 +642,44 @@ BookingCard.displayName = 'BookingCard';
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 const BookingsPage: React.FC = () => {
-  const router       = useRouter();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const { user, userProfile } = useAuth();
 
-  const [bookings,         setBookings]         = useState<BookingWithDetails[]>([]);
+  const [bookings, setBookings] = useState<BookingWithDetails[]>([]);
   const [filteredBookings, setFilteredBookings] = useState<BookingWithDetails[]>([]);
-  const [loading,          setLoading]          = useState(true);
-  const [actionLoading,    setActionLoading]    = useState<string | null>(null);
-  const [error,            setError]            = useState('');
-  const [success,          setSuccess]          = useState('');
-  const [filters,          setFilters]          = useState<SearchFilters>({});
-  const [activeFilter,     setActiveFilter]     = useState('all');
-  const [showFilters,      setShowFilters]      = useState(false);
-  const [notifications,    setNotifications]    = useState<string[]>([]);
-  const [currentPage,      setCurrentPage]      = useState(1);
+  const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [filters, setFilters] = useState<SearchFilters>({});
+  const [activeFilter, setActiveFilter] = useState('all');
+  const [showFilters, setShowFilters] = useState(false);
+  const [notifications, setNotifications] = useState<string[]>([]);
+  const [currentPage, setCurrentPage] = useState(1);
   const bookingsPerPage = 5;
 
-  const [methodModalOpen,  setMethodModalOpen]  = useState(false);
+  const [methodModalOpen, setMethodModalOpen] = useState(false);
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
-  const [selectedBooking,  setSelectedBooking]  = useState<BookingWithDetails | null>(null);
+  const [selectedBooking, setSelectedBooking] = useState<BookingWithDetails | null>(null);
   const [selectedProvider, setSelectedProvider] = useState('');
-  const [selectedSubId,    setSelectedSubId]    = useState('');
-  const [selectedLabel,    setSelectedLabel]    = useState('');
-  const [userDetails,      setUserDetails]      = useState({ name: '', email: '', phone: '+265' });
+  const [selectedSubId, setSelectedSubId] = useState('');
+  const [selectedLabel, setSelectedLabel] = useState('');
+  const [userDetails, setUserDetails] = useState({ name: '', email: '', phone: '+265' });
 
-  const cleanupFunctions   = useRef<Set<() => void>>(new Set());
-  const statusesMapRef     = useRef<Map<string, { bookingStatus: string; paymentStatus: string }>>(new Map());
+  const cleanupFunctions = useRef<Set<() => void>>(new Set());
+  const statusesMapRef = useRef<Map<string, { bookingStatus: string; paymentStatus: string }>>(new Map());
   const initialSnapshotRef = useRef(true);
-  const scheduleCache      = useRef<Map<string, Schedule>>(new Map());
-  const busCache           = useRef<Map<string, Bus>>(new Map());
-  const routeCache         = useRef<Map<string, Route>>(new Map());
-  const companyCache       = useRef<Map<string, Company>>(new Map());
+  const scheduleCache = useRef<Map<string, Schedule>>(new Map());
+  const busCache = useRef<Map<string, Bus>>(new Map());
+  const routeCache = useRef<Map<string, Route>>(new Map());
+  const companyCache = useRef<Map<string, Company>>(new Map());
 
   const formatTime = useCallback((dateTime: unknown): string => {
     let d: Date;
-    if (dateTime instanceof Date)          d = dateTime;
-    else if ((dateTime as any)?.toDate)    d = (dateTime as any).toDate();
-    else if ((dateTime as any)?.seconds)   d = new Date((dateTime as any).seconds * 1000);
+    if (dateTime instanceof Date) d = dateTime;
+    else if ((dateTime as any)?.toDate) d = (dateTime as any).toDate();
+    else if ((dateTime as any)?.seconds) d = new Date((dateTime as any).seconds * 1000);
     else if (typeof dateTime === 'string') d = new Date(dateTime);
     else return 'N/A';
     return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
@@ -687,9 +687,9 @@ const BookingsPage: React.FC = () => {
 
   const formatDate = useCallback((dateTime: unknown): string => {
     let d: Date;
-    if (dateTime instanceof Date)          d = dateTime;
-    else if ((dateTime as any)?.toDate)    d = (dateTime as any).toDate();
-    else if ((dateTime as any)?.seconds)   d = new Date((dateTime as any).seconds * 1000);
+    if (dateTime instanceof Date) d = dateTime;
+    else if ((dateTime as any)?.toDate) d = (dateTime as any).toDate();
+    else if ((dateTime as any)?.seconds) d = new Date((dateTime as any).seconds * 1000);
     else if (typeof dateTime === 'string') d = new Date(dateTime);
     else return 'N/A';
     return d.toLocaleDateString('en-GB', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
@@ -719,41 +719,41 @@ const BookingsPage: React.FC = () => {
   const applyFiltersLogic = useCallback((src: BookingWithDetails[], af: string, cf: SearchFilters) => {
     let f = [...src];
     const now = new Date();
-    if      (af === 'confirmed') f = f.filter((b) => b.bookingStatus === 'confirmed' && (b.paymentStatus === 'paid' || (b as any).paymentMethod === 'cash_on_boarding'));
-    else if (af === 'pending')   f = f.filter((b) => b.bookingStatus === 'pending' || (b.bookingStatus === 'confirmed' && b.paymentStatus === 'pending' && (b as any).paymentMethod !== 'cash_on_boarding'));
+    if (af === 'confirmed') f = f.filter((b) => b.bookingStatus === 'confirmed' && (b.paymentStatus === 'paid' || (b as any).paymentMethod === 'cash_on_boarding'));
+    else if (af === 'pending') f = f.filter((b) => b.bookingStatus === 'pending' || (b.bookingStatus === 'confirmed' && b.paymentStatus === 'pending' && (b as any).paymentMethod !== 'cash_on_boarding'));
     else if (af === 'cancelled') f = f.filter((b) => b.bookingStatus === 'cancelled');
-    else if (af === 'upcoming')  f = f.filter((b) => {
+    else if (af === 'upcoming') f = f.filter((b) => {
       const d = b.schedule?.departureDateTime instanceof Timestamp ? b.schedule.departureDateTime.toDate() : new Date(b.schedule?.departureDateTime as unknown as string);
       return d > now && b.bookingStatus === 'confirmed' && (b.paymentStatus === 'paid' || (b as any).paymentMethod === 'cash_on_boarding');
     });
-    if (cf.busType)    { const t = Array.isArray(cf.busType) ? cf.busType : [cf.busType]; f = f.filter((b) => b.bus?.busType && t.includes(b.bus.busType)); }
+    if (cf.busType) { const t = Array.isArray(cf.busType) ? cf.busType : [cf.busType]; f = f.filter((b) => b.bus?.busType && t.includes(b.bus.busType)); }
     if (cf.priceRange) { f = f.filter((b) => b.schedule?.price !== undefined && b.schedule.price >= ((cf.priceRange as any)?.min ?? 0) && b.schedule.price <= ((cf.priceRange as any)?.max ?? Infinity)); }
-    if (cf.company)    f = f.filter((b) => b.company?.name === cf.company);
+    if (cf.company) f = f.filter((b) => b.company?.name === cf.company);
     setFilteredBookings(f);
     setCurrentPage(1);
   }, []);
 
   const fetchBookings = useCallback(async (retryCount = 0) => {
-    if (!user) return;
+    if (!user?.uid) return;
     setLoading(true); setError('');
     try {
       const snap = await getDocs(query(collection(db, 'bookings'), where('userId', '==', user.uid), orderBy('createdAt', 'desc'), firestoreLimit(50)));
       const raw = snap.docs.map((d) => ({
         id: d.id, bookingReference: d.data().bookingReference || d.id, ...d.data(),
         bookingDate: d.data().bookingDate instanceof Timestamp ? d.data().bookingDate.toDate() : new Date(d.data().bookingDate),
-        createdAt:   d.data().createdAt   instanceof Timestamp ? d.data().createdAt.toDate()   : new Date(d.data().createdAt),
-        updatedAt:   d.data().updatedAt   instanceof Timestamp ? d.data().updatedAt.toDate()   : new Date(d.data().updatedAt),
+        createdAt: d.data().createdAt instanceof Timestamp ? d.data().createdAt.toDate() : new Date(d.data().createdAt),
+        updatedAt: d.data().updatedAt instanceof Timestamp ? d.data().updatedAt.toDate() : new Date(d.data().updatedAt),
       })) as unknown as Booking[];
 
       const schedIds = new Set(raw.filter((b) => !scheduleCache.current.has(b.scheduleId)).map((b) => b.scheduleId));
-      const coIds    = new Set(raw.filter((b) => !companyCache.current.has(b.companyId)).map((b) => b.companyId));
+      const coIds = new Set(raw.filter((b) => !companyCache.current.has(b.companyId)).map((b) => b.companyId));
       await Promise.all([...schedIds].map(async (id) => { const s = await getDoc(doc(db, 'schedules', id)); if (s.exists()) scheduleCache.current.set(id, { id: s.id, ...s.data() } as Schedule); }));
       const busIds = new Set<string>(); const routeIds = new Set<string>();
       raw.forEach((b) => { const sc = scheduleCache.current.get(b.scheduleId); if (!sc) return; if (sc.busId && !busCache.current.has(sc.busId)) busIds.add(sc.busId); if (sc.routeId && !routeCache.current.has(sc.routeId)) routeIds.add(sc.routeId); });
       await Promise.all([
-        ...[...busIds  ].map(async (id) => { const s = await getDoc(doc(db, 'buses',     id)); if (s.exists()) busCache.current.set(id,   { id: s.id, ...s.data() } as Bus);     }),
-        ...[...routeIds].map(async (id) => { const s = await getDoc(doc(db, 'routes',    id)); if (s.exists()) routeCache.current.set(id,  { id: s.id, ...s.data() } as Route);   }),
-        ...[...coIds   ].map(async (id) => { const s = await getDoc(doc(db, 'companies', id)); if (s.exists()) companyCache.current.set(id, { id: s.id, ...s.data() } as Company); }),
+        ...[...busIds].map(async (id) => { const s = await getDoc(doc(db, 'buses', id)); if (s.exists()) busCache.current.set(id, { id: s.id, ...s.data() } as Bus); }),
+        ...[...routeIds].map(async (id) => { const s = await getDoc(doc(db, 'routes', id)); if (s.exists()) routeCache.current.set(id, { id: s.id, ...s.data() } as Route); }),
+        ...[...coIds].map(async (id) => { const s = await getDoc(doc(db, 'companies', id)); if (s.exists()) companyCache.current.set(id, { id: s.id, ...s.data() } as Company); }),
       ]);
       const details: BookingWithDetails[] = [];
       for (const b of raw) {
@@ -786,13 +786,13 @@ const BookingsPage: React.FC = () => {
       const batch = writeBatch(db);
       const upd: Record<string, unknown> = { updatedAt: serverTimestamp() };
       if (!isPaid) {
-        upd.bookingStatus      = 'cancelled';
-        upd.cancellationDate   = serverTimestamp();
+        upd.bookingStatus = 'cancelled';
+        upd.cancellationDate = serverTimestamp();
         upd.cancellationReason = 'Customer initiated';
         sendNotification({ userId: b.userId, type: 'cancellation', title: 'Booking Cancelled', message: `Your booking ${bookingId.slice(-8)} (${b.route.origin} → ${b.route.destination}) has been cancelled.`, data: { bookingId, url: '/bookings' } });
       } else {
         upd.cancellationRequested = true;
-        upd.cancellationReason    = 'Customer requested';
+        upd.cancellationReason = 'Customer requested';
         sendNotification({ userId: b.userId, type: 'cancellation_requested', title: 'Cancellation Requested', message: `Cancellation for booking ${bookingId.slice(-8)} is under review.`, data: { bookingId, url: '/bookings' } });
       }
       batch.update(doc(db, 'bookings', bookingId), upd);
@@ -821,7 +821,7 @@ const BookingsPage: React.FC = () => {
     try {
       const [{ default: PDF }, { default: QR }] = await Promise.all([import('jspdf'), import('qrcode')]);
       const pdf = new PDF(); let y = 30; const lh = 8;
-      const boarding  = resolveStopName(booking.originStopId, booking.originStopName, booking.route, booking.route.origin);
+      const boarding = resolveStopName(booking.originStopId, booking.originStopName, booking.route, booking.route.origin);
       const alighting = resolveStopName(booking.destinationStopId, booking.destinationStopName, booking.route, booking.route.destination);
       const isSeg = boarding !== booking.route.origin || alighting !== booking.route.destination;
       const line = (l: string, v: string, b = false) => { pdf.setFont('helvetica', b ? 'bold' : 'normal'); pdf.text(`${l}: ${v}`, 20, y); y += lh; };
@@ -871,8 +871,8 @@ const BookingsPage: React.FC = () => {
     const isCash = selectedProvider === 'cash';
 
     if (!isCash) {
-      if (userDetails.name.trim().length < 2)                            { setError('Please provide a valid full name'); return; }
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(userDetails.email))        { setError('Please provide a valid email'); return; }
+      if (userDetails.name.trim().length < 2) { setError('Please provide a valid full name'); return; }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(userDetails.email)) { setError('Please provide a valid email'); return; }
       if (!/^\+?\d{10,15}$/.test(userDetails.phone.replace(/\s/g, ''))) { setError('Please provide a valid phone number'); return; }
     }
 
@@ -886,11 +886,22 @@ const BookingsPage: React.FC = () => {
       // ── Cash path ────────────────────────────────────────────────────────
       if (isCash) {
         await updateDoc(doc(db, 'bookings', selectedBooking.id), {
-          paymentMethod:   'cash_on_boarding',
-          paymentStatus:   'pending',
+          paymentMethod: 'cash_on_boarding',
+          paymentStatus: 'pending',
           paymentProvider: 'cash',
-          updatedAt:       new Date(),
+          updatedAt: new Date(),
         });
+
+        // Notify user about cash confirmation
+        await sendNotification({
+          userId: cu.uid,
+          type: 'booking',
+          title: 'Booking Reserved (Cash)',
+          message: `Your booking for ${selectedBooking.route.origin} → ${selectedBooking.route.destination} is reserved. Please pay MWK ${selectedBooking.totalAmount.toLocaleString()} when you board.`,
+          actionUrl: '/bookings',
+          priority: 'high'
+        });
+
         setConfirmModalOpen(false);
         setSuccess('Booking confirmed — please pay the conductor when you board.');
         setTimeout(() => setSuccess(''), 6000);
@@ -906,24 +917,24 @@ const BookingsPage: React.FC = () => {
         : '/api/payments/flutterwave/charge';
 
       const res = await fetch(apiRoute, {
-        method:  'POST',
+        method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          bookingId:       selectedBooking.id,
+          bookingId: selectedBooking.id,
           paymentProvider: selectedProvider,
           customerDetails: {
             email: userDetails.email.toLowerCase().trim(),
-            name:  userDetails.name.trim(),
+            name: userDetails.name.trim(),
             phone: userDetails.phone.trim(),
           },
           metadata: {
-            route:          `${selectedBooking.route.origin}-${selectedBooking.route.destination}`,
-            departure:      selectedBooking.schedule.departureDateTime instanceof Timestamp
-                              ? selectedBooking.schedule.departureDateTime.toDate().toISOString()
-                              : new Date(selectedBooking.schedule.departureDateTime as unknown as string).toISOString(),
+            route: `${selectedBooking.route.origin}-${selectedBooking.route.destination}`,
+            departure: selectedBooking.schedule.departureDateTime instanceof Timestamp
+              ? selectedBooking.schedule.departureDateTime.toDate().toISOString()
+              : new Date(selectedBooking.schedule.departureDateTime as unknown as string).toISOString(),
             passengerCount: String(selectedBooking.passengerDetails.length),
-            seatNumbers:    selectedBooking.seatNumbers.join(','),
-            subMethod:      selectedSubId,
+            seatNumbers: selectedBooking.seatNumbers.join(','),
+            subMethod: selectedSubId,
           },
         }),
       });
@@ -941,7 +952,7 @@ const BookingsPage: React.FC = () => {
       }
     } catch (err: unknown) { setError(`Payment failed: ${err instanceof Error ? err.message : String(err)}`); }
     finally { setActionLoading(null); }
-  }, [selectedBooking, selectedProvider, selectedSubId, userDetails, fetchBookings]);
+  }, [selectedBooking, selectedProvider, selectedSubId, userDetails, user, fetchBookings]);
 
   // ── verifyPaymentStatus ────────────────────────────────────────────────────
   // PayChangu return: ?payment_verify=true&provider=paychangu&tx_ref={bookingId}
@@ -969,6 +980,17 @@ const BookingsPage: React.FC = () => {
       if (!res.ok) throw new Error(result.error || 'Verification failed');
       if (result.success && result.status === 'paid') {
         setSuccess('Payment verified! Your booking is confirmed.');
+
+        // Notify user about payment success
+        await sendNotification({
+          userId: cu.uid,
+          type: 'payment',
+          title: 'Payment Confirmed! ✅',
+          message: `We've successfully verified your payment for the booking to ${txRef.slice(-8)}. Happy traveling!`,
+          actionUrl: '/bookings',
+          priority: 'high'
+        });
+
         fetchBookings();
       } else {
         setError(`Payment status: ${result.status || 'unknown'}. Please contact support if you were charged.`);
@@ -980,11 +1002,11 @@ const BookingsPage: React.FC = () => {
   const bookingStats = useMemo(() => {
     const now = new Date();
     return {
-      all:       bookings.length,
+      all: bookings.length,
       confirmed: bookings.filter((b) => b.bookingStatus === 'confirmed' && (b.paymentStatus === 'paid' || (b as any).paymentMethod === 'cash_on_boarding')).length,
-      pending:   bookings.filter((b) => b.bookingStatus === 'pending' || (b.bookingStatus === 'confirmed' && b.paymentStatus === 'pending' && (b as any).paymentMethod !== 'cash_on_boarding')).length,
+      pending: bookings.filter((b) => b.bookingStatus === 'pending' || (b.bookingStatus === 'confirmed' && b.paymentStatus === 'pending' && (b as any).paymentMethod !== 'cash_on_boarding')).length,
       cancelled: bookings.filter((b) => b.bookingStatus === 'cancelled').length,
-      upcoming:  bookings.filter((b) => {
+      upcoming: bookings.filter((b) => {
         const d = b.schedule?.departureDateTime instanceof Timestamp ? b.schedule.departureDateTime.toDate() : new Date(b.schedule?.departureDateTime as unknown as string);
         return d > now && b.bookingStatus === 'confirmed' && (b.paymentStatus === 'paid' || (b as any).paymentMethod === 'cash_on_boarding');
       }).length,
@@ -992,7 +1014,7 @@ const BookingsPage: React.FC = () => {
   }, [bookings]);
 
   const paginatedBookings = useMemo(() => filteredBookings.slice((currentPage - 1) * bookingsPerPage, currentPage * bookingsPerPage), [filteredBookings, currentPage]);
-  const totalPages        = useMemo(() => Math.ceil(filteredBookings.length / bookingsPerPage), [filteredBookings.length]);
+  const totalPages = useMemo(() => Math.ceil(filteredBookings.length / bookingsPerPage), [filteredBookings.length]);
 
   const handleFilterChange = useCallback((e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -1012,13 +1034,13 @@ const BookingsPage: React.FC = () => {
   useEffect(() => {
     if (!user) { router.push('/login'); return; }
 
-    const pv            = searchParams.get('payment_verify');
-    const provider      = searchParams.get('provider');
-    const txRef         = searchParams.get('tx_ref');
+    const pv = searchParams.get('payment_verify');
+    const provider = searchParams.get('provider');
+    const txRef = searchParams.get('tx_ref');
     const transactionId = searchParams.get('transaction_id') ?? undefined;
-    const flwStatus     = searchParams.get('status');
-    const successP      = searchParams.get('success');
-    const cancelled     = searchParams.get('cancelled');
+    const flwStatus = searchParams.get('status');
+    const successP = searchParams.get('success');
+    const cancelled = searchParams.get('cancelled');
 
     if (successP === 'true' && !pv) { setSuccess('Action completed!'); setTimeout(() => setSuccess(''), 5000); }
 
@@ -1039,11 +1061,11 @@ const BookingsPage: React.FC = () => {
 
     fetchBookings();
     return () => { cleanupFunctions.current.forEach((fn) => fn()); };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, router]);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user?.uid) return;
     const q = query(collection(db, 'bookings'), where('userId', '==', user.uid), orderBy('updatedAt', 'desc'));
     const unsub = onSnapshot(q, (snap) => {
       if (initialSnapshotRef.current) {
@@ -1056,8 +1078,40 @@ const BookingsPage: React.FC = () => {
         const id = ch.doc.id; const nd = ch.doc.data();
         const prev = statusesMapRef.current.get(id) || { bookingStatus: '', paymentStatus: '' };
         const nbs = nd.bookingStatus || ''; const nps = nd.paymentStatus || ''; const ref = nd.bookingReference || id.slice(-8);
-        if (prev.bookingStatus !== nbs) { const m = nbs === 'confirmed' ? `Booking ${ref} approved!` : `Booking ${ref} → "${nbs}"`; setNotifications((p) => [m, ...p]); setSuccess(m); setTimeout(() => setSuccess(''), 6000); fetchBookings(); }
-        if (prev.paymentStatus !== nps) { const m = nps === 'paid' ? `Payment received for ${ref}!` : `Payment for ${ref} → "${nps}"`; setNotifications((p) => [m, ...p]); setSuccess(m); setTimeout(() => setSuccess(''), 6000); fetchBookings(); }
+        if (prev.bookingStatus !== nbs) {
+          const m = nbs === 'confirmed' ? `Booking ${ref} approved!` : `Booking ${ref} → "${nbs}"`;
+          setNotifications((p) => [m, ...p]);
+          setSuccess(m);
+
+          // Send persistent notification for status changes
+          sendNotification({
+            userId: user?.uid || '',
+            type: 'booking',
+            title: nbs === 'confirmed' ? 'Booking Approved! 🎉' : 'Booking Status Update',
+            message: m,
+            actionUrl: '/bookings'
+          }).catch(console.error);
+
+          setTimeout(() => setSuccess(''), 6000);
+          fetchBookings();
+        }
+        if (prev.paymentStatus !== nps) {
+          const m = nps === 'paid' ? `Payment received for ${ref}!` : `Payment for ${ref} → "${nps}"`;
+          setNotifications((p) => [m, ...p]);
+          setSuccess(m);
+
+          // Send persistent notification for payment status changes
+          sendNotification({
+            userId: user?.uid || '',
+            type: 'payment',
+            title: nps === 'paid' ? 'Payment Received 💰' : 'Payment Update',
+            message: m,
+            actionUrl: '/bookings'
+          }).catch(console.error);
+
+          setTimeout(() => setSuccess(''), 6000);
+          fetchBookings();
+        }
         statusesMapRef.current.set(id, { bookingStatus: nbs, paymentStatus: nps });
       });
     }, (err) => console.error('Snapshot error:', err));
@@ -1077,11 +1131,11 @@ const BookingsPage: React.FC = () => {
   );
 
   const statCards: StatCard[] = [
-    { label: 'All Bookings', value: bookingStats.all,       key: 'all',       Icon: BusIcon     },
-    { label: 'Confirmed',    value: bookingStats.confirmed, key: 'confirmed', Icon: CheckCircle },
-    { label: 'Pending',      value: bookingStats.pending,   key: 'pending',   Icon: Clock       },
-    { label: 'Cancelled',    value: bookingStats.cancelled, key: 'cancelled', Icon: XCircle     },
-    { label: 'Upcoming',     value: bookingStats.upcoming,  key: 'upcoming',  Icon: Calendar    },
+    { label: 'All Bookings', value: bookingStats.all, key: 'all', Icon: BusIcon },
+    { label: 'Confirmed', value: bookingStats.confirmed, key: 'confirmed', Icon: CheckCircle },
+    { label: 'Pending', value: bookingStats.pending, key: 'pending', Icon: Clock },
+    { label: 'Cancelled', value: bookingStats.cancelled, key: 'cancelled', Icon: XCircle },
+    { label: 'Upcoming', value: bookingStats.upcoming, key: 'upcoming', Icon: Calendar },
   ];
 
   return (
@@ -1102,7 +1156,7 @@ const BookingsPage: React.FC = () => {
           )}
 
           {success && <div className="mb-6"><AlertMessage type="success" message={success} onClose={() => setSuccess('')} /></div>}
-          {error   && <div className="mb-6"><AlertMessage type="error"   message={error}   onClose={() => setError('')}   /></div>}
+          {error && <div className="mb-6"><AlertMessage type="error" message={error} onClose={() => setError('')} /></div>}
 
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-6">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
