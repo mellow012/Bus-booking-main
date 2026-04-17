@@ -95,3 +95,9 @@ setSuperAdminClaim.js
 # misc / debug
 debug-route-cards.png
 anchor.toml
+*.bak
+*.tmp
+
+# PWA / build artifacts
+public/workbox-*.js
+public/fallback-*.js
