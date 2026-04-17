@@ -101,3 +101,6 @@ anchor.toml
 # PWA / build artifacts
 public/workbox-*.js
 public/fallback-*.js
+
+# Clutter
+"public/Airtel Money Uganda Logo PNG Vector (PDF) Free Download.jpg"
