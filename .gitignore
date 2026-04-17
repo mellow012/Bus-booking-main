@@ -1,0 +1,97 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+/node_modules
+/.pnp
+.pnp.js
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# local env files - ignore local secrets but allow .env.example
+.env.local
+.env.*.local
+.env.production.local
+.env.development.local
+
+# ignore actual env files containing secrets
+.env
+.env.*.secret
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# local service account / private key files
+src/lib/serviceAccountKey.json
+
+.busbookingapp-50592-firebase-adminsdk-fbsvc-00047ea501e.json
+
+.busbookingapp-50592-firebase-adminsdk-fbsvc-e825220c1d.json
+.functions/src/index.ts
+
+# Playwright
+node_modules/
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+/playwright/.auth/
+
+# Browser binaries (Playwright downloads them automatically)
+/playwright/.local-browsers/
+# local search/scratch
+/scratch/
+/tmp/
+
+# build logs
+*.txt
+build_full_output.txt
+build_output.txt
+lint_output.txt
+
+# migration documentation & scripts
+BOOKING_PAGE_ANALYSIS.md
+COMPLETE_MIGRATION_PLAN.md
+IMMEDIATE_ACTION_ITEMS.md
+MIGRATION_PROGRESS.md
+MIGRATION_SESSION_SUMMARY.md
+MIGRATION_STATUS_REPORT.md
+PRODUCTION_READINESS_PLAN.md
+PRODUCTION_READINESS_REVIEW.md
+SESSION_SUMMARY.md
+migrate.sql
+migrate-data.ts
+check-db.ts
+check-firebase.ts
+sample-firebase.ts
+setSuperAdminClaim.js
+
+# misc / debug
+debug-route-cards.png
+anchor.toml
