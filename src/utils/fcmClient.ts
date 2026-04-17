@@ -127,7 +127,7 @@ export async function getAndRegisterFCMToken(): Promise<string | null> {
     console.log('[FCM] Service Worker is ready, retrieving token...');
 
     const token = await getToken(messaging, {
-      vapidKey: process.env.NEXT_PUBLIC_FCM_VAPID_KEY,
+      vapidKey: process.env.NEXT_PUBLIC_FCM_VAPID_KEY?.trim(),
       serviceWorkerRegistration,
     });
 
