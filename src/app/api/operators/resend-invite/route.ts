@@ -65,7 +65,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<ApiRespon
     if (!baseUrl.startsWith('http')) {
       baseUrl = 'http://localhost:3000';
     }
-    const setupPath = role === 'conductor' ? '/conductor/setup' : '/company/setup';
+    const setupPath = '/company/setup';
     const redirectUrl = new URL(setupPath, baseUrl);
     redirectUrl.searchParams.append('operatorId', operatorId);
     redirectUrl.searchParams.append('email', trimmedEmail);

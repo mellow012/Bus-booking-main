@@ -13,6 +13,7 @@ interface InviteTeamMemberRequest {
   companyId: string;
   companyName: string;
   invitedBy: string;
+  region?: string;
 }
 
 interface ApiResponse {
@@ -29,7 +30,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<ApiRespon
     const body: InviteTeamMemberRequest = await request.json();
     console.log('Invite API received:', body);
 
-    const { name, email, companyId, companyName, invitedBy } = body;
+    const { name, email, companyId, companyName, invitedBy, region } = body;
     const role: TeamRole = VALID_ROLES.includes(body.role as TeamRole) ? (body.role as TeamRole) : 'operator';
 
     // 1. Validation
@@ -92,6 +93,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<ApiRespon
             invitationSent: true,
             invitationSentAt: new Date(),
             createdBy: invitedBy,
+            region: region || null,
             createdAt: new Date(),
             updatedAt: new Date(),
           },
@@ -112,7 +114,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<ApiRespon
     if (!baseUrl.startsWith('http')) {
       baseUrl = 'http://localhost:3000';
     }
-    const setupPath = role === 'conductor' ? '/conductor/setup' : '/company/setup';
+    const setupPath = '/company/setup';
     const redirectUrl = new URL(setupPath, baseUrl);
     redirectUrl.searchParams.append('operatorId', operatorId);
     redirectUrl.searchParams.append('email', trimmedEmail);
