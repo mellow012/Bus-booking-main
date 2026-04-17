@@ -36,9 +36,9 @@ function getTransporter(): nodemailer.Transporter {
     pool: true,
     maxConnections: 1,
     rateDelta: 1000,
-    connectionTimeout: 5_000,
-    greetingTimeout: 5_000,
-    socketTimeout: 5_000,
+    connectionTimeout: 15_000, // Increased to 15s
+    greetingTimeout: 15_000,   // Increased to 15s
+    socketTimeout: 15_000,     // Increased to 15s
   });
 
   return _transporter;
@@ -57,12 +57,16 @@ export { getTransporter as transporter };
 
 export async function verifyEmailTransporter(): Promise<boolean> {
   try {
-    await getTransporter().verify();
+    const transporter = getTransporter();
+    await transporter.verify();
+    console.log('[email-service] SMTP verification successful');
     return true;
   } catch (err: any) {
-    console.error('[email-service] SMTP verification failed:', err.message);
-    console.error('[email-service] Check EMAIL_USER, EMAIL_PASS. Gmail requires an App Password when 2FA is enabled.');
-    console.error('[email-service] Docs: https://support.google.com/accounts/answer/185833');
+    console.error('[email-service] SMTP verification failed!');
+    console.error('[email-service] ERROR:', err.message);
+    if (err.code === 'EAUTH') {
+      console.error('[email-service] AUTH FAILURE: Check EMAIL_USER and EMAIL_PASS. Gmail requires an App Password.');
+    }
     return false;
   }
 }
