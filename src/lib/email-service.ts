@@ -20,15 +20,18 @@ let _transporter: nodemailer.Transporter | null = null;
 function getTransporter(): nodemailer.Transporter {
   if (_transporter) return _transporter;
 
-  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+  const user = process.env.EMAIL_USER?.trim();
+  const pass = process.env.EMAIL_PASS?.trim()?.replace(/["']/g, '');
+
+  if (!user || !pass) {
     throw new Error('EMAIL_USER and EMAIL_PASS environment variables must be set.');
   }
 
   _transporter = nodemailer.createTransport({
     service: 'gmail',
     auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS, // 16-char App Password required when 2FA is on
+      user: user,
+      pass: pass, // 16-char App Password required when 2FA is on
     },
     pool: true,
     maxConnections: 1,
