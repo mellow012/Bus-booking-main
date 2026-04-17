@@ -21,7 +21,7 @@ function getTransporter(): nodemailer.Transporter {
   if (_transporter) return _transporter;
 
   const user = process.env.EMAIL_USER?.trim();
-  const pass = process.env.EMAIL_PASS?.trim()?.replace(/["']/g, '');
+  const pass = process.env.EMAIL_PASS?.trim()?.replace(/["']/g, '')?.replace(/\s+/g, '');
 
   if (!user || !pass) {
     throw new Error('EMAIL_USER and EMAIL_PASS environment variables must be set.');
