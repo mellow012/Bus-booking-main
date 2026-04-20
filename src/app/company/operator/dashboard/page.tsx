@@ -17,19 +17,34 @@ import {
   X,
   ChevronRight,
   Bell,
-  AlertTriangle
+  AlertTriangle,
+  LogOut,
+  MapPin,
+  Truck,
+  FileText,
+  Activity
 } from "lucide-react";
 import AlertMessage from "@/components/AlertMessage";
 import SchedulesTab from "@/components/scheduleTab";
 import BookingsTab from "@/components/bookingTab";
 import PaymentsTab from "@/components/PaymentTab";
+import NotificationsManagementTab from "@/components/NotificationsManagementTab";
+import RoutesTab from "@/components/routesTab";
+import BusesTab from "@/components/busesTab";
+import ReportsTab from "@/components/ReportsTab";
 import OperatorProfileTab from "@/components/OperatorProfileTab";
 
+// ─── Constants ────────────────────────────────────────────────────────────────
 const TABS = [
   { id: "schedules" as const, label: "Schedules", icon: Calendar },
-  { id: "bookings" as const, label: "Bookings", icon: Users },
-  { id: "payments" as const, label: "Payments", icon: DollarSign },
-  { id: "profile" as const, label: "Profile", icon: User }
+  { id: "bookings" as const,  label: "Bookings",  icon: Users },
+  { id: "payments" as const,  label: "Payments",  icon: DollarSign },
+  { id: "routes" as const,    label: "My Routes", icon: MapPin },
+  { id: "buses" as const,     label: "Fleet",    icon: Truck },
+  { id: "reports" as const,   label: "Reports",  icon: FileText },
+  { id: "notifications" as const, label: "Notifications", icon: Bell },
+  { id: "activity" as const,  label: "Activity", icon: Activity },
+  { id: "profile" as const,   label: "Profile",  icon: User }
 ] as const;
 
 type TabType = typeof TABS[number]["id"];
@@ -70,98 +85,8 @@ const useAlert = () => {
   return { alert, showAlert, clearAlert };
 };
 
-const Sidebar = ({ activeSection, setActiveSection, isMobileOpen, setIsMobileOpen, company, operatorName, pendingCount }: any) => {
-  return (
-    <>
-      {isMobileOpen && (
-        <div 
-          className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
-          onClick={() => setIsMobileOpen(false)}
-        />
-      )}
-
-      <aside className={`
-        fixed top-0 left-0 z-50 h-screen w-64 bg-white border-r border-gray-200
-        transform transition-transform duration-300 ease-in-out
-        ${isMobileOpen ? 'translate-x-0' : '-translate-x-full'}
-        lg:translate-x-0 lg:static
-      `}>
-        <div className="flex flex-col h-full">
-          <div className="flex items-center justify-between p-6 border-b border-gray-200">
-            <div className="flex items-center space-x-3">
-              {company?.logo ? (
-                <img src={company.logo} alt="Logo" className="w-10 h-10 rounded-xl object-cover" />
-              ) : (
-                <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-blue-700 rounded-xl flex items-center justify-center">
-                  <Building2 className="w-6 h-6 text-white" />
-                </div>
-              )}
-              <div>
-                <h1 className="font-bold text-gray-900 text-sm">{company?.name || 'BusOps'}</h1>
-                <p className="text-xs text-gray-500">Operator Panel</p>
-              </div>
-            </div>
-            <button 
-              onClick={() => setIsMobileOpen(false)}
-              className="lg:hidden p-2 hover:bg-gray-100 rounded-lg"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-
-          <nav className="flex-1 overflow-y-auto p-4 space-y-1">
-            {TABS.map((item) => {
-              const Icon = item.icon;
-              const isActive = activeSection === item.id;
-              
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => {
-                    setActiveSection(item.id);
-                    setIsMobileOpen(false);
-                  }}
-                  className={`
-                    w-full flex items-center space-x-3 px-4 py-3 rounded-xl
-                    transition-all duration-200 group relative
-                    ${isActive 
-                      ? 'bg-blue-50 text-blue-700' 
-                      : 'text-gray-700 hover:bg-gray-50'
-                    }
-                  `}
-                >
-                  <Icon className={`w-5 h-5 ${isActive ? 'text-blue-700' : 'text-gray-400 group-hover:text-gray-600'}`} />
-                  <span className="font-medium flex-1 text-left">{item.label}</span>
-                  {item.id === 'bookings' && pendingCount > 0 && (
-                    <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
-                      {pendingCount}
-                    </span>
-                  )}
-                  {isActive && <ChevronRight className="w-4 h-4" />}
-                </button>
-              );
-            })}
-          </nav>
-
-          <div className="p-4 border-t border-gray-200">
-            <div className="flex items-center space-x-3 px-4 py-3 bg-gray-50 rounded-xl">
-              <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                <User className="w-5 h-5 text-blue-600" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-900 truncate">{operatorName || 'Operator'}</p>
-                <p className="text-xs text-gray-500 truncate">Operations Team</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </aside>
-    </>
-  );
-};
-
 export default function OperatorDashboard() {
-  const { user, userProfile, loading: authLoading } = useAuth();
+  const { user, userProfile, loading: authLoading, signOut } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
   const { alert, showAlert, clearAlert } = useAlert();
@@ -203,9 +128,24 @@ export default function OperatorDashboard() {
       todayBookings: todayBookings.length,
       activeSchedules: (schedules || []).filter((s) => s.status === 'active').length,
       pendingBookings: bookings.filter(b => b.bookingStatus === "pending").length,
-      confirmedBookings: bookings.filter(b => b.bookingStatus === "confirmed").length,
     };
   }, [dashboardData.schedules, dashboardData.bookings]);
+
+  const operatorRoutes = useMemo(() => {
+    return (dashboardData.routes || []).filter(r => 
+      r.assignedOperatorIds?.includes(user?.id || '')
+    );
+  }, [dashboardData.routes, user?.id]);
+
+  const operatorBuses = useMemo(() => {
+    const routeIds = operatorRoutes.map(r => r.id);
+    const busIds = new Set(
+      dashboardData.schedules
+        .filter(s => routeIds.includes(s.routeId))
+        .map(s => s.busId)
+    );
+    return dashboardData.buses.filter(b => busIds.has(b.id));
+  }, [dashboardData.schedules, dashboardData.buses, operatorRoutes]);
 
 
   const fetchInitialData = useCallback(async () => {
@@ -417,6 +357,102 @@ export default function OperatorDashboard() {
           </div>
         );
 
+      case "routes":
+        return (
+          <RoutesTab
+            routes={operatorRoutes}
+            setRoutes={(updatedRoutes) => {
+               // Update global routes with changes from the tab if needed
+               // For now we assume view/assigned management
+            }}
+            companyId={companyId}
+            addRoute={async (data) => ""} // Restricted for operators?
+            setError={(msg) => showAlert("error", msg)}
+            setSuccess={(msg) => showAlert("success", msg)}
+          />
+        );
+
+      case "buses":
+        return (
+          <BusesTab
+            buses={operatorBuses}
+            setBuses={() => {}}
+            companyId={companyId}
+            setError={(msg) => showAlert("error", msg)}
+            setSuccess={(msg) => showAlert("success", msg)}
+            subscriptionTier="premium" // Defaulting for dashboard visibility
+            schedules={dashboardData.schedules}
+            bookings={dashboardData.bookings}
+          />
+        );
+
+      case "reports":
+        return (
+          <ReportsTab
+            schedules={dashboardData.schedules}
+            bookings={dashboardData.bookings}
+            buses={dashboardData.buses}
+            routes={dashboardData.routes}
+            companyId={companyId}
+            user={user}
+            userProfile={userProfile}
+            setError={(msg) => showAlert("error", msg)}
+            setSuccess={(msg) => showAlert("success", msg)}
+          />
+        );
+
+      case "activity":
+        return (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between mb-4">
+               <div>
+                  <h2 className="text-xl font-bold text-gray-900 tracking-tight flex items-center gap-2">
+                     <Activity className="w-5 h-5 text-indigo-600 animate-pulse" /> Operational Activity
+                  </h2>
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Real-time route & schedule intelligence</p>
+               </div>
+            </div>
+            
+            <div className="space-y-4">
+               {dashboardData.schedules.slice(0, 5).map((s, i) => (
+                  <div key={i} className="bg-gray-50 p-6 rounded-[2rem] border border-gray-100 flex items-center justify-between group hover:bg-white hover:shadow-xl transition-all duration-500">
+                     <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 bg-white rounded-2xl shadow-sm flex items-center justify-center text-indigo-600 group-hover:scale-110 transition-transform">
+                           <Calendar className="w-5 h-5" />
+                        </div>
+                        <div>
+                           <p className="text-sm font-black text-gray-900 uppercase">New Schedule Published</p>
+                           <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">
+                              ID: {s.id.substring(0, 8)} • Route: {operatorRoutes.find(r => r.id === s.routeId)?.name || 'Internal Corridor'}
+                           </p>
+                        </div>
+                     </div>
+                     <div className="text-right">
+                        <p className="text-[10px] font-black text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full uppercase tracking-widest border border-indigo-100">Live Sync</p>
+                     </div>
+                  </div>
+               ))}
+               
+               {dashboardData.schedules.length === 0 && (
+                  <div className="text-center py-20 bg-gray-50 rounded-[3rem] border border-dashed border-gray-200">
+                     <Activity className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">No Operational Telemetry Detected</p>
+                  </div>
+               )}
+            </div>
+          </div>
+        );
+
+      case "notifications":
+        return (
+          <NotificationsManagementTab
+            userId={user?.id || ""}
+            companyId={companyId}
+            setError={(msg) => showAlert("error", msg)}
+            setSuccess={(msg) => showAlert("success", msg)}
+          />
+        );
+
       default:
         return (
           <div className="text-center py-12">
@@ -426,12 +462,37 @@ export default function OperatorDashboard() {
     }
   };
 
+  // ── Sidebar Item Component ──────────────────────────────────────────────────
+  const SidebarItem = ({ icon: Icon, label, active, onClick, badge }: any) => (
+    <button
+      onClick={onClick}
+      className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all duration-300 group
+        ${active 
+          ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200 translate-x-1' 
+          : 'text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 hover:translate-x-1'}`}
+    >
+      <div className="flex items-center gap-3">
+        <Icon className={`w-5 h-5 transition-transform duration-300 ${active ? 'scale-110' : 'group-hover:scale-110'}`} />
+        <span className="font-semibold tracking-tight">{label}</span>
+      </div>
+      {badge && (
+        <span className={`px-2 py-0.5 rounded-lg text-[10px] font-bold shadow-sm ${badge.className}`}>
+          {badge.text}
+        </span>
+      )}
+    </button>
+  );
+
   if (loading || authLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <Loader2 className="w-12 h-12 text-blue-600 animate-spin mx-auto" />
-          <p className="mt-4 text-gray-600">Loading dashboard...</p>
+          <div className="relative w-16 h-16 mx-auto mb-6">
+            <div className="absolute inset-0 border-4 border-indigo-100 rounded-full"></div>
+            <div className="absolute inset-0 border-4 border-indigo-600 rounded-full border-t-transparent animate-spin"></div>
+          </div>
+          <p className="text-gray-900 font-bold tracking-tight">Syncing Dashboard Data...</p>
+          <p className="text-gray-400 text-xs mt-1 font-medium italic">Kinetic Engine v1.0</p>
         </div>
       </div>
     );
@@ -439,34 +500,18 @@ export default function OperatorDashboard() {
 
   if (!isValidUser) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center bg-white p-8 rounded-2xl shadow-lg max-w-md">
-          <AlertTriangle className="w-16 h-16 text-red-400 mx-auto mb-4" />
-          <h2 className="text-xl font-semibold text-gray-800 mb-2">Access Denied</h2>
-          <p className="text-gray-600 mb-6">You don't have permission to access this dashboard.</p>
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+        <div className="text-center bg-white p-10 rounded-3xl shadow-2xl shadow-gray-200 max-w-md border border-gray-100">
+          <div className="w-20 h-20 bg-red-50 rounded-2xl flex items-center justify-center mx-auto mb-6">
+            <AlertTriangle className="w-10 h-10 text-red-500" />
+          </div>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2 tracking-tight">Access Restricted</h2>
+          <p className="text-gray-500 mb-8 leading-relaxed font-medium">Your credentials does not have the permissions required to access the Kinetic Operator Console.</p>
           <button
             onClick={() => router.push("/login")}
-            className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-lg hover:shadow-xl active:scale-[0.98]"
           >
-            Go to Login
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  if (!dashboardData.company) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center bg-white p-8 rounded-2xl shadow-lg max-w-md">
-          <Building2 className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-          <h2 className="text-xl font-semibold text-gray-800 mb-2">Company Not Found</h2>
-          <p className="text-gray-600 mb-6">Please contact your administrator for assistance.</p>
-          <button
-            onClick={() => router.push("/login")}
-            className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            Back to Login
+            Return to Terminal
           </button>
         </div>
       </div>
@@ -474,66 +519,98 @@ export default function OperatorDashboard() {
   }
 
   const { company } = dashboardData;
-  const operatorName = `${userProfile?.firstName || ''} ${userProfile?.lastName || ''}`.trim();
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
-      <Sidebar 
-        activeSection={activeTab}
-        setActiveSection={setActiveTab}
-        isMobileOpen={isMobileOpen}
-        setIsMobileOpen={setIsMobileOpen}
-        company={company}
-        operatorName={operatorName}
-        pendingCount={statistics.pendingBookings}
-      />
+    <div className="min-h-screen bg-[#fafafa] flex font-sans selection:bg-indigo-100 selection:text-indigo-900 overflow-hidden">
+      {/* ── SIDEBAR ── */}
+      <aside className="hidden lg:flex w-64 bg-white border-r border-gray-100 h-screen sticky top-0 flex flex-col z-50">
+        <div className="p-6 border-b border-gray-100/50">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-200">
+              <Building2 className="w-6 h-6 text-white" strokeWidth={2.5} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h1 className="font-bold text-gray-900 tracking-tight leading-none truncate text-sm uppercase">{company?.name || 'BusOps'}</h1>
+              <span className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest leading-none mt-1 inline-block italic">Operator Console</span>
+            </div>
+          </div>
+        </div>
 
-      <div className="flex-1 flex flex-col min-h-screen lg:ml-0">
-        <header className="bg-white border-b sticky top-0 z-30 shadow-sm">
-          <div className="px-4 sm:px-6 lg:px-8 py-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-4">
-                <button 
-                  onClick={() => setIsMobileOpen(true)}
-                  className="lg:hidden p-2 hover:bg-gray-100 rounded-lg"
-                >
-                  <Menu className="w-6 h-6" />
-                </button>
-                <div>
-                  <h1 className="text-2xl font-bold text-gray-900">
-                    {TABS.find(t => t.id === activeTab)?.label || 'Dashboard'}
-                  </h1>
-                  <p className="text-sm text-gray-500">Manage {activeTab} for {company.name}</p>
-                </div>
-              </div>
+        <nav className="flex-1 p-4 space-y-1 overflow-y-auto scrollbar-hide">
+          <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-4 px-2">Operational Context</div>
+          {TABS.map(tab => (
+            <SidebarItem 
+              key={tab.id}
+              icon={tab.icon} 
+              label={tab.label} 
+              active={activeTab === tab.id} 
+              onClick={() => setActiveTab(tab.id as TabType)}
+              badge={tab.id === 'bookings' && statistics.pendingBookings > 0 ? { text: `${statistics.pendingBookings} NEW`, className: 'bg-amber-100 text-amber-700' } : undefined}
+            />
+          ))}
+        </nav>
 
-              <div className="flex items-center space-x-4">
-                {statistics.pendingBookings > 0 && (
-                  <div 
-                    className="flex items-center space-x-2 px-3 py-2 bg-yellow-100 text-yellow-800 rounded-lg cursor-pointer hover:bg-yellow-200 transition-colors"
-                    onClick={() => setActiveTab("bookings")}
-                  >
-                    <Bell className="w-4 h-4" />
-                    <span className="text-sm font-medium">{statistics.pendingBookings} pending</span>
-                  </div>
-                )}
+        <div className="p-4 border-t border-gray-100/50">
+          <button 
+            onClick={signOut} 
+            className="w-full flex items-center gap-3 px-4 py-3 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all duration-300 font-medium group"
+          >
+            <LogOut className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+            <span>Terminate Shift</span>
+          </button>
+        </div>
+      </aside>
+
+      {/* ── MAIN CONTENT ── */}
+      <div className="flex-1 flex flex-col h-screen overflow-hidden">
+        {/* Header */}
+        <header className="h-20 bg-white/80 backdrop-blur-md border-b border-gray-100 flex items-center justify-between px-8 sticky top-0 z-40">
+          <div className="flex items-center gap-4">
+            <h2 className="text-xl font-bold text-gray-900 border-l-4 border-indigo-600 pl-4 capitalize tracking-tight">
+              {activeTab} Management
+            </h2>
+          </div>
+
+          <div className="flex items-center gap-6">
+            <div className="hidden md:flex flex-col items-end">
+              <span className="text-[11px] font-bold text-gray-400 uppercase tracking-widest leading-none mb-1">Status</span>
+              <div className="flex items-center gap-1.5 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
+                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-tight">Active duty</p>
               </div>
+            </div>
+            <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600 font-extrabold text-xs shadow-sm border border-indigo-100 ring-4 ring-indigo-50/50">
+              {userProfile?.firstName?.[0] || 'O'}
             </div>
           </div>
         </header>
 
-        <main className="flex-1 px-4 sm:px-6 lg:px-8 py-8">
+        <main className="flex-1 p-8 overflow-y-auto">
           {alert && (
-            <div className="mb-6">
-              <AlertMessage type={alert?.type} message={alert?.message} onClose={clearAlert} />
+            <div className="mb-6 animate-in fade-in slide-in-from-top-2 duration-300">
+              <AlertMessage type={alert.type} message={alert.message} onClose={clearAlert} />
             </div>
           )}
 
           <div className="max-w-7xl mx-auto">
-            {renderActiveTab()}
+            <div className="bg-white rounded-[2rem] shadow-[0_20px_50px_-12px_rgba(0,0,0,0.05)] border border-gray-100 overflow-hidden">
+              <div className="p-8">
+                {renderActiveTab()}
+              </div>
+            </div>
           </div>
         </main>
       </div>
+
+      <style jsx global>{`
+        @keyframes kinetic-slide-up {
+          from { opacity: 0; transform: translateY(20px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .kinetic-animate {
+          animation: kinetic-slide-up 0.5s ease-out forwards;
+        }
+      `}</style>
     </div>
   );
 }

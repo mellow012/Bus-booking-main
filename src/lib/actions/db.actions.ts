@@ -264,7 +264,32 @@ export async function deleteSchedule(id: string) {
  */
 export async function createBus(data: Partial<Bus>) {
   try {
-    const bus = await prisma.bus.create({ data: data as any });
+    const {
+      id, companyId, licensePlate, busType, capacity, amenities,
+      status, yearOfManufacture, registrationDetails, isActive,
+      fuelType, insuranceDetails, lastMaintenanceDate, nextMaintenanceDate,
+      conductorIds
+    } = data;
+
+    const bus = await prisma.bus.create({
+      data: {
+        id,
+        companyId: companyId!,
+        licensePlate: licensePlate!,
+        busType: busType!,
+        capacity: capacity!,
+        amenities: amenities as any,
+        status: status || 'active',
+        yearOfManufacture,
+        registrationDetails: registrationDetails as any,
+        isActive: isActive ?? true,
+        fuelType,
+        insuranceDetails: insuranceDetails as any,
+        lastMaintenanceDate: lastMaintenanceDate ? new Date(lastMaintenanceDate) : null,
+        nextMaintenanceDate: nextMaintenanceDate ? new Date(nextMaintenanceDate) : null,
+        conductorIds: conductorIds || [],
+      } as any
+    });
     revalidatePath('/company/operator/dashboard');
     return { success: true, data: bus as unknown as Bus };
   } catch (error: unknown) {
@@ -275,11 +300,16 @@ export async function createBus(data: Partial<Bus>) {
 
 export async function updateBus(id: string, data: Partial<Bus>) {
   try {
-    const { id: _, createdAt, updatedAt, ...updatableData } = data;
-    const bus = await prisma.bus.update({ 
-      where: { id }, 
+    const {
+      id: _, createdAt, updatedAt, companyId, images, metadata, ...updatableData
+    } = data as any;
+
+    const bus = await prisma.bus.update({
+      where: { id },
       data: {
-        ...(updatableData as any),
+        ...updatableData,
+        lastMaintenanceDate: updatableData.lastMaintenanceDate ? new Date(updatableData.lastMaintenanceDate) : undefined,
+        nextMaintenanceDate: updatableData.nextMaintenanceDate ? new Date(updatableData.nextMaintenanceDate) : undefined,
         updatedAt: new Date(),
       }
     });
@@ -307,7 +337,30 @@ export async function deleteBus(id: string) {
  */
 export async function createRoute(data: Partial<Route>) {
   try {
-    const route = await prisma.route.create({ data: data as any });
+    const {
+      id, companyId, name, origin, destination, distance, duration,
+      baseFare, pricePerKm, stops, isActive, status,
+      assignedOperatorIds, assignedConductorIds
+    } = data;
+
+    const route = await prisma.route.create({
+      data: {
+        id,
+        companyId: companyId!,
+        name: name!,
+        origin: origin!,
+        destination: destination!,
+        distance: distance!,
+        duration: duration!,
+        baseFare: baseFare!,
+        pricePerKm,
+        stops: stops as any,
+        isActive: isActive ?? true,
+        status: status ?? 'active',
+        assignedOperatorIds: assignedOperatorIds || [],
+        assignedConductorIds: assignedConductorIds || [],
+      } as any
+    });
     revalidatePath('/company/operator/dashboard');
     return { success: true, data: route as unknown as Route };
   } catch (error: unknown) {
@@ -318,11 +371,16 @@ export async function createRoute(data: Partial<Route>) {
 
 export async function updateRoute(id: string, data: Partial<Route>) {
   try {
-    const { id: _, createdAt, updatedAt, ...updatableData } = data;
-    const route = await prisma.route.update({ 
-      where: { id }, 
+    const {
+       id: _, createdAt, updatedAt, companyId,
+       assignedOperators, associatedBusIds, metadata,
+       ...updatableData
+    } = data as any;
+
+    const route = await prisma.route.update({
+      where: { id },
       data: {
-        ...(updatableData as any),
+        ...updatableData,
         updatedAt: new Date(),
       }
     });

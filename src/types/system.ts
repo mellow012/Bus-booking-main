@@ -86,3 +86,21 @@ export interface SystemSettings {
   description?: string;
   updatedAt: Date;
 }
+
+// ─── Promotion ───────────────────────────────────────────────────────────────
+
+export interface Promotion {
+  id: string;
+  code: string;
+  title: string;
+  description: string;
+  discountValue: number;
+  discountType: 'percentage' | 'fixed';
+  minPurchase?: number | null;
+  maxDiscount?: number | null;
+  startDate: Date;
+  endDate: Date;
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}

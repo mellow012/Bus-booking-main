@@ -73,8 +73,12 @@ export const NotificationProvider: React.FC<{ children: ReactNode; userId?: stri
       const response = await fetch('/api/notifications/list?userId=' + userId);
       
       if (response.status === 401) {
-        // Silently handle unauthorized (e.g., session expired or refreshing)
-        // We don't want to spam the console with 401 errors during polling
+        // If unauthorized, stop polling as the session is likely expired or invalid.
+        // This prevents the console from being flooded with 401 errors every interval.
+        if (pollingIntervalRef.current) {
+          clearInterval(pollingIntervalRef.current);
+          pollingIntervalRef.current = null;
+        }
         return;
       }
 
@@ -84,9 +88,7 @@ export const NotificationProvider: React.FC<{ children: ReactNode; userId?: stri
       setNotifications(data || []);
       setError(null);
     } catch (err: any) {
-      // Only log non-401 errors, or handle network errors
-      if (err.message?.includes('401')) return;
-      
+      // Log network errors or other unexpected issues
       console.error('[NotificationProvider] Polling error:', err);
       setError(err.message);
     } finally {

@@ -80,6 +80,7 @@ const BusesTab: FC<BusesTabProps> = ({
   const [editBus, setEditBus] = useState<Bus | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive' | 'maintenance'>('all');
+  const [filterConductor, setFilterConductor] = useState<string>('all');
   const [actionLoading, setActionLoading] = useState(false);
 
   const [conductors, setConductors] = useState<Conductor[]>([]);
@@ -167,8 +168,12 @@ const BusesTab: FC<BusesTabProps> = ({
       filtered = filtered.filter(b => b.status === filterStatus);
     }
 
+    if (filterConductor !== 'all') {
+      filtered = filtered.filter(b => b.conductorIds?.includes(filterConductor));
+    }
+
     return filtered;
-  }, [buses, searchTerm, filterStatus, conductors]);
+  }, [buses, searchTerm, filterStatus, filterConductor, conductors]);
 
   const getConductorNames = (ids: string[] = []): string[] => {
     return ids
@@ -417,39 +422,52 @@ const BusesTab: FC<BusesTabProps> = ({
       </div>
 
       {/* Controls */}
-      <div className="bg-white rounded-xl shadow-[0_2px_10px_-4px_rgba(0,0,0,0.1)] border border-gray-100 py-3 px-4">
+      <div className="bg-white rounded-2xl shadow-[0_8px_30px_-10px_rgba(0,0,0,0.05)] border border-gray-100 py-4 px-6">
         <div className="flex flex-col lg:flex-row gap-4 items-center justify-between">
-          <div className="flex gap-4 w-full lg:w-auto flex-1 max-w-2xl">
-            <div className="relative flex-1">
+          <div className="flex flex-wrap gap-3 w-full lg:w-auto flex-1 max-w-4xl">
+            <div className="relative flex-1 min-w-[200px]">
               <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 transform -translate-y-1/2" />
               <input
                 type="text"
-                placeholder="Search buses..."
+                placeholder="Search buses, registration, amenities..."
                 value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
-                className="w-full pl-9 pr-4 py-2 border-none bg-gray-50 rounded-md focus:ring-1 focus:ring-indigo-900 outline-none text-sm font-medium placeholder-gray-400"
+                className="w-full pl-9 pr-4 py-2 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-indigo-600 focus:bg-white outline-none text-[13px] font-bold text-gray-700 transition-all placeholder-gray-400"
               />
             </div>
-            <select
-              value={filterStatus}
-              onChange={e => setFilterStatus(e.target.value as any)}
-              className="py-2 px-3 border-none bg-gray-50 rounded-md text-sm font-bold text-gray-700 outline-none focus:ring-1 focus:ring-indigo-900"
-            >
-              <option value="all">All Statuses</option>
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-              <option value="maintenance">Maintenance</option>
-            </select>
+            <div className="flex gap-3">
+               <select
+                 value={filterStatus}
+                 onChange={e => setFilterStatus(e.target.value as any)}
+                 className="py-2 px-3 bg-gray-50 border border-gray-100 rounded-xl text-[11px] font-black text-gray-500 uppercase tracking-wider outline-none focus:ring-2 focus:ring-indigo-600 focus:bg-white transition-all cursor-pointer"
+               >
+                 <option value="all">Global Lifecycle</option>
+                 <option value="active">Operational</option>
+                 <option value="inactive">Decommissioned</option>
+                 <option value="maintenance">Maintenance</option>
+               </select>
+
+               <select
+                 value={filterConductor}
+                 onChange={e => setFilterConductor(e.target.value)}
+                 className="py-2 px-3 bg-gray-50 border border-gray-100 rounded-xl text-[11px] font-black text-gray-500 uppercase tracking-wider outline-none focus:ring-2 focus:ring-indigo-600 focus:bg-white transition-all cursor-pointer"
+               >
+                 <option value="all">All Personnel</option>
+                 {conductors.map(c => (
+                   <option key={c.id} value={c.id}>{c.name}</option>
+                 ))}
+               </select>
+            </div>
           </div>
           
           <Button 
             onClick={handleAddClick}
-            className="bg-indigo-900 text-white hover:bg-indigo-800 flex items-center gap-2 rounded-md font-bold px-5"
+            className="bg-indigo-600 text-white hover:bg-indigo-700 flex items-center gap-2 rounded-xl text-[11px] font-black uppercase tracking-widest px-6 py-5 shadow-lg shadow-indigo-100 active:scale-95 transition-all w-full lg:w-auto"
             disabled={actionLoading}
           >
             {!canAddBus && <Lock className="w-4 h-4" />}
             <Plus className="w-4 h-4" />
-            Register Bus
+            Vessel Registration
           </Button>
         </div>
       </div>
@@ -480,114 +498,95 @@ const BusesTab: FC<BusesTabProps> = ({
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
           {filteredBuses.map(bus => {
-            const assignments = getBusAssignments(bus.id);
             const isMaintenance = bus.status === 'maintenance';
             
             return (
-              <div key={bus.id} className="bg-white rounded-xl border border-gray-200 overflow-hidden flex flex-col hover:shadow-xl transition-all duration-300">
-                {/* Image/Icon Header Area */}
-                <div className="h-32 bg-slate-100 relative flex items-center justify-center border-b border-gray-200 overflow-hidden" 
-                     style={{ backgroundImage: 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)' }}>
-                   {/* Decorative background grid */}
-                   <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'radial-gradient(#94a3b8 1px, transparent 1px)', backgroundSize: '16px 16px' }}></div>
+              <div key={bus.id} className="bg-white rounded-3xl border border-gray-100 overflow-hidden flex flex-col hover:shadow-[0_20px_40px_-15px_rgba(0,0,0,0.08)] transition-all duration-500 group">
+                {/* Image/Icon Header Area - Kinetic Glassmorphism */}
+                <div className="h-40 bg-slate-50 relative flex items-center justify-center border-b border-gray-50 overflow-hidden">
+                   <div className="absolute inset-0 opacity-20" style={{ backgroundImage: 'radial-gradient(#6366f1 1px, transparent 1px)', backgroundSize: '24px 24px' }}></div>
+                   <div className="absolute -right-8 -top-8 w-32 h-32 bg-indigo-600/5 rounded-full blur-3xl group-hover:bg-indigo-600/10 transition-colors"></div>
                    
-                   <div className="relative z-10 w-20 h-20 bg-white rounded-full shadow-sm flex items-center justify-center border-4 border-slate-50 text-indigo-900">
-                      <Truck className="w-8 h-8" />
+                   <div className="relative z-10 w-24 h-24 bg-white/80 backdrop-blur-md rounded-[2.5rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] flex items-center justify-center border border-white/50 text-indigo-600 group-hover:scale-110 transition-transform duration-500">
+                      <Truck className="w-10 h-10" />
                    </div>
                    
-                   <div className="absolute top-3 left-3 bg-white/90 backdrop-blur px-2.5 py-1 rounded shadow-sm">
-                      <span className="text-[10px] font-extrabold text-gray-900 tracking-wider">UNIT: {bus.id.substring(0,6).toUpperCase()}</span>
+                   <div className="absolute top-4 left-4 bg-white/90 backdrop-blur-sm px-3 py-1.5 rounded-2xl shadow-sm border border-white/50">
+                      <span className="text-[10px] font-black text-gray-900 tracking-widest uppercase">UNIT ID: {bus.id.substring(0,6)}</span>
                    </div>
-                   <div className="absolute top-3 right-3 shadow-sm">
-                      <span className={`px-2.5 py-1 text-[10px] uppercase font-extrabold rounded ${
-                         bus.status === 'active' ? 'bg-green-100 text-green-700' :
-                         isMaintenance ? 'bg-red-100 text-red-700' : 'bg-gray-200 text-gray-700'
+
+                   <div className="absolute top-4 right-4">
+                      <span className={`px-3 py-1.5 text-[10px] uppercase font-black tracking-widest rounded-2xl border shadow-sm ${
+                         bus.status === 'active' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' :
+                         isMaintenance ? 'bg-rose-50 text-rose-700 border-rose-100' : 'bg-gray-50 text-gray-700 border-gray-100'
                       }`}>{bus.status}</span>
                    </div>
                 </div>
 
-                <div className="p-5 flex-1 flex flex-col">
+                <div className="p-6 flex-1 flex flex-col">
                   {/* Title & Basics */}
-                  <div className="mb-5">
-                    <h3 className="text-xl font-extrabold text-gray-900 leading-none mb-1.5">{bus.licensePlate}</h3>
-                    <div className="flex items-center gap-3 text-[11px] font-bold text-gray-400 tracking-wider">
-                       <span className="flex items-center gap-1 text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded">{bus.busType}</span>
-                       <span>• REG: {bus.registrationDetails?.registrationNumber || 'PENDING'}</span>
+                  <div className="mb-6">
+                    <h3 className="text-2xl font-black text-gray-900 tracking-tight mb-1 group-hover:text-indigo-600 transition-colors uppercase">{bus.licensePlate}</h3>
+                    <div className="flex items-center gap-3">
+                       <span className="text-[10px] font-black text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-xl uppercase tracking-widest border border-indigo-100">{bus.busType}</span>
+                       <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">REG: {bus.registrationDetails?.registrationNumber || 'PENDING'}</span>
                     </div>
                   </div>
 
                   {/* Core Data Grid */}
-                  <div className="grid grid-cols-2 gap-4 mb-4">
+                  <div className="grid grid-cols-2 gap-6 mb-6">
                     <div>
-                      <p className="text-[10px] text-gray-400 font-bold tracking-wider mb-1">CAPACITY</p>
-                      <p className="text-[13px] font-bold text-gray-900">{bus.capacity} Passengers</p>
+                      <p className="text-[10px] text-gray-400 font-bold tracking-widest mb-1 uppercase">MAX PAYLOAD</p>
+                      <p className="text-sm font-black text-gray-900">{bus.capacity} <span className="text-[10px] text-gray-400 uppercase ml-0.5">SEATS</span></p>
                     </div>
                     <div>
-                      <p className="text-[10px] text-gray-400 font-bold tracking-wider mb-1">FUEL CLASS</p>
-                      <p className="text-[13px] font-bold text-gray-900 capitalize">{bus.fuelType || 'Diesel'}</p>
+                      <p className="text-[10px] text-gray-400 font-bold tracking-widest mb-1 uppercase">FUEL SYSTEM</p>
+                      <p className="text-sm font-black text-gray-900 uppercase">{bus.fuelType || 'Diesel'}</p>
                     </div>
                   </div>
 
                   {/* Default Crew / Conductor section */}
-                  {bus.conductorIds && bus.conductorIds.length > 0 && (
-                    <div className="mb-4 bg-gray-50 p-3 rounded-lg border border-gray-100">
-                      <p className="text-[10px] text-gray-500 font-bold tracking-wider mb-2">ASSIGNED CREW</p>
-                      <div className="flex flex-col gap-2">
-                        {getConductorNames(bus.conductorIds ?? []).map((name: string, idx: number) => (
-                           <div key={idx} className="flex items-center gap-2">
-                             <div className="w-5 h-5 rounded-full bg-indigo-100 flex items-center justify-center text-[10px] font-bold text-indigo-700">
-                                {name.substring(0, 1)}
-                             </div>
-                             <span className="text-[12px] font-bold text-gray-900">{name}</span>
-                           </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                  <div className="mb-6">
+                     <p className="text-[10px] text-gray-400 font-bold tracking-widest mb-3 uppercase">ASSIGNED PERSONNEL</p>
+                     {bus.conductorIds && bus.conductorIds.length > 0 ? (
+                        <div className="flex flex-col gap-2.5">
+                           {getConductorNames(bus.conductorIds).map((name, idx) => (
+                              <div key={idx} className="flex items-center gap-3 group/person">
+                                 <div className="w-8 h-8 rounded-xl bg-indigo-50 flex items-center justify-center text-[11px] font-black text-indigo-600 border border-indigo-100 group-hover/person:bg-indigo-600 group-hover/person:text-white transition-all">
+                                    {name.substring(0, 1)}
+                                 </div>
+                                 <span className="text-[13px] font-bold text-gray-900">{name}</span>
+                              </div>
+                           ))}
+                        </div>
+                     ) : (
+                        <div className="py-3 px-4 bg-gray-50 border border-dashed border-gray-200 rounded-2xl">
+                           <p className="text-[10px] font-bold text-gray-400 uppercase text-center">No Crew Assigned</p>
+                        </div>
+                     )}
+                  </div>
 
-                  {/* Amenities */}
-                  {bus.amenities && bus.amenities.length > 0 && (
-                    <div className="mb-4">
-                      <p className="text-[10px] text-gray-400 font-bold tracking-wider mb-2">AMENITIES</p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {bus.amenities.slice(0, 3).map((amenity, idx) => (
-                          <span key={idx} className="px-2 py-1 bg-slate-100 text-slate-700 text-[10px] font-bold rounded">
-                            {amenity.toUpperCase()}
-                          </span>
-                        ))}
-                        {bus.amenities.length > 3 && (
-                          <span className="px-2 py-1 bg-slate-100 text-slate-700 text-[10px] font-bold rounded">
-                            +{bus.amenities.length - 3}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="mt-auto"></div>
-
-                  {/* Actions */}
-                  <div className="flex gap-2 pt-4 border-t border-gray-100 mt-4">
-                    <button
-                      onClick={() => handleViewDetails(bus)}
-                      className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-md transition-colors text-xs font-bold"
-                    >
-                      <Eye className="w-3.5 h-3.5" /> View
-                    </button>
-                    <button
-                      onClick={() => { setEditBus(bus); setShowEditModal(true); }} 
-                      className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-md transition-colors text-xs font-bold"
-                      disabled={actionLoading}
-                    >
-                      <Edit3 className="w-3.5 h-3.5" /> Edit
-                    </button>
-                    <button
-                       onClick={() => handleDelete(bus.id)} 
-                       className="px-3 py-2 text-red-600 bg-red-50 hover:bg-red-100 rounded-md transition-colors flex items-center justify-center"
+                  <div className="mt-auto pt-6 border-t border-gray-50 flex gap-2">
+                     <button
+                       onClick={() => handleViewDetails(bus)}
+                       className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-gray-50 text-gray-700 hover:bg-gray-100 rounded-2xl transition-all text-[11px] font-black uppercase tracking-widest"
+                     >
+                       <Eye className="w-4 h-4" /> Insight
+                     </button>
+                     <button
+                       onClick={() => { setEditBus(bus); setShowEditModal(true); }} 
+                       className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-indigo-50 text-indigo-700 hover:bg-indigo-600 hover:text-white rounded-2xl transition-all text-[11px] font-black uppercase tracking-widest border border-indigo-100"
                        disabled={actionLoading}
-                    >
-                       <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                     >
+                       <Edit3 className="w-4 h-4" /> Edit
+                     </button>
+                     <button
+                        onClick={() => handleDelete(bus.id)} 
+                        className="px-4 py-3 text-rose-600 bg-rose-50 hover:bg-rose-600 hover:text-white rounded-2xl transition-all border border-rose-100"
+                        disabled={actionLoading}
+                     >
+                        <Trash2 className="w-4 h-4" />
+                     </button>
                   </div>
                 </div>
               </div>

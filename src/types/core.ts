@@ -87,6 +87,7 @@ export interface Company extends BaseEntity {
     website?: string;
   };
 
+  planType?: string;
   metadata?: Record<string, unknown>;
 }
 
@@ -212,6 +213,7 @@ export interface Bus extends BaseEntity {
   lastMaintenanceDate?: Date;
   nextMaintenanceDate?: Date;
 
+  isActive?: boolean;
   conductorIds?: string[];
 
   metadata?: Record<string, unknown>;
@@ -250,6 +252,7 @@ export interface Route extends BaseEntity {
 
   assignedOperators?: RouteOperator[];
   assignedOperatorIds?: string[];
+  assignedConductorIds?: string[];
   associatedBusIds?: string[];
 
   metadata?: Record<string, unknown>;

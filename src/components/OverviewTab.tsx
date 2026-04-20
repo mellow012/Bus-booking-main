@@ -4,7 +4,8 @@ import {
   DollarSign, Users, Calendar, Truck, TrendingUp,
   Clock, AlertTriangle, CheckCircle, Activity, MapPin,
   ArrowRight, User, Plus, Eye, X,
-  Route as RouteIcon, CreditCard, Wallet, BarChart3
+  Route as RouteIcon, CreditCard, Wallet, BarChart3,
+  ChevronRight, Sparkles, Zap, Building2
 } from "lucide-react";
 import { Company, Schedule, Route, Bus, Booking } from "@/types";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
@@ -54,44 +55,24 @@ function KineticStatCard({ title, value, icon: Icon, iconBg, iconColor, badge, s
   subtitle?: string;
 }) {
   return (
-    <div className="bg-white rounded-xl shadow-[0_2px_10px_-4px_rgba(0,0,0,0.1)] p-5 relative overflow-hidden flex flex-col justify-between min-h-[140px] border border-gray-100">
-      <div className="flex justify-between items-start mb-2">
-        <div className={`p-2 rounded-lg ${iconBg}`}>
+    <div className="bg-white rounded-3xl shadow-[0_8px_30px_-10px_rgba(0,0,0,0.05)] p-6 relative overflow-hidden flex flex-col justify-between min-h-[160px] border border-gray-100 group hover:shadow-[0_20px_40px_-15px_rgba(0,0,0,0.1)] transition-all duration-500 text-left">
+      <div className="absolute -right-8 -top-8 w-24 h-24 bg-indigo-600/5 rounded-full blur-3xl group-hover:bg-indigo-600/10 transition-colors"></div>
+      
+      <div className="flex justify-between items-start mb-4 relative z-10">
+        <div className={`p-3 rounded-2xl ${iconBg} shadow-sm border border-white/50 group-hover:scale-110 transition-transform duration-500`}>
           <Icon className={`w-5 h-5 ${iconColor}`} />
         </div>
         {badge && (
-          <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${badge.className}`}>
+          <span className={`text-[9px] font-black px-2.5 py-1.5 rounded-xl uppercase tracking-widest border shadow-sm ${badge.className}`}>
             {badge.text}
           </span>
         )}
       </div>
-      <div className="mt-auto">
-        <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1">{title}</p>
-        <p className="text-2xl font-extrabold text-gray-900 leading-none">{value}</p>
-        {subtitle && <p className="text-xs text-gray-400 mt-1.5">{subtitle}</p>}
+      <div className="relative z-10">
+        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">{title}</p>
+        <p className="text-3xl font-black text-gray-900 leading-none tracking-tight">{value}</p>
+        {subtitle && <p className="text-[11px] font-bold text-gray-400 mt-2 flex items-center gap-1.5"><Sparkles className="w-3 h-3 text-indigo-400" /> {subtitle}</p>}
       </div>
-    </div>
-  );
-}
-
-// Action card shown when data is empty
-function GetStartedCard({ icon: Icon, title, description, buttonText, iconBg, iconColor, onClick }: {
-  icon: any; title: string; description: string; buttonText: string;
-  iconBg: string; iconColor: string; onClick: () => void;
-}) {
-  return (
-    <div className="bg-white rounded-xl shadow-[0_2px_10px_-4px_rgba(0,0,0,0.1)] border border-gray-100 p-6 flex flex-col items-center text-center hover:shadow-lg transition-all">
-      <div className={`w-14 h-14 rounded-xl ${iconBg} flex items-center justify-center mb-4`}>
-        <Icon className={`w-7 h-7 ${iconColor}`} />
-      </div>
-      <h3 className="text-base font-bold text-gray-900 mb-1">{title}</h3>
-      <p className="text-sm text-gray-500 mb-5 max-w-[200px]">{description}</p>
-      <button
-        onClick={onClick}
-        className="bg-indigo-900 hover:bg-indigo-800 text-white px-5 py-2.5 rounded-lg text-sm font-bold transition-colors flex items-center gap-2"
-      >
-        <Plus className="w-4 h-4" /> {buttonText}
-      </button>
     </div>
   );
 }
@@ -116,8 +97,8 @@ export default function OverviewTab({ dashboardData, realtimeStatus, setActiveTa
     const pendingCount = bookings.filter(b => b.bookingStatus === "pending").length;
     const confirmedCount = bookings.filter(b => b.bookingStatus === "confirmed").length;
     const activeBusesCount = buses.filter(b => b.status === "active").length;
-    const activeRoutesCount = routes.filter(r => r.isActive).length;
-    const activeSchedulesCount = schedules.filter(s => s.status === "active" || s.isActive).length;
+    const activeRoutesCount = routes.filter(r => r.status === "active").length;
+    const activeSchedulesCount = schedules.filter(s => s.status === "active").length;
 
     return {
       totalRevenue: totalRev,
@@ -140,7 +121,6 @@ export default function OverviewTab({ dashboardData, realtimeStatus, setActiveTa
     [bookings]
   );
 
-  // Build revenue chart data from real bookings over the last 7 days
   const chartData = useMemo(() => {
     const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     const now = new Date();
@@ -171,7 +151,6 @@ export default function OverviewTab({ dashboardData, realtimeStatus, setActiveTa
 
   const hasChartData = chartData.some(d => d.value > 0);
 
-  // Today's upcoming schedules
   const todaySchedules = useMemo(() => {
     const now = new Date();
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -181,333 +160,237 @@ export default function OverviewTab({ dashboardData, realtimeStatus, setActiveTa
     return schedules
       .filter(s => {
         const dep = toDate(s.departureDateTime);
-        return dep >= todayStart && dep < todayEnd && (s.status === "active" || s.isActive);
+        return dep >= todayStart && dep < todayEnd && s.status === "active";
       })
       .sort((a, b) => toDate(a.departureDateTime).getTime() - toDate(b.departureDateTime).getTime())
       .slice(0, 4);
   }, [schedules]);
 
-  const isEmpty = buses.length === 0 && routes.length === 0 && schedules.length === 0;
-
   return (
-    <div className="space-y-6">
+    <div className="space-y-8 max-w-[1600px] mx-auto pb-12">
 
       {/* ── Page Header Area ── */}
-      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
         <div>
-          <h1 className="text-[28px] font-bold text-gray-900 tracking-tight">Overview</h1>
-          <p className="text-[13px] text-gray-500 font-medium">
-            {company?.name ? `${company.name} — Dashboard` : 'Company Dashboard'}
+          <h1 className="text-3xl font-black text-gray-900 tracking-tight flex items-center gap-3 uppercase">
+             OPERATIONAL OVERVIEW
+             {realtimeStatus.isConnected && <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_12px_rgba(16,185,129,0.4)]" />}
+          </h1>
+          <p className="text-[11px] font-black text-gray-400 uppercase tracking-widest mt-1.5 flex items-center gap-2">
+            <Building2 className="w-4 h-4 text-indigo-400" />
+            {company?.name || 'GENERIC PARTNER'} • CONTROL CENTER
           </p>
         </div>
-        <div className="flex gap-3">
-          {realtimeStatus.isConnected && (
-            <span className="flex items-center gap-1.5 px-3 py-1.5 bg-green-50 text-green-700 text-xs font-bold rounded-md border border-green-200">
-              <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-              Live
-            </span>
-          )}
+        <div className="flex items-center gap-3">
           <button 
             onClick={() => setActiveTab('bookings')} 
-            className="hover:opacity-90 text-white px-5 py-2.5 rounded-md text-sm font-semibold transition-colors shadow-sm flex items-center gap-2"
-            style={{ backgroundColor: 'var(--brand-primary)' }}
+            className="group flex items-center gap-3 bg-indigo-600 text-white px-6 py-3 rounded-2xl font-black text-[11px] uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-100 active:scale-95"
           >
-            <Eye className="w-4 h-4" /> View Bookings
+            <Eye className="w-4 h-4 group-hover:scale-110 transition-transform" /> 
+            Live Bookings
           </button>
         </div>
       </div>
 
       
       {/* ── KPI Cards ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         <KineticStatCard
-          title="TOTAL REVENUE"
+          title="AGGREGATE REVENUE"
           value={`MWK ${fmt(stats.totalRevenue)}`}
           icon={DollarSign}
-          iconBg="bg-blue-50" iconColor="text-[color:var(--brand-primary)]"
+          iconBg="bg-indigo-50" iconColor="text-indigo-600"
           subtitle={`${stats.confirmedBookings} confirmed bookings`}
         />
         <KineticStatCard
-          title="ACTIVE BUSES"
+          title="OPERATIONAL FLEET"
           value={String(stats.activeBuses)}
           icon={Truck}
-          iconBg="bg-green-50" iconColor="text-green-700"
-          subtitle={`${stats.totalBuses} total fleet`}
+          iconBg="bg-emerald-50" iconColor="text-emerald-600"
+          subtitle={`${stats.totalBuses} total vessels`}
         />
         <KineticStatCard
-          title="PENDING BOOKINGS"
+          title="PENDING APPROVALS"
           value={String(stats.pendingBookings)}
           icon={Users}
-          iconBg="bg-amber-50" iconColor="text-amber-600"
-          badge={stats.pendingBookings > 0 ? { text: "ACTION", className: "bg-amber-100 text-amber-700" } : undefined}
-          subtitle={`${stats.totalBookings} total`}
+          iconBg="bg-rose-50" iconColor="text-rose-600"
+          badge={stats.pendingBookings > 0 ? { text: "CRITICAL", className: "bg-rose-100 text-rose-700 border-rose-200" } : undefined}
+          subtitle={`${stats.totalBookings} total attempts`}
         />
         <KineticStatCard
-          title="ACTIVE ROUTES"
+          title="ACTIVE CORRIDORS"
           value={String(stats.activeRoutes)}
           icon={MapPin}
-          iconBg="bg-purple-50" iconColor="text-purple-600"
-          subtitle={`${stats.activeSchedules} active schedules`}
+          iconBg="bg-amber-50" iconColor="text-amber-600"
+          subtitle={`${stats.activeSchedules} scheduled trips`}
         />
       </div>
 
       {/* ── Middle Section ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 text-left">
 
         {/* Today's Departures */}
-        <div className="lg:col-span-2 bg-white rounded-xl shadow-[0_2px_10px_-4px_rgba(0,0,0,0.1)] border border-gray-100 overflow-hidden flex flex-col">
-          <div className="flex items-center justify-between p-5 border-b border-gray-100">
-            <h2 className="text-[16px] font-bold text-gray-900 flex items-center gap-2">
-              <Calendar className="w-5 h-5" style={{ color: 'var(--brand-primary)' }} /> Today&apos;s Departures
-            </h2>
-            <button onClick={() => setActiveTab('schedules')} style={{ color: 'var(--brand-primary)' }} className="text-[12px] font-semibold hover:opacity-80 flex items-center gap-1">
-              View All <ArrowRight className="w-3 h-3" />
+        <div className="lg:col-span-2 bg-white rounded-[2rem] shadow-[0_8px_30px_-10px_rgba(0,0,0,0.05)] border border-gray-100 overflow-hidden flex flex-col group">
+          <div className="flex items-center justify-between p-6 border-b border-gray-50">
+            <div>
+               <h2 className="text-sm font-black text-gray-900 uppercase tracking-widest flex items-center gap-2">
+                 <Calendar className="w-4 h-4 text-indigo-500" /> DAILY LOGISTICS WINDOW
+               </h2>
+               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Real-time departure monitoring</p>
+            </div>
+            <button onClick={() => setActiveTab('schedules')} className="text-[10px] font-black text-indigo-600 hover:text-indigo-700 uppercase tracking-widest flex items-center gap-1.5 transition-colors">
+              FULL LOG <ChevronRight className="w-3.5 h-3.5" />
             </button>
           </div>
 
-          {todaySchedules.length > 0 ? (
-            <div className="divide-y divide-gray-50">
-              {todaySchedules.map(s => {
-                const route = routes.find(r => r.id === s.routeId);
-                const bus = buses.find(b => b.id === s.busId);
-                const dep = toDate(s.departureDateTime);
-                const arr = toDate(s.arrivalDateTime);
-                const capacity = bus?.capacity ?? 0;
-                const available = s.availableSeats ?? 0;
-                const booked = capacity > 0 ? capacity - available : 0;
-                const fillPct = capacity > 0 ? Math.round((booked / capacity) * 100) : 0;
+          <div className="flex-1">
+            {todaySchedules.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-px bg-gray-50">
+                {todaySchedules.map(s => {
+                  const route = routes.find(r => r.id === s.routeId);
+                  const bus = buses.find(b => b.id === s.busId);
+                  const dep = toDate(s.departureDateTime);
+                  const capacity = bus?.capacity ?? 0;
+                  const available = s.availableSeats ?? 0;
+                  const booked = capacity > 0 ? capacity - available : 0;
+                  const fillPct = capacity > 0 ? Math.round((booked / capacity) * 100) : 0;
 
-                return (
-                  <div key={s.id} className="flex items-center gap-4 px-5 py-4 hover:bg-gray-50/50 transition-colors">
-                    <div className="w-12 h-12 text-white rounded-lg flex flex-col items-center justify-center shrink-0" style={{ backgroundColor: 'var(--brand-primary)' }}>
-                      <span className="text-xs font-bold leading-none">{dep.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-bold text-gray-900 truncate">
-                        {route ? `${route.origin} → ${route.destination}` : 'Route not set'}
-                      </p>
-                      <p className="text-xs text-gray-500 font-medium">
-                        {bus?.licensePlate ?? 'No bus'} · {bus?.busType ?? ''} · ETA {fmtTime(arr)}
-                      </p>
-                    </div>
-                    <div className="text-right shrink-0">
-                      <p className="text-sm font-bold text-gray-900">{booked}/{capacity}</p>
-                      <div className="w-20 h-1.5 bg-gray-100 rounded-full mt-1">
-                        <div
-                          className={`h-full rounded-full transition-all ${fillPct > 75 ? 'bg-red-400' : fillPct > 50 ? 'bg-amber-400' : 'bg-green-400'}`}
-                          style={{ width: `${fillPct}%` }}
-                        />
+                  return (
+                    <div key={s.id} className="bg-white p-6 hover:bg-indigo-50/30 transition-all duration-300">
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="px-3 py-1.5 bg-indigo-600 text-white rounded-xl text-[10px] font-black tracking-widest shadow-md shadow-indigo-100">
+                           {dep.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                        <div className="flex flex-col items-end">
+                           <span className="text-[10px] font-black text-gray-900">{fillPct}% LOAD</span>
+                           <div className="w-20 h-1 bg-gray-100 rounded-full mt-1 overflow-hidden">
+                              <div className={`h-full transition-all duration-1000 ${fillPct > 80 ? 'bg-rose-500' : 'bg-emerald-500'}`} style={{ width: `${fillPct}%` }} />
+                           </div>
+                        </div>
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-sm font-black text-gray-900 uppercase tracking-tight">
+                          {route ? `${route.origin} → ${route.destination}` : 'UNDEFINED CORRIDOR'}
+                        </p>
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                          <Truck className="w-3.5 h-3.5 text-indigo-300" />
+                          {bus?.licensePlate ?? 'UNASSIGNED'} • {bus?.busType ?? 'GENERIC'}
+                        </p>
                       </div>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="flex-1 flex flex-col items-center justify-center p-10 text-center">
-              <Calendar className="w-12 h-12 text-gray-200 mb-3" />
-              <p className="text-sm font-medium text-gray-500">No departures scheduled today</p>
-              <button onClick={() => setActiveTab('schedules')} className="mt-4 text-sm font-bold hover:opacity-80 flex items-center gap-1" style={{ color: 'var(--brand-primary)' }}>
-                <Plus className="w-4 h-4" /> Create Schedule
-              </button>
-            </div>
-          )}
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="h-full flex flex-col items-center justify-center py-20 bg-gray-50/30">
+                <div className="w-16 h-16 bg-white rounded-2xl shadow-sm flex items-center justify-center mb-4 border border-gray-100">
+                   <Zap className="w-6 h-6 text-gray-200" />
+                </div>
+                <p className="text-[11px] font-black text-gray-400 uppercase tracking-widest">No Operational departures identified</p>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Revenue Trends */}
-        <div className="bg-white rounded-xl shadow-[0_2px_10px_-4px_rgba(0,0,0,0.1)] border border-gray-100 flex flex-col min-h-[300px]">
-          <div className="flex items-center justify-between p-5 border-b border-gray-100">
-            <h2 className="text-[16px] font-bold text-gray-900 flex items-center gap-2">
-              <TrendingUp className="w-5 h-5" style={{ color: 'var(--brand-primary)' }} /> Revenue (7 days)
-            </h2>
+        <div className="bg-white rounded-[2rem] shadow-[0_8px_30px_-10px_rgba(0,0,0,0.05)] border border-gray-100 flex flex-col p-6 overflow-hidden">
+          <div className="mb-6">
+             <h2 className="text-sm font-black text-gray-900 uppercase tracking-widest flex items-center gap-2">
+               <TrendingUp className="w-4 h-4 text-emerald-500" /> YIELD ANALYTICS
+             </h2>
+             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">7-Day performance cycle</p>
           </div>
-          <div className="p-5 flex-1 flex flex-col">
+          
+          <div className="flex-1 flex flex-col min-h-[220px]">
             {hasChartData ? (
               <>
-                <div className="flex-1 min-h-[150px]">
+                <div className="flex-1">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={chartData} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
-                      <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#9ca3af' }} />
+                    <BarChart data={chartData}>
+                      <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 9, fill: '#9ca3af', fontWeight: 'bold' }} />
                       <YAxis hide />
                       <Tooltip
-                        cursor={{ fill: '#f3f4f6' }}
-                        contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                        formatter={(value: any) => [`MWK ${fmt(Number(value) || 0)}`, 'Revenue']}
+                        cursor={{ fill: 'rgba(99, 102, 241, 0.05)', radius: 8 }}
+                        contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', padding: '12px' }}
+                        itemStyle={{ fontSize: '11px', fontWeight: 'bold', textTransform: 'uppercase' }}
                       />
-                      <Bar dataKey="value" radius={[3, 3, 0, 0]}>
+                      <Bar dataKey="value" radius={[6, 6, 6, 6]}>
                         {chartData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.isToday ? '#312e81' : '#94a3b8'} />
+                          <Cell key={`cell-${index}`} fill={entry.isToday ? '#4f46e5' : '#e2e8f0'} />
                         ))}
                       </Bar>
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
-                <div className="mt-4 pt-4 border-t border-gray-100 flex justify-between items-center">
+                <div className="mt-6 pt-6 border-t border-gray-50 flex justify-between items-center">
                   <div>
-                    <p className="text-[10px] font-bold text-gray-400 tracking-wider">7-DAY TOTAL</p>
-                    <p className="text-sm font-bold text-gray-900">MWK {fmt(chartData.reduce((s, d) => s + d.value, 0))}</p>
+                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">CYCLICAL TOTAL</p>
+                    <p className="text-lg font-black text-gray-900 tracking-tight">MWK {fmt(chartData.reduce((s, d) => s + d.value, 0))}</p>
                   </div>
-                  <button onClick={() => setActiveTab('payments')} className="text-xs font-bold hover:opacity-80 flex items-center gap-1" style={{ color: 'var(--brand-primary)' }}>
-                    Full Report <ArrowRight className="w-3 h-3" />
+                  <button onClick={() => setActiveTab('payments')} className="p-2 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-indigo-600 hover:text-white transition-all">
+                    <ArrowRight className="w-4 h-4" />
                   </button>
                 </div>
               </>
             ) : (
               <div className="flex-1 flex flex-col items-center justify-center text-center">
-                <BarChart3 className="w-12 h-12 text-gray-200 mb-3" />
-                <p className="text-sm font-medium text-gray-500">No revenue data yet</p>
-                <p className="text-xs text-gray-400 mt-1 max-w-[180px]">Revenue will appear here once bookings come in.</p>
+                <div className="w-12 h-12 bg-gray-50 rounded-xl flex items-center justify-center mb-4">
+                   <BarChart3 className="w-6 h-6 text-gray-200" />
+                </div>
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Transaction history null</p>
               </div>
             )}
           </div>
         </div>
       </div>
 
-      {/* ── Bottom Section: Recent Bookings Table ── */}
-      <div className="bg-white rounded-xl shadow-[0_2px_10px_-4px_rgba(0,0,0,0.1)] border border-gray-100">
-        <div className="flex items-center justify-between p-5 border-b border-gray-100">
-          <h2 className="text-[16px] font-bold text-gray-900 flex items-center gap-2">
-            <Users className="w-5 h-5" style={{ color: 'var(--brand-primary)' }} /> Recent Bookings
-          </h2>
-          <button onClick={() => setActiveTab('bookings')} className="flex items-center gap-1 px-3 py-1.5 bg-gray-50 hover:bg-gray-100 text-gray-700 text-xs font-bold rounded border border-gray-200 transition-colors">
-            View All <ArrowRight className="w-3 h-3" />
-          </button>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-[13px]">
-            <thead>
-              <tr className="border-b border-gray-100 bg-gray-50/50">
-                <th className="px-5 py-3 font-bold text-gray-500 text-[11px] uppercase tracking-wider">Reference</th>
-                <th className="px-5 py-3 font-bold text-gray-500 text-[11px] uppercase tracking-wider">Passenger</th>
-                <th className="px-5 py-3 font-bold text-gray-500 text-[11px] uppercase tracking-wider hidden md:table-cell">Route</th>
-                <th className="px-5 py-3 font-bold text-gray-500 text-[11px] uppercase tracking-wider">Amount</th>
-                <th className="px-5 py-3 font-bold text-gray-500 text-[11px] uppercase tracking-wider">Status</th>
-                <th className="px-5 py-3 font-bold text-gray-500 text-[11px] uppercase tracking-wider hidden sm:table-cell">Payment</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {recentBookings.length > 0 ? recentBookings.map((b, index) => {
-                const name = b.passengerDetails?.[0]?.name || "Passenger";
-                const initials = name.substring(0, 2).toUpperCase();
-                const bgColors = ['bg-blue-100 text-blue-700', 'bg-green-100 text-green-700', 'bg-purple-100 text-purple-700', 'bg-orange-100 text-orange-700', 'bg-pink-100 text-pink-700'];
-                const avatarColor = bgColors[index % bgColors.length];
-                const isConfirmed = b.bookingStatus === 'confirmed';
-                const isPending = b.bookingStatus === 'pending';
-                const sch = schedules.find(s => s.id === b.scheduleId);
-                const route = sch ? routes.find(r => r.id === sch.routeId) : undefined;
-
-                return (
-                  <tr key={b.id} className="hover:bg-gray-50/50 transition-colors">
-                    <td className="px-5 py-4">
-                      <span className="font-mono text-xs font-bold text-gray-700 bg-gray-100 px-1.5 py-0.5 rounded">
-                        {b.bookingReference || b.id.substring(0, 8).toUpperCase()}
-                      </span>
-                    </td>
-                    <td className="px-5 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold ${avatarColor}`}>
-                          {initials}
-                        </div>
-                        <span className="font-bold text-gray-900">{name}</span>
-                      </div>
-                    </td>
-                    <td className="px-5 py-4 text-gray-500 font-medium hidden md:table-cell">
-                      {route ? `${route.origin} → ${route.destination}` : '—'}
-                    </td>
-                    <td className="px-5 py-4 font-bold text-gray-900">MWK {fmt(b.totalAmount || 0)}</td>
-                    <td className="px-5 py-4">
-                      <span className={`px-2.5 py-1 text-[10px] font-bold rounded-full ${
-                        isConfirmed ? 'bg-green-100 text-green-700' :
-                        isPending ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'
-                      }`}>
-                        {b.bookingStatus?.toUpperCase()}
-                      </span>
-                    </td>
-                    <td className="px-5 py-4 hidden sm:table-cell">
-                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold rounded-full ${
-                        b.paymentStatus === 'paid'
-                          ? 'bg-green-50 text-green-600 border border-green-200'
-                          : 'bg-gray-50 text-gray-500 border border-gray-200'
-                      }`}>
-                        {b.paymentStatus === 'paid' ? <CreditCard className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
-                        {b.paymentStatus?.toUpperCase()}
-                      </span>
-                    </td>
-                  </tr>
-                );
-              }) : (
-                <tr>
-                  <td colSpan={6} className="px-5 py-12 text-center">
-                    <Users className="w-10 h-10 text-gray-200 mx-auto mb-3" />
-                    <p className="text-sm font-medium text-gray-500">No bookings yet</p>
-                    <p className="text-xs text-gray-400 mt-1">Bookings will appear here once passengers start booking.</p>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {recentBookings.length > 0 && (
-          <div className="px-5 py-3 flex items-center justify-between border-t border-gray-100 bg-gray-50/50">
-            <span className="text-[11px] font-bold text-gray-500">
-              Showing {recentBookings.length} of {stats.totalBookings} bookings
-            </span>
-            <button onClick={() => setActiveTab('bookings')} className="text-xs font-bold hover:opacity-80 flex items-center gap-1" style={{ color: 'var(--brand-primary)' }}>
-              View All <ArrowRight className="w-3 h-3" />
-            </button>
-          </div>
-        )}
-
-      <div className="mt-8">
-  {/* ── Setup Wizard: Progressive Onboarding ── */}
+      {/* ── Setup Wizard: Progressive Onboarding ── */}
       {(() => {
         const steps = [
           {
             id: 'profile',
-            title: 'Brand Identity',
-            desc: 'Company logo & business details',
+            title: 'CORE IDENTITY',
+            desc: 'Assets & Branding',
             tab: 'profile' as TabType,
             isDone: !!(company?.logo && company?.contact),
             icon: User
           },
           {
             id: 'payments',
-            title: 'Wallet Setup',
-            desc: 'Connect your PayChangu keys',
+            title: 'GATEWAY SYNC',
+            desc: 'Financial Integration',
             tab: 'settings' as TabType,
             isDone: !!(paymentSettings?.publicKey || (paymentSettings as any)?.live_public_key),
             icon: CreditCard
           },
           {
             id: 'routes',
-            title: 'Transit Map',
-            desc: 'Origin, Destination & Fares',
+            title: 'TRANSIT MAPPING',
+            desc: 'Station Hierarchies',
             tab: 'routes' as TabType,
             isDone: routes.length > 0,
             icon: RouteIcon
           },
           {
             id: 'buses',
-            title: 'Fleet Setup',
-            desc: 'Register license plates & capacity',
+            title: 'FLEET REGISTRY',
+            desc: 'Asset Enumeration',
             tab: 'buses' as TabType,
             isDone: buses.length > 0,
             icon: Truck
           },
           {
             id: 'schedules',
-            title: 'Go Live!',
-            desc: 'Launch your first schedule',
+            title: 'LAUNCH WINDOW',
+            desc: 'Operational Lifecycle',
             tab: 'schedules' as TabType,
             isDone: schedules.length > 0,
             icon: Calendar
           },
           {
             id: 'team',
-            title: 'Build the Team',
-            desc: 'Add operators or conductors',
+            title: 'CREW MANIFESTO',
+            desc: 'Human Resource Sync',
             tab: 'operators' as TabType,
             isDone: Object.keys(dashboardData.operatorNames ?? {}).length > 0 || Object.keys(dashboardData.conductorNames ?? {}).length > 0,
             icon: Users
@@ -518,75 +401,80 @@ export default function OverviewTab({ dashboardData, realtimeStatus, setActiveTa
         const progressPercent = Math.round((completedCount / steps.length) * 100);
         const nextStep = steps.find(s => !s.isDone);
 
-        // We show the wizard if not all steps are done
         if (progressPercent === 100) return null;
 
         return (
-          <div className="bg-white rounded-2xl shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] border border-brand-primary/20 overflow-hidden" style={{ borderColor: 'var(--brand-primary)33' }}>
-            <div className="p-6 text-white" style={{ background: 'linear-gradient(to right, var(--brand-primary), var(--brand-secondary))' }}>
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
-                <div>
-                    <span className="px-2 py-0.5 bg-white/20 rounded text-[10px] font-bold uppercase tracking-wider">Onboarding</span>
-                    <h2 className="text-xl font-bold">Guided Setup Wizard</h2>
+          <div className="bg-white rounded-[2.5rem] shadow-[0_20px_50px_rgba(0,0,0,0.05)] border border-gray-100 overflow-hidden">
+            <div className="p-8 bg-indigo-900 relative overflow-hidden">
+               <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-600 rounded-full blur-[100px] opacity-20 -mr-32 -mt-32"></div>
+               <div className="absolute bottom-0 left-0 w-48 h-48 bg-emerald-600 rounded-full blur-[80px] opacity-10 -ml-24 -mb-24"></div>
+               
+               <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-8 text-left">
+                  <div className="space-y-2">
+                     <span className="px-3 py-1 bg-white/10 text-white/90 rounded-xl text-[10px] font-black uppercase tracking-widest border border-white/10 backdrop-blur-sm">
+                        OPERATIONAL READINESS
+                     </span>
+                     <h2 className="text-3xl font-black text-white tracking-tight uppercase">GUIDED ONBOARDING SYSTEM</h2>
+                     <p className="text-white/50 text-[11px] font-bold uppercase tracking-widest">Synchronize your infrastructure for full platform activation</p>
                   </div>
-                  <p className="text-white/70 text-sm">Complete these steps to fully activate your company operations.</p>
-                </div>
-                <div className="flex items-center gap-6">
-                  <div className="flex items-center gap-4">
-                    <div className="text-right">
-                      <p className="text-2xl font-black leading-none">{progressPercent}%</p>
-                      <p className="text-[10px] font-bold text-white/50 uppercase tracking-widest mt-1">Completion</p>
-                    </div>
-                    <div className="w-16 h-16 relative">
-                       <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
-                          <circle cx="18" cy="18" r="16" fill="none" className="stroke-white/10" strokeWidth="3" />
-                          <circle cx="18" cy="18" r="16" fill="none" className="transition-all duration-1000" strokeWidth="3" style={{ stroke: 'white' }} strokeDasharray={`${progressPercent}, 100`} strokeLinecap="round" />
-                       </svg>
-                    </div>
+
+                  <div className="flex items-center gap-8">
+                     <div className="flex items-center gap-5">
+                        <div className="text-right">
+                           <p className="text-4xl font-black text-white leading-none tracking-tighter">{progressPercent}%</p>
+                           <p className="text-[10px] font-black text-white/40 uppercase tracking-widest mt-1.5">INTEGRATION INDEX</p>
+                        </div>
+                        <div className="w-20 h-20 relative">
+                           <svg className="w-full h-full -rotate-90 drop-shadow-[0_0_8px_rgba(255,255,255,0.2)]" viewBox="0 0 36 36">
+                              <circle cx="18" cy="18" r="16" fill="none" className="stroke-white/10" strokeWidth="4" />
+                              <circle cx="18" cy="18" r="16" fill="none" className="transition-all duration-1000" strokeWidth="4" 
+                                      style={{ stroke: 'white' }} strokeDasharray={`${progressPercent}, 100`} strokeLinecap="round" />
+                           </svg>
+                        </div>
+                     </div>
+                     <button 
+                       onClick={() => setIsWizardMinimized(!isWizardMinimized)}
+                       className="w-12 h-12 flex items-center justify-center bg-white/10 hover:bg-white text-white hover:text-indigo-900 rounded-2xl transition-all border border-white/10"
+                     >
+                       {isWizardMinimized ? <Plus className="w-5 h-5" /> : <X className="w-5 h-5" />}
+                     </button>
                   </div>
-                  <button 
-                    onClick={() => setIsWizardMinimized(!isWizardMinimized)}
-                    className="p-2 hover:bg-white/10 rounded-lg transition-colors"
-                    title={isWizardMinimized ? "Show steps" : "Minimize wizard"}
-                  >
-                    {isWizardMinimized ? <Plus className="w-5 h-5" /> : <X className="w-5 h-5" />}
-                  </button>
-                </div>
-              </div>
+               </div>
             </div>
 
             {!isWizardMinimized && (
-              <div className="p-6 animate-in fade-in slide-in-from-top-2 duration-500">
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="p-8 animate-in fade-in slide-in-from-top-4 duration-500 text-left">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                   {steps.map((step, idx) => (
                     <button
                       key={step.id}
                       onClick={() => setActiveTab(step.tab)}
-                      className={`group relative p-4 rounded-xl border transition-all text-left flex items-start gap-4 ${
+                      className={`group relative p-6 rounded-[2rem] border transition-all duration-300 text-left flex flex-col gap-4 ${
                         step.isDone 
-                          ? 'bg-green-50/50 border-green-100 hover:bg-green-50' 
+                          ? 'bg-emerald-50/30 border-emerald-100 hover:bg-emerald-50' 
                           : nextStep?.id === step.id 
-                            ? 'bg-blue-50/30 border-blue-200 ring-1 ring-blue-200 shadow-sm hover:shadow-md' 
-                            : 'bg-gray-50/50 border-transparent text-gray-400 opacity-70 hover:opacity-100'
+                            ? 'bg-white border-indigo-200 shadow-xl shadow-indigo-50 ring-2 ring-indigo-50 active:scale-95' 
+                            : 'bg-gray-50/50 border-gray-50 text-gray-300 pointer-events-none'
                       }`}
                     >
-                      <div className={`shrink-0 w-10 h-10 rounded-lg flex items-center justify-center transition-colors ${
-                        step.isDone ? 'bg-green-100 text-green-600' : 'bg-white border text-gray-400'
+                      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-500 ${
+                        step.isDone ? 'bg-emerald-100 text-emerald-600' : nextStep?.id === step.id ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'bg-white border border-gray-100 text-gray-200'
                       }`}>
-                        {step.isDone ? <CheckCircle className="w-5 h-5" /> : <step.icon className="w-5 h-5" />}
+                        {step.isDone ? <CheckCircle className="w-6 h-6" /> : <step.icon className="w-6 h-6" />}
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between mb-0.5">
-                          <p className={`text-xs font-bold uppercase tracking-wider ${step.isDone ? 'text-green-700' : 'text-gray-500'}`}>Step {idx + 1}</p>
-                          {step.isDone && <span className="text-[10px] font-bold text-green-600 bg-green-100 px-1.5 rounded">DONE</span>}
+                      
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                           <p className={`text-[10px] font-black uppercase tracking-widest ${step.isDone ? 'text-emerald-600/60' : nextStep?.id === step.id ? 'text-indigo-600' : 'text-gray-400'}`}>MODULE {idx + 1}</p>
+                           {step.isDone && <span className="text-[9px] font-black text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded-lg border border-emerald-200">VERIFIED</span>}
                         </div>
-                        <p className={`font-bold truncate ${step.isDone ? 'text-green-900 line-through' : 'text-gray-900'}`}>{step.title}</p>
-                        <p className="text-[11px] text-gray-500 truncate">{step.desc}</p>
+                        <p className={`text-sm font-black tracking-tight uppercase ${step.isDone ? 'text-emerald-900/40' : 'text-gray-900'}`}>{step.title}</p>
+                        <p className="text-[11px] font-bold text-gray-400 mt-1 uppercase tracking-widest">{step.desc}</p>
                       </div>
+
                       {nextStep?.id === step.id && (
-                        <div className="absolute right-4 bottom-4 w-6 h-6 rounded-full bg-brand-primary text-white flex items-center justify-center animate-bounce shadow-lg" style={{ backgroundColor: 'var(--brand-primary)' }}>
-                          <ArrowRight className="w-3.5 h-3.5" />
+                        <div className="absolute right-6 bottom-6 w-8 h-8 rounded-2xl bg-indigo-600 text-white flex items-center justify-center animate-pulse shadow-xl shadow-indigo-100">
+                          <ChevronRight className="w-4 h-4" />
                         </div>
                       )}
                     </button>
@@ -594,22 +482,21 @@ export default function OverviewTab({ dashboardData, realtimeStatus, setActiveTa
                 </div>
 
                 {nextStep && (
-                  <div className="mt-8 p-4 bg-gray-50 rounded-xl border border-dashed border-gray-200 flex flex-col sm:flex-row items-center justify-between gap-4">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-white rounded-lg border shadow-sm">
-                        <nextStep.icon className="w-5 h-5" style={{ color: 'var(--brand-primary)' }} />
+                  <div className="mt-12 p-8 bg-gray-50 rounded-[2rem] border-2 border-dashed border-gray-200 flex flex-col md:flex-row items-center justify-between gap-8 group/next">
+                    <div className="flex items-center gap-5">
+                      <div className="w-16 h-16 bg-white rounded-3xl flex items-center justify-center shadow-sm border border-gray-100 group-hover/next:scale-110 transition-transform duration-500">
+                        <nextStep.icon className="w-8 h-8 text-indigo-600" />
                       </div>
                       <div>
-                        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Next Up</p>
-                        <p className="font-bold text-gray-900">{nextStep.title}</p>
+                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-1">IMMEDIATE OBJECTIVE</p>
+                        <p className="text-xl font-black text-gray-900 tracking-tight uppercase">{nextStep.title}</p>
                       </div>
                     </div>
                     <button 
                       onClick={() => setActiveTab(nextStep.tab)}
-                      className="w-full sm:w-auto px-6 py-2.5 hover:opacity-90 text-white rounded-lg text-sm font-bold shadow-lg transition-all flex items-center justify-center gap-2"
-                      style={{ backgroundColor: 'var(--brand-primary)' }}
+                      className="w-full md:w-auto px-10 py-4 bg-indigo-600 text-white rounded-3xl font-black text-[11px] uppercase tracking-widest shadow-2xl shadow-indigo-200 hover:bg-indigo-700 hover:translate-x-1 transition-all active:scale-95 flex items-center justify-center gap-3"
                     >
-                      Continue Setup <ArrowRight className="w-4 h-4" />
+                      EXECUTE SETUP <ArrowRight className="w-4 h-4" />
                     </button>
                   </div>
                 )}
@@ -619,8 +506,97 @@ export default function OverviewTab({ dashboardData, realtimeStatus, setActiveTa
         );
       })()}
 
+      {/* ── Recent Bookings Table ── */}
+      <div className="bg-white rounded-[2.5rem] shadow-[0_8px_30px_-10px_rgba(0,0,0,0.05)] border border-gray-100 overflow-hidden text-left">
+        <div className="flex items-center justify-between p-8 border-b border-gray-50">
+          <div>
+             <h2 className="text-sm font-black text-gray-900 uppercase tracking-widest flex items-center gap-2">
+               <Users className="w-4 h-4 text-rose-500" /> TRANSACTION LEDGER
+             </h2>
+             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Recent passenger procurement</p>
+          </div>
+          <button onClick={() => setActiveTab('bookings')} className="px-5 py-2.5 bg-gray-50 hover:bg-indigo-50 text-gray-900 text-[10px] font-black uppercase tracking-widest rounded-2xl border border-gray-100 hover:border-indigo-100 transition-all">
+            FULL AUDIT
+          </button>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
+            <thead>
+              <tr className="bg-gray-50/50">
+                {['Reference', 'Identity', 'Operational Corridor', 'Yield', 'Lifecycle', 'Financials'].map(h => (
+                  <th key={h} className="px-8 py-5 font-black text-gray-400 text-[10px] uppercase tracking-widest">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {recentBookings.length > 0 ? recentBookings.map((b, index) => {
+                const name = b.passengerDetails?.[0]?.name || "ANONYMOUS";
+                const initials = name.substring(0, 1).toUpperCase();
+                const isConfirmed = b.bookingStatus === 'confirmed';
+                const isPending = b.bookingStatus === 'pending';
+                const sch = schedules.find(s => s.id === b.scheduleId);
+                const route = sch ? routes.find(r => r.id === sch.routeId) : undefined;
+
+                return (
+                  <tr key={b.id} className="hover:bg-indigo-50/20 transition-colors group">
+                    <td className="px-8 py-6">
+                      <span className="font-mono text-[11px] font-black text-gray-400 bg-gray-50 px-2.5 py-1.5 rounded-xl border border-gray-100 group-hover:bg-indigo-600 group-hover:text-white group-hover:border-indigo-600 transition-all">
+                        #{b.bookingReference || b.id.substring(0, 8).toUpperCase()}
+                      </span>
+                    </td>
+                    <td className="px-8 py-6">
+                      <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 rounded-2xl bg-indigo-50 flex items-center justify-center text-[12px] font-black text-indigo-600 border border-indigo-100 group-hover:scale-110 transition-transform">
+                          {initials}
+                        </div>
+                        <span className="text-sm font-black text-gray-900 uppercase tracking-tight">{name}</span>
+                      </div>
+                    </td>
+                    <td className="px-8 py-6">
+                       {route ? (
+                          <div className="flex flex-col gap-0.5">
+                             <p className="text-xs font-black text-gray-700 uppercase tracking-tight">{route.origin} → {route.destination}</p>
+                             <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">{fmtTime(toDate(sch?.departureDateTime))}</p>
+                          </div>
+                       ) : <span className="text-gray-300">N/A</span>}
+                    </td>
+                    <td className="px-8 py-6 text-sm font-black text-gray-900">MWK {fmt(b.totalAmount || 0)}</td>
+                    <td className="px-8 py-6">
+                      <span className={`px-3 py-1.5 text-[9px] font-black rounded-xl uppercase tracking-widest border shadow-sm ${
+                        isConfirmed ? 'bg-emerald-50 text-emerald-700 border-emerald-100' :
+                        isPending ? 'bg-amber-50 text-amber-700 border-amber-100' : 'bg-rose-50 text-rose-700 border-rose-100'
+                      }`}>
+                        {b.bookingStatus}
+                      </span>
+                    </td>
+                    <td className="px-8 py-6">
+                      <span className={`inline-flex items-center gap-2 px-3 py-1.5 text-[9px] font-black rounded-xl border uppercase tracking-widest ${
+                        b.paymentStatus === 'paid'
+                          ? 'bg-emerald-50 text-emerald-600 border-emerald-100'
+                          : 'bg-gray-50 text-gray-400 border-gray-100'
+                      }`}>
+                        <div className={`w-1.5 h-1.5 rounded-full ${b.paymentStatus === 'paid' ? 'bg-emerald-500' : 'bg-gray-300'}`} />
+                        {b.paymentStatus}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              }) : (
+                <tr>
+                  <td colSpan={6} className="px-8 py-20 text-center">
+                    <div className="w-16 h-16 bg-gray-50 rounded-[2rem] flex items-center justify-center mx-auto mb-4">
+                       <Users className="w-6 h-6 text-gray-200" />
+                    </div>
+                    <p className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Transaction log cleared</p>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
-      </div>
+
     </div>
   );
 }

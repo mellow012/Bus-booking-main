@@ -47,6 +47,7 @@ model Company {
   description          String?
   logo                 String?
   status               String             @default("active")
+  planType             String             @default("basic")
   maxBuses             Int                @default(6)
   maxRoutes            Int                @default(3)
   branches             Json?
@@ -85,6 +86,7 @@ model Bus {
   insuranceDetails    Json?
   lastMaintenanceDate DateTime?
   nextMaintenanceDate DateTime?
+  conductorIds        String[]           @default([])
   company             Company            @relation(fields: [companyId], references: [id])
   schedules           Schedule[]
   scheduleTemplates   ScheduleTemplate[]
@@ -94,21 +96,23 @@ model Route {
   id                String             @id @default(uuid())
   companyId         String
   name              String
-  origin            String
-  destination       String
-  distance          Int
-  duration          Int
-  baseFare          Int
-  pricePerKm        Int?
-  stops             Json?
-  isActive          Boolean            @default(true)
-  status            String             @default("active")
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
-  groupRequests     GroupRequest[]
-  company           Company            @relation(fields: [companyId], references: [id])
-  schedules         Schedule[]
-  scheduleTemplates ScheduleTemplate[]
+  origin              String
+  destination         String
+  distance            Int
+  duration            Int
+  baseFare            Int
+  pricePerKm          Int?
+  stops               Json?
+  isActive            Boolean            @default(true)
+  status              String             @default("active")
+  assignedOperatorIds String[]           @default([])
+  assignedConductorIds String[]          @default([])
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  groupRequests       GroupRequest[]
+  company             Company            @relation(fields: [companyId], references: [id])
+  schedules           Schedule[]
+  scheduleTemplates   ScheduleTemplate[]
 }
 
 model Schedule {
@@ -284,4 +288,23 @@ model DailyReport {
 
   @@index([companyId])
   @@index([date])
+}
+
+model Promotion {
+  id            String   @id @default(uuid())
+  code          String   @unique
+  title         String
+  description   String
+  discountValue Int
+  discountType  String   @default("percentage") // "percentage" or "fixed"
+  minPurchase   Int?     @default(0)
+  maxDiscount   Int?
+  startDate     DateTime
+  endDate       DateTime
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([code])
+  @@index([isActive])
 }
