@@ -393,7 +393,7 @@ const BookingsTab: FC<BookingsTabProps> = ({ schedules, routes, buses, companyId
     const fetchBookings = async () => {
       let queryBuilder = supabase
         .from('Booking')
-        .select('*')
+        .select('*, Payment(*)')
         .eq('companyId', companyId);
         
       if (!isAdmin && activeIds.length > 0) {
@@ -405,6 +405,8 @@ const BookingsTab: FC<BookingsTabProps> = ({ schedules, routes, buses, companyId
       if (!fetchError && data) {
         setBookings(data.map(d => ({
           ...d,
+          paymentMethod: (d as any).Payment?.[0]?.paymentType || (d as any).Payment?.[0]?.provider || (d as any).paymentMethod || (d.paymentStatus === 'paid' ? 'cash' : 'Not specified'),
+          transactionId: (d as any).Payment?.[0]?.transactionId || (d as any).transactionId,
           createdAt: new Date(d.createdAt),
           updatedAt: new Date(d.updatedAt),
         })) as Booking[]);

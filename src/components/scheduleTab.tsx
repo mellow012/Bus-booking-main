@@ -969,8 +969,10 @@ const SchedulesTab: FC<SchedulesTabProps> = ({
       if (!fetchError && data) {
         setTemplates(data.map(d => ({
           ...d,
-          validFrom:  new Date(d.validFrom),
+          validFrom:  d.validFrom ? new Date(d.validFrom) : new Date(),
           validUntil: d.validUntil ? new Date(d.validUntil) : null,
+          availableSeats: d.availableSeats || 0,
+          status: d.isActive ? 'active' : 'inactive',
           createdAt:  new Date(d.createdAt),
           updatedAt:  new Date(d.updatedAt),
         } as ScheduleTemplate)));
@@ -1170,9 +1172,15 @@ const SchedulesTab: FC<SchedulesTabProps> = ({
       const { data, error: writeError } = await supabase
         .from('ScheduleTemplate')
         .insert({
-          ...newTemplate,
-          validFrom:  newTemplate.validFrom.toISOString(),
-          validUntil: newTemplate.validUntil ? newTemplate.validUntil.toISOString() : null,
+          id: crypto.randomUUID(),
+          companyId: newTemplate.companyId,
+          routeId: newTemplate.routeId,
+          busId: newTemplate.busId,
+          departureTime: newTemplate.departureTime,
+          arrivalTime: newTemplate.arrivalTime,
+          daysOfWeek: newTemplate.daysOfWeek,
+          price: newTemplate.price,
+          isActive: newTemplate.isActive,
           createdAt:  new Date().toISOString(),
           updatedAt:  new Date().toISOString(),
         })
@@ -1181,7 +1189,7 @@ const SchedulesTab: FC<SchedulesTabProps> = ({
         
       if (writeError) throw writeError;
       
-      setTemplates(prev => [{ ...data, validFrom: new Date(data.validFrom), validUntil: data.validUntil ? new Date(data.validUntil) : null } as ScheduleTemplate, ...prev]);
+      setTemplates(prev => [{ ...data, validFrom: newTemplate.validFrom, validUntil: newTemplate.validUntil, availableSeats: newTemplate.availableSeats, status: newTemplate.status } as ScheduleTemplate, ...prev]);
       setShowTplAddModal(false); setNewTemplate(emptyTemplate(companyId, user?.id ?? ''));
       setSuccess('Template created! Click "Generate Schedules" to materialise instances.');
     } catch (e: any) { setError(`Failed: ${e.message}`); }
@@ -1200,10 +1208,8 @@ const SchedulesTab: FC<SchedulesTabProps> = ({
           routeId: editTemplate.routeId, busId: editTemplate.busId,
           departureTime: editTemplate.departureTime, arrivalTime: editTemplate.arrivalTime,
           daysOfWeek: editTemplate.daysOfWeek,
-          validFrom:  toDate(editTemplate.validFrom).toISOString(),
-          validUntil: editTemplate.validUntil ? toDate(editTemplate.validUntil).toISOString() : null,
-          price: editTemplate.price, availableSeats: editTemplate.availableSeats,
-          status: editTemplate.status, isActive: editTemplate.isActive, 
+          price: editTemplate.price,
+          isActive: editTemplate.isActive, 
           updatedAt: new Date().toISOString(),
         })
         .eq('id', editTemplate.id)
@@ -1212,7 +1218,7 @@ const SchedulesTab: FC<SchedulesTabProps> = ({
 
       if (writeError) throw writeError;
       
-      setTemplates(prev => prev.map(t => t.id === editTemplate.id ? { ...data, validFrom: new Date(data.validFrom), validUntil: data.validUntil ? new Date(data.validUntil) : null } as ScheduleTemplate : t));
+      setTemplates(prev => prev.map(t => t.id === editTemplate.id ? { ...data, validFrom: editTemplate.validFrom, validUntil: editTemplate.validUntil, availableSeats: editTemplate.availableSeats, status: editTemplate.status } as ScheduleTemplate : t));
       setShowTplEditModal(false); setEditTemplate(null);
       setSuccess('Template updated.');
     } catch (e: any) { setError(`Failed: ${e.message}`); }

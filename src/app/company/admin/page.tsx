@@ -178,7 +178,7 @@ const useRealtimeBookings = (
       const fetchBookings = async () => {
         const { data, error } = await supabase
           .from('Booking')
-          .select('*')
+          .select('*, Payment(*)')
           .eq('companyId', companyId.trim())
           .order('updatedAt', { ascending: false })
           .limit(100);
@@ -186,6 +186,8 @@ const useRealtimeBookings = (
         if (!error && data) {
           const processed = data.map(d => ({
             ...d,
+            paymentMethod: (d as any).Payment?.[0]?.paymentType || (d as any).Payment?.[0]?.provider || (d as any).paymentMethod || (d.paymentStatus === 'paid' ? 'cash' : 'Not specified'),
+            transactionId: (d as any).Payment?.[0]?.transactionId || (d as any).transactionId,
             createdAt: new Date(d.createdAt),
             updatedAt: new Date(d.updatedAt),
           })) as Booking[];

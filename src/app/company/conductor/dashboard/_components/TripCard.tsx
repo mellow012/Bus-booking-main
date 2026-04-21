@@ -1,7 +1,7 @@
 'use client';
 
 import React, { FC } from 'react';
-import { Schedule, Bus } from '@/types';
+import { Schedule, Bus, Route } from '@/types';
 import { Bus as BusIcon, Clock, ArrowRight, CheckCircle, Radio, Flame, CalendarClock } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -29,10 +29,11 @@ const getTripBucket = (t: Schedule): TripBucket => {
 interface TripCardProps {
   trip: Schedule;
   bus: Bus | undefined;
+  route?: Route | undefined;
   onClick: () => void;
 }
 
-const TripCard: FC<TripCardProps> = ({ trip, bus, onClick }) => {
+const TripCard: FC<TripCardProps> = ({ trip, bus, route, onClick }) => {
   const dep = toDate(trip.departureDateTime);
   const arr = toDate(trip.arrivalDateTime);
   const ts = trip.tripStatus ?? 'scheduled';
@@ -65,7 +66,9 @@ const TripCard: FC<TripCardProps> = ({ trip, bus, onClick }) => {
       <div className="p-4">
         <div className="flex items-start justify-between gap-2 mb-3">
           <div className="flex-1 min-w-0">
-            <p className="font-semibold text-gray-900 truncate">{trip.departureLocation || 'TBD'} → {trip.arrivalLocation || 'TBD'}</p>
+            <p className="font-semibold text-gray-900 truncate" title={`${trip.departureLocation || route?.origin || 'TBD'} to ${trip.arrivalLocation || route?.destination || 'TBD'}`}>
+              {trip.departureLocation || route?.origin || 'TBD'} → {trip.arrivalLocation || route?.destination || 'TBD'}
+            </p>
             <p className="text-xs text-gray-500 mt-0.5 flex items-center gap-1">
               <BusIcon className="w-3 h-3" /> {bus?.licensePlate ?? '—'} · {bus?.busType ?? '—'}
             </p>

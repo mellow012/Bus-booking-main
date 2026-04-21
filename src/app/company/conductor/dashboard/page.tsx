@@ -110,8 +110,13 @@ export default function ConductorDashboard() {
   useEffect(() => {
     const fetchBookings = async () => {
       if (!selectedTrip) return;
-      const { data } = await supabase.from('Booking').select('*').eq('scheduleId', selectedTrip.id);
-      setTripBookings(data as Booking[] || []);
+      const res = await dbActions.getBookingsForSchedule(selectedTrip.id);
+      if (res.success && res.data) {
+        setTripBookings(res.data as Booking[]);
+      } else {
+        console.error('Error fetching bookings:', res.error);
+        setTripBookings([]);
+      }
     };
     fetchBookings();
     
@@ -397,7 +402,7 @@ export default function ConductorDashboard() {
       case 'trips':
         return (
           !selectedTrip ? (
-            <TripBuckets trips={trips} buses={buses} onSelect={setSelectedTrip} />
+            <TripBuckets trips={trips} buses={buses} routes={routes} onSelect={setSelectedTrip} />
           ) : (
             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
               {selectedTrip.tripStatus === 'completed' ? (
@@ -494,7 +499,7 @@ export default function ConductorDashboard() {
   return (
     <div className="min-h-screen bg-[#fafafa] flex font-sans selection:bg-indigo-100 selection:text-indigo-900">
       {/* ── SIDEBAR ── */}
-      <aside className="w-64 bg-white border-r border-gray-100 h-screen sticky top-0 flex flex-col z-50 overflow-hidden">
+      <aside className="hidden lg:flex w-64 bg-white border-r border-gray-100 h-screen sticky top-0 flex-col z-50 overflow-hidden">
         <div className="p-6 border-b border-gray-100/50">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-200">
@@ -554,7 +559,7 @@ export default function ConductorDashboard() {
           </div>
         </header>
 
-        <main className="flex-1 p-8 overflow-y-auto">
+        <main className="flex-1 p-4 lg:p-8 overflow-y-auto pb-24 lg:pb-8">
           {globalError && (
             <div className="bg-red-50 border border-red-200 text-red-700 px-6 py-4 rounded-3xl mb-6 text-sm font-bold flex items-center gap-3 animate-in fade-in zoom-in duration-300 shadow-lg shadow-red-100">
               <AlertTriangle className="w-5 h-5" />
@@ -586,6 +591,26 @@ export default function ConductorDashboard() {
         onConfirm={handleWalkOnBooking}
         loading={actionLoadingId === 'walk-on'}
       />
+
+      {/* ── MOBILE BOTTOM BAR ── */}
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 flex items-center justify-around px-2 py-3 z-50 pb-safe shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">
+        <button onClick={() => setActiveTab('overview')} className={`flex flex-col items-center gap-1 ${activeTab === 'overview' ? 'text-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}>
+          <LayoutDashboard className="w-5 h-5" />
+          <span className="text-[10px] font-medium">Overview</span>
+        </button>
+        <button onClick={() => setActiveTab('trips')} className={`flex flex-col items-center gap-1 ${activeTab === 'trips' ? 'text-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}>
+          <MapPin className="w-5 h-5" />
+          <span className="text-[10px] font-medium">Trips</span>
+        </button>
+        <button onClick={() => setActiveTab('notifications')} className={`flex flex-col items-center gap-1 ${activeTab === 'notifications' ? 'text-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}>
+          <Bell className="w-5 h-5" />
+          <span className="text-[10px] font-medium">Alerts</span>
+        </button>
+        <button onClick={() => setActiveTab('profile')} className={`flex flex-col items-center gap-1 ${activeTab === 'profile' ? 'text-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}>
+          <User className="w-5 h-5" />
+          <span className="text-[10px] font-medium">Profile</span>
+        </button>
+      </nav>
     </div>
   );
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { FC, useState, useMemo } from 'react';
-import { Schedule, Bus } from '@/types';
+import { Schedule, Bus, Route } from '@/types';
 import { Calendar, ChevronDown, ChevronUp, Radio, Flame, CalendarClock, CheckCircle } from 'lucide-react';
 import TripCard, { getTripBucket, toDate } from './TripCard';
 
@@ -22,15 +22,17 @@ const BUCKET_ORDER: TripBucket[] = ['live', 'today', 'week', 'completed'];
 interface TripBucketsProps {
   trips: Schedule[];
   buses: Bus[];
+  routes: Route[];
   onSelect: (t: Schedule) => void;
 }
 
-const TripBuckets: FC<TripBucketsProps> = ({ trips, buses, onSelect }) => {
+const TripBuckets: FC<TripBucketsProps> = ({ trips, buses, routes, onSelect }) => {
   const [collapsed, setCollapsed] = useState<Record<TripBucket, boolean>>({
     live: false, today: false, week: false, completed: true,
   });
   const toggle = (b: TripBucket) => setCollapsed(p => ({ ...p, [b]: !p[b] }));
   const busMap = useMemo(() => new Map(buses.map(b => [b.id, b])), [buses]);
+  const routeMap = useMemo(() => new Map(routes.map(r => [r.id, r])), [routes]);
 
   const bucketed = useMemo(() => {
     const map: Record<TripBucket, Schedule[]> = { live: [], today: [], week: [], completed: [] };
@@ -87,7 +89,7 @@ const TripBuckets: FC<TripBucketsProps> = ({ trips, buses, onSelect }) => {
               {!collapsed[bucket] && (
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 pl-1">
                   {list.map(trip => (
-                    <TripCard key={trip.id} trip={trip} bus={busMap.get(trip.busId)} onClick={() => onSelect(trip)} />
+                    <TripCard key={trip.id} trip={trip} bus={busMap.get(trip.busId)} route={routeMap.get(trip.routeId)} onClick={() => onSelect(trip)} />
                   ))}
                 </div>
               )}

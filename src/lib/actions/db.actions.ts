@@ -111,6 +111,26 @@ export async function deleteUser(id: string) {
 /**
  * --- Bookings ---
  */
+export async function getBookingsForSchedule(scheduleId: string) {
+  try {
+    const bookings = await prisma.booking.findMany({
+      where: { scheduleId },
+      include: {
+        schedule: {
+          include: {
+            route: true,
+            bus: true
+          }
+        },
+        user: true
+      }
+    });
+    return { success: true, data: bookings as any[] };
+  } catch (error: unknown) {
+    console.error('Error fetching bookings for schedule:', error);
+    return { success: false, error: (error as Error).message };
+  }
+}
 export async function createBooking(data: Partial<Booking> & { bookingReference: string; scheduleId: string; companyId: string; routeId: string; totalAmount: number; passengerDetails: any[]; seatNumbers: string[]; contactEmail?: string; contactPhone: string; }) {
   try {
     const booking = await prisma.booking.create({
@@ -136,8 +156,21 @@ export async function createBooking(data: Partial<Booking> & { bookingReference:
         ...(data as any).originStopId !== undefined ? { originStopId: (data as any).originStopId } : {},
         ...(data as any).destinationStopId !== undefined ? { destinationStopId: (data as any).destinationStopId } : {},
         ...(data as any).paidAt !== undefined ? { paidAt: (data as any).paidAt } : {},
-        ...(data as any).paymentMethod !== undefined ? { paymentMethod: (data as any).paymentMethod } : {},
+        ...((data as any).paymentMethod !== undefined ? { 
+          payments: {
+            create: [{
+              paymentId: `PAY-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
+              amount: data.totalAmount || 0,
+              currency: data.currency || 'MWK',
+              paymentType: (data as any).paymentMethod,
+              provider: (data as any).paymentMethod,
+              status: data.paymentStatus || 'pending',
+              txRef: `TXN-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
+            }]
+          }
+        } : {}),
       },
+      include: { payments: true }
     });
     revalidatePath('/bookings');
     revalidatePath('/company/conductor/dashboard');
@@ -158,7 +191,21 @@ export async function updateBooking(id: string, data: Partial<Booking>) {
         ...(updatableData as any),
         paidAt: updatableData.paidAt ? new Date(updatableData.paidAt) : undefined,
         updatedAt: new Date(),
+        ...((updatableData as any).paymentMethod !== undefined ? { 
+          payments: {
+            create: [{
+              paymentId: `PAY-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
+              amount: 0, // In update, we don't have totalAmount easily, but we just need the record
+              currency: 'MWK',
+              paymentType: (updatableData as any).paymentMethod,
+              provider: (updatableData as any).paymentMethod,
+              status: updatableData.paymentStatus || 'paid',
+              txRef: `TXN-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
+            }]
+          }
+        } : {}),
       },
+      include: { payments: true }
     });
     revalidatePath('/bookings');
     revalidatePath('/company/conductor/dashboard');

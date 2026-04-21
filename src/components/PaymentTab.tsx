@@ -169,15 +169,15 @@ const PaymentsTab: React.FC<PaymentsTabProps> = ({
           await Promise.all(chunks.map(async chunk => {
             const { data, error: fetchError } = await supabase
               .from('Schedule')
-              .select('*')
+              .select('*, Route(*)')
               .in('id', chunk);
               
             if (!fetchError && data) {
               data.forEach(d => {
                 scheduleCache.current.set(d.id, {
                   busId:       d.busId || "",
-                  origin:      d.departureLocation || "", // Adjusted to match schema
-                  destination: d.arrivalLocation || "",   // Adjusted to match schema
+                  origin:      (d as any).Route?.origin || d.departureLocation || "", 
+                  destination: (d as any).Route?.destination || d.arrivalLocation || "",
                   departureTime: d.departureDateTime ? new Date(d.departureDateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "",
                 });
               });

@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
     const where: any = {
       status: 'active',
       availableSeats: { gt: 0 },
-      departureTime: { gt: new Date() },
+      arrivalDateTime: { gt: new Date() },
       company: { status: 'active' }, // Only show schedules from active companies
       route: {
         AND: [
@@ -54,7 +54,7 @@ export async function GET(request: NextRequest) {
     if (date) {
       const startOfDay = new Date(`${date}T00:00:00Z`);
       const endOfDay = new Date(`${date}T23:59:59Z`);
-      where.departureTime = {
+      where.departureDateTime = {
         gte: startOfDay,
         lte: endOfDay,
       };
@@ -87,7 +87,17 @@ export async function GET(request: NextRequest) {
       const bus = sch.bus;
       const company = sch.company || bus?.company;
       const dep = new Date(sch.departureDateTime);
-      const arr = new Date(sch.departureDateTime); // Using departure as arrival is not available
+      const arr = new Date(sch.arrivalDateTime);
+
+      let currentStatus = sch.status;
+      if (sch.status === 'active') {
+        const now = new Date();
+        if (now >= dep && now <= arr) {
+          currentStatus = 'in_transit';
+        } else if (now > arr) {
+          currentStatus = 'completed';
+        }
+      }
 
       return {
         id: sch.id,
@@ -97,7 +107,7 @@ export async function GET(request: NextRequest) {
         price: sch.price,
         availableSeats: sch.availableSeats,
         totalSeats: bus?.capacity || 40,
-        status: sch.status,
+        status: currentStatus,
         date: dep.toISOString().split('T')[0],
         departureTime: dep.toTimeString().slice(0, 5),
         arrivalTime: arr.toTimeString().slice(0, 5),

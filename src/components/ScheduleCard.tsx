@@ -1,5 +1,5 @@
 import React from "react";
-import { Star, ArrowRight, Calendar, Users, MapPin, Bus as BusIcon, Flame, CheckCircle, Shield } from "lucide-react";
+import { Star, ArrowRight, Calendar, Users, MapPin, Bus as BusIcon, Flame, CheckCircle, Shield, Navigation } from "lucide-react";
 import { EnhancedSchedule, fillingFast, seatColor, cityMatch, formatDuration, isToday, AMENITY_ICONS } from "@/utils/homeHelpers";
 
 export const ScheduleCard = React.memo(({ s, onBook, userCity }: {
@@ -93,6 +93,8 @@ export const ScheduleCard = React.memo(({ s, onBook, userCity }: {
           {filling   && <span className="flex items-center gap-0.5 sm:gap-1 text-[10px] sm:text-[11px] px-1.5 sm:px-2 py-0.5 sm:py-1 bg-rose-50 text-rose-600 rounded-full border border-rose-100 font-semibold"><Flame className="w-2.5 h-2.5 sm:w-3 sm:h-3"/>Filling Fast</span>}
           {isToday(s.date) && <span className="flex items-center gap-0.5 sm:gap-1 text-[10px] sm:text-[11px] px-1.5 sm:px-2 py-0.5 sm:py-1 bg-emerald-50 text-emerald-700 rounded-full border border-emerald-100 font-semibold"><CheckCircle className="w-2.5 h-2.5 sm:w-3 sm:h-3"/>Today</span>}
           {isLocal   && <span className="flex items-center gap-0.5 sm:gap-1 text-[10px] sm:text-[11px] px-1.5 sm:px-2 py-0.5 sm:py-1 bg-teal-50 text-teal-700 rounded-full border border-teal-100 font-semibold"><MapPin className="w-2.5 h-2.5 sm:w-3 sm:h-3"/>Near You</span>}
+          {s.status === 'in_transit' && <span className="flex items-center gap-0.5 sm:gap-1 text-[10px] sm:text-[11px] px-1.5 sm:px-2 py-0.5 sm:py-1 bg-amber-50 text-amber-700 rounded-full border border-amber-200 font-semibold shadow-sm animate-pulse"><Navigation className="w-2.5 h-2.5 sm:w-3 sm:h-3"/>In Transit</span>}
+          {s.status === 'completed' && <span className="flex items-center gap-0.5 sm:gap-1 text-[10px] sm:text-[11px] px-1.5 sm:px-2 py-0.5 sm:py-1 bg-gray-50 text-gray-600 rounded-full border border-gray-200 font-semibold"><CheckCircle className="w-2.5 h-2.5 sm:w-3 sm:h-3"/>Completed</span>}
         </div>
 
         <button onClick={onBook} disabled={s.availableSeats<=0}

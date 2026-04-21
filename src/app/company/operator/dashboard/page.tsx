@@ -170,8 +170,7 @@ export default function OperatorDashboard() {
       const { data: schedules, error: schedError } = await supabase
         .from('Schedule')
         .select('*')
-        .eq('companyId', companyId)
-        .eq('createdBy', user?.id);
+        .eq('companyId', companyId);
 
       // Fetch Routes
       const { data: routes, error: routeError } = await supabase
@@ -191,7 +190,7 @@ export default function OperatorDashboard() {
       if (scheduleIds.length > 0) {
         const { data: bookingsData } = await supabase
           .from('Booking')
-          .select('*')
+          .select('*, Payment(*)')
           .eq('companyId', companyId)
           .in('scheduleId', scheduleIds);
         bookings = (bookingsData || []) as Booking[];
@@ -210,6 +209,8 @@ export default function OperatorDashboard() {
         buses: (buses || []) as Bus[],
         bookings: bookings.map(b => ({
           ...b,
+          paymentMethod: (b as any).Payment?.[0]?.paymentType || (b as any).Payment?.[0]?.provider || (b as any).paymentMethod || (b.paymentStatus === 'paid' ? 'cash' : 'Not specified'),
+          transactionId: (b as any).Payment?.[0]?.transactionId || (b as any).transactionId,
           createdAt: new Date(b.createdAt),
         })) as Booking[],
       });

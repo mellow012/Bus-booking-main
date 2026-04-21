@@ -65,8 +65,8 @@ export async function GET(request: NextRequest) {
     const where: any = {
       status: 'active',
       availableSeats: { gt: 0 },
-      // Only show future schedules
-      departureDateTime: { gt: new Date() },
+      // Only show schedules that haven't arrived yet
+      arrivalDateTime: { gt: new Date() },
       company: { status: 'active' }, // Only show schedules from active companies
     };
 
@@ -119,6 +119,16 @@ export async function GET(request: NextRequest) {
         const durationMs = arr.getTime() - dep.getTime();
         const durationMin = Math.round(durationMs / 60000);
 
+        let currentStatus = sch.status;
+        if (sch.status === 'active') {
+          const now = new Date();
+          if (now >= dep && now <= arr) {
+            currentStatus = 'in_transit';
+          } else if (now > arr) {
+            currentStatus = 'completed';
+          }
+        }
+
         return {
           id: sch.id,
           companyId: sch.companyId,
@@ -126,7 +136,7 @@ export async function GET(request: NextRequest) {
           routeId: sch.routeId,
           price: sch.price,
           availableSeats: sch.availableSeats,
-          status: sch.status,
+          status: currentStatus,
           date: dep.toISOString().split('T')[0],
           departureTime: dep.toTimeString().slice(0, 5),
           arrivalTime: arr.toTimeString().slice(0, 5),
