@@ -33,6 +33,7 @@ import RoutesTab from "@/components/routesTab";
 import BusesTab from "@/components/busesTab";
 import ReportsTab from "@/components/ReportsTab";
 import OperatorProfileTab from "@/components/OperatorProfileTab";
+import ChartersTab from "@/components/ChartersTab";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const TABS = [
@@ -41,6 +42,7 @@ const TABS = [
   { id: "payments" as const,  label: "Payments",  icon: DollarSign },
   { id: "routes" as const,    label: "My Routes", icon: MapPin },
   { id: "buses" as const,     label: "Fleet",    icon: Truck },
+  { id: "charters" as const,  label: "Charters", icon: Users },
   { id: "reports" as const,   label: "Reports",  icon: FileText },
   { id: "notifications" as const, label: "Notifications", icon: Bell },
   { id: "activity" as const,  label: "Activity", icon: Activity },
@@ -384,6 +386,14 @@ export default function OperatorDashboard() {
             subscriptionTier="premium" // Defaulting for dashboard visibility
             schedules={dashboardData.schedules}
             bookings={dashboardData.bookings}
+          />
+        );
+
+      case "charters":
+        return (
+          <ChartersTab 
+            companyId={companyId}
+            {...commonProps}
           />
         );
 

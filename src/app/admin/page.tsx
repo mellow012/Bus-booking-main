@@ -44,9 +44,12 @@ import {
   TrendingUp,
   Activity,
   User2,
+  TicketPercent,
+  Zap,
+  Gift,
 } from 'lucide-react';
 import AlertMessage from '../../components/AlertMessage';
-import { Company, UserProfile, Booking, Schedule, Route, Bus, OperatorProfile, ConductorProfile } from '@/types/index';
+import { Company, UserProfile, Booking, Schedule, Route, Bus, OperatorProfile, ConductorProfile, Promotion } from '@/types/index';
 import TabButton from '@/components/tabButton';
 
 // ─── Kinetic Theme Components ───────────────────────────────────────────────
@@ -112,11 +115,11 @@ const StatusBadge: React.FC<{ status: string; type?: 'booking' | 'company' }> = 
 type StatusFilter = 'all' | 'active' | 'inactive' | 'pending';
 type SortBy = 'name' | 'createdAt' | 'status' | 'email';
 type SortOrder = 'asc' | 'desc';
-type TabType = 'overview' | 'companies' | 'bookings' | 'profile' | 'routes' | 'schedules';
+type TabType = 'overview' | 'companies' | 'bookings' | 'profile' | 'routes' | 'schedules' | 'promotions';
 
 interface AlertState { type: 'error' | 'success' | 'warning' | 'info'; message: string; id: string; }
 interface FormErrors { name?: string; email?: string; contact?: string; adminPhone?: string; adminFirstName?: string; adminLastName?: string; }
-interface LoadingStates { companies: boolean; bookings: boolean; creating: boolean; updating: boolean; deleting: boolean; initializing: boolean; }
+interface LoadingStates { companies: boolean; bookings: boolean; promotions: boolean; creating: boolean; updating: boolean; deleting: boolean; initializing: boolean; }
 
 interface DashboardStats {
   totalCompanies: number; activeCompanies: number; pendingCompanies: number; inactiveCompanies: number;
@@ -334,7 +337,257 @@ const BookingsTab: React.FC<{
   );
 };
 
-// ─── PaymentSettingsModal ─────────────────────────────────────────────────────
+// ─── PromotionsTab ────────────────────────────────────────────────────────────
+const PromotionsTab: React.FC<{
+  promotions: Promotion[];
+  loading: boolean;
+  onRefresh: () => void;
+  setError: (msg: string) => void;
+  setSuccess: (msg: string) => void;
+}> = ({ promotions, loading, onRefresh, setError, setSuccess }) => {
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [editingPromotion, setEditingPromotion] = useState<Partial<Promotion> | null>(null);
+
+  const resetForm = () => {
+    setEditingPromotion({
+      code: '',
+      title: '',
+      description: '',
+      discountValue: 0,
+      discountType: 'percentage',
+      minPurchase: 0,
+      startDate: new Date(),
+      endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      isActive: true,
+    });
+  };
+
+  const handleAdd = () => {
+    resetForm();
+    setIsModalOpen(true);
+  };
+
+  const handleEdit = (promo: Promotion) => {
+    setEditingPromotion(promo);
+    setIsModalOpen(true);
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this promotion?')) return;
+    setIsDeleting(true);
+    try {
+      const res = await fetch(`/api/promotions?id=${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        setSuccess('Promotion deleted successfully');
+        onRefresh();
+      } else {
+        throw new Error('Failed to delete promotion');
+      }
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleSave = async () => {
+    if (!editingPromotion?.code || !editingPromotion?.title) {
+      setError('Code and Title are required');
+      return;
+    }
+    setIsSaving(true);
+    try {
+      const res = await fetch('/api/promotions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(editingPromotion),
+      });
+      if (res.ok) {
+        setSuccess(editingPromotion.id ? 'Promotion updated' : 'Promotion created');
+        setIsModalOpen(false);
+        onRefresh();
+      } else {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to save promotion');
+      }
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  if (loading) return <div className="flex justify-center p-12"><Loader2 className="animate-spin" /></div>;
+
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <div>
+          <h3 className="text-lg font-bold text-gray-900">Platform Promotions</h3>
+          <p className="text-xs text-gray-500 uppercase tracking-widest font-bold">Manage system-wide discount codes</p>
+        </div>
+        <button onClick={handleAdd} className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-indigo-700 transition-colors shadow-lg">
+          <Plus className="w-4 h-4" /> Create Promotion
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {promotions.length === 0 ? (
+          <div className="col-span-full py-12 text-center bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200">
+            <TicketPercent className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+            <p className="text-gray-500 font-bold uppercase tracking-widest text-xs">No promotions found</p>
+          </div>
+        ) : promotions.map(promo => (
+          <div key={promo.id} className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm hover:shadow-md transition-all group relative overflow-hidden">
+            <div className={`absolute top-0 right-0 w-24 h-24 bg-gradient-to-br ${promo.isActive ? 'from-green-500/10 to-emerald-500/5' : 'from-gray-500/10 to-slate-500/5'} -mr-8 -mt-8 rounded-full blur-xl`} />
+            
+            <div className="flex justify-between items-start mb-4 relative">
+              <div className={`p-2.5 rounded-xl ${promo.isActive ? 'bg-emerald-50 text-emerald-600' : 'bg-gray-100 text-gray-400'}`}>
+                <TicketPercent className="w-5 h-5" />
+              </div>
+              <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button onClick={() => handleEdit(promo)} className="p-1.5 text-amber-600 hover:bg-amber-50 rounded-lg transition-colors">
+                  <Edit className="w-4 h-4" />
+                </button>
+                <button onClick={() => handleDelete(promo.id)} className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors">
+                  <Trash className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            <div className="relative">
+              <div className="flex items-center gap-2 mb-1">
+                <h4 className="font-black text-gray-900 uppercase tracking-tight">{promo.code}</h4>
+                <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest ${promo.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                  {promo.isActive ? 'Active' : 'Inactive'}
+                </span>
+              </div>
+              <p className="text-xs font-bold text-indigo-600 mb-2">{promo.title}</p>
+              <p className="text-[11px] text-gray-500 line-clamp-2 mb-4 h-8">{promo.description}</p>
+              
+              <div className="grid grid-cols-2 gap-3 pt-4 border-t border-gray-50">
+                <div>
+                  <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Discount</p>
+                  <p className="text-sm font-black text-gray-900">
+                    {promo.discountType === 'percentage' ? `${promo.discountValue}%` : `MWK ${promo.discountValue.toLocaleString()}`}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Valid Until</p>
+                  <p className="text-sm font-black text-gray-900">{formatDate(promo.endDate)}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Promotion Modal */}
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
+          <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div className="px-8 py-6 bg-gray-50 border-b flex justify-between items-center">
+              <div>
+                <h3 className="text-xl font-black text-gray-900 tracking-tight">{editingPromotion?.id ? 'Edit Promotion' : 'New Promotion'}</h3>
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Configure discount parameters</p>
+              </div>
+              <button onClick={() => setIsModalOpen(false)} className="p-2 hover:bg-gray-200 rounded-full transition-colors">
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+
+            <div className="p-8 space-y-5 max-h-[70vh] overflow-y-auto">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="col-span-2 sm:col-span-1">
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Promo Code</label>
+                  <input type="text" value={editingPromotion?.code} onChange={e => setEditingPromotion(p => ({ ...p!, code: e.target.value.toUpperCase() }))}
+                    placeholder="E.G. WELCOME20" className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl text-sm font-black uppercase tracking-wider focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all" />
+                </div>
+                <div className="col-span-2 sm:col-span-1">
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Status</label>
+                  <select value={editingPromotion?.isActive ? 'true' : 'false'} onChange={e => setEditingPromotion(p => ({ ...p!, isActive: e.target.value === 'true' }))}
+                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl text-sm font-bold focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all">
+                    <option value="true">Active</option>
+                    <option value="false">Inactive</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Title</label>
+                <input type="text" value={editingPromotion?.title} onChange={e => setEditingPromotion(p => ({ ...p!, title: e.target.value }))}
+                  placeholder="Welcome Discount" className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl text-sm font-bold focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all" />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Description</label>
+                <textarea value={editingPromotion?.description} onChange={e => setEditingPromotion(p => ({ ...p!, description: e.target.value }))}
+                  rows={2} placeholder="Get 20% off on your first booking..." className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl text-sm font-medium focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all resize-none" />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Discount Type</label>
+                  <select value={editingPromotion?.discountType} onChange={e => setEditingPromotion(p => ({ ...p!, discountType: e.target.value as any }))}
+                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl text-sm font-bold focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all">
+                    <option value="percentage">Percentage (%)</option>
+                    <option value="fixed">Fixed (MWK)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Value</label>
+                  <input type="number" value={editingPromotion?.discountValue} onChange={e => setEditingPromotion(p => ({ ...p!, discountValue: Number(e.target.value) }))}
+                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl text-sm font-black focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all" />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Min Purchase (MWK)</label>
+                  <input type="number" value={editingPromotion?.minPurchase || 0} onChange={e => setEditingPromotion(p => ({ ...p!, minPurchase: Number(e.target.value) }))}
+                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl text-sm font-black focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all" />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Max Discount (MWK)</label>
+                  <input type="number" value={editingPromotion?.maxDiscount || 0} onChange={e => setEditingPromotion(p => ({ ...p!, maxDiscount: Number(e.target.value) }))}
+                    placeholder="No Limit" className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl text-sm font-black focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all" />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Start Date</label>
+                  <input type="date" value={editingPromotion?.startDate ? new Date(editingPromotion.startDate).toISOString().split('T')[0] : ''} 
+                    onChange={e => setEditingPromotion(p => ({ ...p!, startDate: new Date(e.target.value) }))}
+                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl text-sm font-bold focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all" />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">End Date</label>
+                  <input type="date" value={editingPromotion?.endDate ? new Date(editingPromotion.endDate).toISOString().split('T')[0] : ''} 
+                    onChange={e => setEditingPromotion(p => ({ ...p!, endDate: new Date(e.target.value) }))}
+                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl text-sm font-bold focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all" />
+                </div>
+              </div>
+            </div>
+
+            <div className="px-8 py-6 bg-gray-50 border-t flex gap-3 justify-end">
+              <button onClick={() => setIsModalOpen(false)} className="px-6 py-2.5 text-xs font-black uppercase tracking-widest text-gray-500 hover:text-gray-700 transition-colors">
+                Cancel
+              </button>
+              <button onClick={handleSave} disabled={isSaving} className="bg-indigo-600 text-white px-8 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all disabled:opacity-50 flex items-center gap-2">
+                {isSaving && <Loader2 className="w-4 h-4 animate-spin" />}
+                {editingPromotion?.id ? 'Update Promotion' : 'Create Promotion'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const PaymentSettingsModal: React.FC<{
   company: Company;
   onClose: () => void;
@@ -916,6 +1169,7 @@ export default function SuperAdminDashboard() {
   const [routes, setRoutes] = useState<Route[]>([]);
   const [buses, setBuses] = useState<Bus[]>([]);
   const [operators, setOperators] = useState<(OperatorProfile | ConductorProfile)[]>([]);
+  const [promotions, setPromotions] = useState<Promotion[]>([]);
   const [stats, setStats] = useState<DashboardStats>({
     totalCompanies: 0, activeCompanies: 0, pendingCompanies: 0, inactiveCompanies: 0,
     totalRevenue: 0, monthlyRevenue: 0, totalBookings: 0, monthlyBookings: 0,
@@ -925,7 +1179,7 @@ export default function SuperAdminDashboard() {
   const [refreshCount, setRefreshCount] = useState(0);
 
   const [loadingStates, setLoadingStates] = useState<LoadingStates>({
-    companies: true, bookings: true, creating: false, updating: false, deleting: false, initializing: true,
+    companies: true, bookings: true, promotions: true, creating: false, updating: false, deleting: false, initializing: true,
   });
 
   const [alerts, setAlerts] = useState<AlertState[]>([]);
@@ -1036,7 +1290,20 @@ export default function SuperAdminDashboard() {
       }
     };
 
+    const fetchPromotions = async () => {
+      try {
+        const res = await fetch('/api/promotions');
+        const data = await res.json();
+        if (data.success) setPromotions(data.data);
+      } catch (err) {
+        console.error('Failed to fetch promotions:', err);
+      } finally {
+        setLoadingState('promotions', false);
+      }
+    };
+
     fetchDashboardData();
+    fetchPromotions();
   }, [user, userProfile, authLoading, router, showAlert, setLoadingState, refreshCount]);
 
   useEffect(() => { calculateStats(companies, bookings); }, [companies, bookings, calculateStats]);
@@ -1286,6 +1553,7 @@ export default function SuperAdminDashboard() {
           <SidebarItem id="bookings" label="Bookings" icon={List} />
           <SidebarItem id="routes" label="Routes" icon={Map} />
           <SidebarItem id="schedules" label="Schedules" icon={Calendar} />
+          <SidebarItem id="promotions" label="Promotions" icon={TicketPercent} />
           <SidebarItem id="profile" label="Profiles" icon={User} />
 
           <div className="pt-4 mt-4 border-t border-gray-50">
@@ -1790,6 +2058,17 @@ export default function SuperAdminDashboard() {
                   </div>
                 )}
               </div>
+            )}
+
+            {/* ── PROMOTIONS ── */}
+            {activeTab === 'promotions' && (
+              <PromotionsTab 
+                promotions={promotions} 
+                loading={loadingStates.promotions} 
+                onRefresh={() => setRefreshCount(r => r + 1)}
+                setError={m => showAlert('error', m)}
+                setSuccess={m => showAlert('success', m)}
+              />
             )}
           </div>
         </main>

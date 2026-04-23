@@ -2,7 +2,7 @@
 
 import React, { FC } from 'react';
 import { Schedule, Bus, Route } from '@/types';
-import { Bus as BusIcon, Clock, ArrowRight, CheckCircle, Radio, Flame, CalendarClock } from 'lucide-react';
+import { Bus as BusIcon, Clock, ArrowRight, CheckCircle, Radio } from 'lucide-react';
 import { format } from 'date-fns';
 
 const toDate = (v: unknown): Date => {
@@ -61,45 +61,49 @@ const TripCard: FC<TripCardProps> = ({ trip, bus, route, onClick }) => {
   return (
     <div
       onClick={onClick}
-      className={`bg-white rounded-xl border border-l-4 shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer ${accentCls} ${bkt === 'completed' ? 'opacity-70' : ''}`}
+      className={`bg-white rounded-2xl border border-l-4 shadow-sm hover:shadow-md active:scale-[0.98] transition-all duration-200 cursor-pointer ${accentCls} ${bkt === 'completed' ? 'opacity-70' : ''}`}
     >
       <div className="p-4">
         <div className="flex items-start justify-between gap-2 mb-3">
           <div className="flex-1 min-w-0">
-            <p className="font-semibold text-gray-900 truncate" title={`${trip.departureLocation || route?.origin || 'TBD'} to ${trip.arrivalLocation || route?.destination || 'TBD'}`}>
+            <p className="font-bold text-gray-900 truncate">
               {trip.departureLocation || route?.origin || 'TBD'} → {trip.arrivalLocation || route?.destination || 'TBD'}
             </p>
-            <p className="text-xs text-gray-500 mt-0.5 flex items-center gap-1">
-              <BusIcon className="w-3 h-3" /> {bus?.licensePlate ?? '—'} · {bus?.busType ?? '—'}
+            <p className="text-xs text-gray-500 mt-1 flex items-center gap-1.5">
+              <BusIcon className="w-3.5 h-3.5" /> {bus?.licensePlate ?? '—'} · {bus?.busType ?? '—'}
             </p>
           </div>
-          <span className="shrink-0 text-xs font-medium text-gray-500 bg-gray-100 px-2 py-1 rounded-lg whitespace-nowrap">
+          <span className="shrink-0 text-xs font-semibold text-gray-500 bg-gray-100 px-2.5 py-1.5 rounded-lg">
             {isSameDay(dep, new Date()) ? 'Today' : format(dep, 'EEE d MMM')}
           </span>
         </div>
+
         <div className="flex items-center gap-2 text-sm text-gray-700 mb-3">
-          <Clock className="w-3.5 h-3.5 text-gray-400" />
-          <span className="font-semibold">{format(dep, 'HH:mm')}</span>
-          <ArrowRight className="w-3 h-3 text-gray-400" />
-          <span className="font-semibold">{format(arr, 'HH:mm')}</span>
+          <Clock className="w-4 h-4 text-gray-400" />
+          <span className="font-bold text-base">{format(dep, 'HH:mm')}</span>
+          <ArrowRight className="w-3.5 h-3.5 text-gray-400" />
+          <span className="font-bold text-base">{format(arr, 'HH:mm')}</span>
         </div>
+
         {bus?.capacity && (
           <div className="mb-3">
-            <div className="flex justify-between text-xs text-gray-500 mb-1">
-              <span>{booked} booked</span><span>{bus.capacity - booked} seats free</span>
+            <div className="flex justify-between text-xs text-gray-500 mb-1.5">
+              <span className="font-medium">{booked} booked</span>
+              <span className="font-medium">{bus.capacity - booked} free</span>
             </div>
-            <div className="w-full bg-gray-100 rounded-full h-1.5">
+            <div className="w-full bg-gray-100 rounded-full h-2">
               <div
-                className={`h-full rounded-full ${pct > 75 ? 'bg-red-400' : pct > 50 ? 'bg-amber-400' : 'bg-green-400'}`}
+                className={`h-full rounded-full transition-all duration-500 ${pct > 75 ? 'bg-red-400' : pct > 50 ? 'bg-amber-400' : 'bg-green-400'}`}
                 style={{ width: `${pct}%` }}
               />
             </div>
           </div>
         )}
-        <div className="flex items-center justify-between pt-2 border-t border-gray-100">
-          <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium border ${tsBadgeCls}`}>{tsLabel}</span>
-          <span className="text-xs text-blue-600 font-medium hover:underline">
-            {(ts === 'boarding' || ts === 'in_transit') ? 'Manage Trip' : 'View Manifest'} →
+
+        <div className="flex items-center justify-between pt-3 border-t border-gray-100">
+          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold border ${tsBadgeCls}`}>{tsLabel}</span>
+          <span className="text-xs text-blue-600 font-bold">
+            {(ts === 'boarding' || ts === 'in_transit') ? 'Manage →' : 'View →'}
           </span>
         </div>
       </div>

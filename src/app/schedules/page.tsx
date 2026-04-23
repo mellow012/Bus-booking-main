@@ -1,73 +1,13 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useMemo } from "react";
-import { useRouter } from "next/navigation";
-import { 
-  Bus as BusIcon, 
-  MapPin, 
-  Clock, 
-  Users, 
-  Currency, 
-  Loader2, 
-  ArrowRight,
-  CheckCircle,
-  Search,
-  Filter,
-  Calendar,
-  MapPinIcon,
-  SlidersHorizontal,
-  Zap,
-  Star,
-  ChevronDown,
-  RefreshCw,
-  TrendingUp,
-  Timer,
-  Navigation,
-  AlertCircle,
-  CheckCircle2
+import React, { useState, useEffect, useCallback, useMemo, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useAuth } from "@/contexts/AuthContext";
+import {
+  Search, MapPin, Calendar, Users, Navigation, Clock, CheckCircle, Bus as BusIcon,
+  Filter, AlertCircle, RefreshCw, Zap, TrendingUp, Loader2, ArrowRight, User, Star
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-
-interface Company {
-  id: string;
-  name: string;
-  phone?: string;
-  status: string;
-  logo?: string;
-}
-
-interface Bus {
-  id: string;
-  licensePlate: string;
-  busType: string;
-  capacity: number;
-  totalSeats: number;
-  amenities: string[];
-  companyId: string;
-  status: string;
-}
-
-interface Route {
-  id: string;
-  origin: string;
-  destination: string;
-  duration: number;
-  distance: number;
-  companyId: string;
-  isActive: boolean;
-}
-
-interface Schedule {
-  id: string;
-  companyId: string;
-  busId: string;
-  routeId: string;
-  departureDateTime: Date | string;
-  arrivalDateTime: Date | string;
-  price: number;
-  availableSeats: number;
-  status: string;
-}
 
 interface EnhancedSchedule {
   id: string;
@@ -83,721 +23,532 @@ interface EnhancedSchedule {
   duration: number;
   date: string;
   companyLogo?: string | null;
+  companyId: string;
+  routeId: string;
 }
 
-// Custom Toggle Switch Component
-const ToggleSwitch = ({ 
-  checked, 
-  onChange, 
-  disabled = false, 
-  size = "md" 
-}: { 
-  checked: boolean; 
-  onChange: (checked: boolean) => void; 
-  disabled?: boolean; 
-  size?: "sm" | "md" | "lg";
-}) => {
-  const sizeClasses = {
-    sm: "w-8 h-5",
-    md: "w-11 h-6",
-    lg: "w-14 h-8"
-  };
-  
-  const thumbSizeClasses = {
-    sm: "w-3 h-3",
-    md: "w-4 h-4", 
-    lg: "w-6 h-6"
-  };
 
+
+export default function SchedulesPage() {
   return (
-    <button
-      type="button"
-      onClick={() => !disabled && onChange(!checked)}
-      disabled={disabled}
-      className={`
-        ${sizeClasses[size]} 
-        ${checked ? 'bg-gradient-to-r from-blue-500 to-indigo-600' : 'bg-gray-200'} 
-        ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:shadow-md'}
-        relative inline-flex items-center rounded-full border-2 border-transparent 
-        transition-all duration-200 ease-in-out focus:outline-none focus:ring-2 
-        focus:ring-blue-500 focus:ring-offset-2 shadow-sm
-      `}
-    >
-      <span
-        className={`
-          ${thumbSizeClasses[size]} 
-          ${checked ? `translate-x-${size === 'sm' ? '3' : size === 'md' ? '5' : '6'}` : 'translate-x-0.5'}
-          bg-white rounded-full shadow-lg transform transition-transform duration-200 ease-in-out
-          flex items-center justify-center
-        `}
-      >
-        {checked && (
-          <CheckCircle2 className={`${size === 'sm' ? 'w-2 h-2' : size === 'md' ? 'w-2.5 h-2.5' : 'w-3 h-3'} text-blue-600`} />
-        )}
-      </span>
-    </button>
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <Loader2 className="w-10 h-10 text-blue-600 animate-spin" />
+      </div>
+    }>
+      <DashboardContent />
+    </Suspense>
   );
-};
+}
 
-const SchedulesPage = () => {
+function DashboardContent() {
   const router = useRouter();
-  const [schedules, setSchedules] = useState<EnhancedSchedule[]>([]);
+  const searchParams = useSearchParams();
+  const { user, userProfile } = useAuth();
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [searchTerm, setSearchTerm] = useState("");
-  const [selectedDate, setSelectedDate] = useState(new Date());
-  const [selectedOrigin, setSelectedOrigin] = useState("");
-  const [selectedDestination, setSelectedDestination] = useState("");
-  const [priceRange, setPriceRange] = useState<[number, number]>([0, 1000000]);
-  const [showFilters, setShowFilters] = useState(false);
-  const [viewMode, setViewMode] = useState<'grid' | 'timeline'>('grid');
-  const [sortBy, setSortBy] = useState<'time' | 'price' | 'company'>('time');
-  const [useLocation, setUseLocation] = useState(false);
-  const [userLocation, setUserLocation] = useState<string>("");
-  const [locationError, setLocationError] = useState<string>("");
-  const [locationLoading, setLocationLoading] = useState(false);
+  
+  // Data state
+  const [schedules, setSchedules] = useState<EnhancedSchedule[]>([]);
 
-  const today = new Date();
-  const maxDate = new Date(today);
-  maxDate.setDate(today.getDate() + 13);
+  // Search/Filter state
+  const [searchFrom, setSearchFrom] = useState(searchParams.get('from') || "");
+  const [searchTo, setSearchTo] = useState(searchParams.get('to') || "");
+  const [searchDate, setSearchDate] = useState(searchParams.get('date') || "");
+  const [passengers, setPassengers] = useState(parseInt(searchParams.get('passengers') || "1"));
+  
+  const [activeFilter, setActiveFilter] = useState("all");
+  const [sortBy, setSortBy] = useState<'price' | 'time' | 'company'>('price');
+  
+  const [selectedCompany, setSelectedCompany] = useState("");
+  const [selectedTimeSlot, setSelectedTimeSlot] = useState("");
+  
+  const [popularBuses, setPopularBuses] = useState<any[]>([]);
 
-  const handleLocationToggle = useCallback((enabled: boolean) => {
-    setUseLocation(enabled);
-    setLocationError("");
-    
-    if (enabled) {
-      setLocationLoading(true);
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-          (pos) => {
-            setUserLocation(`${pos.coords.latitude},${pos.coords.longitude}`);
-            setLocationError("");
-            setLocationLoading(false);
-          },
-          (err) => {
-            setLocationError("Unable to access your location. Please enter it manually.");
-            setLocationLoading(false);
-          },
-          { timeout: 10000, enableHighAccuracy: true }
-        );
-      } else {
-        setLocationError("Geolocation is not supported by your browser.");
-        setLocationLoading(false);
-      }
-    } else {
-      setUserLocation("");
-      setLocationLoading(false);
+  // Auth protection
+  useEffect(() => {
+    if (!loading && !user) {
+      router.push('/login');
     }
-  }, []);
+  }, [user, loading, router]);
 
-  const fetchData = useCallback(async (targetDate: Date) => {
+  // Fetch initial data
+  useEffect(() => {
+    if (!user) {
+      setLoading(false);
+      return;
+    }
+
+    const fetchDashboardData = async () => {
+      setLoading(true);
+      setError("");
+      try {
+        // 1. Fetch upcoming schedules (next 7 days)
+        const startOfWeek = new Date();
+        startOfWeek.setHours(0, 0, 0, 0);
+        const endOfWeek = new Date(startOfWeek);
+        endOfWeek.setDate(startOfWeek.getDate() + 7);
+        endOfWeek.setHours(23, 59, 59, 999);
+
+        const queryParams = new URLSearchParams({
+          startDate: startOfWeek.toISOString(),
+          endDate: endOfWeek.toISOString(),
+          sortBy: 'departureDateTime',
+        });
+
+        const schedulesRes = await fetch(`/api/schedules?${queryParams}`);
+        if (!schedulesRes.ok) throw new Error("Failed to load schedules");
+        const { data: apiSchedules } = await schedulesRes.json();
+
+        const enhancedSchedules: EnhancedSchedule[] = apiSchedules
+          .filter((s: any) => new Date(s.arrivalDateTime) >= new Date())
+          .map((schedule: any) => ({
+            id: schedule.id,
+            companyName: schedule.companyName || 'Unknown',
+            busNumber: schedule.busNumber || 'N/A',
+            busType: schedule.busType || 'Standard',
+            origin: schedule.origin || 'N/A',
+            destination: schedule.destination || 'N/A',
+            departureTime: new Date(schedule.departureDateTime).toLocaleTimeString('en-US', { 
+              hour: '2-digit', minute: '2-digit', hour12: false 
+            }),
+            arrivalTime: new Date(schedule.arrivalDateTime).toLocaleTimeString('en-US', { 
+              hour: '2-digit', minute: '2-digit', hour12: false 
+            }),
+            availableSeats: schedule.availableSeats,
+            price: schedule.price,
+            duration: schedule.duration || 0,
+            date: new Date(schedule.departureDateTime).toISOString().split('T')[0],
+            companyLogo: schedule.companyLogo || null,
+            companyId: schedule.companyId,
+            routeId: schedule.routeId
+          }));
+
+        setSchedules(enhancedSchedules);
+
+      } catch (err: any) {
+        console.error("Dashboard fetch error:", err);
+        setError("Unable to load dashboard data. Please try again.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDashboardData();
+  }, [user]);
+  
+  const handleSearch = useCallback(async () => {
     setLoading(true);
     setError("");
-
     try {
-      // Calculate week range
-      const startOfWeek = new Date(targetDate);
-      const dayOfWeek = startOfWeek.getDay();
-      const diff = startOfWeek.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
-      startOfWeek.setDate(diff);
-      startOfWeek.setHours(0, 0, 0, 0);
+      const queryParams = new URLSearchParams();
+      if (searchFrom) queryParams.append('from', searchFrom);
+      if (searchTo) queryParams.append('to', searchTo);
+      if (searchDate) queryParams.append('date', searchDate);
+      queryParams.append('sortBy', 'departureDateTime');
 
-      const endOfWeek = new Date(startOfWeek);
-      endOfWeek.setDate(startOfWeek.getDate() + 6);
-      endOfWeek.setHours(23, 59, 59, 999);
+      const schedulesRes = await fetch(`/api/schedules?${queryParams}`);
+      if (!schedulesRes.ok) throw new Error("Failed to load schedules");
+      const { data: apiSchedules } = await schedulesRes.json();
 
-      console.log("Fetching schedules for week range:", { startOfWeek, endOfWeek });
-
-      // Fetch from API
-      const queryParams = new URLSearchParams({
-        startDate: startOfWeek.toISOString(),
-        endDate: endOfWeek.toISOString(),
-        sortBy: 'departureDateTime',
-      });
-
-      const response = await fetch(`/api/schedules?${queryParams}`);
-
-      if (!response.ok) {
-        throw new Error(`Failed to load schedules: ${response.statusText}`);
-      }
-
-      const { data: apiSchedules } = await response.json();
-
-      // Transform API response to EnhancedSchedule format
       const enhancedSchedules: EnhancedSchedule[] = apiSchedules
-        .filter((schedule: any) => {
-          // Filter out expired schedules
-          const arrivalTime = new Date(schedule.arrivalDateTime);
-          return arrivalTime >= new Date();
-        })
         .map((schedule: any) => ({
           id: schedule.id,
-          companyName: schedule.company?.name || 'Unknown',
-          busNumber: schedule.bus?.licensePlate || 'N/A',
-          busType: schedule.bus?.busType || 'Standard',
-          origin: schedule.route?.origin || 'N/A',
-          destination: schedule.route?.destination || 'N/A',
+          companyName: schedule.companyName,
+          busNumber: schedule.busNumber,
+          busType: schedule.busType,
+          origin: schedule.origin,
+          destination: schedule.destination,
           departureTime: new Date(schedule.departureDateTime).toLocaleTimeString('en-US', { 
-            hour: '2-digit', 
-            minute: '2-digit',
-            hour12: false 
+            hour: '2-digit', minute: '2-digit', hour12: false 
           }),
           arrivalTime: new Date(schedule.arrivalDateTime).toLocaleTimeString('en-US', { 
-            hour: '2-digit', 
-            minute: '2-digit',
-            hour12: false 
+            hour: '2-digit', minute: '2-digit', hour12: false 
           }),
           availableSeats: schedule.availableSeats,
           price: schedule.price,
-          duration: schedule.route?.duration || 0,
-          date: new Date(schedule.departureDateTime).toDateString(),
-          companyLogo: schedule.company?.logo || null,
+          duration: schedule.duration || 0,
+          date: new Date(schedule.departureDateTime).toISOString().split('T')[0],
+          companyLogo: schedule.companyLogo || null,
+          companyId: schedule.companyId,
+          routeId: schedule.routeId
         }));
 
-      console.log(`Loaded ${enhancedSchedules.length} non-expired schedules`);
       setSchedules(enhancedSchedules);
     } catch (err: any) {
-      console.error("Error fetching schedules:", err);
-      setError("Unable to load schedules. Please try again later.");
+      console.error("Search error:", err);
+      setError("Unable to find schedules. Please try again.");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [searchFrom, searchTo, searchDate]);
 
   useEffect(() => {
-    fetchData(selectedDate);
-  }, [fetchData, selectedDate]);
-
-  const { origins, destinations } = useMemo(() => {
-    const origins = [...new Set(schedules.map(s => s.origin))];
-    const destinations = [...new Set(schedules.map(s => s.destination))];
-    return { origins, destinations };
+    if (schedules.length > 0) {
+      // Mock popular buses for now
+      const popular = schedules.slice(0, 4).map(s => ({
+        id: s.id,
+        name: s.companyName,
+        logo: s.companyLogo,
+        rating: 4.8,
+        price: s.price,
+        type: s.busType
+      }));
+      setPopularBuses(popular);
+    }
   }, [schedules]);
 
-  const filteredSchedules = useMemo(() => {
-    let filtered = schedules.filter(schedule => {
-      const priceInMWK = schedule.price * 1700;
-      const matchesSearch = !searchTerm || 
-        schedule.companyName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        schedule.origin.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        schedule.destination.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesPrice = priceInMWK >= priceRange[0] * 1000 && priceInMWK <= priceRange[1] * 1000;
-      const matchesOrigin = !selectedOrigin || schedule.origin === selectedOrigin;
-      const matchesDest = !selectedDestination || schedule.destination === selectedDestination;
-      
-      let matchesLocation = true;
-      if (useLocation && userLocation) {
-        matchesLocation = schedule.origin.toLowerCase().includes(userLocation.toLowerCase()) ||
-          schedule.destination.toLowerCase().includes(userLocation.toLowerCase());
-      }
-      
-      return matchesSearch && matchesPrice && matchesOrigin && matchesDest && matchesLocation;
-    });
+  const handleBooking = (scheduleId: string, companyId: string, routeId: string) => {
+    router.push(`/book/${scheduleId}?companyId=${companyId}&routeId=${routeId}&passengers=${passengers}`);
+  };
 
+  const filteredSchedules = useMemo(() => {
+    let filtered = schedules;
+
+    // Apply Search
+    if (searchFrom) {
+      filtered = filtered.filter(s => s.origin.toLowerCase().includes(searchFrom.toLowerCase()));
+    }
+    if (searchTo) {
+      filtered = filtered.filter(s => s.destination.toLowerCase().includes(searchTo.toLowerCase()));
+    }
+    if (searchDate) {
+      filtered = filtered.filter(s => s.date === searchDate);
+    }
+
+    // Apply Quick Filters
+    if (activeFilter === 'today') {
+      const todayStr = new Date().toISOString().split('T')[0];
+      filtered = filtered.filter(s => s.date === todayStr);
+    } else if (activeFilter === 'morning') {
+      filtered = filtered.filter(s => parseInt(s.departureTime.split(':')[0]) < 12);
+    } else if (activeFilter === 'economy') {
+      filtered = filtered.filter(s => s.busType.toLowerCase().includes('economy'));
+    } else if (activeFilter === 'luxury') {
+      filtered = filtered.filter(s => s.busType.toLowerCase().includes('luxury') || s.busType.toLowerCase().includes('vip'));
+    }
+
+    // Apply New Filters
+    if (selectedCompany) {
+      filtered = filtered.filter(s => s.companyName === selectedCompany);
+    }
+    if (selectedTimeSlot) {
+      const hour = parseInt(selectedTimeSlot.split(':')[0]);
+      if (selectedTimeSlot === 'morning') {
+        filtered = filtered.filter(s => {
+          const h = parseInt(s.departureTime.split(':')[0]);
+          return h >= 5 && h < 12;
+        });
+      } else if (selectedTimeSlot === 'afternoon') {
+        filtered = filtered.filter(s => {
+          const h = parseInt(s.departureTime.split(':')[0]);
+          return h >= 12 && h < 17;
+        });
+      } else if (selectedTimeSlot === 'evening') {
+        filtered = filtered.filter(s => {
+          const h = parseInt(s.departureTime.split(':')[0]);
+          return h >= 17 && h < 21;
+        });
+      }
+    }
+
+    // Sort
     filtered.sort((a, b) => {
       switch (sortBy) {
-        case 'price':
-          return a.price - b.price;
-        case 'company':
-          return a.companyName.localeCompare(b.companyName);
-        case 'time':
-        default:
-          return a.departureTime.localeCompare(b.departureTime);
+        case 'price': return a.price - b.price;
+        case 'time': return a.departureTime.localeCompare(b.departureTime);
+        case 'company': return a.companyName.localeCompare(b.companyName);
+        default: return 0;
       }
     });
 
     return filtered;
-  }, [schedules, searchTerm, priceRange, selectedOrigin, selectedDestination, sortBy, useLocation, userLocation]);
+  }, [schedules, searchFrom, searchTo, searchDate, activeFilter, sortBy, selectedCompany, selectedTimeSlot]);
 
-  const handleBooking = useCallback((scheduleId: string) => {
-    router.push(`/book/${scheduleId}?passengers=1`);
-  }, [router]);
-
-  const formatDate = (date: Date) => {
-    const today = new Date();
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-
-    if (date.toDateString() === today.toDateString()) return "Today";
-    if (date.toDateString() === tomorrow.toDateString()) return "Tomorrow";
-    
-    return date.toLocaleDateString('en-US', { 
-      weekday: 'short', 
-      month: 'short', 
-      day: 'numeric' 
-    });
-  };
-
-  const groupedSchedules = useMemo(() => {
-    const grouped: { [key: string]: EnhancedSchedule[] } = {};
-    filteredSchedules.forEach(schedule => {
-      const timeSlot = parseInt(schedule.departureTime.split(':')[0]);
-      let period: string;
-      
-      if (timeSlot < 6) period = "Dawn (00:00 - 05:59)";
-      else if (timeSlot < 12) period = "Morning (06:00 - 11:59)";
-      else if (timeSlot < 17) period = "Afternoon (12:00 - 16:59)";
-      else period = "Evening (17:00 - 23:59)";
-      
-      if (!grouped[period]) grouped[period] = [];
-      grouped[period].push(schedule);
-    });
-    return grouped;
-  }, [filteredSchedules]);
+  if (loading || !user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="flex flex-col items-center">
+          <Loader2 className="w-10 h-10 text-blue-600 animate-spin mb-4" />
+          <p className="text-gray-500 font-medium">Loading schedules...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 overflow-hidden">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        {/* Hero Section */}
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-4">
-            Smart Schedule Explorer
-          </h1>
-          <p className="text-lg text-gray-600 mb-6">
-            Discover, compare, and book bus schedules across Malawi
-          </p>
-          
-          {/* Quick Stats */}
-          <div className="flex justify-center items-center space-x-8 mb-8">
-            <div className="text-center">
-              <div className="text-2xl font-bold text-blue-600">{filteredSchedules.length}</div>
-              <div className="text-sm text-gray-500">Available Trips</div>
+    <div className="min-h-screen bg-gray-50 pb-20 md:pb-0">
+      
+      {/* ─── Hero / Quick Search Bar ────────────────────────────────────────── */}
+      <div className="bg-gradient-to-br from-blue-900 via-indigo-900 to-slate-900 text-white pt-16 pb-20 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-7xl mx-auto">
+          <div className="flex flex-col md:flex-row md:justify-between md:items-center mb-8 gap-4">
+            <div>
+              <h1 className="text-3xl sm:text-4xl font-extrabold font-display tracking-tight">
+                Find Your Next Journey
+              </h1>
+              <p className="text-blue-200 mt-2 text-lg">Browse available bus schedules and book instantly.</p>
             </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-green-600">{origins.length}</div>
-              <div className="text-sm text-gray-500">Routes</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-purple-600">{[...new Set(schedules.map(s => s.companyName))].length}</div>
-              <div className="text-sm text-gray-500">Companies</div>
+          </div>
+
+          <div className="bg-white rounded-2xl shadow-2xl p-4 sm:p-6 w-full max-w-5xl mx-auto transform translate-y-12">
+            <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-5 gap-4">
+              <div className="col-span-1 md:col-span-2 lg:col-span-1 relative">
+                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">From</label>
+                <div className="relative flex items-center">
+                  <MapPin className="absolute left-3 w-5 h-5 text-gray-400" />
+                  <input type="text" value={searchFrom} onChange={e => setSearchFrom(e.target.value)} placeholder="Leaving from..." className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-gray-900" />
+
+                </div>
+              </div>
+              <div className="col-span-1 md:col-span-2 lg:col-span-1">
+                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">To</label>
+                <div className="relative">
+                  <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  <input type="text" value={searchTo} onChange={e => setSearchTo(e.target.value)} placeholder="Going to..." className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-gray-900" />
+                </div>
+              </div>
+              <div className="col-span-1 lg:col-span-1">
+                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">Date</label>
+                <div className="relative">
+                  <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  <input type="date" value={searchDate} onChange={e => setSearchDate(e.target.value)} min={new Date().toISOString().split('T')[0]} className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-gray-900" placeholder="Any date" />
+                </div>
+              </div>
+              <div className="col-span-1 lg:col-span-1">
+                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">Passengers</label>
+                <div className="relative">
+                  <Users className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  <input type="number" min="1" value={passengers} onChange={e => setPassengers(parseInt(e.target.value) || 1)} className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-gray-900" />
+                </div>
+              </div>
+              <div className="col-span-1 md:col-span-4 lg:col-span-1 flex items-end">
+                <button 
+                  onClick={handleSearch}
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl font-bold flex items-center justify-center transition-colors shadow-lg shadow-blue-200"
+                >
+                  <Search className="w-5 h-5 mr-2" /> Search
+                </button>
+              </div>
             </div>
           </div>
         </div>
+      </div>
 
-        {/* Enhanced Location Toggle Section */}
-        <div className="bg-white rounded-3xl shadow-lg p-6 mb-6 border border-gray-100">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl flex items-center justify-center">
-                  <Navigation className="w-5 h-5 text-white" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-3 mb-1">
-                    <label className="font-semibold text-gray-800">Location-Based Search</label>
-                    <ToggleSwitch
-                      checked={useLocation}
-                      onChange={handleLocationToggle}
-                      disabled={locationLoading}
-                    />
-                  </div>
-                  <p className="text-sm text-gray-600">
-                    Find routes from your current location
-                  </p>
-                </div>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-16 pt-4">
+          {/* ─── Main Feed: Filters & Schedules ───────────────────────────── */}
+          <div className="lg:col-span-4 space-y-6">
+            
+            {/* Advanced Filters */}
+            <div className="flex flex-wrap items-center gap-3 bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
+              <div className="flex items-center gap-2">
+                <Filter className="w-4 h-4 text-gray-400" />
+                <span className="text-sm font-bold text-gray-900">Filters:</span>
               </div>
               
-              {locationLoading && (
-                <div className="flex items-center gap-2 text-blue-600">
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span className="text-sm">Getting location...</span>
-                </div>
-              )}
+              <select 
+                value={selectedCompany} 
+                onChange={e => setSelectedCompany(e.target.value)}
+                className="text-sm bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">All Companies</option>
+                {Array.from(new Set(schedules.map(s => s.companyName))).map(c => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+
+              <select 
+                value={selectedTimeSlot} 
+                onChange={e => setSelectedTimeSlot(e.target.value)}
+                className="text-sm bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">Any Time</option>
+                <option value="morning">Morning (5 AM - 12 PM)</option>
+                <option value="afternoon">Afternoon (12 PM - 5 PM)</option>
+                <option value="evening">Evening (5 PM - 9 PM)</option>
+              </select>
+
+              <div className="h-6 w-px bg-gray-200 mx-2 hidden sm:block" />
+
+              <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
+                {[
+                  { id: 'all', label: 'All' },
+                  { id: 'today', label: 'Today' },
+                  { id: 'economy', label: 'Economy' },
+                  { id: 'luxury', label: 'Luxury/VIP' }
+                ].map(f => (
+                  <button
+                    key={f.id}
+                    onClick={() => setActiveFilter(f.id)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-colors ${
+                      activeFilter === f.id 
+                        ? 'bg-blue-600 text-white shadow-md' 
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
             </div>
 
-            {useLocation && (
-              <div className="flex flex-col lg:flex-row items-start lg:items-center gap-3">
-                <div className="flex items-center gap-2">
-                  <MapPin className="w-4 h-4 text-gray-500" />
-                  <input
-                    type="text"
-                    value={userLocation}
-                    onChange={(e) => setUserLocation(e.target.value)}
-                    placeholder="Enter your location or city"
-                    className="px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm min-w-[200px]"
-                  />
+            {/* Popular Buses Section */}
+            {popularBuses.length > 0 && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                    <TrendingUp className="w-5 h-5 text-orange-500" /> Popular Buses
+                  </h3>
                 </div>
-                {locationError && (
-                  <div className="flex items-center gap-2 text-amber-600 bg-amber-50 px-3 py-2 rounded-lg">
-                    <AlertCircle className="w-4 h-4" />
-                    <span className="text-sm">{locationError}</span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {popularBuses.map((bus) => (
+                    <div key={bus.id} className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all">
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold">
+                          {bus.logo ? <img src={bus.logo} alt={bus.name} className="w-full h-full rounded-full object-cover" /> : bus.name.charAt(0)}
+                        </div>
+                        <div>
+                          <p className="text-sm font-bold text-gray-900">{bus.name}</p>
+                          <div className="flex items-center gap-1">
+                            <Star className="w-3 h-3 text-yellow-500 fill-yellow-500" />
+                            <span className="text-[10px] font-bold text-gray-600">{bus.rating}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex justify-between items-end">
+                        <span className="text-[10px] font-bold bg-green-100 text-green-700 px-2 py-0.5 rounded-full">{bus.type}</span>
+                        <p className="text-sm font-bold text-blue-600">MWK {bus.price.toLocaleString()}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Sorting Header */}
+            <div className="flex justify-between items-center bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
+              <span className="text-sm font-bold text-gray-900">{filteredSchedules.length} schedules found</span>
+              <div className="flex items-center gap-2 text-sm">
+                <span className="text-gray-500">Sort by:</span>
+                <select value={sortBy} onChange={e => setSortBy(e.target.value as any)} className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium">
+                  <option value="price">Cheapest</option>
+                  <option value="time">Earliest</option>
+                  <option value="company">Company</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Error state */}
+            {error && (
+              <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-xl flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <AlertCircle className="w-5 h-5" /> {error}
+                </div>
+                <button 
+                  onClick={handleSearch}
+                  className="flex items-center gap-1 text-sm font-bold bg-white px-3 py-1.5 rounded-lg border border-red-100 hover:bg-red-50 transition-colors"
+                >
+                  <RefreshCw className="w-4 h-4" /> Retry
+                </button>
+              </div>
+            )}
+
+            {/* Schedules Grid */}
+            {filteredSchedules.length === 0 && !loading && !error ? (
+              <div className="bg-white rounded-3xl p-12 text-center border border-gray-100 shadow-sm">
+                <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <BusIcon className="w-10 h-10 text-gray-400" />
+                </div>
+                <h3 className="text-xl font-bold text-gray-900 mb-2">No buses found</h3>
+                <p className="text-gray-500">Try adjusting your filters or search criteria.</p>
+                <button onClick={() => { setSearchFrom(""); setSearchTo(""); setActiveFilter("all"); }} className="mt-6 text-blue-600 font-bold hover:underline">Clear all filters</button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {filteredSchedules.map((schedule) => (
+                  <div key={schedule.id} className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm hover:shadow-md hover:border-blue-200 transition-all flex flex-col group">
+                    <div className="flex justify-between items-start mb-4">
+                      <div className="flex items-center gap-3">
+                        {schedule.companyLogo ? (
+                          <img src={schedule.companyLogo} alt={schedule.companyName} className="w-10 h-10 rounded-full object-cover border border-gray-200" />
+                        ) : (
+                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold">{schedule.companyName.charAt(0)}</div>
+                        )}
+                        <div>
+                          <h4 className="font-bold text-gray-900 leading-tight">{schedule.companyName}</h4>
+                          <span className="text-xs text-gray-500 font-medium bg-gray-100 px-2 py-0.5 rounded-md">{schedule.busType}</span>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-lg font-bold text-blue-600">MWK {(schedule.price).toLocaleString()}</div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between mb-4 bg-gray-50 p-3 rounded-xl relative">
+                      <div className="text-center w-1/3">
+                        <div className="text-lg font-bold text-gray-900">{schedule.departureTime}</div>
+                        <div className="text-xs font-semibold text-gray-600 truncate">{schedule.origin}</div>
+                      </div>
+                      <div className="flex-1 flex flex-col items-center justify-center relative">
+                        <span className="text-[10px] text-gray-400 font-medium mb-1">{schedule.duration}h</span>
+                        <div className="w-full h-px bg-gray-300 relative">
+                          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-full p-1 border border-gray-200">
+                            <ArrowRight className="w-3 h-3 text-blue-600" />
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-center w-1/3">
+                        <div className="text-lg font-bold text-gray-900">{schedule.arrivalTime}</div>
+                        <div className="text-xs font-semibold text-gray-600 truncate">{schedule.destination}</div>
+                      </div>
+                    </div>
+
+                    <div className="mt-auto flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className={`w-2 h-2 rounded-full ${schedule.availableSeats > 10 ? 'bg-green-500' : 'bg-orange-500'}`} />
+                        <span className="text-xs font-medium text-gray-600">{schedule.availableSeats} seats left</span>
+                      </div>
+                      <Button onClick={() => handleBooking(schedule.id, schedule.companyId, schedule.routeId)} className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-md transition-transform active:scale-95 group-hover:shadow-blue-200">
+                        Book
+                      </Button>
+                    </div>
                   </div>
-                )}
+                ))}
               </div>
             )}
           </div>
         </div>
 
-        {/* Search and Filters */}
-        <div className="bg-white rounded-3xl shadow-lg p-6 mb-8 border border-gray-100">
-          {/* Date Selection with Picker */}
-          <div className="flex flex-wrap gap-2 mb-6 items-center">
-            <label className="text-sm font-medium text-gray-700 mr-2">Select Date:</label>
-            <div className="relative flex-1 max-w-xs">
-              <input
-                type="date"
-                value={selectedDate.toISOString().split('T')[0]}
-                onChange={(e) => {
-                  const date = new Date(e.target.value);
-                  if (date <= maxDate) setSelectedDate(date);
-                }}
-                min={today.toISOString().split('T')[0]}
-                max={maxDate.toISOString().split('T')[0]}
-                className="w-full pl-10 pr-4 py-3 rounded-2xl border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-              />
-              <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-            </div>
-            <div className="text-sm text-gray-600 bg-blue-50 px-3 py-2 rounded-lg">
-              {formatDate(selectedDate)}
-            </div>
-          </div>
 
-          {/* Search Bar and Controls */}
-          <div className="flex flex-col lg:flex-row gap-4 items-center">
-            <div className="relative flex-1">
-              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-              <input
-                type="text"
-                placeholder="Search companies, routes, or destinations..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-12 pr-4 py-3 rounded-2xl border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-              />
-            </div>
-            
-            <div className="flex gap-2 flex-wrap">
-              <Button
-                onClick={() => setShowFilters(!showFilters)}
-                variant="outline"
-                className={`rounded-2xl border-gray-200 transition-all ${showFilters ? 'bg-blue-50 border-blue-300 text-blue-700' : ''}`}
-              >
-                <SlidersHorizontal className="w-4 h-4 mr-2" />
-                Filters
-                {(selectedOrigin || selectedDestination || priceRange[0] > 0 || priceRange[1] < 100) && (
-                  <div className="ml-2 w-2 h-2 bg-blue-500 rounded-full"></div>
-                )}
-              </Button>
-              
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as 'time' | 'price' | 'company')}
-                className="px-4 py-3 rounded-2xl border border-gray-200 focus:ring-2 focus:ring-blue-500 text-sm"
-              >
-                <option value="time">Sort by Time</option>
-                <option value="price">Sort by Price</option>
-                <option value="company">Sort by Company</option>
-              </select>
-              
-              <Button
-                onClick={() => setViewMode(viewMode === 'grid' ? 'timeline' : 'grid')}
-                variant="outline"
-                className="rounded-2xl border-gray-200"
-                title={`Switch to ${viewMode === 'grid' ? 'timeline' : 'grid'} view`}
-              >
-                {viewMode === 'grid' ? <Timer className="w-4 h-4" /> : <div className="w-4 h-4 grid grid-cols-2 gap-0.5"><div className="bg-current"></div><div className="bg-current"></div><div className="bg-current"></div><div className="bg-current"></div></div>}
-              </Button>
-            </div>
-          </div>
-
-          {/* Advanced Filters */}
-          {showFilters && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6 p-4 bg-gradient-to-r from-gray-50 to-blue-50 rounded-2xl border border-gray-200">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Origin</label>
-                <select
-                  value={selectedOrigin}
-                  onChange={(e) => setSelectedOrigin(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 text-sm"
-                >
-                  <option value="">All Origins</option>
-                  {origins.map((origin) => (
-                    <option key={origin} value={origin}>{origin}</option>
-                  ))}
-                </select>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Destination</label>
-                <select
-                  value={selectedDestination}
-                  onChange={(e) => setSelectedDestination(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 text-sm"
-                >
-                  <option value="">All Destinations</option>
-                  {destinations.map((destination) => (
-                    <option key={destination} value={destination}>{destination}</option>
-                  ))}
-                </select>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Price Range (MWK {priceRange[0]}K - {priceRange[1]}K)
-                </label>
-                <div className="flex items-center space-x-2">
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    value={priceRange[0]}
-                    onChange={(e) => setPriceRange([parseInt(e.target.value), priceRange[1]])}
-                    className="flex-1"
-                  />
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    value={priceRange[1]}
-                    onChange={(e) => setPriceRange([priceRange[0], parseInt(e.target.value)])}
-                    className="flex-1"
-                  />
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Content */}
-        {loading ? (
-          <div className={viewMode === 'grid' ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" : "space-y-6"}>
-            {Array(6).fill(0).map((_, i) => (
-              <div
-                key={i}
-                className="bg-white rounded-3xl shadow-lg p-6 animate-pulse border border-gray-100"
-              >
-                <div className="h-6 bg-gray-200 rounded mb-4"></div>
-                <div className="h-4 bg-gray-200 rounded mb-2"></div>
-                <div className="h-4 bg-gray-200 rounded mb-2"></div>
-                <div className="h-12 bg-gray-200 rounded"></div>
-              </div>
-            ))}
-          </div>
-        ) : error ? (
-          <div className="text-center py-12">
-            <p className="text-red-600">{error}</p>
-            <Button
-              onClick={() => fetchData(selectedDate)}
-              className="mt-4 bg-blue-600 hover:bg-blue-700 text-white"
-            >
-              <RefreshCw className="w-4 h-4 mr-2" />
-              Retry
-            </Button>
-          </div>
-        ) : viewMode === 'timeline' ? (
-          <div className="space-y-8">
-            {Object.entries(groupedSchedules).map(([period, periodSchedules]) => (
-              <div key={period} className="bg-white rounded-3xl shadow-lg border border-gray-100 overflow-hidden">
-                <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-4">
-                  <h3 className="text-lg font-bold">{period}</h3>
-                  <p className="text-blue-100">{periodSchedules.length} trips available</p>
-                </div>
-                <div className="p-6">
-                  <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
-                    {periodSchedules.map((schedule) => (
-                      <div
-                        key={schedule.id}
-                        className="group relative bg-gradient-to-br from-gray-50 to-white rounded-2xl p-4 border border-gray-200 hover:border-blue-300 hover:shadow-lg transition-all duration-300"
-                      >
-                        <div className="flex items-start justify-between mb-3">
-                          <div className="flex items-center space-x-3">
-                            {schedule.companyLogo ? (
-                              <div className="w-10 h-10 rounded-xl overflow-hidden border border-gray-200">
-                                <img
-                                  src={schedule.companyLogo}
-                                  alt={schedule.companyName}
-                                  className="w-full h-full object-cover"
-                                  loading="lazy"
-                                  onError={(e) => {
-                                    const target = e.target as HTMLImageElement;
-                                    target.style.display = 'none';
-                                    const fallback = target.parentElement?.nextElementSibling;
-                                    if (fallback) (fallback as HTMLElement).style.display = 'flex';
-                                  }}
-                                />
-                              </div>
-                            ) : null}
-                            <div className={`w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center text-white font-bold text-sm ${schedule.companyLogo ? 'hidden' : ''}`}>
-                              {schedule.companyName.charAt(0)}
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <div className="text-lg font-bold text-blue-600">
-                              MWK {(schedule.price).toLocaleString()}
-                            </div>
-                            <div className="text-xs text-gray-500">{schedule.availableSeats} seats</div>
-                          </div>
-                        </div>
-                        
-                        <div className="flex items-center justify-between mb-3">
-                          <div className="text-center">
-                            <div className="text-sm font-bold text-gray-900">{schedule.origin}</div>
-                            <div className="text-xs text-blue-600 font-medium">{schedule.departureTime}</div>
-                          </div>
-                          <div className="flex-1 mx-3 relative">
-                            <div className="h-px bg-gradient-to-r from-blue-300 to-indigo-300"></div>
-                            <div className="absolute inset-0 flex items-center justify-center">
-                              <div className="bg-white border-2 border-blue-300 rounded-full p-1">
-                                <ArrowRight className="w-3 h-3 text-blue-600" />
-                              </div>
-                            </div>
-                          </div>
-                          <div className="text-center">
-                            <div className="text-sm font-bold text-gray-900">{schedule.destination}</div>
-                            <div className="text-xs text-gray-600">{schedule.arrivalTime}</div>
-                          </div>
-                        </div>
-                        
-                        <Button
-                          onClick={() => handleBooking(schedule.id)}
-                          size="sm"
-                          className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl"
-                        >
-                          Book Now
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredSchedules.map((schedule, index) => (
-              <div
-                key={schedule.id}
-                className="group bg-white rounded-3xl shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden border border-gray-100 hover:border-blue-200 transform hover:-translate-y-1"
-                style={{ animationDelay: `${index * 50}ms` }}
-              >
-                <div className="p-6 pb-4">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center space-x-4">
-                      <div className="relative">
-                        {schedule.companyLogo ? (
-                          <div className="w-16 h-16 rounded-2xl overflow-hidden border-2 border-gray-200 shadow-lg">
-                            <img
-                              src={schedule.companyLogo}
-                              alt={schedule.companyName}
-                              className="w-full h-full object-cover"
-                              loading="lazy"
-                              onError={(e) => {
-                                const target = e.target as HTMLImageElement;
-                                target.style.display = 'none';
-                                const fallback = target.parentElement?.nextElementSibling;
-                                if (fallback) (fallback as HTMLElement).style.display = 'flex';
-                              }}
-                            />
-                          </div>
-                        ) : null}
-                        <div className={`w-16 h-16 bg-gradient-to-br from-blue-500 via-indigo-600 to-purple-600 rounded-2xl flex items-center justify-center text-white font-bold text-xl shadow-lg ${schedule.companyLogo ? 'hidden' : ''}`}>
-                          {schedule.companyName.charAt(0)}
-                        </div>
-                        <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-green-500 rounded-full border-2 border-white flex items-center justify-center shadow-md">
-                          <CheckCircle className="w-3 h-3 text-white" />
-                        </div>
-                      </div>
-                      <div>
-                        <h3 className="text-lg font-bold text-gray-900 group-hover:text-blue-600 transition-colors">
-                          {schedule.companyName}
-                        </h3>
-                        <div className="flex items-center space-x-2">
-                          <p className="text-sm text-gray-600">{schedule.busType}</p>
-                          <div className="flex items-center">
-                            <Star className="w-3 h-3 text-yellow-400 fill-current" />
-                            <span className="text-xs text-gray-500 ml-1">4.5</span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
-                        MWK {(schedule.price).toLocaleString()}
-                      </div>
-                      <p className="text-xs text-gray-500">per person</p>
-                    </div>
-                  </div>
-
-                  <div className="bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 rounded-2xl p-4 mb-4 border border-blue-100">
-                    <div className="flex items-center justify-between">
-                      <div className="text-center">
-                        <div className="text-sm font-bold text-gray-900">{schedule.origin}</div>
-                        <div className="text-xs text-gray-600 mt-1">Departure</div>
-                        <div className="text-sm font-bold text-blue-600 mt-1">{schedule.departureTime}</div>
-                      </div>
-                      <div className="flex-1 relative mx-4">
-                        <div className="h-px bg-gradient-to-r from-blue-300 via-indigo-300 to-purple-300" />
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <div className="bg-white rounded-full p-2 border border-blue-200 shadow-sm group-hover:scale-110 transition-transform">
-                            <ArrowRight className="w-4 h-4 text-blue-600" />
-                          </div>
-                        </div>
-                        <div className="text-center mt-2">
-                          <span className="text-xs text-gray-500">{schedule.duration}h journey</span>
-                        </div>
-                      </div>
-                      <div className="text-center">
-                        <div className="text-sm font-bold text-gray-900">{schedule.destination}</div>
-                        <div className="text-xs text-gray-600 mt-1">Arrival</div>
-                        <div className="text-sm font-bold text-indigo-600 mt-1">{schedule.arrivalTime}</div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3 mb-4">
-                    <div className="flex items-center space-x-2 p-2 rounded-lg bg-gray-50">
-                      <Users className="w-4 h-4 text-green-600 flex-shrink-0" />
-                      <span className="text-sm font-medium text-gray-700">
-                        {schedule.availableSeats} seats
-                      </span>
-                    </div>
-                    <div className="flex items-center space-x-2 p-2 rounded-lg bg-gray-50">
-                      <Zap className="w-4 h-4 text-yellow-600 flex-shrink-0" />
-                      <span className="text-sm font-medium text-gray-700">Fast Route</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="px-6 pb-6">
-                  <Button
-                    onClick={() => handleBooking(schedule.id)}
-                    className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold py-3 rounded-2xl transition-all duration-200 group-hover:shadow-lg transform active:scale-95"
-                  >
-                    Book Now
-                    <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {!loading && !error && filteredSchedules.length === 0 && (
-          <div className="text-center py-16">
-            <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <BusIcon className="w-12 h-12 text-gray-400" />
-            </div>
-            <h3 className="text-xl font-semibold text-gray-900 mb-2">No schedules found</h3>
-            <p className="text-gray-600 mb-6">
-              Try adjusting your search criteria or selecting a different date
-            </p>
-            <Button
-              onClick={() => {
-                setSearchTerm("");
-                setSelectedOrigin("");
-                setSelectedDestination("");
-                setPriceRange([0, 100]);
-                setUseLocation(false);
-              }}
-              variant="outline"
-              className="rounded-2xl"
-            >
-              Clear Filters
-            </Button>
-          </div>
-        )}
+      {/* ─── Mobile Bottom Navigation ─────────────────────────────────────── */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 flex justify-around items-center p-3 z-50 pb-safe">
+        <button onClick={() => router.push('/schedules')} className="flex flex-col items-center text-blue-600">
+          <Search className="w-6 h-6" />
+          <span className="text-[10px] font-bold mt-1">Search</span>
+        </button>
+        <button onClick={() => router.push('/bookings')} className="flex flex-col items-center text-gray-400 hover:text-gray-900">
+          <BusIcon className="w-6 h-6" />
+          <span className="text-[10px] font-medium mt-1">Bookings</span>
+        </button>
+        <button onClick={() => router.push('/notifications')} className="flex flex-col items-center text-gray-400 hover:text-gray-900 relative">
+          <AlertCircle className="w-6 h-6" />
+          <span className="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full border border-white"></span>
+          <span className="text-[10px] font-medium mt-1">Alerts</span>
+        </button>
+        <button onClick={() => router.push('/profile')} className="flex flex-col items-center text-gray-400 hover:text-gray-900">
+          <User className="w-6 h-6" />
+          <span className="text-[10px] font-medium mt-1">Profile</span>
+        </button>
       </div>
+
+      <style jsx global>{`
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Inter:wght@400;500;600&display=swap');
+        .font-display { font-family: 'Plus Jakarta Sans', sans-serif; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+      `}</style>
     </div>
   );
-};
-
-export default SchedulesPage;
+}

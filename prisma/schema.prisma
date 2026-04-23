@@ -33,6 +33,7 @@ model User {
   activities       ActivityLog[]
   bookings         Booking[]
   groupRequests    GroupRequest[]
+  charterRequests  GroupCharterRequest[]
   notifications    Notification[]
   reservations     SeatReservation[]
   company          Company?          @relation("CompanyStaff", fields: [companyId], references: [id])
@@ -66,6 +67,7 @@ model Company {
   routes               Route[]
   schedules            Schedule[]
   scheduleTemplates    ScheduleTemplate[]
+  charterQuotes        GroupCharterQuote[]
   staff                User[]             @relation("CompanyStaff")
 }
 
@@ -132,6 +134,11 @@ model Schedule {
   isActive          Boolean           @default(true)
   isArchived        Boolean           @default(false)
   isCompleted       Boolean           @default(false)
+  actualDepartureTime DateTime?
+  actualArrivalTime   DateTime?
+  currentStopId       String?
+  delayMinutes        Int               @default(0)
+  tripNotes           String?
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
   baseFare          Int?
@@ -307,4 +314,42 @@ model Promotion {
 
   @@index([code])
   @@index([isActive])
+}
+
+model GroupCharterRequest {
+  id              String   @id @default(uuid())
+  userId          String
+  organizerName   String
+  organizerPhone  String
+  origin          String   // School Campus/Pickup location
+  destination     String
+  departureDate   DateTime
+  estimatedPax    Int
+  status          String   @default("pending") // pending, quoted, approved, rejected, cancelled
+  notes           String?
+  budget          Int?
+  quotes          GroupCharterQuote[]
+  user            User     @relation(fields: [userId], references: [id])
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([userId])
+  @@index([status])
+}
+
+model GroupCharterQuote {
+  id                String              @id @default(uuid())
+  requestId         String
+  companyId         String
+  price             Int
+  notes             String?
+  status            String              @default("pending") // pending, accepted, rejected
+  validUntil        DateTime?
+  company           Company             @relation(fields: [companyId], references: [id])
+  request           GroupCharterRequest @relation(fields: [requestId], references: [id])
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  @@index([requestId])
+  @@index([companyId])
 }

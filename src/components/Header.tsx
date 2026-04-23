@@ -7,7 +7,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import {
   Menu, X, User, LogOut, Search, Calendar,
-  Shield, ChevronDown, HomeIcon, BusIcon,
+  Shield, ChevronDown, HomeIcon, BusIcon, Zap,
 } from 'lucide-react';
 import { NotificationBell } from '@/contexts/NotificationContext';
 import Image from 'next/image';
@@ -41,13 +41,14 @@ const Header: React.FC = () => {
   const [isMenuOpen,     setIsMenuOpen]     = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isScrolled,     setIsScrolled]     = useState(false);
+  const [hasPromotions,   setHasPromotions]   = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
   // ── navigation items use translations ──────────────────────────────────────
   const navigationItems = [
     { href: '/',          label: t('home'),        icon: HomeIcon },
-    { href: '/search',    label: t('searchBuses'), icon: Search   },
-    { href: '/schedules', label: t('schedules'),   icon: Calendar },
+    ...(user ? [{ href: '/schedules', label: 'Schedules', icon: Search }] : []),
+    ...(hasPromotions ? [{ href: '/#promotions-section', label: t('promotions'), icon: Zap }] : []),
   ];
 
   const isAdminPage =
@@ -59,6 +60,15 @@ const Header: React.FC = () => {
   useEffect(() => {
     const onScroll = () => setIsScrolled(window.scrollY > 20);
     window.addEventListener('scroll', onScroll);
+
+    // Fetch promotion status
+    fetch('/api/promotions')
+      .then(res => res.json())
+      .then(data => {
+        if (data.success && data.data.length > 0) setHasPromotions(true);
+      })
+      .catch(err => console.error('Error checking promotions:', err));
+
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
@@ -91,8 +101,11 @@ const Header: React.FC = () => {
     catch (err) { console.error('Sign-out error:', err); }
   };
 
-  const isActivePage = (href: string) =>
-    href === '/' ? pathname === '/' : pathname.startsWith(href);
+  const isActivePage = (href: string) => {
+    const baseHref = href.split('#')[0];
+    if (baseHref === '/') return pathname === '/';
+    return pathname.startsWith(baseHref);
+  };
 
   const normalizedRole = String(userProfile?.role ?? '').trim().toLowerCase();
   const isSuperAdmin   = normalizedRole === 'superadmin';

@@ -24,7 +24,7 @@ const PROTECTED_ROUTES = [
   '/bookings',
   '/book',
   '/profile',
-  '/dashboard',
+  '/schedules',
   '/company/admin',
   '/company/operator',
   '/company/conductor',

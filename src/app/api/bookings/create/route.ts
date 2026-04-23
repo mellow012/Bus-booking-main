@@ -34,6 +34,7 @@ interface CreateBookingRequest {
   // Optional: segment stop IDs for pricing lookup.
   originStopId?:      string;
   destinationStopId?: string;
+  promoCode?:         string;
 }
 
 /** Generate a short human-readable booking reference, e.g. BK-A3F9X2 */
@@ -126,6 +127,7 @@ export async function POST(req: NextRequest) {
       scheduleId, routeId, companyId,
       seatNumbers, passengerDetails,
       originStopId, destinationStopId,
+      promoCode
     } = body;
 
     if (!scheduleId || !routeId || !companyId) {
@@ -222,7 +224,42 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const totalAmount = baseFare * passengerCount;
+    let totalAmount = baseFare * passengerCount;
+    let discountAmount = 0;
+    let appliedPromo = null;
+
+    // ── Apply Promotion if provided ───────────────────────────────────────────
+    if (promoCode) {
+      const promotion = await prisma.promotion.findUnique({
+        where: { code: promoCode.toUpperCase() },
+      });
+
+      if (promotion && promotion.isActive) {
+        const now = new Date();
+        const isValidDate = now >= promotion.startDate && now <= promotion.endDate;
+        const isValidAmount = !promotion.minPurchase || totalAmount >= promotion.minPurchase;
+
+        if (isValidDate && isValidAmount) {
+          if (promotion.discountType === 'percentage') {
+            discountAmount = (totalAmount * promotion.discountValue) / 100;
+            if (promotion.maxDiscount && discountAmount > promotion.maxDiscount) {
+              discountAmount = promotion.maxDiscount;
+            }
+          } else {
+            discountAmount = promotion.discountValue;
+          }
+
+          // Cap discount at total amount
+          discountAmount = Math.min(discountAmount, totalAmount);
+          totalAmount -= discountAmount;
+          appliedPromo = {
+            code: promotion.code,
+            discount: discountAmount,
+            title: promotion.title
+          };
+        }
+      }
+    }
 
     // ── Normalise passenger details ───────────────────────────────────────────
     const firstPassenger         = passengerDetails[0];
@@ -289,6 +326,8 @@ export async function POST(req: NextRequest) {
       bookingId:        result.id,
       bookingReference,
       totalAmount,
+      discountAmount,
+      appliedPromo,
       baseFare,
       fullTripFare:     fullFare,
       fareSource,

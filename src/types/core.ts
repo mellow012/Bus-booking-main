@@ -287,7 +287,7 @@ export type ScheduleStatus =
  * in_transit — conductor tapped "Depart [stop]"; bus is moving
  * completed  — conductor tapped "Complete Trip" at final destination
  */
-export type TripStatus = 'scheduled' | 'boarding' | 'in_transit' | 'completed';
+export type TripStatus = 'scheduled' | 'boarding' | 'in_transit' | 'arrived' | 'completed' | 'cancelled' | 'delayed';
 
 export interface TripStop {
   id: string;
@@ -328,6 +328,8 @@ export interface Schedule extends BaseEntity {
   departedStops?: string[];
   tripStartedAt?: Date;
   tripCompletedAt?: Date;
+  currentStopId?: string;
+  tripNotes?: string;
   conductorUid?: string;
 
   createdBy?: string;

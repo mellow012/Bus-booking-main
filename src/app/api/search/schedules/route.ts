@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
+import { isSegmentBookable } from '@/lib/schedule-utils';
 
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 100;
@@ -29,26 +30,20 @@ export async function GET(request: NextRequest) {
     const sortBy = searchParams.get('sortBy') || 'time'; // time, price_asc, price_desc, seats
     const pageOffset = (page - 1) * limit;
 
-    if (!origin || !destination) {
-      return NextResponse.json(
-        { error: 'origin and destination are required' },
-        { status: 400 }
-      );
-    }
-
     // Build where clause
     const where: any = {
       status: 'active',
       availableSeats: { gt: 0 },
+      // By default we check arrivalDateTime, but smart logic will handle segments
       arrivalDateTime: { gt: new Date() },
       company: { status: 'active' }, // Only show schedules from active companies
-      route: {
-        AND: [
-          { origin: { contains: origin, mode: 'insensitive' } },
-          { destination: { contains: destination, mode: 'insensitive' } },
-        ],
-      },
     };
+
+    if (origin || destination) {
+      where.route = { AND: [] };
+      if (origin) where.route.AND.push({ origin: { contains: origin, mode: 'insensitive' } });
+      if (destination) where.route.AND.push({ destination: { contains: destination, mode: 'insensitive' } });
+    }
 
     // Optional: filter by date
     if (date) {
@@ -61,7 +56,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Determine sort order
-    let orderBy: any = { departureTime: 'asc' };
+    let orderBy: any = { departureDateTime: 'asc' };
     if (sortBy === 'price_asc') orderBy = { price: 'asc' };
     else if (sortBy === 'price_desc') orderBy = { price: 'desc' };
     else if (sortBy === 'seats') orderBy = { availableSeats: 'desc' };
@@ -89,15 +84,17 @@ export async function GET(request: NextRequest) {
       const dep = new Date(sch.departureDateTime);
       const arr = new Date(sch.arrivalDateTime);
 
-      let currentStatus = sch.status;
-      if (sch.status === 'active') {
-        const now = new Date();
-        if (now >= dep && now <= arr) {
-          currentStatus = 'in_transit';
-        } else if (now > arr) {
-          currentStatus = 'completed';
-        }
+      // Smart Segment Filtering: If we have an origin city, check if it's still bookable
+      // This allows booking a bus that has already started but hasn't reached the user's stop yet.
+      let originStopId: string | undefined;
+      if (origin && route.stops) {
+        const stops = route.stops as any[];
+        const match = stops.find(s => s.name.toLowerCase().includes(origin));
+        if (match) originStopId = match.id;
       }
+
+      const bookable = isSegmentBookable(sch, originStopId);
+      if (!bookable) return null;
 
       return {
         id: sch.id,
@@ -107,7 +104,8 @@ export async function GET(request: NextRequest) {
         price: sch.price,
         availableSeats: sch.availableSeats,
         totalSeats: bus?.capacity || 40,
-        status: currentStatus,
+        status: sch.status,
+        tripStatus: sch.tripStatus, // Return raw tripStatus for UI
         date: dep.toISOString().split('T')[0],
         departureTime: dep.toTimeString().slice(0, 5),
         arrivalTime: arr.toTimeString().slice(0, 5),
@@ -121,7 +119,7 @@ export async function GET(request: NextRequest) {
         busType: bus?.busType || 'Standard',
         amenities: (bus?.amenities as string[]) || [],
       };
-    });
+    }).filter(item => item !== null);
 
     return NextResponse.json({
       success: true,

@@ -383,7 +383,7 @@ const HowItWorks = () => {
             </div>
             <div className="flex flex-col sm:flex-row gap-3 shrink-0">
               <button
-                onClick={() => router.push("/search")}
+                onClick={() => router.push("/schedules")}
                 className="group flex items-center justify-center gap-2 px-7 py-3.5 bg-white text-blue-700 font-bold rounded-2xl hover:bg-blue-50 transition-all shadow-lg text-sm active:scale-[.97]"
               >
                 Find a Bus

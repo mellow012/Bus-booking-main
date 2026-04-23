@@ -48,12 +48,12 @@ const TripBuckets: FC<TripBucketsProps> = ({ trips, buses, routes, onSelect }) =
   if (trips.length === 0) {
     return (
       <section>
-        <h2 className="text-2xl font-semibold mb-4 flex items-center gap-2">
+        <h2 className="text-xl sm:text-2xl font-bold mb-4 flex items-center gap-2">
           <Calendar className="w-6 h-6 text-blue-600" /> Your Trips
         </h2>
-        <div className="bg-white rounded-2xl p-10 text-center border shadow-sm">
-          <Calendar className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-          <p className="text-xl font-medium text-gray-700">No trips assigned yet</p>
+        <div className="bg-white rounded-2xl p-8 sm:p-10 text-center border shadow-sm">
+          <Calendar className="w-14 h-14 text-gray-300 mx-auto mb-4" />
+          <p className="text-lg font-semibold text-gray-700">No trips assigned yet</p>
           <p className="text-gray-500 mt-2 text-sm">Your operator hasn&apos;t assigned any upcoming trips to your buses</p>
         </div>
       </section>
@@ -63,10 +63,10 @@ const TripBuckets: FC<TripBucketsProps> = ({ trips, buses, routes, onSelect }) =
   return (
     <section>
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-2xl font-semibold flex items-center gap-2">
+        <h2 className="text-xl sm:text-2xl font-bold flex items-center gap-2">
           <Calendar className="w-6 h-6 text-blue-600" /> Your Trips
         </h2>
-        <span className="text-sm text-gray-500">{totalActive} active</span>
+        <span className="text-sm text-gray-500 font-medium bg-gray-100 px-3 py-1 rounded-full">{totalActive} active</span>
       </div>
       <div className="space-y-4">
         {BUCKET_ORDER.map(bucket => {
@@ -77,17 +77,17 @@ const TripBuckets: FC<TripBucketsProps> = ({ trips, buses, routes, onSelect }) =
             <div key={bucket} className="space-y-3">
               <button
                 onClick={() => toggle(bucket)}
-                className={`w-full flex items-center justify-between px-4 py-2.5 rounded-xl border font-medium text-sm transition-all hover:opacity-90 ${cfg.bgCls} ${cfg.borderCls} ${cfg.textCls}`}
+                className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border font-medium text-sm transition-all active:scale-[0.98] ${cfg.bgCls} ${cfg.borderCls} ${cfg.textCls}`}
               >
                 <div className="flex items-center gap-2.5">
                   {cfg.icon}
-                  <span className="font-semibold">{cfg.label}</span>
+                  <span className="font-bold">{cfg.label}</span>
                   <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${cfg.pillCls}`}>{list.length}</span>
                 </div>
-                {collapsed[bucket] ? <ChevronDown className="w-4 h-4 opacity-50" /> : <ChevronUp className="w-4 h-4 opacity-50" />}
+                {collapsed[bucket] ? <ChevronDown className="w-5 h-5 opacity-50" /> : <ChevronUp className="w-5 h-5 opacity-50" />}
               </button>
               {!collapsed[bucket] && (
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 pl-1">
+                <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
                   {list.map(trip => (
                     <TripCard key={trip.id} trip={trip} bus={busMap.get(trip.busId)} route={routeMap.get(trip.routeId)} onClick={() => onSelect(trip)} />
                   ))}

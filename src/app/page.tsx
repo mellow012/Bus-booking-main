@@ -8,7 +8,7 @@ import {
   Star, ArrowRight, Zap, Shield, CheckCircle, RefreshCw,
   Award, Navigation, Wifi, AirVent, Search, Play, Music,
   Coffee, Flame, ArrowUpDown, ChevronLeft, ChevronRight,
-  LocateFixed, X, ChevronDown,
+  LocateFixed, X, ChevronDown, School,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import TourModal from "@/components/TourModal";
@@ -16,6 +16,9 @@ import PromoBanner from "@/components/PromoBanner";
 import PopularRoutesCarousel from "@/components/PopularRouteCarousal";
 import HowItWorks from "@/components/HowItWorks";
 import Partners from "@/components/Partners";
+import { PromotionCard } from "@/components/PromotionCard";
+import { Promotion } from "@/types/system";
+import { TicketPercent, Sparkles, TrendingUp, Gift } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -113,6 +116,10 @@ export default function HomePage() {
   const [showCityPicker, setShowCityPicker] = useState(false);
   const [cityResolved,   setCityResolved]   = useState(false);
 
+  // ── Promotions ───────────────────────────────────────────────────────────────
+  const [promotions,    setPromotions]    = useState<Promotion[]>([]);
+  const [promoLoading,  setPromoLoading]  = useState(true);
+
   // ── Schedule tabs / sort / pagination ────────────────────────────────────────
   const [activeTab, setActiveTab] = useState<TabKey>("nearby");
   const [sortKey,   setSortKey]   = useState<SortKey>("time");
@@ -165,9 +172,23 @@ export default function HomePage() {
     }
   }, []);
 
+  const fetchPromotions = useCallback(async () => {
+    setPromoLoading(true);
+    try {
+      const response = await fetch('/api/promotions');
+      const result = await response.json();
+      if (result.success) setPromotions(result.data);
+    } catch (err) {
+      console.error('Failed to fetch promotions:', err);
+    } finally {
+      setPromoLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     // Initial fetch
     fetchSchedules();
+    fetchPromotions();
 
     // Set up polling interval (30 seconds for homepage)
     pollingIntervalRef.current = setInterval(() => {
@@ -217,7 +238,7 @@ export default function HomePage() {
   // ── Handlers ─────────────────────────────────────────────────────────────────
   const handleSearch = useCallback(()=>{
     const p = new URLSearchParams({ from:search.from.trim(), to:search.to.trim(), date:search.date, passengers:String(Math.max(1,search.passengers)) } as any);
-    router.push(`/search?${p}`);
+    router.push(`/schedules?${p}`);
   },[router,search]);
 
   const handleBooking = useCallback((id: string)=>{
@@ -472,7 +493,12 @@ export default function HomePage() {
         </div>
       </section>
 
-      <PromoBanner onCtaClick={()=>router.push("/promotions")}/>
+      {promotions.length > 0 && (
+        <PromoBanner 
+          promotions={promotions} 
+          onCtaClick={() => document.getElementById("promotions-section")?.scrollIntoView({ behavior: "smooth" })}
+        />
+      )}
 
       {/* ── FEATURED SCHEDULES ────────────────────────────────────────────────── */}
       <section id="schedules-section" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
@@ -632,7 +658,83 @@ export default function HomePage() {
             </div>
           </div>
         )}
+
+        {/* ── SCHOOL CHARTERS PROMO ────────────────────────────────────────────── */}
+        <div className="mt-16 bg-gradient-to-br from-indigo-900 to-blue-900 rounded-[3rem] overflow-hidden shadow-2xl relative">
+          <div className="absolute inset-0 opacity-20 bg-[url('/student_group_bus_charter_1776923652869.png')] bg-cover bg-center mix-blend-overlay"></div>
+          <div className="relative px-8 py-12 md:px-16 md:py-20 flex flex-col md:flex-row items-center gap-12">
+            <div className="flex-1 text-center md:text-left">
+              <div className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-md px-4 py-1.5 rounded-full border border-white/20 mb-6">
+                <School className="w-4 h-4 text-indigo-300" />
+                <span className="text-[10px] font-black text-white uppercase tracking-widest">Campus Special</span>
+              </div>
+              <h2 className="text-4xl md:text-5xl font-extrabold text-white tracking-tighter mb-6 leading-none">
+                Organizing a <br /> <span className="text-indigo-400">School Trip?</span>
+              </h2>
+              <p className="text-indigo-100 text-lg font-medium leading-relaxed mb-8 max-w-lg">
+                Get exclusive student rates and door-to-door campus pickup. Perfect for sports teams, field trips, and club events.
+              </p>
+              <Button 
+                onClick={() => router.push('/groups')}
+                className="h-14 px-8 bg-white text-indigo-900 hover:bg-indigo-50 font-bold rounded-2xl shadow-xl transition-all flex items-center gap-2 group"
+              >
+                Charter a Bus <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+              </Button>
+            </div>
+            <div className="flex-shrink-0 w-full md:w-1/3 aspect-video md:aspect-square bg-white/5 backdrop-blur-xl border border-white/10 rounded-[2.5rem] p-8 flex flex-col justify-center">
+               <div className="flex -space-x-3 mb-6">
+                  {[1,2,3,4].map(i => <div key={i} className="w-10 h-10 rounded-full border-2 border-indigo-900 bg-indigo-100 flex items-center justify-center text-[10px] font-bold text-indigo-600">UN</div>)}
+                  <div className="w-10 h-10 rounded-full border-2 border-indigo-900 bg-indigo-600 flex items-center justify-center text-[10px] font-bold text-white">+15</div>
+               </div>
+               <p className="text-white font-bold text-xl mb-1 italic">"The easiest way to move our team."</p>
+               <p className="text-indigo-300 text-sm font-medium">— UNIMA Sports Committee</p>
+            </div>
+          </div>
+        </div>
       </section>
+
+      {/* ── PROMOTIONS SECTION ────────────────────────────────────────────────── */}
+      {promotions.length > 0 && (
+        <section id="promotions-section" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 bg-white rounded-3xl border border-gray-100 shadow-sm mb-12">
+          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-8">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-widest text-indigo-600 mb-1">Exclusive Deals</p>
+              <h2 className="font-display text-2xl sm:text-3xl font-extrabold text-gray-900">Current Promotions</h2>
+              <p className="text-gray-500 text-sm mt-1">Redeem these codes at checkout for instant savings</p>
+            </div>
+            <div className="flex items-center gap-4">
+              <div className="hidden md:flex items-center gap-2 text-xs font-medium text-gray-400">
+                <TicketPercent className="w-4 h-4" /> Valid for limited time
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {promotions.map((p) => (
+              <PromotionCard key={p.id} promotion={p} />
+            ))}
+          </div>
+
+          {/* Quick Stats for promotions moved from dedicated page */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-12 pt-12 border-t border-gray-50">
+            {[
+              { icon: TrendingUp, label: "Flash Sales", desc: "Up to 50% discount", col: "text-blue-600 bg-blue-50" },
+              { icon: Award, label: "Loyalty Rewards", desc: "Earn as you travel", col: "text-indigo-600 bg-indigo-50" },
+              { icon: Gift, label: "New User Bonus", desc: "First booking special", col: "text-emerald-600 bg-emerald-50" },
+            ].map((item, i) => (
+              <div key={i} className="flex items-center gap-4 p-4 rounded-2xl hover:bg-gray-50 transition-colors">
+                <div className={`w-10 h-10 rounded-xl ${item.col} flex items-center justify-center shrink-0`}>
+                  <item.icon className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-gray-900">{item.label}</h4>
+                  <p className="text-[10px] text-gray-500 font-medium">{item.desc}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* ── HOW IT WORKS + REST ────────────────────────────────────────────────── */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-16">

@@ -14,6 +14,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
+import { isSegmentBookable } from '@/lib/schedule-utils';
 
 export const dynamic = 'force-dynamic';
 
@@ -52,25 +53,37 @@ export async function GET(request: NextRequest) {
     // Extract query parameters
     const from = searchParams.get('from')?.toLowerCase().trim() || '';
     const to = searchParams.get('to')?.toLowerCase().trim() || '';
-    const date = searchParams.get('date') || ''; // YYYY-MM-DD
+    const startDate = searchParams.get('startDate') || '';
+    const endDate = searchParams.get('endDate') || '';
     const page = Math.max(1, parseInt(searchParams.get('page') || '1'));
     const limit = Math.min(
       parseInt(searchParams.get('limit') || String(DEFAULT_LIMIT)),
       MAX_LIMIT
     );
     const sortBy = (searchParams.get('sortBy') || 'time') as SortBy;
+    const date = searchParams.get('date') || '';
     const pageOffset = (page - 1) * limit;
 
     // Build where clause
     const where: any = {
       status: 'active',
       availableSeats: { gt: 0 },
-      // Only show schedules that haven't arrived yet
-      arrivalDateTime: { gt: new Date() },
-      company: { status: 'active' }, // Only show schedules from active companies
+      // By default, only show schedules that haven't arrived yet
+      // but if specific dates are provided, we follow those
+      company: { status: 'active' }, 
     };
 
-    // Optional: filter by date if provided
+    if (startDate || endDate) {
+      where.departureDateTime = {};
+      if (startDate) where.departureDateTime.gte = new Date(startDate);
+      if (endDate) where.departureDateTime.lte = new Date(endDate);
+    } else if (!date) {
+      // Default: only show upcoming
+      // Smart logic in map() will handle per-stop visibility
+      where.arrivalDateTime = { gt: new Date() };
+    }
+
+    // Optional: filter by specific date if provided (YYYY-MM-DD)
     if (date) {
       const startOfDay = new Date(`${date}T00:00:00Z`);
       const endOfDay = new Date(`${date}T23:59:59Z`);
@@ -89,7 +102,7 @@ export async function GET(request: NextRequest) {
         company: true,
       },
       orderBy:
-        sortBy === 'time'
+        sortBy === 'time' || (sortBy as string) === 'departureDateTime'
           ? { departureDateTime: 'asc' }
           : sortBy === 'price_asc'
           ? { price: 'asc' }
@@ -119,15 +132,16 @@ export async function GET(request: NextRequest) {
         const durationMs = arr.getTime() - dep.getTime();
         const durationMin = Math.round(durationMs / 60000);
 
-        let currentStatus = sch.status;
-        if (sch.status === 'active') {
-          const now = new Date();
-          if (now >= dep && now <= arr) {
-            currentStatus = 'in_transit';
-          } else if (now > arr) {
-            currentStatus = 'completed';
-          }
+        // Smart Segment Filtering: If we have an from city, check if it's still bookable
+        let originStopId: string | undefined;
+        if (from && route.stops) {
+          const stops = route.stops as any[];
+          const match = stops.find(s => s.name.toLowerCase().includes(from));
+          if (match) originStopId = match.id;
         }
+
+        const bookable = isSegmentBookable(sch, originStopId);
+        if (!bookable) return null;
 
         return {
           id: sch.id,
@@ -136,8 +150,10 @@ export async function GET(request: NextRequest) {
           routeId: sch.routeId,
           price: sch.price,
           availableSeats: sch.availableSeats,
-          status: currentStatus,
+          status: sch.status,
           date: dep.toISOString().split('T')[0],
+          departureDateTime: sch.departureDateTime,
+          arrivalDateTime: sch.arrivalDateTime,
           departureTime: dep.toTimeString().slice(0, 5),
           arrivalTime: arr.toTimeString().slice(0, 5),
           duration: durationMin,

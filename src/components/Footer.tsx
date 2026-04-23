@@ -45,7 +45,7 @@ const Footer: React.FC = () => {
     { href: '/schedules', label: 'Schedules', ariaLabel: 'View bus schedules' },
     { href: '/bookings', label: 'My Bookings', ariaLabel: 'View your bookings' },
     { href: '/routes', label: 'Popular Routes', ariaLabel: 'Explore popular routes' },
-    { href: '/offers', label: 'Special Offers', ariaLabel: 'Check special offers' }
+    { href: '/#promotions-section', label: 'Special Offers', ariaLabel: 'Check special offers' }
   ];
 
   const support = [

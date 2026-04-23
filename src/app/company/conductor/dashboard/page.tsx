@@ -9,7 +9,7 @@ import * as dbActions from '@/lib/actions/db.actions';
 
 import {
   Loader2, LogOut, Radio, Navigation, Bell, Search, MapPin, 
-  Calendar, LayoutDashboard, User, AlertTriangle 
+  Calendar, LayoutDashboard, User, AlertTriangle, X, UserPlus 
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -151,14 +151,22 @@ export default function ConductorDashboard() {
     setActionLoadingId('trip-control');
     try {
       const now = new Date();
+      const firstStop = stopSequence[0];
       await dbActions.updateSchedule(selectedTrip.id, {
         tripStatus: 'boarding',
         currentStopIndex: 0,
+        currentStopId: firstStop.id,
         departedStops: [],
         tripStartedAt: now,
       });
-      updateTripOptimistically({ tripStatus: 'boarding', currentStopIndex: 0, departedStops: [], tripStartedAt: now });
-      await broadcastTripStatus(selectedTrip.id, 'boarding', { currentStopIndex: 0 });
+      updateTripOptimistically({ 
+        tripStatus: 'boarding', 
+        currentStopIndex: 0, 
+        currentStopId: firstStop.id,
+        departedStops: [], 
+        tripStartedAt: now 
+      });
+      await broadcastTripStatus(selectedTrip.id, 'boarding', { currentStopIndex: 0, currentStopId: firstStop.id });
     } catch (err) {
       setGlobalError('Failed to start trip.');
     } finally {
@@ -179,9 +187,14 @@ export default function ConductorDashboard() {
       await dbActions.updateSchedule(selectedTrip.id, {
         tripStatus: 'in_transit',
         departedStops: deps as any,
+        currentStopId: currentStop.id,
       });
-      updateTripOptimistically({ tripStatus: 'in_transit', departedStops: deps });
-      await broadcastTripStatus(selectedTrip.id, 'in_transit', { departedStops: deps, departedStopName: currentStop.name });
+      updateTripOptimistically({ tripStatus: 'in_transit', departedStops: deps, currentStopId: currentStop.id });
+      await broadcastTripStatus(selectedTrip.id, 'in_transit', { 
+        departedStops: deps, 
+        departedStopName: currentStop.name,
+        currentStopId: currentStop.id 
+      });
     } finally {
       setActionLoadingId(null);
     }
@@ -193,6 +206,7 @@ export default function ConductorDashboard() {
     try {
       const currentIdx = selectedTrip.currentStopIndex ?? 0;
       const nextIdx = currentIdx + 1;
+      const nextStop = stopSequence[nextIdx];
       
       if (nextIdx >= stopSequence.length - 1) {
         // Final Stop
@@ -200,19 +214,52 @@ export default function ConductorDashboard() {
         await dbActions.updateSchedule(selectedTrip.id, {
           tripStatus: 'completed',
           currentStopIndex: nextIdx,
+          currentStopId: nextStop.id,
           tripCompletedAt: now,
         } as any);
-        updateTripOptimistically({ tripStatus: 'completed', currentStopIndex: nextIdx, tripCompletedAt: now });
-        await broadcastTripStatus(selectedTrip.id, 'completed', { completedAt: now });
+        updateTripOptimistically({ tripStatus: 'completed', currentStopIndex: nextIdx, currentStopId: nextStop.id, tripCompletedAt: now });
+        await broadcastTripStatus(selectedTrip.id, 'completed', { completedAt: now, currentStopId: nextStop.id });
       } else {
         // Intermediate Stop
         await dbActions.updateSchedule(selectedTrip.id, {
-          tripStatus: 'boarding',
+          tripStatus: 'arrived', // Updated to 'arrived' state
           currentStopIndex: nextIdx,
+          currentStopId: nextStop.id,
         });
-        updateTripOptimistically({ tripStatus: 'boarding', currentStopIndex: nextIdx });
-        await broadcastTripStatus(selectedTrip.id, 'boarding', { currentStopIndex: nextIdx, arrivedStopName: stopSequence[nextIdx].name });
+        updateTripOptimistically({ tripStatus: 'arrived', currentStopIndex: nextIdx, currentStopId: nextStop.id });
+        await broadcastTripStatus(selectedTrip.id, 'arrived', { 
+          currentStopIndex: nextIdx, 
+          arrivedStopName: nextStop.name,
+          currentStopId: nextStop.id 
+        });
       }
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const handleOpenBoarding = async () => {
+    if (!selectedTrip) return;
+    setActionLoadingId('trip-control');
+    try {
+      await dbActions.updateSchedule(selectedTrip.id, { tripStatus: 'boarding' });
+      updateTripOptimistically({ tripStatus: 'boarding' });
+      await broadcastTripStatus(selectedTrip.id, 'boarding', {});
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const handleMarkDelayed = async (reason: string) => {
+    if (!selectedTrip) return;
+    setActionLoadingId('trip-control');
+    try {
+      await dbActions.updateSchedule(selectedTrip.id, { 
+        tripStatus: 'delayed',
+        tripNotes: reason 
+      });
+      updateTripOptimistically({ tripStatus: 'delayed', tripNotes: reason });
+      await broadcastTripStatus(selectedTrip.id, 'delayed', { reason });
     } finally {
       setActionLoadingId(null);
     }
@@ -346,51 +393,53 @@ export default function ConductorDashboard() {
   );
 
   const renderOverview = () => (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="grid gap-4 sm:grid-cols-3">
-        <div className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm relative overflow-hidden group">
-          <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-50 rounded-full -mr-8 -mt-8 transition-transform group-hover:scale-110" />
-          <Radio className="w-6 h-6 text-indigo-600 mb-4 relative" />
-          <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest leading-none mb-1 relative">Live Now</p>
-          <p className="text-3xl font-extrabold text-gray-900 relative">{stats.liveCount}</p>
+    <div className="space-y-5 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      {/* Stats — horizontal scroll on mobile */}
+      <div className="flex gap-3 overflow-x-auto pb-2 hide-scrollbar sm:grid sm:grid-cols-3 sm:overflow-visible">
+        <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm relative overflow-hidden group min-w-[140px] shrink-0 sm:min-w-0">
+          <Radio className="w-5 h-5 text-indigo-600 mb-2 relative" />
+          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest leading-none mb-1 relative">Live Now</p>
+          <p className="text-2xl font-black text-gray-900 relative">{stats.liveCount}</p>
         </div>
-        <div className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm relative overflow-hidden group">
-          <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-50 rounded-full -mr-8 -mt-8 transition-transform group-hover:scale-110" />
-          <Calendar className="w-6 h-6 text-emerald-600 mb-4 relative" />
-          <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest leading-none mb-1 relative">Today's Total</p>
-          <p className="text-3xl font-extrabold text-gray-900 relative">{stats.totalToday}</p>
+        <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm relative overflow-hidden group min-w-[140px] shrink-0 sm:min-w-0">
+          <Calendar className="w-5 h-5 text-emerald-600 mb-2 relative" />
+          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest leading-none mb-1 relative">Today</p>
+          <p className="text-2xl font-black text-gray-900 relative">{stats.totalToday}</p>
         </div>
-        <div className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm relative overflow-hidden group">
-          <div className="absolute top-0 right-0 w-24 h-24 bg-amber-50 rounded-full -mr-8 -mt-8 transition-transform group-hover:scale-110" />
-          <Navigation className="w-6 h-6 text-amber-600 mb-4 relative" />
-          <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest leading-none mb-1 relative">Remaining Today</p>
-          <p className="text-3xl font-extrabold text-gray-900 relative">{stats.pendingToday}</p>
+        <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm relative overflow-hidden group min-w-[140px] shrink-0 sm:min-w-0">
+          <Navigation className="w-5 h-5 text-amber-600 mb-2 relative" />
+          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest leading-none mb-1 relative">Remaining</p>
+          <p className="text-2xl font-black text-gray-900 relative">{stats.pendingToday}</p>
         </div>
       </div>
 
-      <div className="bg-white rounded-[2.5rem] p-8 border border-gray-100 shadow-xl shadow-gray-200/50">
-        <div className="flex items-center justify-between mb-6">
-          <h3 className="text-xl font-bold text-gray-900 tracking-tight flex items-center gap-2">
-            <Radio className="w-5 h-5 text-indigo-600 animate-pulse" /> Current System Status
+      <div className="bg-white rounded-2xl p-4 sm:p-6 border border-gray-100 shadow-sm">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-base sm:text-lg font-bold text-gray-900 tracking-tight flex items-center gap-2">
+            <Radio className="w-4 h-4 text-indigo-600 animate-pulse" /> System Status
           </h3>
-          <span className="text-[10px] font-black text-indigo-500 bg-indigo-50 px-3 py-1 rounded-full uppercase tracking-widest">Connected</span>
+          <span className="text-[10px] font-black text-indigo-500 bg-indigo-50 px-2.5 py-1 rounded-full uppercase tracking-widest">Connected</span>
         </div>
-        <div className="space-y-4">
-           {stats.liveCount > 0 ? (
-             <div className="bg-indigo-50/50 p-6 rounded-3xl border border-indigo-100 flex items-center justify-between">
-                <div>
-                  <p className="text-indigo-900 font-bold">You have active trips</p>
-                  <p className="text-indigo-600/70 text-sm font-medium">Head to the "My Trips" console to manage manifest.</p>
-                </div>
-                <button onClick={() => setActiveTab('trips')} className="bg-indigo-600 text-white px-6 py-3 rounded-2xl font-bold shadow-lg shadow-indigo-200 hover:bg-black transition-all">Go to Live Console</button>
-             </div>
-           ) : (
-             <div className="bg-gray-50 p-10 rounded-[2rem] text-center border border-dashed border-gray-200">
-                <Navigation className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                <p className="text-gray-400 font-bold italic tracking-tight uppercase text-xs">Awaiting assignments or trip start...</p>
-             </div>
-           )}
-        </div>
+        {stats.liveCount > 0 ? (
+          <button
+            onClick={() => setActiveTab('trips')}
+            className="w-full bg-indigo-50 p-4 rounded-xl border border-indigo-100 flex items-center gap-3 text-left active:bg-indigo-100 transition-colors"
+          >
+            <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center shrink-0">
+              <MapPin className="w-5 h-5 text-white" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-indigo-900 font-bold text-sm">You have active trips</p>
+              <p className="text-indigo-600/70 text-xs">Tap to manage your live console</p>
+            </div>
+            <span className="text-indigo-600 font-bold text-xs shrink-0">Go →</span>
+          </button>
+        ) : (
+          <div className="bg-gray-50 p-8 rounded-xl text-center border border-dashed border-gray-200">
+            <Navigation className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+            <p className="text-gray-400 font-bold text-xs uppercase tracking-wide">Awaiting assignments...</p>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -409,13 +458,13 @@ export default function ConductorDashboard() {
                 <TripSummaryCard trip={selectedTrip} bus={activeBus} bookings={tripBookings} company={company} onRefresh={() => setSelectedTrip(null)} />
               ) : (
                 <>
-                  <div className="flex items-center justify-between mb-2">
-                    <button onClick={() => setSelectedTrip(null)} className="flex items-center gap-2 text-indigo-600 font-bold text-sm bg-indigo-50 px-4 py-2 rounded-xl border border-indigo-100 hover:bg-indigo-100 transition-all">
-                      <span>← All Trips</span>
+                  <div className="flex items-center justify-between mb-3">
+                    <button onClick={() => setSelectedTrip(null)} className="flex items-center gap-2 text-indigo-600 font-bold text-sm bg-indigo-50 px-4 py-2.5 rounded-xl border border-indigo-100 active:bg-indigo-100 transition-all">
+                      <span>← Back</span>
                     </button>
                     <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Active Workspace</span>
-                      <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                      <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest hidden sm:block">Live</span>
                     </div>
                   </div>
                   <NextStopPassengerAlert 
@@ -431,16 +480,18 @@ export default function ConductorDashboard() {
                     onStartTrip={handleStartTrip}
                     onDepart={handleDepartStop}
                     onArriveAtNext={handleArriveNextStop}
+                    onOpenBoarding={handleOpenBoarding}
+                    onMarkDelayed={handleMarkDelayed}
                     loading={actionLoadingId === 'trip-control'}
                   />
 
                   <div className="pt-4 border-t border-gray-100">
                     <div className="flex items-center justify-between mb-4">
-                      <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                         <Radio className="w-5 h-5 text-indigo-500 animate-pulse" /> Live Manifest
+                      <h2 className="text-lg sm:text-xl font-bold text-gray-900 flex items-center gap-2">
+                         <Radio className="w-4 h-4 text-indigo-500 animate-pulse" /> Manifest
                       </h2>
-                      <Button onClick={() => setWalkOnModalOpen(true)} className="bg-indigo-600 hover:bg-black text-white shadow-lg transition-all rounded-xl font-bold">
-                        Walk-on Booking
+                      <Button onClick={() => setWalkOnModalOpen(true)} className="bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg transition-all rounded-xl font-bold h-10 sm:h-auto hidden sm:flex">
+                        <UserPlus className="w-4 h-4 mr-1.5" /> Walk-on
                       </Button>
                     </div>
 
@@ -453,6 +504,14 @@ export default function ConductorDashboard() {
                       loadingActionId={actionLoadingId}
                     />
                   </div>
+
+                  {/* Mobile FAB for Walk-on */}
+                  <button
+                    onClick={() => setWalkOnModalOpen(true)}
+                    className="sm:hidden fixed bottom-20 right-4 w-14 h-14 bg-indigo-600 text-white rounded-2xl shadow-xl shadow-indigo-300 flex items-center justify-center z-40 active:scale-95 transition-transform"
+                  >
+                    <UserPlus className="w-6 h-6" />
+                  </button>
                 </>
               )}
             </div>
@@ -460,25 +519,31 @@ export default function ConductorDashboard() {
         );
       case 'profile':
         return (
-          <div className="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm max-w-2xl mx-auto">
-            <div className="flex items-center gap-6 mb-8">
-              <div className="w-20 h-20 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600 text-3xl font-bold border border-indigo-100 ring-8 ring-indigo-50/50">
+          <div className="bg-white p-5 sm:p-8 rounded-2xl border border-gray-100 shadow-sm max-w-2xl mx-auto">
+            <div className="flex items-center gap-4 sm:gap-6 mb-6">
+              <div className="w-16 h-16 sm:w-20 sm:h-20 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600 text-2xl sm:text-3xl font-bold border border-indigo-100">
                 {userProfile?.firstName?.[0] || 'C'}
               </div>
-              <div>
-                <h3 className="text-2xl font-bold text-gray-900 tracking-tight">{userProfile?.firstName} {userProfile?.lastName}</h3>
-                <p className="text-indigo-500 font-bold uppercase tracking-widest text-[11px] mt-1 italic">Conductor Level 4 • Fleet Operations</p>
+              <div className="min-w-0">
+                <h3 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight truncate">{userProfile?.firstName} {userProfile?.lastName}</h3>
+                <p className="text-indigo-500 font-bold uppercase tracking-widest text-[10px] mt-1">Conductor • Fleet Operations</p>
               </div>
             </div>
-            <div className="space-y-4">
-               <div className="p-4 bg-gray-50 rounded-2xl flex items-center justify-between border border-gray-100">
-                  <span className="text-sm font-bold text-gray-400 uppercase tracking-widest">Email Address</span>
-                  <span className="font-semibold text-gray-700">{userProfile?.email}</span>
+            <div className="space-y-3">
+               <div className="p-3.5 bg-gray-50 rounded-xl border border-gray-100">
+                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1">Email</span>
+                  <span className="font-semibold text-gray-700 text-sm break-all">{userProfile?.email}</span>
                </div>
-               <div className="p-4 bg-gray-50 rounded-2xl flex items-center justify-between border border-gray-100">
-                  <span className="text-sm font-bold text-gray-400 uppercase tracking-widest">Phone Number</span>
-                  <span className="font-semibold text-gray-700">{userProfile?.phone || 'Not Managed'}</span>
+               <div className="p-3.5 bg-gray-50 rounded-xl border border-gray-100">
+                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1">Phone</span>
+                  <span className="font-semibold text-gray-700 text-sm">{userProfile?.phone || 'Not set'}</span>
                </div>
+               <button
+                 onClick={signOut}
+                 className="w-full flex items-center justify-center gap-2 px-4 py-3 text-red-600 bg-red-50 hover:bg-red-100 rounded-xl transition-all font-bold text-sm lg:hidden"
+               >
+                 <LogOut className="w-4 h-4" /> Sign Out
+               </button>
             </div>
           </div>
         );
@@ -538,22 +603,16 @@ export default function ConductorDashboard() {
       {/* ── MAIN CONTENT ── */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Header */}
-        <header className="h-20 bg-white/80 backdrop-blur-md border-b border-gray-100 flex items-center justify-between px-8 sticky top-0 z-40 transition-all duration-300">
-          <div className="flex items-center gap-4">
-            <h2 className="text-xl font-bold text-gray-900 border-l-4 border-indigo-600 pl-4 capitalize tracking-tight italic">
-              {activeTab === 'trips' ? (selectedTrip ? 'Trip Workspace' : 'My Schedule') : activeTab}
-            </h2>
-          </div>
-
-          <div className="flex items-center gap-6">
-            <div className="flex flex-col items-end">
-              <span className="text-[11px] font-bold text-gray-400 uppercase tracking-widest leading-none mb-1">Status</span>
-              <div className="flex items-center gap-1.5 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
-                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-tight">Active Duty</p>
-              </div>
+        <header className="h-14 sm:h-16 bg-white/80 backdrop-blur-md border-b border-gray-100 flex items-center justify-between px-4 sm:px-8 sticky top-0 z-40">
+          <h2 className="text-base sm:text-lg font-bold text-gray-900 border-l-3 border-indigo-600 pl-3 capitalize tracking-tight">
+            {activeTab === 'trips' ? (selectedTrip ? 'Trip Workspace' : 'My Trips') : activeTab}
+          </h2>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1.5 bg-emerald-50 px-2 py-1 rounded-full border border-emerald-100">
+              <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <p className="text-[10px] font-bold text-emerald-600 uppercase hidden sm:block">Active</p>
             </div>
-            <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600 font-bold text-xs shadow-sm border border-indigo-100 ring-4 ring-indigo-50/50">
+            <div className="w-9 h-9 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600 font-bold text-sm border border-indigo-100">
               {userProfile?.firstName?.[0] || 'C'}
             </div>
           </div>
@@ -561,9 +620,12 @@ export default function ConductorDashboard() {
 
         <main className="flex-1 p-4 lg:p-8 overflow-y-auto pb-24 lg:pb-8">
           {globalError && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-6 py-4 rounded-3xl mb-6 text-sm font-bold flex items-center gap-3 animate-in fade-in zoom-in duration-300 shadow-lg shadow-red-100">
-              <AlertTriangle className="w-5 h-5" />
-              {globalError}
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-2xl mb-4 text-sm font-bold flex items-center gap-3 animate-in fade-in duration-300">
+              <AlertTriangle className="w-5 h-5 shrink-0" />
+              <span className="flex-1">{globalError}</span>
+              <button onClick={() => setGlobalError('')} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-red-100 shrink-0">
+                <X className="w-4 h-4" />
+              </button>
             </div>
           )}
 
@@ -593,23 +655,23 @@ export default function ConductorDashboard() {
       />
 
       {/* ── MOBILE BOTTOM BAR ── */}
-      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 flex items-center justify-around px-2 py-3 z-50 pb-safe shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">
-        <button onClick={() => setActiveTab('overview')} className={`flex flex-col items-center gap-1 ${activeTab === 'overview' ? 'text-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}>
-          <LayoutDashboard className="w-5 h-5" />
-          <span className="text-[10px] font-medium">Overview</span>
-        </button>
-        <button onClick={() => setActiveTab('trips')} className={`flex flex-col items-center gap-1 ${activeTab === 'trips' ? 'text-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}>
-          <MapPin className="w-5 h-5" />
-          <span className="text-[10px] font-medium">Trips</span>
-        </button>
-        <button onClick={() => setActiveTab('notifications')} className={`flex flex-col items-center gap-1 ${activeTab === 'notifications' ? 'text-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}>
-          <Bell className="w-5 h-5" />
-          <span className="text-[10px] font-medium">Alerts</span>
-        </button>
-        <button onClick={() => setActiveTab('profile')} className={`flex flex-col items-center gap-1 ${activeTab === 'profile' ? 'text-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}>
-          <User className="w-5 h-5" />
-          <span className="text-[10px] font-medium">Profile</span>
-        </button>
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-gray-200 flex items-center justify-around px-2 pt-2 z-50 pb-safe shadow-[0_-4px_20px_rgba(0,0,0,0.08)]">
+        {[
+          { tab: 'overview' as const, icon: LayoutDashboard, label: 'Home' },
+          { tab: 'trips' as const, icon: MapPin, label: 'Trips' },
+          { tab: 'notifications' as const, icon: Bell, label: 'Alerts' },
+          { tab: 'profile' as const, icon: User, label: 'Profile' },
+        ].map(({ tab, icon: Icon, label }) => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className={`flex flex-col items-center gap-0.5 min-w-[60px] min-h-[48px] justify-center rounded-xl transition-all ${activeTab === tab ? 'text-indigo-600' : 'text-gray-400 active:text-gray-600'}`}
+          >
+            <Icon className="w-6 h-6" />
+            <span className="text-[10px] font-bold">{label}</span>
+            {activeTab === tab && <div className="w-5 h-1 rounded-full bg-indigo-600 mt-0.5" />}
+          </button>
+        ))}
       </nav>
     </div>
   );

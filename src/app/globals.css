@@ -136,4 +136,42 @@
     padding-left: max(1rem, env(safe-area-inset-left));
     padding-right: max(1rem, env(safe-area-inset-right));
   }
+  .pb-safe {
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+  }
+}
+
+/* Hide scrollbar utility (alias) */
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Touch feedback for conductor dashboard */
+.touch-highlight {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.touch-highlight:active {
+  transform: scale(0.97);
+  transition: transform 0.1s ease;
+}
+
+/* Large conductor action button base */
+.conductor-action-btn {
+  min-height: 52px;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+@media (max-width: 640px) {
+  .conductor-action-btn {
+    min-height: 56px;
+    font-size: 1.05rem;
+  }
 }

@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   CreditCard, CheckCircle, AlertCircle, MapPin,
   Users, Calendar, ArrowRight, Star, ArrowLeft,
+  TicketPercent, Loader2,
 } from "lucide-react";
 
 // ================================
@@ -238,6 +239,9 @@ export default function BookBus() {
   // FIX UX-1: replaces window.confirm() for duplicate name check
   const [dupNameModalOpen, setDupNameModalOpen] = useState(false);
   const [pendingPassengerSubmit, setPendingPassengerSubmit] = useState(false);
+  const [promoCode, setPromoCode] = useState("");
+  const [appliedPromo, setAppliedPromo] = useState<any>(null);
+  const [isValidatingPromo, setIsValidatingPromo] = useState(false);
 
   // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -407,6 +411,31 @@ setDisplayPrice(calcSegmentPrice(
     }));
   };
 
+  const validatePromoCode = async () => {
+    if (!promoCode.trim()) return;
+    setIsValidatingPromo(true);
+    setError("");
+    try {
+      const res = await fetch('/api/promotions/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: promoCode, amount: displayPrice * passengers }),
+      });
+      const result = await res.json();
+      if (result.success) {
+        setAppliedPromo(result.data);
+        setSuccess(`Promo code "${result.data.code}" applied!`);
+      } else {
+        setError(result.error || 'Invalid promo code');
+        setAppliedPromo(null);
+      }
+    } catch (err) {
+      setError('Failed to validate promo code');
+    } finally {
+      setIsValidatingPromo(false);
+    }
+  };
+
   // ── Booking flow handlers ──────────────────────────────────────────────────
 
   const handleSeatSelection = useCallback((seats: string[]) => {
@@ -519,6 +548,7 @@ setDisplayPrice(calcSegmentPrice(
             originStopName:      stopName(originStopId),
             destinationStopName: stopName(destinationStopId),
           })),
+          promoCode: appliedPromo?.code,
         }),
       });
 
@@ -568,7 +598,7 @@ setDisplayPrice(calcSegmentPrice(
     if (!user) { router.push("/register"); return; }
     if (passengers < 1 || passengers > 10) {
       setError("Invalid passenger count. Please select between 1 and 10 passengers.");
-      setTimeout(() => router.push("/search"), 3000);
+      setTimeout(() => router.push("/schedules"), 3000);
     }
   }, [user, passengers, router]);
 
@@ -612,7 +642,7 @@ setDisplayPrice(calcSegmentPrice(
           <p className="text-gray-600 mb-6">{error || "Could not load booking. Please try again."}</p>
           <div className="space-y-3">
             <Button onClick={() => window.location.reload()} className="w-full">Try Again</Button>
-            <Button onClick={() => router.push("/search")} variant="outline" className="w-full">Back to Search</Button>
+            <Button onClick={() => router.push("/schedules")} variant="outline" className="w-full">Back to Search</Button>
           </div>
         </CardContent></Card>
       </div>
@@ -954,19 +984,65 @@ setDisplayPrice(calcSegmentPrice(
                   <p className="font-semibold text-sm">{selectedSeats.join(", ")}</p>
                 </div>
                 <div className="p-3 bg-blue-50 rounded-lg border border-blue-100 col-span-full">
-                  <p className="text-xs text-gray-500 mb-0.5">Price</p>
-                  {serverTotalAmount !== null ? (
-                    <>
-                      <p className="text-lg font-bold text-blue-600">
-                        {serverCurrency} {serverTotalAmount.toLocaleString()}
-                      </p>
-                      <p className="text-xs text-green-600 font-medium">✓ Server-confirmed price</p>
-                    </>
-                  ) : (
-                    <p className="text-sm text-gray-500">Will be confirmed on submission</p>
-                  )}
+                  <p className="text-xs text-gray-500 mb-0.5">Price Summary</p>
+                  <div className="space-y-1">
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-gray-600">Base Fare ({passengers}x)</span>
+                      <span className="font-semibold text-gray-900">MWK {(displayPrice * passengers).toLocaleString()}</span>
+                    </div>
+                    {appliedPromo && (
+                      <div className="flex justify-between items-center text-sm">
+                        <span className="text-green-600 flex items-center gap-1"><TicketPercent className="w-3 h-3" /> Promo: {appliedPromo.code}</span>
+                        <span className="font-semibold text-green-600">- MWK {appliedPromo.discount.toLocaleString()}</span>
+                      </div>
+                    )}
+                    <div className="pt-1 border-t border-blue-100 mt-1 flex justify-between items-center">
+                      <span className="font-bold text-gray-900">Total Amount</span>
+                      <span className="text-xl font-black text-blue-600">
+                        MWK {((displayPrice * passengers) - (appliedPromo?.discount || 0)).toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
                 </div>
               </div>
+
+              {/* Promo Code Input */}
+              {!appliedPromo ? (
+                <div className="space-y-2">
+                  <Label htmlFor="promoCode" className="text-xs font-black text-gray-400 uppercase tracking-widest">Have a Promo Code?</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="promoCode"
+                      value={promoCode}
+                      onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
+                      placeholder="ENTER CODE"
+                      className="flex-1 font-black tracking-widest uppercase"
+                      disabled={isValidatingPromo}
+                    />
+                    <Button
+                      onClick={validatePromoCode}
+                      variant="outline"
+                      className="shrink-0 border-blue-200 text-blue-600 hover:bg-blue-50"
+                      disabled={isValidatingPromo || !promoCode.trim()}
+                    >
+                      {isValidatingPromo ? <Loader2 className="w-4 h-4 animate-spin" /> : "Apply"}
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-3 bg-green-50 border border-green-100 rounded-xl flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 bg-green-100 text-green-600 rounded-lg">
+                      <TicketPercent className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-black text-green-700 uppercase tracking-widest">{appliedPromo.code}</p>
+                      <p className="text-[10px] text-green-600 font-bold">{appliedPromo.title}</p>
+                    </div>
+                  </div>
+                  <button onClick={() => { setAppliedPromo(null); setPromoCode(""); }} className="text-xs font-bold text-red-500 hover:underline">Remove</button>
+                </div>
+              )}
               <div>
                 <p className="text-sm font-semibold text-gray-700 mb-2">Passengers</p>
                 <div className="space-y-2">

@@ -1118,7 +1118,7 @@ const BookingsPage: React.FC = () => {
                 <button onClick={() => fetchBookings()} disabled={loading} className="flex items-center gap-2 px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50 w-full sm:w-auto">
                   <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />Refresh
                 </button>
-                <button onClick={() => router.push('/search')} className="flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all hover:scale-105 shadow-lg w-full sm:w-auto justify-center">
+                <button onClick={() => router.push('/schedules')} className="flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all hover:scale-105 shadow-lg w-full sm:w-auto justify-center">
                   <Search className="w-4 h-4" />Book New Ticket
                 </button>
               </div>
@@ -1178,7 +1178,7 @@ const BookingsPage: React.FC = () => {
               <div className="mx-auto w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mb-6"><BusIcon className="w-10 h-10 text-gray-400" /></div>
               <h3 className="text-xl font-semibold text-gray-900 mb-2">No {activeFilter === 'all' ? '' : activeFilter} bookings found</h3>
               <p className="text-gray-600 mb-8 max-w-md mx-auto">{activeFilter === 'all' ? "You haven't made any bus bookings yet." : `You don't have any ${activeFilter} bookings.`}</p>
-              <button onClick={() => router.push('/search')} className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all hover:scale-105 shadow-lg">
+              <button onClick={() => router.push('/schedules')} className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all hover:scale-105 shadow-lg">
                 <Search className="w-5 h-5" />Search for Buses
               </button>
             </div>
