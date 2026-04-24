@@ -704,3 +704,56 @@ export async function getAdminBookings(page = 1, limit = 10, search = '', status
     return { success: false, error: (error as Error).message };
   }
 }
+
+/**
+ * --- Activity Logs ---
+ */
+export async function createActivityLog(data: {
+  userId: string;
+  action: string;
+  description: string;
+  companyId?: string;
+  scheduleId?: string;
+  metadata?: any;
+}) {
+  try {
+    const log = await prisma.activityLog.create({
+      data: {
+        userId: data.userId,
+        action: data.action,
+        description: data.description,
+        companyId: data.companyId,
+        scheduleId: data.scheduleId,
+        metadata: data.metadata || {},
+      },
+    });
+    if (data.companyId) revalidatePath('/company/admin');
+    if (data.scheduleId) revalidatePath('/company/conductor/dashboard');
+    return { success: true, data: log };
+  } catch (error: unknown) {
+    console.error('Error creating activity log:', error);
+    return { success: false, error: (error as Error).message };
+  }
+}
+
+export async function getActivityLogs(params: {
+  companyId?: string;
+  scheduleId?: string;
+  limit?: number;
+}) {
+  try {
+    const logs = await prisma.activityLog.findMany({
+      where: {
+        companyId: params.companyId,
+        scheduleId: params.scheduleId,
+      },
+      orderBy: { createdAt: 'desc' },
+      take: params.limit || 50,
+      include: { user: true },
+    });
+    return { success: true, data: logs };
+  } catch (error: unknown) {
+    console.error('Error fetching activity logs:', error);
+    return { success: false, error: (error as Error).message };
+  }
+}

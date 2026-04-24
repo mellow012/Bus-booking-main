@@ -449,6 +449,18 @@ export interface Location extends BaseEntity {
   isActive: boolean;
 }
 
+export interface ActivityLog extends BaseEntity {
+  userId: string;
+  companyId?: string;
+  scheduleId?: string;
+  action: string;
+  description: string;
+  metadata?: Record<string, unknown>;
+  user?: UserProfile;
+  schedule?: Schedule;
+  company?: Company;
+}
+
 export interface Amenity extends BaseEntity {
   name: string;
   description?: string;

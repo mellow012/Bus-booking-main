@@ -289,26 +289,26 @@ const TeamManagementTab: React.FC<TeamManagementTabProps> = ({
 
   // ─── RENDER ────────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-8 pb-12">
+    <div className="space-y-6 sm:space-y-8 pb-12 px-2 sm:px-0">
 
       {/* ── Header ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6 text-left">
         <div>
-          <h2 className="text-3xl font-black text-gray-900 tracking-tight flex items-center gap-3 uppercase">
+          <h2 className="text-2xl sm:text-3xl font-black text-gray-900 tracking-tight flex items-center gap-3 uppercase">
              TEAM HIERARCHY
              <Shield className="w-5 h-5 text-indigo-600" />
           </h2>
-          <p className="text-[11px] font-black text-gray-400 uppercase tracking-widest mt-1.5 flex items-center gap-2">
+          <p className="text-[10px] sm:text-[11px] font-black text-gray-400 uppercase tracking-widest mt-1.5 flex items-center gap-2">
             Control personnel access & operational roles
           </p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-3">
           <button onClick={() => openAdd('operator')}
-            className="group flex items-center gap-2 px-6 py-3 bg-white border border-gray-100 rounded-2xl text-[11px] font-black uppercase tracking-widest text-gray-900 shadow-sm hover:shadow-lg hover:border-indigo-100 hover:text-indigo-600 transition-all active:scale-95">
+            className="flex-1 sm:flex-none group flex items-center justify-center gap-2 px-6 py-3 bg-white border border-gray-100 rounded-2xl text-[11px] font-black uppercase tracking-widest text-gray-900 shadow-sm hover:shadow-lg hover:border-indigo-100 hover:text-indigo-600 transition-all active:scale-95">
             <UserCog className="w-4 h-4 group-hover:rotate-12 transition-transform" /> Recruit Operator
           </button>
           <button onClick={() => openAdd('conductor')}
-            className="group flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-2xl text-[11px] font-black uppercase tracking-widest shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95">
+            className="flex-1 sm:flex-none group flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-2xl text-[11px] font-black uppercase tracking-widest shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95">
             <Truck className="w-4 h-4 group-hover:translate-x-1 transition-transform" /> Recruit Conductor
           </button>
         </div>
@@ -324,7 +324,7 @@ const TeamManagementTab: React.FC<TeamManagementTabProps> = ({
           
           return (
             <button key={role} onClick={() => setActiveTab(role)}
-              className={`p-8 bg-white rounded-[2.5rem] shadow-[0_8px_30px_-10px_rgba(0,0,0,0.05)] border transition-all duration-500 flex flex-col text-left relative overflow-hidden group ${
+              className={`p-6 sm:p-8 bg-white rounded-[2rem] sm:rounded-[2.5rem] shadow-[0_8px_30px_-10px_rgba(0,0,0,0.05)] border transition-all duration-500 flex flex-col text-left relative overflow-hidden group ${
                 isActive ? 'border-indigo-600 ring-2 ring-indigo-50 shadow-indigo-50' : 'border-gray-50 hover:border-indigo-200'
               }`}>
               <div className="absolute -right-8 -top-8 w-32 h-32 bg-indigo-600/5 rounded-full blur-3xl group-hover:bg-indigo-600/10 transition-colors"></div>
@@ -338,8 +338,8 @@ const TeamManagementTab: React.FC<TeamManagementTabProps> = ({
               
               <div className="relative z-10">
                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-1">{cfg.plural}</p>
-                 <p className="text-4xl font-black text-gray-900 leading-none tracking-tighter mb-4">{s.total}</p>
-                 <div className="flex items-center gap-4">
+                 <p className="text-3xl sm:text-4xl font-black text-gray-900 leading-none tracking-tighter mb-4">{s.total}</p>
+                 <div className="flex flex-wrap items-center gap-4">
                     <span className="flex items-center gap-2 text-[10px] font-black text-emerald-600 uppercase tracking-widest bg-emerald-50 px-2.5 py-1 rounded-xl border border-emerald-100">
                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> {s.active} Operational
                     </span>
@@ -356,7 +356,7 @@ const TeamManagementTab: React.FC<TeamManagementTabProps> = ({
       </div>
 
       {/* ── Table card ── */}
-      <div className="bg-white rounded-[2.5rem] shadow-[0_8px_30px_-10px_rgba(0,0,0,0.05)] border border-gray-100 overflow-hidden">
+      <div className="bg-white rounded-[2rem] sm:rounded-[2.5rem] shadow-[0_8px_30px_-10px_rgba(0,0,0,0.05)] border border-gray-100 overflow-hidden text-left">
         {/* Tab Header Bar */}
         <div className="flex p-2 bg-gray-50/50">
           {(['operator', 'conductor'] as TeamRole[]).map(role => {
@@ -366,14 +366,15 @@ const TeamManagementTab: React.FC<TeamManagementTabProps> = ({
               <button 
                 key={role} 
                 onClick={() => setActiveTab(role)}
-                className={`flex items-center justify-center gap-3 px-8 py-4 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all flex-1 ${
+                className={`flex items-center justify-center gap-3 px-4 sm:px-8 py-3 sm:py-4 rounded-2xl text-[10px] sm:text-[11px] font-black uppercase tracking-widest transition-all flex-1 ${
                   isActive 
                     ? 'bg-white text-indigo-600 shadow-sm border border-gray-100' 
                     : 'text-gray-400 hover:text-gray-600 hover:bg-white/50'
                 }`}
               >
                 <cfg.icon className={`w-4 h-4 ${isActive ? 'text-indigo-600' : 'text-gray-300'}`} />
-                {cfg.plural}
+                <span className="hidden sm:inline">{cfg.plural}</span>
+                <span className="sm:hidden">{role}</span>
               </button>
             );
           })}
@@ -386,9 +387,9 @@ const TeamManagementTab: React.FC<TeamManagementTabProps> = ({
           </div>
         ) : (
           <div className="overflow-x-auto text-left">
-            <table className="w-full">
+            <table className="w-full min-w-[800px]">
               <thead>
-                <tr className="border-b border-gray-50">
+                <tr className="border-b border-gray-50 bg-gray-50/20">
                   {["Personnel Identity", "Digital Access", ...(activeTab === 'operator' ? ["Deployment Region"] : []), "Operational Status", "Execution Control"].map(h => (
                     <th key={h} className="px-8 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">{h}</th>
                   ))}
@@ -399,7 +400,7 @@ const TeamManagementTab: React.FC<TeamManagementTabProps> = ({
                   <tr>
                     <td colSpan={activeTab === 'operator' ? 5 : 4} className="px-8 py-24 text-center">
                       <div className="flex flex-col items-center gap-4 text-gray-300">
-                        <div className="w-16 h-16 bg-gray-50 rounded-3xl flex items-center justify-center border border-gray-50">
+                        <div className="w-16 h-16 bg-gray-50 rounded-[2rem] flex items-center justify-center border border-gray-50">
                            {React.createElement(ROLE_CONFIG[activeTab].icon, { className: "w-8 h-8 opacity-20" })}
                         </div>
                         <p className="text-[11px] font-black uppercase tracking-widest text-gray-400">No {activeTab} records identified</p>
@@ -488,7 +489,7 @@ const TeamManagementTab: React.FC<TeamManagementTabProps> = ({
       <Modal isOpen={showAddModal} onClose={() => setShowAddModal(false)} title="Recruit Team Intelligence">
         <form onSubmit={handleAdd} className="space-y-6 text-left">
           {/* Role picker */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {(['operator', 'conductor'] as TeamRole[]).map(role => {
               const cfg  = ROLE_CONFIG[role];
               const Icon = cfg.icon;
@@ -565,11 +566,11 @@ const TeamManagementTab: React.FC<TeamManagementTabProps> = ({
 
           <div className="flex gap-3 pt-6 border-t border-gray-50">
             <button type="button" onClick={() => setShowAddModal(false)}
-              className="flex-1 px-6 py-4 text-[11px] font-black uppercase tracking-widest text-gray-400 bg-gray-50 hover:bg-gray-100 rounded-2xl transition-all">
+              className="flex-1 px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-[11px] font-black uppercase tracking-widest text-gray-400 bg-gray-50 hover:bg-gray-100 rounded-2xl transition-all">
               Abort
             </button>
             <button type="submit" disabled={actionLoading}
-              className="flex-[2] flex items-center justify-center gap-3 px-6 py-4 text-[11px] font-black uppercase tracking-widest text-white bg-indigo-600 hover:bg-indigo-700 rounded-2xl shadow-xl shadow-indigo-100 transition-all disabled:opacity-50 active:scale-95">
+              className="flex-[2] flex items-center justify-center gap-3 px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-[11px] font-black uppercase tracking-widest text-white bg-indigo-600 hover:bg-indigo-700 rounded-2xl shadow-xl shadow-indigo-100 transition-all disabled:opacity-50 active:scale-95">
               {actionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
               Dispatch Credentials
             </button>
@@ -582,13 +583,13 @@ const TeamManagementTab: React.FC<TeamManagementTabProps> = ({
         title="Override Personnel Config">
         {editingMember && (
           <form onSubmit={handleEdit} className="space-y-6 text-left">
-            <div className="flex items-center gap-5 p-6 bg-slate-50 rounded-[2rem] border border-gray-100">
-              <div className="w-16 h-16 rounded-2xl bg-white flex items-center justify-center text-xl font-black text-indigo-600 shadow-sm border border-gray-100">
+            <div className="flex items-center gap-5 p-4 sm:p-6 bg-slate-50 rounded-[2rem] border border-gray-100">
+              <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-2xl bg-white flex items-center justify-center text-lg sm:text-xl font-black text-indigo-600 shadow-sm border border-gray-100">
                  {initials(editingMember.name)}
               </div>
               <div>
-                <p className="text-lg font-black text-gray-900 uppercase tracking-tight leading-none">{editingMember.name}</p>
-                <p className="text-[10px] font-bold text-gray-400 mt-1 uppercase tracking-widest">USER_REF: {editingMember.id.substring(0,8)}</p>
+                <p className="text-base sm:text-lg font-black text-gray-900 uppercase tracking-tight leading-none">{editingMember.name}</p>
+                <p className="text-[9px] sm:text-[10px] font-bold text-gray-400 mt-1 uppercase tracking-widest">USER_REF: {editingMember.id.substring(0,8)}</p>
               </div>
             </div>
 
@@ -608,10 +609,10 @@ const TeamManagementTab: React.FC<TeamManagementTabProps> = ({
 
             <div>
               <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Operational state</label>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-3 gap-2 sm:gap-3">
                 {(['active', 'inactive', 'pending'] as const).map(s => (
                   <button key={s} type="button" onClick={() => setEditData({ ...editData, status: s })}
-                    className={`py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest border-2 transition-all ${
+                    className={`py-3 rounded-2xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest border-2 transition-all ${
                       editData.status === s
                         ? s === 'active'   ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
                         : s === 'inactive' ? 'border-slate-400 bg-slate-50 text-slate-700'
@@ -626,11 +627,11 @@ const TeamManagementTab: React.FC<TeamManagementTabProps> = ({
 
             <div className="flex gap-3 pt-6 border-t border-gray-50">
               <button type="button" onClick={() => { setShowEditModal(false); setEditingMember(null); }}
-                className="flex-1 px-6 py-4 text-[11px] font-black uppercase tracking-widest text-gray-400 bg-gray-50 hover:bg-gray-100 rounded-2xl transition-all">
+                className="flex-1 px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-[11px] font-black uppercase tracking-widest text-gray-400 bg-gray-50 hover:bg-gray-100 rounded-2xl transition-all">
                 Cancel
               </button>
               <button type="submit" disabled={actionLoading}
-                className="flex-[2] flex items-center justify-center gap-3 px-6 py-4 text-[11px] font-black uppercase tracking-widest text-white bg-indigo-600 hover:bg-indigo-700 rounded-2xl shadow-xl shadow-indigo-100 transition-all disabled:opacity-50 active:scale-95">
+                className="flex-[2] flex items-center justify-center gap-3 px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-[11px] font-black uppercase tracking-widest text-white bg-indigo-600 hover:bg-indigo-700 rounded-2xl shadow-xl shadow-indigo-100 transition-all disabled:opacity-50 active:scale-95">
                 {actionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Apply Overrides'}
               </button>
             </div>

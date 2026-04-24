@@ -8,7 +8,7 @@ import {
   Star, ArrowRight, Zap, Shield, CheckCircle, RefreshCw,
   Award, Navigation, Wifi, AirVent, Search, Play, Music,
   Coffee, Flame, ArrowUpDown, ChevronLeft, ChevronRight,
-  LocateFixed, X, ChevronDown, School,
+  LocateFixed, X, ChevronDown, School, Sun, Moon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import TourModal from "@/components/TourModal";
@@ -35,7 +35,7 @@ interface Route    { id: string; origin: string; destination: string; duration: 
 import { LocationAutocomplete } from "@/components/LocationAutocomplete";
 import { CityPickerModal } from "@/components/CityPickerModal";
 import { ScheduleCard } from "@/components/ScheduleCard";
-import { EnhancedSchedule, GeoStatus, isToday, cityMatch, MALAWI_CITIES } from "@/utils/homeHelpers";
+import { EnhancedSchedule, GeoStatus, isToday, cityMatch, MALAWI_CITIES, getScheduleCategory } from "@/utils/homeHelpers";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Main Page
@@ -50,7 +50,7 @@ const isThisWeek = (d: string) => {
   return date >= today && date <= nextWeek;
 };
 
-type TabKey = "nearby" | "today" | "week" | "all";
+type TabKey = "boarding" | "morning" | "afternoon" | "evening";
 type SortKey = "time" | "price_asc" | "price_desc" | "seats";
 
 const LS_CITY_KEY = "tb_user_city";
@@ -121,7 +121,7 @@ export default function HomePage() {
   const [promoLoading,  setPromoLoading]  = useState(true);
 
   // ── Schedule tabs / sort / pagination ────────────────────────────────────────
-  const [activeTab, setActiveTab] = useState<TabKey>("nearby");
+  const [activeTab, setActiveTab] = useState<TabKey>("boarding");
   const [sortKey,   setSortKey]   = useState<SortKey>("time");
   const [page,      setPage]      = useState(1);
   const [showSort,  setShowSort]  = useState(false);
@@ -210,14 +210,10 @@ export default function HomePage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   },[]);
 
-  // ── Auto-select best tab after city+schedules ready ──────────────────────────
   useEffect(()=>{
     if (!cityResolved||loading) return;
-    if (userCity) {
-      const hasLocal = schedules.some(s=>cityMatch(s,userCity));
-      setActiveTab(hasLocal?"nearby":"today");
-    } else setActiveTab("today");
-  },[cityResolved,loading,userCity,schedules]);
+    setActiveTab("boarding");
+  },[cityResolved,loading]);
 
   const requestGeolocation = useCallback(()=>{
     if (!("geolocation" in navigator)) { setGeoStatus("unavailable"); setShowCityPicker(true); return; }
@@ -255,44 +251,27 @@ export default function HomePage() {
   }, [schedules]);
 
   // ── Derived schedule data ────────────────────────────────────────────────────
-  const nearby = useMemo(()=>userCity?schedules.filter(s=>cityMatch(s,userCity)):[], [schedules,userCity]);
-
-  const tabCounts = useMemo(()=>({
-    nearby: nearby.length,
-    today:  schedules.filter(s=>isToday(s.date)).length,
-    week:   schedules.filter(s=>isThisWeek(s.date)).length,
-    all:    schedules.length,
-  }),[schedules,nearby]);
+  const todaysSchedules = useMemo(() => schedules.filter(s => isToday(s.date)), [schedules]);
 
   const filtered = useMemo(()=>{
-    const list = activeTab==="nearby"?nearby:activeTab==="today"?schedules.filter(s=>isToday(s.date)):activeTab==="week"?schedules.filter(s=>isThisWeek(s.date)):schedules;
-    return [...list].sort((a,b)=>{
+    return [...todaysSchedules].sort((a,b)=>{
       if (sortKey==="price_asc")  return a.price-b.price;
       if (sortKey==="price_desc") return b.price-a.price;
       if (sortKey==="seats")      return b.availableSeats-a.availableSeats;
       return new Date(`${a.date}T${a.departureTime}`).getTime()-new Date(`${b.date}T${b.departureTime}`).getTime();
     });
-  },[schedules,nearby,activeTab,sortKey]);
+  },[todaysSchedules, sortKey]);
 
-  const totalPages = Math.max(1,Math.ceil(filtered.length/PAGE_SIZE));
-  const paged      = filtered.slice((page-1)*PAGE_SIZE,page*PAGE_SIZE);
+  const groups = useMemo(() => {
+    return [
+      { label: 'Boarding Now', icon: Flame, items: filtered.filter(s => getScheduleCategory(s) === 'Boarding Now') },
+      { label: 'Morning', icon: Coffee, items: filtered.filter(s => getScheduleCategory(s) === 'Morning') },
+      { label: 'Afternoon', icon: Sun, items: filtered.filter(s => getScheduleCategory(s) === 'Afternoon') },
+      { label: 'Evening', icon: Moon, items: filtered.filter(s => getScheduleCategory(s) === 'Evening') },
+    ].filter(g => g.items.length > 0);
+  }, [filtered]);
 
-  const changeTab  = useCallback((t:TabKey)=>{ setActiveTab(t); setPage(1); },[]);
   const changePage = useCallback((p:number)=>{ setPage(p); document.getElementById("schedules-section")?.scrollIntoView({behavior:"smooth",block:"start"}); },[]);
-
-  const TABS = [
-    { key:"nearby" as TabKey, label:"Near You",  icon:Navigation, onlyCity:true },
-    { key:"today"  as TabKey, label:"Today",     icon:Flame },
-    { key:"week"   as TabKey, label:"This Week", icon:Calendar },
-    { key:"all"    as TabKey, label:"All",       icon:BusIcon },
-  ].filter(t=>!(t.onlyCity&&!userCity));
-
-  const emptyMsg: Record<TabKey,{title:string;body:string;cta?:{label:string;fn:()=>void}}> = {
-    nearby: { title:`No routes near ${userCity}`,    body:"No schedules from your city right now.", cta:{label:"Browse all →",fn:()=>changeTab("all")} },
-    today:  { title:"No departures today",           body:"Try This Week to see upcoming trips.",   cta:{label:"View this week →",fn:()=>changeTab("week")} },
-    week:   { title:"No departures this week",       body:"Browse all available schedules.",        cta:{label:"View all →",fn:()=>changeTab("all")} },
-    all:    { title:"No schedules available",        body:"Check back soon or refresh." },
-  };
 
   // ─────────────────────────────────────────────────────────────────────────────
   // Render
@@ -531,25 +510,6 @@ export default function HomePage() {
         {!loading&&(
           <div className="flex flex-col gap-3 mb-5">
             <div className="flex items-center justify-between gap-2">
-              {/* Tabs — scrollable on mobile */}
-              <div className="flex items-center bg-white border border-gray-200 rounded-xl p-1 gap-0.5 shadow-sm overflow-x-auto max-w-full scrollbar-none">
-                {TABS.map(({ key, label, icon: Icon }) => (
-                  <button key={key} onClick={() => changeTab(key)}
-                    className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3.5 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all whitespace-nowrap shrink-0 ${
-                      activeTab === key
-                        ? key === "nearby" ? "bg-teal-600 text-white shadow-sm" : "bg-blue-600 text-white shadow-sm"
-                        : "text-gray-500 hover:text-gray-800 hover:bg-gray-50"
-                    }`}>
-                    <Icon className="w-3 h-3 sm:w-3.5 sm:h-3.5"/>
-                    <span className="hidden xs:inline">{label}</span>
-                    {/* On tiny screens show icon only + count */}
-                    <span className={`text-[10px] sm:text-xs px-1 sm:px-1.5 py-0.5 rounded-full font-bold ${
-                      activeTab === key ? "bg-white/25 text-white" : "bg-gray-100 text-gray-500"
-                    }`}>{tabCounts[key]}</span>
-                  </button>
-                ))}
-              </div>
-
               {/* Sort — icon only on small screens */}
               <div className="relative shrink-0">
                 <button onClick={() => setShowSort(s => !s)}
@@ -558,7 +518,7 @@ export default function HomePage() {
                   <span className="hidden sm:inline">{SORT_OPTIONS.find(o => o.value === sortKey)?.label}</span>
                 </button>
                 {showSort && (
-                  <div className="absolute right-0 top-full mt-1.5 bg-white border border-gray-200 rounded-xl shadow-xl z-20 py-1.5 min-w-[180px]">
+                  <div className="absolute left-0 sm:right-0 sm:left-auto top-full mt-1.5 bg-white border border-gray-200 rounded-xl shadow-xl z-20 py-1.5 min-w-[180px]">
                     {SORT_OPTIONS.map(o => (
                       <button key={o.value} onClick={() => { setSortKey(o.value as SortKey); setShowSort(false); setPage(1); }}
                         className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
@@ -585,11 +545,11 @@ export default function HomePage() {
         )}
 
         {/* Near you banner */}
-        {!loading&&activeTab==="nearby"&&userCity&&tabCounts.nearby>0&&(
+        {!loading&&userCity&&(todaysSchedules.length > 0)&&(
           <div className="flex items-center gap-3 bg-teal-50 border border-teal-200 rounded-xl px-4 py-3 mb-5">
             <Navigation className="w-4 h-4 text-teal-600 shrink-0"/>
             <p className="text-sm text-teal-800">
-              Showing <span className="font-semibold">{tabCounts.nearby}</span> route{tabCounts.nearby!==1?"s":""} from or to <span className="font-semibold">{userCity}</span>
+              Showing schedules from or to <span className="font-semibold">{userCity}</span>
             </p>
             <button onClick={()=>setShowCityPicker(true)}
               className="ml-auto text-xs text-teal-600 hover:text-teal-800 font-semibold underline underline-offset-2 shrink-0">
@@ -603,59 +563,42 @@ export default function HomePage() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 mb-8">
             {Array(6).fill(0).map((_,i)=><CardSkeleton key={i}/>)}
           </div>
-        ):paged.length>0?(
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 mb-8">
-            {paged.map(s=><ScheduleCard key={s.id} s={s} userCity={userCity} onBook={()=>handleBooking(s.id)}/>)}
+        ):groups.length>0?(
+          <div className="flex flex-col lg:flex-row gap-10 lg:gap-6 xl:gap-8 mb-10 overflow-x-auto pb-4 scrollbar-hide items-start">
+            {groups.map(group => (
+              <div key={group.label} className="animate-in fade-in slide-in-from-bottom-4 duration-500 w-full lg:flex-1 lg:min-w-[320px]">
+                <div className="flex items-center gap-2 mb-4 sm:mb-5 px-4 lg:px-0 sticky top-0 bg-gray-50/95 backdrop-blur-sm z-10 py-2">
+                  <group.icon className={`w-5 h-5 sm:w-6 sm:h-6 ${group.label === 'Boarding Now' ? 'text-orange-500 animate-pulse' : 'text-blue-500'}`} />
+                  <h3 className="font-display text-lg sm:text-xl font-extrabold text-gray-900 tracking-tight">
+                    {group.label}
+                  </h3>
+                  <span className="ml-auto text-[10px] sm:text-xs font-bold text-gray-500 bg-gray-200 px-2.5 py-1 rounded-full">{group.items.length}</span>
+                </div>
+                
+                {/* Horizontal Carousel on Mobile, Vertical Stack inside Column on Desktop */}
+                <div className="flex flex-row lg:flex-col gap-4 sm:gap-5 overflow-x-auto lg:overflow-x-visible pb-6 lg:pb-0 scrollbar-hide snap-x px-4 lg:px-0 -mx-4 lg:mx-0">
+                  {group.items.map(s=>(
+                    <div key={s.id} className="min-w-[85vw] sm:min-w-[340px] lg:min-w-0 lg:w-full snap-center sm:snap-start shrink-0 group-hover:z-10">
+                      <ScheduleCard s={s} userCity={userCity} onBook={()=>handleBooking(s.id)}/>
+                    </div>
+                  ))}
+                  {/* Empty spacer so the last card doesn't hug the right edge on mobile */}
+                  <div className="w-4 sm:w-8 shrink-0 lg:hidden"></div>
+                </div>
+              </div>
+            ))}
           </div>
         ):(
           <div className="bg-white rounded-2xl border border-gray-100 p-10 sm:p-14 text-center mb-8 shadow-sm">
             <div className="max-w-[280px] mx-auto mb-6 opacity-90">
               <img src="/Bus Stop-rafiki.svg" alt="No schedules available" className="w-full h-auto" />
             </div>
-            <h3 className="font-display text-lg font-bold text-gray-800 mb-2">{emptyMsg[activeTab].title}</h3>
-            <p className="text-gray-500 text-sm mb-5 max-w-xs mx-auto">{emptyMsg[activeTab].body}</p>
-            {emptyMsg[activeTab].cta?(
-              <button onClick={emptyMsg[activeTab].cta!.fn} className="text-sm text-blue-600 hover:underline font-semibold">
-                {emptyMsg[activeTab].cta!.label}
-              </button>
-            ):(
-              <button onClick={()=>fetchSchedules(true)} disabled={refreshing}
-                className="flex items-center gap-2 mx-auto text-sm border border-gray-200 rounded-xl px-4 py-2 text-gray-600 hover:bg-gray-50 disabled:opacity-50">
-                {refreshing?<Loader2 className="w-4 h-4 animate-spin"/>:<RefreshCw className="w-4 h-4"/>} Refresh
-              </button>
-            )}
-          </div>
-        )}
-
-        {/* Pagination */}
-        {!loading&&totalPages>1&&(
-          <div className="flex items-center justify-between gap-4 bg-white border border-gray-100 rounded-2xl px-4 sm:px-5 py-3 sm:py-3.5 shadow-sm">
-            <p className="text-xs sm:text-sm text-gray-500">
-              <span className="font-semibold text-gray-800">{(page-1)*PAGE_SIZE+1}–{Math.min(page*PAGE_SIZE,filtered.length)}</span>
-              <span className="hidden sm:inline"> of </span>
-              <span className="hidden sm:inline font-semibold text-gray-800">{filtered.length}</span>
-              <span className="sm:hidden text-gray-400"> / {filtered.length}</span>
-            </p>
-            <div className="flex items-center gap-1 sm:gap-1.5">
-              <button onClick={()=>changePage(page-1)} disabled={page===1}
-                className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40">
-                <ChevronLeft className="w-4 h-4"/>
-              </button>
-              {/* Full page numbers on sm+, just current/total on mobile */}
-              <div className="hidden sm:flex items-center gap-1">
-                {Array.from({length:totalPages},(_,i)=>i+1).map(p=>(
-                  <button key={p} onClick={()=>changePage(p)}
-                    className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors ${
-                      p===page?"bg-blue-600 text-white":"border border-gray-200 text-gray-600 hover:bg-gray-50"
-                    }`}>{p}</button>
-                ))}
-              </div>
-              <span className="sm:hidden text-sm font-medium text-gray-700 px-2">{page} / {totalPages}</span>
-              <button onClick={()=>changePage(page+1)} disabled={page===totalPages}
-                className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40">
-                <ChevronRight className="w-4 h-4"/>
-              </button>
-            </div>
+            <h3 className="font-display text-lg font-bold text-gray-800 mb-2">No buses departing today</h3>
+            <p className="text-gray-500 text-sm mb-5 max-w-xs mx-auto">There are no more buses available for today. Please check back tomorrow or use the search bar to find future dates.</p>
+            <button onClick={()=>fetchSchedules(true)} disabled={refreshing}
+              className="flex items-center gap-2 mx-auto text-sm border border-gray-200 rounded-xl px-4 py-2 text-gray-600 hover:bg-gray-50 disabled:opacity-50">
+              {refreshing?<Loader2 className="w-4 h-4 animate-spin"/>:<RefreshCw className="w-4 h-4"/>} Refresh
+            </button>
           </div>
         )}
 

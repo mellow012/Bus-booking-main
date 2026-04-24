@@ -55,7 +55,7 @@ function KineticStatCard({ title, value, icon: Icon, iconBg, iconColor, badge, s
   subtitle?: string;
 }) {
   return (
-    <div className="bg-white rounded-3xl shadow-[0_8px_30px_-10px_rgba(0,0,0,0.05)] p-6 relative overflow-hidden flex flex-col justify-between min-h-[160px] border border-gray-100 group hover:shadow-[0_20px_40px_-15px_rgba(0,0,0,0.1)] transition-all duration-500 text-left">
+    <div className="bg-white rounded-2xl sm:rounded-3xl shadow-[0_8px_30px_-10px_rgba(0,0,0,0.05)] p-4 sm:p-6 relative overflow-hidden flex flex-col justify-between min-h-[140px] sm:min-h-[160px] border border-gray-100 group hover:shadow-[0_20px_40px_-15px_rgba(0,0,0,0.1)] transition-all duration-500 text-left">
       <div className="absolute -right-8 -top-8 w-24 h-24 bg-indigo-600/5 rounded-full blur-3xl group-hover:bg-indigo-600/10 transition-colors"></div>
       
       <div className="flex justify-between items-start mb-4 relative z-10">
@@ -69,9 +69,9 @@ function KineticStatCard({ title, value, icon: Icon, iconBg, iconColor, badge, s
         )}
       </div>
       <div className="relative z-10">
-        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">{title}</p>
-        <p className="text-3xl font-black text-gray-900 leading-none tracking-tight">{value}</p>
-        {subtitle && <p className="text-[11px] font-bold text-gray-400 mt-2 flex items-center gap-1.5"><Sparkles className="w-3 h-3 text-indigo-400" /> {subtitle}</p>}
+        <p className="text-[9px] sm:text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 sm:mb-1.5">{title}</p>
+        <p className="text-2xl sm:text-3xl font-black text-gray-900 leading-none tracking-tight">{value}</p>
+        {subtitle && <p className="text-[10px] sm:text-[11px] font-bold text-gray-400 mt-2 flex items-center gap-1.5"><Sparkles className="w-3 h-3 text-indigo-400" /> {subtitle}</p>}
       </div>
     </div>
   );
@@ -167,16 +167,16 @@ export default function OverviewTab({ dashboardData, realtimeStatus, setActiveTa
   }, [schedules]);
 
   return (
-    <div className="space-y-8 max-w-[1600px] mx-auto pb-12">
+    <div className="space-y-8 max-w-[1600px] mx-auto pb-12 px-2 sm:px-0">
 
       {/* ── Page Header Area ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
         <div>
-          <h1 className="text-3xl font-black text-gray-900 tracking-tight flex items-center gap-3 uppercase">
+          <h1 className="text-2xl sm:text-3xl font-black text-gray-900 tracking-tight flex items-center gap-3 uppercase">
              OPERATIONAL OVERVIEW
              {realtimeStatus.isConnected && <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_12px_rgba(16,185,129,0.4)]" />}
           </h1>
-          <p className="text-[11px] font-black text-gray-400 uppercase tracking-widest mt-1.5 flex items-center gap-2">
+          <p className="text-[10px] sm:text-[11px] font-black text-gray-400 uppercase tracking-widest mt-1.5 flex items-center gap-2">
             <Building2 className="w-4 h-4 text-indigo-400" />
             {company?.name || 'GENERIC PARTNER'} • CONTROL CENTER
           </p>
@@ -184,7 +184,7 @@ export default function OverviewTab({ dashboardData, realtimeStatus, setActiveTa
         <div className="flex items-center gap-3">
           <button 
             onClick={() => setActiveTab('bookings')} 
-            className="group flex items-center gap-3 bg-indigo-600 text-white px-6 py-3 rounded-2xl font-black text-[11px] uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-100 active:scale-95"
+            className="group w-full sm:w-auto flex items-center justify-center gap-3 bg-indigo-600 text-white px-6 py-3.5 rounded-2xl font-black text-[11px] uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-100 active:scale-95"
           >
             <Eye className="w-4 h-4 group-hover:scale-110 transition-transform" /> 
             Live Bookings
@@ -192,9 +192,8 @@ export default function OverviewTab({ dashboardData, realtimeStatus, setActiveTa
         </div>
       </div>
 
-      
       {/* ── KPI Cards ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
         <KineticStatCard
           title="AGGREGATE REVENUE"
           value={`MWK ${fmt(stats.totalRevenue)}`}
@@ -227,13 +226,13 @@ export default function OverviewTab({ dashboardData, realtimeStatus, setActiveTa
       </div>
 
       {/* ── Middle Section ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 text-left">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8 text-left">
 
         {/* Today's Departures */}
         <div className="lg:col-span-2 bg-white rounded-[2rem] shadow-[0_8px_30px_-10px_rgba(0,0,0,0.05)] border border-gray-100 overflow-hidden flex flex-col group">
-          <div className="flex items-center justify-between p-6 border-b border-gray-50">
+          <div className="flex items-center justify-between p-5 sm:p-6 border-b border-gray-50">
             <div>
-               <h2 className="text-sm font-black text-gray-900 uppercase tracking-widest flex items-center gap-2">
+               <h2 className="text-xs sm:text-sm font-black text-gray-900 uppercase tracking-widest flex items-center gap-2">
                  <Calendar className="w-4 h-4 text-indigo-500" /> DAILY LOGISTICS WINDOW
                </h2>
                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Real-time departure monitoring</p>
@@ -256,7 +255,7 @@ export default function OverviewTab({ dashboardData, realtimeStatus, setActiveTa
                   const fillPct = capacity > 0 ? Math.round((booked / capacity) * 100) : 0;
 
                   return (
-                    <div key={s.id} className="bg-white p-6 hover:bg-indigo-50/30 transition-all duration-300">
+                    <div key={s.id} className="bg-white p-5 sm:p-6 hover:bg-indigo-50/30 transition-all duration-300">
                       <div className="flex items-center justify-between mb-4">
                         <div className="px-3 py-1.5 bg-indigo-600 text-white rounded-xl text-[10px] font-black tracking-widest shadow-md shadow-indigo-100">
                            {dep.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -282,20 +281,20 @@ export default function OverviewTab({ dashboardData, realtimeStatus, setActiveTa
                 })}
               </div>
             ) : (
-              <div className="h-full flex flex-col items-center justify-center py-20 bg-gray-50/30">
-                <div className="w-16 h-16 bg-white rounded-2xl shadow-sm flex items-center justify-center mb-4 border border-gray-100">
+              <div className="h-full flex flex-col items-center justify-center py-16 sm:py-20 bg-gray-50/30">
+                <div className="w-14 h-14 sm:w-16 sm:h-16 bg-white rounded-2xl shadow-sm flex items-center justify-center mb-4 border border-gray-100">
                    <Zap className="w-6 h-6 text-gray-200" />
                 </div>
-                <p className="text-[11px] font-black text-gray-400 uppercase tracking-widest">No Operational departures identified</p>
+                <p className="text-[10px] sm:text-[11px] font-black text-gray-400 uppercase tracking-widest">No Operational departures identified</p>
               </div>
             )}
           </div>
         </div>
 
         {/* Revenue Trends */}
-        <div className="bg-white rounded-[2rem] shadow-[0_8px_30px_-10px_rgba(0,0,0,0.05)] border border-gray-100 flex flex-col p-6 overflow-hidden">
+        <div className="bg-white rounded-[2rem] shadow-[0_8px_30px_-10px_rgba(0,0,0,0.05)] border border-gray-100 flex flex-col p-5 sm:p-6 overflow-hidden">
           <div className="mb-6">
-             <h2 className="text-sm font-black text-gray-900 uppercase tracking-widest flex items-center gap-2">
+             <h2 className="text-xs sm:text-sm font-black text-gray-900 uppercase tracking-widest flex items-center gap-2">
                <TrendingUp className="w-4 h-4 text-emerald-500" /> YIELD ANALYTICS
              </h2>
              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">7-Day performance cycle</p>
@@ -325,9 +324,9 @@ export default function OverviewTab({ dashboardData, realtimeStatus, setActiveTa
                 <div className="mt-6 pt-6 border-t border-gray-50 flex justify-between items-center">
                   <div>
                     <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">CYCLICAL TOTAL</p>
-                    <p className="text-lg font-black text-gray-900 tracking-tight">MWK {fmt(chartData.reduce((s, d) => s + d.value, 0))}</p>
+                    <p className="text-base sm:text-lg font-black text-gray-900 tracking-tight">MWK {fmt(chartData.reduce((s, d) => s + d.value, 0))}</p>
                   </div>
-                  <button onClick={() => setActiveTab('payments')} className="p-2 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-indigo-600 hover:text-white transition-all">
+                  <button onClick={() => setActiveTab('payments')} className="p-2.5 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-indigo-600 hover:text-white transition-all">
                     <ArrowRight className="w-4 h-4" />
                   </button>
                 </div>
@@ -404,27 +403,27 @@ export default function OverviewTab({ dashboardData, realtimeStatus, setActiveTa
         if (progressPercent === 100) return null;
 
         return (
-          <div className="bg-white rounded-[2.5rem] shadow-[0_20px_50px_rgba(0,0,0,0.05)] border border-gray-100 overflow-hidden">
-            <div className="p-8 bg-indigo-900 relative overflow-hidden">
+          <div className="bg-white rounded-[2rem] sm:rounded-[2.5rem] shadow-[0_20px_50px_rgba(0,0,0,0.05)] border border-gray-100 overflow-hidden">
+            <div className="p-6 sm:p-8 bg-indigo-900 relative overflow-hidden">
                <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-600 rounded-full blur-[100px] opacity-20 -mr-32 -mt-32"></div>
                <div className="absolute bottom-0 left-0 w-48 h-48 bg-emerald-600 rounded-full blur-[80px] opacity-10 -ml-24 -mb-24"></div>
                
-               <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-8 text-left">
+               <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6 sm:gap-8 text-left">
                   <div className="space-y-2">
-                     <span className="px-3 py-1 bg-white/10 text-white/90 rounded-xl text-[10px] font-black uppercase tracking-widest border border-white/10 backdrop-blur-sm">
+                     <span className="px-3 py-1 bg-white/10 text-white/90 rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest border border-white/10 backdrop-blur-sm">
                         OPERATIONAL READINESS
                      </span>
-                     <h2 className="text-3xl font-black text-white tracking-tight uppercase">GUIDED ONBOARDING SYSTEM</h2>
-                     <p className="text-white/50 text-[11px] font-bold uppercase tracking-widest">Synchronize your infrastructure for full platform activation</p>
+                     <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight uppercase">ONBOARDING</h2>
+                     <p className="text-white/50 text-[10px] sm:text-[11px] font-bold uppercase tracking-widest">Sync your infrastructure</p>
                   </div>
 
-                  <div className="flex items-center gap-8">
-                     <div className="flex items-center gap-5">
+                  <div className="flex items-center justify-between sm:justify-end gap-6 sm:gap-8">
+                     <div className="flex items-center gap-4 sm:gap-5">
                         <div className="text-right">
-                           <p className="text-4xl font-black text-white leading-none tracking-tighter">{progressPercent}%</p>
-                           <p className="text-[10px] font-black text-white/40 uppercase tracking-widest mt-1.5">INTEGRATION INDEX</p>
+                           <p className="text-3xl sm:text-4xl font-black text-white leading-none tracking-tighter">{progressPercent}%</p>
+                           <p className="text-[9px] font-black text-white/40 uppercase tracking-widest mt-1.5">INDEX</p>
                         </div>
-                        <div className="w-20 h-20 relative">
+                        <div className="w-16 h-16 sm:w-20 sm:h-20 relative">
                            <svg className="w-full h-full -rotate-90 drop-shadow-[0_0_8px_rgba(255,255,255,0.2)]" viewBox="0 0 36 36">
                               <circle cx="18" cy="18" r="16" fill="none" className="stroke-white/10" strokeWidth="4" />
                               <circle cx="18" cy="18" r="16" fill="none" className="transition-all duration-1000" strokeWidth="4" 
@@ -443,13 +442,13 @@ export default function OverviewTab({ dashboardData, realtimeStatus, setActiveTa
             </div>
 
             {!isWizardMinimized && (
-              <div className="p-8 animate-in fade-in slide-in-from-top-4 duration-500 text-left">
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="p-5 sm:p-8 animate-in fade-in slide-in-from-top-4 duration-500 text-left">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
                   {steps.map((step, idx) => (
                     <button
                       key={step.id}
                       onClick={() => setActiveTab(step.tab)}
-                      className={`group relative p-6 rounded-[2rem] border transition-all duration-300 text-left flex flex-col gap-4 ${
+                      className={`group relative p-5 sm:p-6 rounded-[1.5rem] sm:rounded-[2rem] border transition-all duration-300 text-left flex flex-col gap-4 ${
                         step.isDone 
                           ? 'bg-emerald-50/30 border-emerald-100 hover:bg-emerald-50' 
                           : nextStep?.id === step.id 
@@ -457,80 +456,60 @@ export default function OverviewTab({ dashboardData, realtimeStatus, setActiveTa
                             : 'bg-gray-50/50 border-gray-50 text-gray-300 pointer-events-none'
                       }`}
                     >
-                      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-500 ${
+                      <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-2xl flex items-center justify-center transition-all duration-500 ${
                         step.isDone ? 'bg-emerald-100 text-emerald-600' : nextStep?.id === step.id ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'bg-white border border-gray-100 text-gray-200'
                       }`}>
-                        {step.isDone ? <CheckCircle className="w-6 h-6" /> : <step.icon className="w-6 h-6" />}
+                        {step.isDone ? <CheckCircle className="w-5 h-5 sm:w-6 sm:h-6" /> : <step.icon className="w-5 h-5 sm:w-6 sm:h-6" />}
                       </div>
                       
                       <div>
                         <div className="flex items-center justify-between mb-1">
-                           <p className={`text-[10px] font-black uppercase tracking-widest ${step.isDone ? 'text-emerald-600/60' : nextStep?.id === step.id ? 'text-indigo-600' : 'text-gray-400'}`}>MODULE {idx + 1}</p>
-                           {step.isDone && <span className="text-[9px] font-black text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded-lg border border-emerald-200">VERIFIED</span>}
+                           <p className={`text-[9px] font-black uppercase tracking-widest ${step.isDone ? 'text-emerald-600/60' : nextStep?.id === step.id ? 'text-indigo-600' : 'text-gray-400'}`}>STEP {idx + 1}</p>
+                           {step.isDone && <span className="text-[8px] font-black text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded-lg border border-emerald-200">DONE</span>}
                         </div>
-                        <p className={`text-sm font-black tracking-tight uppercase ${step.isDone ? 'text-emerald-900/40' : 'text-gray-900'}`}>{step.title}</p>
-                        <p className="text-[11px] font-bold text-gray-400 mt-1 uppercase tracking-widest">{step.desc}</p>
+                        <p className={`text-xs sm:text-sm font-black tracking-tight uppercase ${step.isDone ? 'text-emerald-900/40' : 'text-gray-900'}`}>{step.title}</p>
+                        <p className="text-[10px] font-bold text-gray-400 mt-1 uppercase tracking-widest">{step.desc}</p>
                       </div>
 
                       {nextStep?.id === step.id && (
-                        <div className="absolute right-6 bottom-6 w-8 h-8 rounded-2xl bg-indigo-600 text-white flex items-center justify-center animate-pulse shadow-xl shadow-indigo-100">
+                        <div className="absolute right-5 sm:right-6 bottom-5 sm:bottom-6 w-7 h-7 sm:w-8 sm:h-8 rounded-xl sm:rounded-2xl bg-indigo-600 text-white flex items-center justify-center animate-pulse shadow-xl shadow-indigo-100">
                           <ChevronRight className="w-4 h-4" />
                         </div>
                       )}
                     </button>
                   ))}
                 </div>
-
-                {nextStep && (
-                  <div className="mt-12 p-8 bg-gray-50 rounded-[2rem] border-2 border-dashed border-gray-200 flex flex-col md:flex-row items-center justify-between gap-8 group/next">
-                    <div className="flex items-center gap-5">
-                      <div className="w-16 h-16 bg-white rounded-3xl flex items-center justify-center shadow-sm border border-gray-100 group-hover/next:scale-110 transition-transform duration-500">
-                        <nextStep.icon className="w-8 h-8 text-indigo-600" />
-                      </div>
-                      <div>
-                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-1">IMMEDIATE OBJECTIVE</p>
-                        <p className="text-xl font-black text-gray-900 tracking-tight uppercase">{nextStep.title}</p>
-                      </div>
-                    </div>
-                    <button 
-                      onClick={() => setActiveTab(nextStep.tab)}
-                      className="w-full md:w-auto px-10 py-4 bg-indigo-600 text-white rounded-3xl font-black text-[11px] uppercase tracking-widest shadow-2xl shadow-indigo-200 hover:bg-indigo-700 hover:translate-x-1 transition-all active:scale-95 flex items-center justify-center gap-3"
-                    >
-                      EXECUTE SETUP <ArrowRight className="w-4 h-4" />
-                    </button>
-                  </div>
-                )}
               </div>
             )}
           </div>
         );
       })()}
 
-      {/* ── Recent Bookings Table ── */}
-      <div className="bg-white rounded-[2.5rem] shadow-[0_8px_30px_-10px_rgba(0,0,0,0.05)] border border-gray-100 overflow-hidden text-left">
-        <div className="flex items-center justify-between p-8 border-b border-gray-50">
+      {/* Recent Bookings Section */}
+      <div className="bg-white rounded-[2rem] shadow-[0_8px_30px_-10px_rgba(0,0,0,0.05)] border border-gray-100 overflow-hidden text-left">
+        <div className="flex items-center justify-between p-5 sm:p-8 border-b border-gray-50">
           <div>
-             <h2 className="text-sm font-black text-gray-900 uppercase tracking-widest flex items-center gap-2">
+             <h2 className="text-xs sm:text-sm font-black text-gray-900 uppercase tracking-widest flex items-center gap-2">
                <Users className="w-4 h-4 text-rose-500" /> TRANSACTION LEDGER
              </h2>
-             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Recent passenger procurement</p>
+             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Recent passenger interactions</p>
           </div>
-          <button onClick={() => setActiveTab('bookings')} className="px-5 py-2.5 bg-gray-50 hover:bg-indigo-50 text-gray-900 text-[10px] font-black uppercase tracking-widest rounded-2xl border border-gray-100 hover:border-indigo-100 transition-all">
+          <button onClick={() => setActiveTab('bookings')} className="px-4 py-2 sm:px-5 sm:py-2.5 bg-gray-50 hover:bg-indigo-50 text-gray-900 text-[9px] sm:text-[10px] font-black uppercase tracking-widest rounded-xl sm:rounded-2xl border border-gray-100 hover:border-indigo-100 transition-all">
             FULL AUDIT
           </button>
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-left">
+          <table className="w-full text-left min-w-[800px]">
             <thead>
               <tr className="bg-gray-50/50">
                 {['Reference', 'Identity', 'Operational Corridor', 'Yield', 'Lifecycle', 'Financials'].map(h => (
-                  <th key={h} className="px-8 py-5 font-black text-gray-400 text-[10px] uppercase tracking-widest">{h}</th>
+                  <th key={h} className="px-6 sm:px-8 py-4 sm:py-5 font-black text-gray-400 text-[9px] sm:text-[10px] uppercase tracking-widest">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {recentBookings.length > 0 ? recentBookings.map((b, index) => {
+              {recentBookings.length > 0 ? recentBookings.map((b) => {
                 const name = b.passengerDetails?.[0]?.name || "ANONYMOUS";
                 const initials = name.substring(0, 1).toUpperCase();
                 const isConfirmed = b.bookingStatus === 'confirmed';
@@ -540,43 +519,43 @@ export default function OverviewTab({ dashboardData, realtimeStatus, setActiveTa
 
                 return (
                   <tr key={b.id} className="hover:bg-indigo-50/20 transition-colors group">
-                    <td className="px-8 py-6">
-                      <span className="font-mono text-[11px] font-black text-gray-400 bg-gray-50 px-2.5 py-1.5 rounded-xl border border-gray-100 group-hover:bg-indigo-600 group-hover:text-white group-hover:border-indigo-600 transition-all">
+                    <td className="px-6 sm:px-8 py-5 sm:py-6">
+                      <span className="font-mono text-[10px] sm:text-[11px] font-black text-gray-400 bg-gray-50 px-2.5 py-1.5 rounded-xl border border-gray-100 group-hover:bg-indigo-600 group-hover:text-white group-hover:border-indigo-600 transition-all">
                         #{b.bookingReference || b.id.substring(0, 8).toUpperCase()}
                       </span>
                     </td>
-                    <td className="px-8 py-6">
-                      <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 rounded-2xl bg-indigo-50 flex items-center justify-center text-[12px] font-black text-indigo-600 border border-indigo-100 group-hover:scale-110 transition-transform">
+                    <td className="px-6 sm:px-8 py-5 sm:py-6">
+                      <div className="flex items-center gap-3 sm:gap-4">
+                        <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-indigo-50 flex items-center justify-center text-xs sm:text-[12px] font-black text-indigo-600 border border-indigo-100 group-hover:scale-110 transition-transform">
                           {initials}
                         </div>
-                        <span className="text-sm font-black text-gray-900 uppercase tracking-tight">{name}</span>
+                        <span className="text-xs sm:text-sm font-black text-gray-900 uppercase tracking-tight">{name}</span>
                       </div>
                     </td>
-                    <td className="px-8 py-6">
+                    <td className="px-6 sm:px-8 py-5 sm:py-6">
                        {route ? (
                           <div className="flex flex-col gap-0.5">
-                             <p className="text-xs font-black text-gray-700 uppercase tracking-tight">{route.origin} → {route.destination}</p>
-                             <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">{fmtTime(toDate(sch?.departureDateTime))}</p>
+                             <p className="text-[11px] sm:text-xs font-black text-gray-700 uppercase tracking-tight">{route.origin} → {route.destination}</p>
+                             <p className="text-[8px] sm:text-[9px] font-bold text-gray-400 uppercase tracking-widest">{fmtTime(toDate(sch?.departureDateTime))}</p>
                           </div>
                        ) : <span className="text-gray-300">N/A</span>}
                     </td>
-                    <td className="px-8 py-6 text-sm font-black text-gray-900">MWK {fmt(b.totalAmount || 0)}</td>
-                    <td className="px-8 py-6">
-                      <span className={`px-3 py-1.5 text-[9px] font-black rounded-xl uppercase tracking-widest border shadow-sm ${
+                    <td className="px-6 sm:px-8 py-5 sm:py-6 text-xs sm:text-sm font-black text-gray-900">MWK {fmt(b.totalAmount || 0)}</td>
+                    <td className="px-6 sm:px-8 py-5 sm:py-6">
+                      <span className={`px-2 py-1 sm:px-3 sm:py-1.5 text-[8px] sm:text-[9px] font-black rounded-lg sm:rounded-xl uppercase tracking-widest border shadow-sm ${
                         isConfirmed ? 'bg-emerald-50 text-emerald-700 border-emerald-100' :
                         isPending ? 'bg-amber-50 text-amber-700 border-amber-100' : 'bg-rose-50 text-rose-700 border-rose-100'
                       }`}>
                         {b.bookingStatus}
                       </span>
                     </td>
-                    <td className="px-8 py-6">
-                      <span className={`inline-flex items-center gap-2 px-3 py-1.5 text-[9px] font-black rounded-xl border uppercase tracking-widest ${
+                    <td className="px-6 sm:px-8 py-5 sm:py-6">
+                      <span className={`inline-flex items-center gap-1.5 sm:gap-2 px-2 py-1 sm:px-3 sm:py-1.5 text-[8px] sm:text-[9px] font-black rounded-lg sm:rounded-xl border uppercase tracking-widest ${
                         b.paymentStatus === 'paid'
                           ? 'bg-emerald-50 text-emerald-600 border-emerald-100'
                           : 'bg-gray-50 text-gray-400 border-gray-100'
                       }`}>
-                        <div className={`w-1.5 h-1.5 rounded-full ${b.paymentStatus === 'paid' ? 'bg-emerald-500' : 'bg-gray-300'}`} />
+                        <div className={`w-1 h-1 sm:w-1.5 sm:h-1.5 rounded-full ${b.paymentStatus === 'paid' ? 'bg-emerald-500' : 'bg-gray-300'}`} />
                         {b.paymentStatus}
                       </span>
                     </td>
@@ -584,11 +563,11 @@ export default function OverviewTab({ dashboardData, realtimeStatus, setActiveTa
                 );
               }) : (
                 <tr>
-                  <td colSpan={6} className="px-8 py-20 text-center">
-                    <div className="w-16 h-16 bg-gray-50 rounded-[2rem] flex items-center justify-center mx-auto mb-4">
+                  <td colSpan={6} className="px-6 sm:px-8 py-16 sm:py-20 text-center">
+                    <div className="w-12 h-12 sm:w-16 sm:h-16 bg-gray-50 rounded-2xl sm:rounded-[2rem] flex items-center justify-center mx-auto mb-4">
                        <Users className="w-6 h-6 text-gray-200" />
                     </div>
-                    <p className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Transaction log cleared</p>
+                    <p className="text-[10px] sm:text-[11px] font-black text-gray-400 uppercase tracking-widest">Transaction log cleared</p>
                   </td>
                 </tr>
               )}
@@ -596,7 +575,6 @@ export default function OverviewTab({ dashboardData, realtimeStatus, setActiveTa
           </table>
         </div>
       </div>
-
     </div>
   );
 }

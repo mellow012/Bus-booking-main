@@ -47,10 +47,12 @@ import {
   TicketPercent,
   Zap,
   Gift,
+  Menu,
 } from 'lucide-react';
 import AlertMessage from '../../components/AlertMessage';
 import { Company, UserProfile, Booking, Schedule, Route, Bus, OperatorProfile, ConductorProfile, Promotion } from '@/types/index';
 import TabButton from '@/components/tabButton';
+import DashboardBottomNav from "@/components/DashboardBottomNav";
 
 // ─── Kinetic Theme Components ───────────────────────────────────────────────
 
@@ -419,6 +421,28 @@ const PromotionsTab: React.FC<{
     }
   };
 
+  const handleToggleStatus = async (promo: Promotion) => {
+    setIsSaving(true);
+    try {
+      const res = await fetch('/api/promotions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...promo, isActive: !promo.isActive }),
+      });
+      if (res.ok) {
+        setSuccess(`Promotion ${promo.isActive ? 'deactivated' : 'activated'}`);
+        onRefresh();
+      } else {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to toggle promotion status');
+      }
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   if (loading) return <div className="flex justify-center p-12"><Loader2 className="animate-spin" /></div>;
 
   return (
@@ -447,11 +471,14 @@ const PromotionsTab: React.FC<{
               <div className={`p-2.5 rounded-xl ${promo.isActive ? 'bg-emerald-50 text-emerald-600' : 'bg-gray-100 text-gray-400'}`}>
                 <TicketPercent className="w-5 h-5" />
               </div>
-              <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button onClick={() => handleEdit(promo)} className="p-1.5 text-amber-600 hover:bg-amber-50 rounded-lg transition-colors">
+              <div className="flex gap-1">
+                <button onClick={() => handleToggleStatus(promo)} title={promo.isActive ? "Deactivate" : "Activate"} className={`p-1.5 rounded-lg transition-colors ${promo.isActive ? 'text-amber-600 bg-amber-50' : 'text-green-600 bg-green-50'}`}>
+                  {promo.isActive ? <Ban className="w-4 h-4" /> : <CheckCircle className="w-4 h-4" />}
+                </button>
+                <button onClick={() => handleEdit(promo)} title="Edit" className="p-1.5 text-blue-600 bg-blue-50 rounded-lg transition-colors">
                   <Edit className="w-4 h-4" />
                 </button>
-                <button onClick={() => handleDelete(promo.id)} className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors">
+                <button onClick={() => handleDelete(promo.id)} title="Delete" className="p-1.5 text-red-600 bg-red-50 rounded-lg transition-colors">
                   <Trash className="w-4 h-4" />
                 </button>
               </div>
@@ -1191,7 +1218,7 @@ export default function SuperAdminDashboard() {
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
   const [currentPage, setCurrentPage] = useState(1);
   const [activeTab, setActiveTab] = useState<TabType>('overview');
-
+  const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [modals, setModals] = useState({
     add: false, edit: false, view: false, delete: null as string | null,
   });
@@ -1535,16 +1562,24 @@ export default function SuperAdminDashboard() {
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
+      {isMobileOpen && (
+        <div className="fixed inset-0 bg-black/40 z-40 lg:hidden backdrop-blur-sm" onClick={() => setIsMobileOpen(false)} />
+      )}
       {/* Sidebar */}
-      <aside className="w-64 bg-white border-r border-gray-100 h-screen sticky top-0 flex flex-col z-50 overflow-hidden">
-        <div className="p-6 mb-2 flex items-center space-x-3">
-          <div className="w-10 h-10 bg-indigo-900 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-100">
-            <Layers className="w-5 h-5 text-white" />
+      <aside className={`w-64 bg-white border-r border-gray-100 h-screen fixed lg:sticky top-0 flex flex-col z-50 overflow-hidden transition-transform duration-300 ${isMobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
+        <div className="p-6 mb-2 flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <div className="w-10 h-10 bg-indigo-900 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-100">
+              <Layers className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h1 className="font-bold text-indigo-900 text-[15px] leading-tight">Super Admin</h1>
+              <p className="text-[10px] text-gray-400 font-bold tracking-wider uppercase">Platform Control</p>
+            </div>
           </div>
-          <div>
-            <h1 className="font-bold text-indigo-900 text-[15px] leading-tight">Super Admin</h1>
-            <p className="text-[10px] text-gray-400 font-bold tracking-wider uppercase">Platform Control</p>
-          </div>
+          <button onClick={() => setIsMobileOpen(false)} className="lg:hidden p-2 text-gray-500 hover:bg-gray-100 rounded-lg">
+            <X className="w-5 h-5" />
+          </button>
         </div>
 
         <nav className="flex-1 overflow-y-auto px-3 pt-2">
@@ -1585,14 +1620,22 @@ export default function SuperAdminDashboard() {
 
       <div className="flex-1 flex flex-col min-w-0">
         {/* Header */}
-        <header className="bg-white/80 backdrop-blur-md border-b border-gray-100 sticky top-0 z-40 px-8 py-4 flex justify-between items-center h-[73px]">
-          <div>
-            <h2 className="text-[20px] font-bold text-gray-900 tracking-tight capitalize">
-              {activeTab} Dashboard
-            </h2>
-            <p className="text-[11px] text-gray-400 font-bold uppercase tracking-widest leading-none mt-1">
-              Final Production Release v1.0
-            </p>
+        <header className="bg-white/80 backdrop-blur-md border-b border-gray-100 sticky top-0 z-40 px-4 sm:px-8 py-4 flex justify-between items-center h-[73px]">
+          <div className="flex items-center gap-3">
+            <button onClick={() => setIsMobileOpen(true)} className="lg:hidden p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors">
+              <Menu className="w-5 h-5" />
+            </button>
+            <div>
+              <h2 className="text-[20px] font-bold text-gray-900 tracking-tight capitalize hidden sm:block">
+                {activeTab} Dashboard
+              </h2>
+              <h2 className="text-[16px] font-bold text-gray-900 tracking-tight capitalize sm:hidden">
+                {activeTab}
+              </h2>
+              <p className="text-[11px] text-gray-400 font-bold uppercase tracking-widest leading-none mt-1 hidden sm:block">
+                Final Production Release v1.0
+              </p>
+            </div>
           </div>
           <div className="flex items-center gap-4">
             <button onClick={() => setRefreshCount(r => r + 1)} className="p-2 text-gray-400 hover:bg-gray-50 rounded-lg transition-all" title="Refresh Data">
@@ -1611,7 +1654,7 @@ export default function SuperAdminDashboard() {
           </div>
         </header>
 
-        <main className="flex-1 p-8 overflow-y-auto">
+        <main className="flex-1 p-4 sm:p-8 overflow-y-auto pb-32 lg:pb-8">
           {/* Alerts */}
           <div className="space-y-2 mb-6">
             {alerts.map(a => (
@@ -2248,6 +2291,20 @@ export default function SuperAdminDashboard() {
             showAlert={showAlert}
           />
         )}
+        {/* Mobile Bottom Nav */}
+        <DashboardBottomNav 
+          activeTab={activeTab}
+          onTabChange={(id) => {
+            setActiveTab(id as TabType);
+            setIsMobileOpen(false);
+          }}
+          tabs={[
+            { id: 'overview', label: 'Home', icon: BarChart3 },
+            { id: 'companies', label: 'Firms', icon: Building2 },
+            { id: 'bookings', label: 'Sales', icon: List },
+            { id: 'promotions', label: 'Promo', icon: TicketPercent },
+          ]}
+        />
       </div>
     </div>
   );

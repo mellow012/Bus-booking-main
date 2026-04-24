@@ -2,22 +2,25 @@
 
 import React, { FC, useState, useMemo } from 'react';
 import { Schedule, Bus, Route } from '@/types';
-import { Calendar, ChevronDown, ChevronUp, Radio, Flame, CalendarClock, CheckCircle } from 'lucide-react';
+import { Calendar, Radio, Flame, CalendarClock, CheckCircle, LayoutGrid } from 'lucide-react';
 import TripCard, { getTripBucket, toDate } from './TripCard';
 
+// Add 'all' to trip buckets
+type TripBucketFilter = 'all' | 'live' | 'today' | 'week' | 'completed';
 type TripBucket = 'live' | 'today' | 'week' | 'completed';
 
-const BUCKET_CFG: Record<TripBucket, {
+const FILTER_CFG: Record<TripBucketFilter, {
   label: string; icon: React.ReactNode;
-  textCls: string; bgCls: string; borderCls: string; pillCls: string;
+  activeCls: string; inactiveCls: string; pillCls: string;
 }> = {
-  live: { label: 'Live Now', icon: <Radio className="w-4 h-4" />, textCls: 'text-green-800', bgCls: 'bg-green-50', borderCls: 'border-green-200', pillCls: 'bg-green-200 text-green-900' },
-  today: { label: 'Today', icon: <Flame className="w-4 h-4" />, textCls: 'text-blue-800', bgCls: 'bg-blue-50', borderCls: 'border-blue-200', pillCls: 'bg-blue-200 text-blue-900' },
-  week: { label: 'This Week', icon: <CalendarClock className="w-4 h-4" />, textCls: 'text-slate-700', bgCls: 'bg-slate-50', borderCls: 'border-slate-200', pillCls: 'bg-slate-200 text-slate-800' },
-  completed: { label: 'Completed', icon: <CheckCircle className="w-4 h-4" />, textCls: 'text-gray-600', bgCls: 'bg-gray-50', borderCls: 'border-gray-200', pillCls: 'bg-gray-200 text-gray-700' },
+  all: { label: 'All Active', icon: <LayoutGrid className="w-4 h-4" />, activeCls: 'bg-indigo-600 text-white shadow-md border-indigo-600', inactiveCls: 'bg-white text-gray-600 hover:bg-gray-50 border-gray-200', pillCls: 'bg-indigo-500 text-white' },
+  live: { label: 'Live Now', icon: <Radio className="w-4 h-4" />, activeCls: 'bg-green-600 text-white shadow-md border-green-600', inactiveCls: 'bg-white text-gray-600 hover:bg-green-50 border-gray-200', pillCls: 'bg-green-500 text-white' },
+  today: { label: 'Today', icon: <Flame className="w-4 h-4" />, activeCls: 'bg-blue-600 text-white shadow-md border-blue-600', inactiveCls: 'bg-white text-gray-600 hover:bg-blue-50 border-gray-200', pillCls: 'bg-blue-500 text-white' },
+  week: { label: 'This Week', icon: <CalendarClock className="w-4 h-4" />, activeCls: 'bg-slate-700 text-white shadow-md border-slate-700', inactiveCls: 'bg-white text-gray-600 hover:bg-slate-50 border-gray-200', pillCls: 'bg-slate-600 text-white' },
+  completed: { label: 'Completed', icon: <CheckCircle className="w-4 h-4" />, activeCls: 'bg-gray-600 text-white shadow-md border-gray-600', inactiveCls: 'bg-white text-gray-500 hover:bg-gray-50 border-gray-200', pillCls: 'bg-gray-500 text-white' },
 };
 
-const BUCKET_ORDER: TripBucket[] = ['live', 'today', 'week', 'completed'];
+const FILTER_ORDER: TripBucketFilter[] = ['all', 'live', 'today', 'week', 'completed'];
 
 interface TripBucketsProps {
   trips: Schedule[];
@@ -27,10 +30,7 @@ interface TripBucketsProps {
 }
 
 const TripBuckets: FC<TripBucketsProps> = ({ trips, buses, routes, onSelect }) => {
-  const [collapsed, setCollapsed] = useState<Record<TripBucket, boolean>>({
-    live: false, today: false, week: false, completed: true,
-  });
-  const toggle = (b: TripBucket) => setCollapsed(p => ({ ...p, [b]: !p[b] }));
+  const [activeFilter, setActiveFilter] = useState<TripBucketFilter>('all');
   const busMap = useMemo(() => new Map(buses.map(b => [b.id, b])), [buses]);
   const routeMap = useMemo(() => new Map(routes.map(r => [r.id, r])), [routes]);
 
@@ -43,7 +43,16 @@ const TripBuckets: FC<TripBucketsProps> = ({ trips, buses, routes, onSelect }) =
     return map;
   }, [trips]);
 
-  const totalActive = bucketed.live.length + bucketed.today.length + bucketed.week.length;
+  const allActive = useMemo(() => [...bucketed.live, ...bucketed.today, ...bucketed.week], [bucketed]);
+  const counts: Record<TripBucketFilter, number> = {
+    all: allActive.length,
+    live: bucketed.live.length,
+    today: bucketed.today.length,
+    week: bucketed.week.length,
+    completed: bucketed.completed.length
+  };
+
+  const displayedTrips = activeFilter === 'all' ? allActive : bucketed[activeFilter as TripBucket];
 
   if (trips.length === 0) {
     return (
@@ -66,36 +75,47 @@ const TripBuckets: FC<TripBucketsProps> = ({ trips, buses, routes, onSelect }) =
         <h2 className="text-xl sm:text-2xl font-bold flex items-center gap-2">
           <Calendar className="w-6 h-6 text-blue-600" /> Your Trips
         </h2>
-        <span className="text-sm text-gray-500 font-medium bg-gray-100 px-3 py-1 rounded-full">{totalActive} active</span>
+        <span className="text-sm text-gray-500 font-medium bg-gray-100 px-3 py-1 rounded-full">{counts.all} active</span>
       </div>
-      <div className="space-y-4">
-        {BUCKET_ORDER.map(bucket => {
-          const list = bucketed[bucket];
-          if (!list.length) return null;
-          const cfg = BUCKET_CFG[bucket];
+      
+      {/* Horizontal Pill Filters */}
+      <div className="flex gap-2 overflow-x-auto pb-4 mb-2 scrollbar-hide snap-x px-1 -mx-1">
+        {FILTER_ORDER.map(filter => {
+          const cfg = FILTER_CFG[filter];
+          const count = counts[filter];
+          const isActive = activeFilter === filter;
+          
+          if (count === 0 && filter !== 'all') return null; // Hide empty buckets except 'all'
+          
           return (
-            <div key={bucket} className="space-y-3">
-              <button
-                onClick={() => toggle(bucket)}
-                className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border font-medium text-sm transition-all active:scale-[0.98] ${cfg.bgCls} ${cfg.borderCls} ${cfg.textCls}`}
-              >
-                <div className="flex items-center gap-2.5">
-                  {cfg.icon}
-                  <span className="font-bold">{cfg.label}</span>
-                  <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${cfg.pillCls}`}>{list.length}</span>
-                </div>
-                {collapsed[bucket] ? <ChevronDown className="w-5 h-5 opacity-50" /> : <ChevronUp className="w-5 h-5 opacity-50" />}
-              </button>
-              {!collapsed[bucket] && (
-                <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-                  {list.map(trip => (
-                    <TripCard key={trip.id} trip={trip} bus={busMap.get(trip.busId)} route={routeMap.get(trip.routeId)} onClick={() => onSelect(trip)} />
-                  ))}
-                </div>
-              )}
-            </div>
+            <button
+              key={filter}
+              onClick={() => setActiveFilter(filter)}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-full border text-sm font-semibold whitespace-nowrap transition-all duration-300 snap-start shrink-0 active:scale-95 ${isActive ? cfg.activeCls : cfg.inactiveCls}`}
+            >
+              {cfg.icon}
+              <span>{cfg.label}</span>
+              <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ml-1 transition-colors ${isActive ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500'}`}>
+                {count}
+              </span>
+            </button>
           );
         })}
+      </div>
+
+      {/* Grid of Trips */}
+      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 xl:grid-cols-3">
+        {displayedTrips.length > 0 ? (
+          displayedTrips.map(trip => (
+            <div key={trip.id} className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <TripCard trip={trip} bus={busMap.get(trip.busId)} route={routeMap.get(trip.routeId)} onClick={() => onSelect(trip)} />
+            </div>
+          ))
+        ) : (
+          <div className="col-span-full bg-gray-50 border border-dashed border-gray-200 rounded-xl p-8 text-center text-gray-500 animate-in fade-in">
+            No trips found in this category.
+          </div>
+        )}
       </div>
     </section>
   );

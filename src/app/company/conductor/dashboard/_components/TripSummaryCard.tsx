@@ -6,6 +6,7 @@ import { Flag, Banknote, Users, CheckCircle, CarFront, Timer, Loader2 } from 'lu
 import { Button } from '@/components/ui/button';
 import { format } from 'date-fns';
 import { supabase } from '@/lib/supabase';
+import * as dbActions from '@/lib/actions/db.actions';
 
 interface TripSummaryCardProps {
   trip: Schedule;
@@ -17,6 +18,7 @@ interface TripSummaryCardProps {
 
 const TripSummaryCard: FC<TripSummaryCardProps> = ({ trip, bus, bookings, company, onRefresh }) => {
   const [loading, setLoading] = useState(true);
+  const [logs, setLogs] = useState<any[]>([]);
   const [stats, setStats] = useState<{
     expectedRevenue: number;
     cashCollected: number;
@@ -65,6 +67,13 @@ const TripSummaryCard: FC<TripSummaryCardProps> = ({ trip, bus, bookings, compan
     };
 
     fetchOrCalculateStats();
+
+    const fetchLogs = async () => {
+      const res = await dbActions.getActivityLogs({ scheduleId: trip.id });
+      if (res.success && res.data) setLogs(res.data);
+    };
+    fetchLogs();
+
     return () => { isMounted = false; };
   }, [trip.id, bookings]);
 
@@ -149,6 +158,24 @@ const TripSummaryCard: FC<TripSummaryCardProps> = ({ trip, bus, bookings, compan
                 </div>
               </div>
             </div>
+
+            {/* Activity Logs */}
+            {logs.length > 0 && (
+              <div className="border-t border-gray-100 pt-4">
+                <h4 className="text-sm font-bold text-gray-900 mb-3">Trip Event Log</h4>
+                <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
+                  {logs.map((log, i) => (
+                    <div key={i} className="flex justify-between items-center bg-gray-50 p-2.5 rounded-lg border border-gray-100">
+                      <div className="flex flex-col">
+                        <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">{log.action.replace(/_/g, ' ')}</span>
+                        <span className="text-xs font-medium text-gray-700">{log.description}</span>
+                      </div>
+                      <span className="text-[9px] font-bold text-gray-400">{format(new Date(log.createdAt), 'HH:mm')}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <p className="text-xs text-gray-400 text-center bg-gray-50 p-3 rounded-xl">
               This summary has been recorded. You can close this trip.

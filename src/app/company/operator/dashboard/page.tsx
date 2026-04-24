@@ -25,6 +25,7 @@ import {
   Activity
 } from "lucide-react";
 import AlertMessage from "@/components/AlertMessage";
+import DashboardBottomNav from "@/components/DashboardBottomNav";
 import SchedulesTab from "@/components/scheduleTab";
 import BookingsTab from "@/components/bookingTab";
 import PaymentsTab from "@/components/PaymentTab";
@@ -33,7 +34,7 @@ import RoutesTab from "@/components/routesTab";
 import BusesTab from "@/components/busesTab";
 import ReportsTab from "@/components/ReportsTab";
 import OperatorProfileTab from "@/components/OperatorProfileTab";
-import ChartersTab from "@/components/ChartersTab";
+import TripActivityTab from "@/components/TripActivityTab";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const TABS = [
@@ -42,7 +43,6 @@ const TABS = [
   { id: "payments" as const,  label: "Payments",  icon: DollarSign },
   { id: "routes" as const,    label: "My Routes", icon: MapPin },
   { id: "buses" as const,     label: "Fleet",    icon: Truck },
-  { id: "charters" as const,  label: "Charters", icon: Users },
   { id: "reports" as const,   label: "Reports",  icon: FileText },
   { id: "notifications" as const, label: "Notifications", icon: Bell },
   { id: "activity" as const,  label: "Activity", icon: Activity },
@@ -364,12 +364,13 @@ export default function OperatorDashboard() {
         return (
           <RoutesTab
             routes={operatorRoutes}
-            setRoutes={(updatedRoutes) => {
-               // Update global routes with changes from the tab if needed
-               // For now we assume view/assigned management
+            setRoutes={(newRoutes) => {
+              setDashboardData(prev => ({
+                ...prev,
+                routes: typeof newRoutes === "function" ? (newRoutes as any)(prev.routes) : newRoutes
+              }));
             }}
             companyId={companyId}
-            addRoute={async (data) => ""} // Restricted for operators?
             setError={(msg) => showAlert("error", msg)}
             setSuccess={(msg) => showAlert("success", msg)}
           />
@@ -379,7 +380,12 @@ export default function OperatorDashboard() {
         return (
           <BusesTab
             buses={operatorBuses}
-            setBuses={() => {}}
+            setBuses={(newBuses) => {
+              setDashboardData(prev => ({
+                ...prev,
+                buses: typeof newBuses === "function" ? (newBuses as any)(prev.buses) : newBuses
+              }));
+            }}
             companyId={companyId}
             setError={(msg) => showAlert("error", msg)}
             setSuccess={(msg) => showAlert("success", msg)}
@@ -389,13 +395,6 @@ export default function OperatorDashboard() {
           />
         );
 
-      case "charters":
-        return (
-          <ChartersTab 
-            companyId={companyId}
-            {...commonProps}
-          />
-        );
 
       case "reports":
         return (
@@ -414,46 +413,13 @@ export default function OperatorDashboard() {
 
       case "activity":
         return (
-          <div className="space-y-6">
-            <div className="flex items-center justify-between mb-4">
-               <div>
-                  <h2 className="text-xl font-bold text-gray-900 tracking-tight flex items-center gap-2">
-                     <Activity className="w-5 h-5 text-indigo-600 animate-pulse" /> Operational Activity
-                  </h2>
-                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Real-time route & schedule intelligence</p>
-               </div>
-            </div>
-            
-            <div className="space-y-4">
-               {dashboardData.schedules.slice(0, 5).map((s, i) => (
-                  <div key={i} className="bg-gray-50 p-6 rounded-[2rem] border border-gray-100 flex items-center justify-between group hover:bg-white hover:shadow-xl transition-all duration-500">
-                     <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 bg-white rounded-2xl shadow-sm flex items-center justify-center text-indigo-600 group-hover:scale-110 transition-transform">
-                           <Calendar className="w-5 h-5" />
-                        </div>
-                        <div>
-                           <p className="text-sm font-black text-gray-900 uppercase">New Schedule Published</p>
-                           <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">
-                              ID: {s.id.substring(0, 8)} • Route: {operatorRoutes.find(r => r.id === s.routeId)?.name || 'Internal Corridor'}
-                           </p>
-                        </div>
-                     </div>
-                     <div className="text-right">
-                        <p className="text-[10px] font-black text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full uppercase tracking-widest border border-indigo-100">Live Sync</p>
-                     </div>
-                  </div>
-               ))}
-               
-               {dashboardData.schedules.length === 0 && (
-                  <div className="text-center py-20 bg-gray-50 rounded-[3rem] border border-dashed border-gray-200">
-                     <Activity className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">No Operational Telemetry Detected</p>
-                  </div>
-               )}
-            </div>
-          </div>
+          <TripActivityTab 
+            companyId={companyId}
+            schedules={dashboardData.schedules}
+            routes={dashboardData.routes}
+            showAlert={showAlert}
+          />
         );
-
       case "notifications":
         return (
           <NotificationsManagementTab
@@ -533,9 +499,19 @@ export default function OperatorDashboard() {
 
   return (
     <div className="min-h-screen bg-[#fafafa] flex font-sans selection:bg-indigo-100 selection:text-indigo-900 overflow-hidden">
+      {/* Overlay for mobile sidebar */}
+      {isMobileOpen && (
+        <div 
+          className="fixed inset-0 bg-black/40 z-[60] lg:hidden backdrop-blur-sm animate-in fade-in duration-300" 
+          onClick={() => setIsMobileOpen(false)} 
+        />
+      )}
+
       {/* ── SIDEBAR ── */}
-      <aside className="hidden lg:flex w-64 bg-white border-r border-gray-100 h-screen sticky top-0 flex flex-col z-50">
-        <div className="p-6 border-b border-gray-100/50">
+      <aside className={`fixed lg:sticky top-0 left-0 h-screen bg-white border-r border-gray-100 flex flex-col z-[70] transition-transform duration-300 ease-in-out lg:translate-x-0 ${
+        isMobileOpen ? 'translate-x-0 w-72 shadow-2xl' : '-translate-x-full lg:w-64'
+      }`}>
+        <div className="p-6 border-b border-gray-100/50 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-200">
               <Building2 className="w-6 h-6 text-white" strokeWidth={2.5} />
@@ -545,6 +521,9 @@ export default function OperatorDashboard() {
               <span className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest leading-none mt-1 inline-block italic">Operator Console</span>
             </div>
           </div>
+          <button onClick={() => setIsMobileOpen(false)} className="lg:hidden p-2 text-gray-400 hover:bg-gray-100 rounded-lg">
+            <X className="w-5 h-5" />
+          </button>
         </div>
 
         <nav className="flex-1 p-4 space-y-1 overflow-y-auto scrollbar-hide">
@@ -555,7 +534,10 @@ export default function OperatorDashboard() {
               icon={tab.icon} 
               label={tab.label} 
               active={activeTab === tab.id} 
-              onClick={() => setActiveTab(tab.id as TabType)}
+              onClick={() => {
+                setActiveTab(tab.id as TabType);
+                setIsMobileOpen(false);
+              }}
               badge={tab.id === 'bookings' && statistics.pendingBookings > 0 ? { text: `${statistics.pendingBookings} NEW`, className: 'bg-amber-100 text-amber-700' } : undefined}
             />
           ))}
@@ -573,16 +555,22 @@ export default function OperatorDashboard() {
       </aside>
 
       {/* ── MAIN CONTENT ── */}
-      <div className="flex-1 flex flex-col h-screen overflow-hidden">
+      <div className="flex-1 flex flex-col h-screen overflow-hidden relative">
         {/* Header */}
-        <header className="h-20 bg-white/80 backdrop-blur-md border-b border-gray-100 flex items-center justify-between px-8 sticky top-0 z-40">
+        <header className="h-20 bg-white/80 backdrop-blur-md border-b border-gray-100 flex items-center justify-between px-4 sm:px-8 sticky top-0 z-40">
           <div className="flex items-center gap-4">
-            <h2 className="text-xl font-bold text-gray-900 border-l-4 border-indigo-600 pl-4 capitalize tracking-tight">
-              {activeTab} Management
+            <button 
+              onClick={() => setIsMobileOpen(true)}
+              className="lg:hidden p-2.5 bg-gray-50 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all border border-gray-100"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+            <h2 className="text-lg sm:text-xl font-bold text-gray-900 border-l-4 border-indigo-600 pl-4 capitalize tracking-tight truncate">
+              {activeTab} <span className="hidden sm:inline">Management</span>
             </h2>
           </div>
 
-          <div className="flex items-center gap-6">
+          <div className="flex items-center gap-3 sm:gap-6">
             <div className="hidden md:flex flex-col items-end">
               <span className="text-[11px] font-bold text-gray-400 uppercase tracking-widest leading-none mb-1">Status</span>
               <div className="flex items-center gap-1.5 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
@@ -596,7 +584,7 @@ export default function OperatorDashboard() {
           </div>
         </header>
 
-        <main className="flex-1 p-8 overflow-y-auto">
+        <main className="flex-1 p-4 sm:p-8 overflow-y-auto pb-32 lg:pb-8">
           {alert && (
             <div className="mb-6 animate-in fade-in slide-in-from-top-2 duration-300">
               <AlertMessage type={alert.type} message={alert.message} onClose={clearAlert} />
@@ -605,12 +593,24 @@ export default function OperatorDashboard() {
 
           <div className="max-w-7xl mx-auto">
             <div className="bg-white rounded-[2rem] shadow-[0_20px_50px_-12px_rgba(0,0,0,0.05)] border border-gray-100 overflow-hidden">
-              <div className="p-8">
+              <div className="p-4 sm:p-8">
                 {renderActiveTab()}
               </div>
             </div>
           </div>
         </main>
+
+        {/* Mobile Bottom Nav */}
+        <DashboardBottomNav 
+          activeTab={activeTab}
+          onTabChange={(id) => setActiveTab(id as TabType)}
+          tabs={[
+            { id: 'schedules', label: 'Trips', icon: Calendar },
+            { id: 'bookings', label: 'Sales', icon: Users },
+            { id: 'activity', label: 'Live', icon: Activity },
+            { id: 'profile', label: 'Me', icon: User },
+          ]}
+        />
       </div>
 
       <style jsx global>{`

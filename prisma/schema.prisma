@@ -136,7 +136,14 @@ model Schedule {
   isCompleted       Boolean           @default(false)
   actualDepartureTime DateTime?
   actualArrivalTime   DateTime?
+  
+  // Trip Tracking
+  currentStopIndex    Int               @default(0)
   currentStopId       String?
+  departedStops       String[]          @default([])
+  tripStartedAt       DateTime?
+  tripCompletedAt     DateTime?
+  
   delayMinutes        Int               @default(0)
   tripNotes           String?
   createdAt         DateTime          @default(now())
@@ -150,6 +157,7 @@ model Schedule {
   company           Company           @relation(fields: [companyId], references: [id])
   route             Route             @relation(fields: [routeId], references: [id])
   reservations      SeatReservation[]
+  activities        ActivityLog[]
 }
 
 model Booking {
@@ -244,15 +252,17 @@ model ScheduleTemplate {
 }
 
 model ActivityLog {
-  id          String   @id @default(uuid())
+  id          String    @id @default(uuid())
   userId      String
   companyId   String?
+  scheduleId  String?
   action      String
   description String
   metadata    Json?
-  createdAt   DateTime @default(now())
-  company     Company? @relation(fields: [companyId], references: [id])
-  user        User     @relation(fields: [userId], references: [id])
+  createdAt   DateTime  @default(now())
+  company     Company?  @relation(fields: [companyId], references: [id])
+  user        User      @relation(fields: [userId], references: [id])
+  schedule    Schedule? @relation(fields: [scheduleId], references: [id])
 }
 
 model GroupRequest {

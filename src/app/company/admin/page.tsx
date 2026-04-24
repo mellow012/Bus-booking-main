@@ -44,6 +44,8 @@ import TeamManagementTab from "@/components/OperatorsTab";
 import OverviewTab from "@/components/OverviewTab";
 import DailyReportsTab from "@/components/ReportsTab";
 import NotificationsManagementTab from "@/components/NotificationsManagementTab";
+import ChartersTab from "@/components/ChartersTab";
+import DashboardBottomNav from "@/components/DashboardBottomNav";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 const TABS = [
@@ -52,6 +54,7 @@ const TABS = [
   { id: "routes"        as const, label: "Routes",        icon: MapPin },
   { id: "buses"         as const, label: "Buses",         icon: Truck },
   { id: "bookings"      as const, label: "Bookings",      icon: Users },
+  { id: "charters"      as const, label: "Charters",      icon: Users },
   { id: "operators"     as const, label: "Team",          icon: Users },
   { id: "reports"       as const, label: "Reports",       icon: PieChart },
   { id: "profile"       as const, label: "Profile",       icon: User },
@@ -63,7 +66,7 @@ const TABS = [
 const CATEGORIES = [
   { id: "overview", label: "Overview", icon: LayoutDashboard, subTabs: ["overview"] },
   { id: "fleet",    label: "Fleet & Ops", icon: Truck, subTabs: ["schedules", "routes", "buses"] },
-  { id: "sales",    label: "Sales & Rev", icon: DollarSign, subTabs: ["bookings", "reports", "payments"] },
+  { id: "sales",    label: "Sales & Rev", icon: DollarSign, subTabs: ["bookings", "charters", "reports", "payments"] },
   { id: "team",     label: "Team Management", icon: Users, subTabs: ["operators"] },
   { id: "config",   label: "Configuration", icon: Settings, subTabs: ["profile", "settings", "notifications"] },
 ] as const;
@@ -393,8 +396,8 @@ const SubNav = ({
   if (filteredTabs.length <= 1) return null;
 
   return (
-    <div className="bg-white border-b border-gray-100 px-6 py-1 sticky top-[61px] z-20">
-      <nav className="flex items-center space-x-8">
+    <div className="bg-white border-b border-gray-100 px-6 py-1 sticky top-[61px] z-20 overflow-x-auto no-scrollbar">
+      <nav className="flex items-center space-x-6 sm:space-x-8 min-w-max">
         {filteredTabs.map(tab => {
           const isActive = activeTab === tab.id;
           return (
@@ -725,13 +728,21 @@ setSchedules={(newSchedules) => {
           />
         );
 
+      case "charters":
+        return (
+          <ChartersTab 
+            companyId={companyId}
+            setError={(msg) => showAlert("error", msg)}
+            setSuccess={(msg) => showAlert("success", msg)}
+          />
+        );
+
       case "routes":
         return (
           <RoutesTab
             companyId={companyId}
             routes={routes}
             setRoutes={(newRoutes) => updateDashboardData("routes", typeof newRoutes === "function" ? newRoutes(routes) : newRoutes)}
-            addRoute={(data) => addItem("Route", data)}
             {...commonProps}
           />
         );
@@ -1031,7 +1042,7 @@ setSchedules={(newSchedules) => {
           statistics={statistics}
         />
 
-        <main className="flex-1 px-4 sm:px-6 lg:px-8 py-8">
+        <main className="flex-1 px-4 sm:px-6 lg:px-8 py-8 pb-32 lg:pb-8">
           <div className="max-w-[1600px] mx-auto">
             {/* Operational Status Banner */}
             {company.status !== 'active' && (
@@ -1065,6 +1076,23 @@ setSchedules={(newSchedules) => {
             </div>
           </div>
         </main>
+
+        {/* Mobile Bottom Nav */}
+        <DashboardBottomNav 
+          activeTab={activeTab}
+          onTabChange={(tabId) => {
+            setActiveTab(tabId as TabType);
+            // Map tabId to categoryId if needed
+            const category = CATEGORIES.find(c => (c.subTabs as readonly string[]).includes(tabId))?.id;
+            if (category) setActiveCategory(category);
+          }}
+          tabs={[
+            { id: 'overview', label: 'Home', icon: LayoutDashboard },
+            { id: 'schedules', label: 'Trips', icon: Calendar },
+            { id: 'bookings', label: 'Sales', icon: Users },
+            { id: 'operators', label: 'Team', icon: Users },
+          ]}
+        />
       </div>
     </div>
   );

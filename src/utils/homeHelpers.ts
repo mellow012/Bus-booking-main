@@ -26,3 +26,19 @@ export const AMENITY_ICONS: Record<string, React.ElementType> = {
   "WiFi": Wifi, "AC": AirVent, "Coffee": Coffee,
   "Entertainment": Music, "Charging": Zap, "Reclining Seats": Users,
 };
+
+export const getScheduleCategory = (s: EnhancedSchedule): string => {
+  const [hours] = s.departureTime.split(':').map(Number);
+  const now = new Date();
+  const currentHour = now.getHours();
+  
+  // Boarding Now if within 4 hours (and >= -1 hours)
+  const hoursDiff = hours - currentHour;
+  if (s.status === 'boarding' || (isToday(s.date) && hoursDiff >= -1 && hoursDiff <= 4)) {
+    return "Boarding Now";
+  }
+
+  if (hours >= 6 && hours < 12) return "Morning";
+  if (hours >= 12 && hours < 17) return "Afternoon";
+  return "Evening";
+};

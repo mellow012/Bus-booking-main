@@ -56,10 +56,10 @@ export default function ConductorDashboard() {
 
   const companyId = userProfile?.companyId;
 
-  const fetchInitialData = useCallback(async () => {
+  const fetchInitialData = useCallback(async (isSilent = false) => {
     if (!companyId || !user) return;
     try {
-      setLoading(true);
+      if (!isSilent) setLoading(true);
       const uid = userProfile?.uid || user.id;
 
       // Ensure we only see buses assigned to this conductor
@@ -91,9 +91,9 @@ export default function ConductorDashboard() {
       }
     } catch (err) {
       console.error(err);
-      setGlobalError('Failed to load trips.');
+      if (!isSilent) setGlobalError('Failed to load trips.');
     } finally {
-      setLoading(false);
+      if (!isSilent) setLoading(false);
     }
   }, [companyId, user, userProfile]);
 
@@ -102,7 +102,14 @@ export default function ConductorDashboard() {
     if (!user || userProfile?.role !== 'conductor') {
       router.push('/login');
     } else {
-      fetchInitialData();
+      fetchInitialData(false);
+      
+      // Auto refresh every 30 seconds silently
+      const intervalId = setInterval(() => {
+        fetchInitialData(true);
+      }, 30000);
+      
+      return () => clearInterval(intervalId);
     }
   }, [user, userProfile, authLoading, fetchInitialData, router]);
 
@@ -159,6 +166,16 @@ export default function ConductorDashboard() {
         departedStops: [],
         tripStartedAt: now,
       });
+
+      await dbActions.createActivityLog({
+        userId: user?.id || '',
+        companyId: companyId,
+        scheduleId: selectedTrip.id,
+        action: 'TRIP_STARTED',
+        description: `Trip started at ${firstStop.name}`,
+        metadata: { stopId: firstStop.id, stopName: firstStop.name }
+      });
+
       updateTripOptimistically({ 
         tripStatus: 'boarding', 
         currentStopIndex: 0, 
@@ -183,12 +200,23 @@ export default function ConductorDashboard() {
     try {
       const currentIdx = selectedTrip.currentStopIndex ?? 0;
       const currentStop = stopSequence[currentIdx];
-      const deps = [...(selectedTrip.departedStops ?? []), currentStop.id];
+      const deps = Array.from(new Set([...(selectedTrip.departedStops ?? []), currentStop.id]));
+      
       await dbActions.updateSchedule(selectedTrip.id, {
         tripStatus: 'in_transit',
-        departedStops: deps as any,
+        departedStops: deps,
         currentStopId: currentStop.id,
       });
+
+      await dbActions.createActivityLog({
+        userId: user?.id || '',
+        companyId: companyId,
+        scheduleId: selectedTrip.id,
+        action: 'DEPARTED_STOP',
+        description: `Departed from ${currentStop.name}`,
+        metadata: { stopId: currentStop.id, stopName: currentStop.name, departedStops: deps }
+      });
+
       updateTripOptimistically({ tripStatus: 'in_transit', departedStops: deps, currentStopId: currentStop.id });
       await broadcastTripStatus(selectedTrip.id, 'in_transit', { 
         departedStops: deps, 
@@ -217,15 +245,35 @@ export default function ConductorDashboard() {
           currentStopId: nextStop.id,
           tripCompletedAt: now,
         } as any);
+
+        await dbActions.createActivityLog({
+          userId: user?.id || '',
+          companyId: companyId,
+          scheduleId: selectedTrip.id,
+          action: 'TRIP_COMPLETED',
+          description: `Trip completed at ${nextStop.name}`,
+          metadata: { stopId: nextStop.id, stopName: nextStop.name }
+        });
+
         updateTripOptimistically({ tripStatus: 'completed', currentStopIndex: nextIdx, currentStopId: nextStop.id, tripCompletedAt: now });
         await broadcastTripStatus(selectedTrip.id, 'completed', { completedAt: now, currentStopId: nextStop.id });
       } else {
         // Intermediate Stop
         await dbActions.updateSchedule(selectedTrip.id, {
-          tripStatus: 'arrived', // Updated to 'arrived' state
+          tripStatus: 'arrived',
           currentStopIndex: nextIdx,
           currentStopId: nextStop.id,
         });
+
+        await dbActions.createActivityLog({
+          userId: user?.id || '',
+          companyId: companyId,
+          scheduleId: selectedTrip.id,
+          action: 'ARRIVED_AT_STOP',
+          description: `Arrived at ${nextStop.name}`,
+          metadata: { stopId: nextStop.id, stopName: nextStop.name, stopIndex: nextIdx }
+        });
+
         updateTripOptimistically({ tripStatus: 'arrived', currentStopIndex: nextIdx, currentStopId: nextStop.id });
         await broadcastTripStatus(selectedTrip.id, 'arrived', { 
           currentStopIndex: nextIdx, 
@@ -392,49 +440,93 @@ export default function ConductorDashboard() {
     </button>
   );
 
-  const renderOverview = () => (
-    <div className="space-y-5 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      {/* Stats — horizontal scroll on mobile */}
-      <div className="flex gap-3 overflow-x-auto pb-2 hide-scrollbar sm:grid sm:grid-cols-3 sm:overflow-visible">
-        <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm relative overflow-hidden group min-w-[140px] shrink-0 sm:min-w-0">
-          <Radio className="w-5 h-5 text-indigo-600 mb-2 relative" />
-          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest leading-none mb-1 relative">Live Now</p>
-          <p className="text-2xl font-black text-gray-900 relative">{stats.liveCount}</p>
-        </div>
-        <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm relative overflow-hidden group min-w-[140px] shrink-0 sm:min-w-0">
-          <Calendar className="w-5 h-5 text-emerald-600 mb-2 relative" />
-          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest leading-none mb-1 relative">Today</p>
-          <p className="text-2xl font-black text-gray-900 relative">{stats.totalToday}</p>
-        </div>
-        <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm relative overflow-hidden group min-w-[140px] shrink-0 sm:min-w-0">
-          <Navigation className="w-5 h-5 text-amber-600 mb-2 relative" />
-          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest leading-none mb-1 relative">Remaining</p>
-          <p className="text-2xl font-black text-gray-900 relative">{stats.pendingToday}</p>
-        </div>
-      </div>
+  const renderOverview = () => {
+    const startOfToday = new Date();
+    startOfToday.setHours(0,0,0,0);
 
-      <div className="bg-white rounded-2xl p-4 sm:p-6 border border-gray-100 shadow-sm">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-base sm:text-lg font-bold text-gray-900 tracking-tight flex items-center gap-2">
-            <Radio className="w-4 h-4 text-indigo-600 animate-pulse" /> System Status
-          </h3>
-          <span className="text-[10px] font-black text-indigo-500 bg-indigo-50 px-2.5 py-1 rounded-full uppercase tracking-widest">Connected</span>
+    const firstActiveTrip = trips.find(t => t.tripStatus === 'boarding' || t.tripStatus === 'in_transit') || 
+                            trips.filter(t => (t.tripStatus === 'scheduled' || !t.tripStatus) && new Date(t.departureDateTime) >= startOfToday)
+                                 .sort((a,b) => new Date(a.departureDateTime).getTime() - new Date(b.departureDateTime).getTime())[0];
+    const activeRoute = firstActiveTrip ? routes.find(r => r.id === firstActiveTrip.routeId) : null;
+    const activeBusObj = firstActiveTrip ? buses.find(b => b.id === firstActiveTrip.busId) : null;
+
+    return (
+      <div className="space-y-5 animate-in fade-in slide-in-from-bottom-4 duration-500">
+        {/* Stats — horizontal scroll on mobile */}
+        <div className="flex gap-3 overflow-x-auto pb-2 hide-scrollbar sm:grid sm:grid-cols-3 sm:overflow-visible">
+          <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm relative overflow-hidden group min-w-[140px] shrink-0 sm:min-w-0">
+            <Radio className="w-5 h-5 text-indigo-600 mb-2 relative" />
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest leading-none mb-1 relative">Live Now</p>
+            <p className="text-2xl font-black text-gray-900 relative">{stats.liveCount}</p>
+          </div>
+          <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm relative overflow-hidden group min-w-[140px] shrink-0 sm:min-w-0">
+            <Calendar className="w-5 h-5 text-emerald-600 mb-2 relative" />
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest leading-none mb-1 relative">Today</p>
+            <p className="text-2xl font-black text-gray-900 relative">{stats.totalToday}</p>
+          </div>
+          <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm relative overflow-hidden group min-w-[140px] shrink-0 sm:min-w-0">
+            <Navigation className="w-5 h-5 text-amber-600 mb-2 relative" />
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest leading-none mb-1 relative">Remaining</p>
+            <p className="text-2xl font-black text-gray-900 relative">{stats.pendingToday}</p>
+          </div>
         </div>
-        {stats.liveCount > 0 ? (
-          <button
-            onClick={() => setActiveTab('trips')}
-            className="w-full bg-indigo-50 p-4 rounded-xl border border-indigo-100 flex items-center gap-3 text-left active:bg-indigo-100 transition-colors"
-          >
-            <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center shrink-0">
-              <MapPin className="w-5 h-5 text-white" />
+
+        <div className="bg-white rounded-2xl p-4 sm:p-6 border border-gray-100 shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-base sm:text-lg font-bold text-gray-900 tracking-tight flex items-center gap-2">
+              <Radio className="w-4 h-4 text-indigo-600 animate-pulse" /> System Status
+            </h3>
+            <span className="text-[10px] font-black text-indigo-500 bg-indigo-50 px-2.5 py-1 rounded-full uppercase tracking-widest">Connected</span>
+          </div>
+          
+          {firstActiveTrip ? (
+            <div className="mb-2">
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
+                {firstActiveTrip.tripStatus === 'boarding' || firstActiveTrip.tripStatus === 'in_transit' ? 'Current Active Trip' : 'Next Upcoming Trip'}
+              </p>
+              <div
+                className="w-full bg-gradient-to-r from-indigo-500 to-blue-600 p-4 sm:p-5 rounded-xl border border-indigo-200 flex flex-col sm:flex-row items-start sm:items-center gap-4 text-left shadow-md"
+              >
+                <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center shrink-0 shadow-inner">
+                  <MapPin className="w-6 h-6 text-white" />
+                </div>
+                <div className="flex-1 min-w-0 w-full">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="px-2 py-0.5 bg-white/20 text-white text-[10px] font-bold uppercase rounded-sm tracking-wider">
+                      {firstActiveTrip.tripStatus === 'boarding' ? 'Boarding' : firstActiveTrip.tripStatus === 'in_transit' ? 'In Transit' : 'Scheduled'}
+                    </span>
+                    <span className="text-indigo-100 text-xs font-medium">{activeBusObj?.licensePlate || 'Assigned Bus'}</span>
+                  </div>
+                  <p className="text-white font-extrabold text-lg sm:text-xl truncate leading-tight">
+                    {activeRoute?.origin || firstActiveTrip.departureLocation} → {activeRoute?.destination || firstActiveTrip.arrivalLocation}
+                  </p>
+                  <p className="text-indigo-100 text-sm mt-0.5">
+                    Departing at {new Date(firstActiveTrip.departureDateTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                  </p>
+                </div>
+                <div className="mt-4 sm:mt-0 w-full sm:w-auto flex flex-col sm:flex-row justify-end gap-2 sm:gap-3">
+                  <button
+                    onClick={() => {
+                      setSelectedTrip(firstActiveTrip);
+                      setWalkOnModalOpen(true);
+                    }}
+                    className="bg-white/10 hover:bg-white/20 text-white font-bold text-sm px-4 py-2 sm:py-2.5 rounded-lg flex items-center justify-center gap-2 transition-colors border border-white/20"
+                  >
+                    <UserPlus className="w-4 h-4" /> Walk-on
+                  </button>
+                  <button
+                    onClick={() => {
+                      setSelectedTrip(firstActiveTrip);
+                      setActiveTab('trips');
+                    }}
+                    className="bg-white text-indigo-600 font-bold text-sm px-4 py-2 sm:py-2.5 rounded-lg flex items-center justify-center gap-2 shadow-sm hover:bg-gray-50 transition-colors"
+                  >
+                    Enter Console <Navigation className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-indigo-900 font-bold text-sm">You have active trips</p>
-              <p className="text-indigo-600/70 text-xs">Tap to manage your live console</p>
-            </div>
-            <span className="text-indigo-600 font-bold text-xs shrink-0">Go →</span>
-          </button>
-        ) : (
+          ) : (
           <div className="bg-gray-50 p-8 rounded-xl text-center border border-dashed border-gray-200">
             <Navigation className="w-10 h-10 text-gray-300 mx-auto mb-3" />
             <p className="text-gray-400 font-bold text-xs uppercase tracking-wide">Awaiting assignments...</p>
@@ -443,6 +535,7 @@ export default function ConductorDashboard() {
       </div>
     </div>
   );
+};
 
   const renderActiveTab = () => {
     switch (activeTab) {
