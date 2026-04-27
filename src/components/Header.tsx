@@ -47,6 +47,7 @@ const Header: React.FC = () => {
   // ── navigation items use translations ──────────────────────────────────────
   const navigationItems = [
     { href: '/',          label: t('home'),        icon: HomeIcon },
+    { href: '/groups',    label: 'Charters',    icon: BusIcon },
     ...(user ? [{ href: '/schedules', label: 'Schedules', icon: Search }] : []),
     ...(hasPromotions ? [{ href: '/#promotions-section', label: t('promotions'), icon: Zap }] : []),
   ];

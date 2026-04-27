@@ -283,7 +283,7 @@ export default function AdminDashboard() {
       />
 
       <div className={`flex-1 flex flex-col min-h-screen relative transition-all duration-300 ease-in-out ${isCollapsed ? 'lg:pl-[72px]' : 'lg:pl-64'}`}>
-        <header className="bg-white border-b border-gray-100 sticky top-0 z-30">
+        <header className="bg-white border-b border-gray-100 sticky top-0 z-30 shadow-sm">
           <div className="flex items-center justify-between px-6 py-3">
             <div className="flex items-center space-x-4 flex-1">
               <button onClick={() => setIsMobileOpen(true)} className="lg:hidden p-2 hover:bg-gray-100 rounded-lg">
@@ -419,8 +419,9 @@ export default function AdminDashboard() {
           tabs={[
             { id: 'overview',   label: 'Home',  icon: LayoutDashboard },
             { id: 'schedules',  label: 'Trips', icon: Calendar },
-            { id: 'bookings',   label: 'Sales', icon: Users },
+            { id: 'bookings',   label: 'Sales', icon: DollarSign, badge: statistics.pendingBookings > 0 },
             { id: 'operators',  label: 'Team',  icon: Users },
+            { id: 'buses',      label: 'Fleet', icon: BusIcon },
           ]}
         />
       </div>

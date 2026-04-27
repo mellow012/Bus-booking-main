@@ -5,6 +5,8 @@ import { ArrowRight, TicketPercent, Sparkles, ChevronLeft, ChevronRight } from "
 import { Button } from "@/components/ui/button";
 import { Promotion } from "@/types/system";
 
+import Link from "next/link";
+
 interface PromoBannerProps {
   onCtaClick?: () => void;
   promotions?: Promotion[];
@@ -73,10 +75,12 @@ const PromoBanner: React.FC<PromoBannerProps> = ({ onCtaClick, promotions = [] }
               </div>
             </div>
             <div className="md:col-span-2 flex md:justify-end">
-              <Button onClick={onCtaClick} className="bg-white text-blue-600 hover:bg-blue-50 h-14 px-8 rounded-2xl font-black text-lg shadow-xl shadow-blue-900/20 group">
-                REDEEM NOW
-                <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
-              </Button>
+              <Link href="#promotions-section">
+                <Button onClick={onCtaClick} className="bg-white text-blue-600 hover:bg-blue-50 h-14 px-8 rounded-2xl font-black text-lg shadow-xl shadow-blue-900/20 group">
+                  REDEEM NOW
+                  <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
+                </Button>
+              </Link>
             </div>
           </div>
 

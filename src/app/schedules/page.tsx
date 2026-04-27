@@ -8,6 +8,9 @@ import {
   Filter, AlertCircle, RefreshCw, Zap, TrendingUp, Loader2, ArrowRight, User, Star
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { LocationAutocomplete } from "@/components/LocationAutocomplete";
+import { MALAWI_CITIES } from "@/utils/homeHelpers";
+import { useNotifications } from "@/contexts/NotificationContext";
 
 interface EnhancedSchedule {
   id: string;
@@ -45,6 +48,7 @@ function DashboardContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, userProfile } = useAuth();
+  const { unreadCount } = useNotifications();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -290,24 +294,47 @@ function DashboardContent() {
               </h1>
               <p className="text-blue-200 mt-2 text-lg">Browse available bus schedules and book instantly.</p>
             </div>
+            <div className="flex items-center gap-3 bg-white/10 backdrop-blur-md p-3 rounded-2xl border border-white/20">
+              <div className="w-10 h-10 bg-indigo-500/20 rounded-xl flex items-center justify-center">
+                <Users className="w-5 h-5 text-indigo-300" />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-white uppercase tracking-wider leading-none">Need a private bus?</p>
+                <button 
+                  onClick={() => router.push('/groups')}
+                  className="text-[11px] font-black text-blue-300 hover:text-white transition-colors uppercase mt-1 flex items-center gap-1"
+                >
+                  Request Charter <ArrowRight className="w-3 h-3" />
+                </button>
+              </div>
+            </div>
           </div>
 
           <div className="bg-white rounded-2xl shadow-2xl p-4 sm:p-6 w-full max-w-5xl mx-auto transform translate-y-12">
             <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-5 gap-4">
-              <div className="col-span-1 md:col-span-2 lg:col-span-1 relative">
+              <div className="col-span-1 md:col-span-2 lg:col-span-1">
                 <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">From</label>
-                <div className="relative flex items-center">
-                  <MapPin className="absolute left-3 w-5 h-5 text-gray-400" />
-                  <input type="text" value={searchFrom} onChange={e => setSearchFrom(e.target.value)} placeholder="Leaving from..." className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-gray-900" />
-
-                </div>
+                <LocationAutocomplete 
+                  value={searchFrom} 
+                  onChange={setSearchFrom} 
+                  onSelect={setSearchFrom}
+                  placeholder="Leaving from..."
+                  icon={MapPin}
+                  cities={MALAWI_CITIES}
+                  exclude={searchTo}
+                />
               </div>
               <div className="col-span-1 md:col-span-2 lg:col-span-1">
                 <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">To</label>
-                <div className="relative">
-                  <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  <input type="text" value={searchTo} onChange={e => setSearchTo(e.target.value)} placeholder="Going to..." className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-gray-900" />
-                </div>
+                <LocationAutocomplete 
+                  value={searchTo} 
+                  onChange={setSearchTo} 
+                  onSelect={setSearchTo}
+                  placeholder="Going to..."
+                  icon={MapPin}
+                  cities={MALAWI_CITIES}
+                  exclude={searchFrom}
+                />
               </div>
               <div className="col-span-1 lg:col-span-1">
                 <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">Date</label>
@@ -533,7 +560,9 @@ function DashboardContent() {
         </button>
         <button onClick={() => router.push('/notifications')} className="flex flex-col items-center text-gray-400 hover:text-gray-900 relative">
           <AlertCircle className="w-6 h-6" />
-          <span className="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full border border-white"></span>
+          {unreadCount > 0 && (
+            <span className="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full border border-white"></span>
+          )}
           <span className="text-[10px] font-medium mt-1">Alerts</span>
         </button>
         <button onClick={() => router.push('/profile')} className="flex flex-col items-center text-gray-400 hover:text-gray-900">

@@ -314,6 +314,17 @@ export default function GroupCharterPage() {
               </div>
               <p className="text-xs text-gray-400 mt-2 font-medium">Average 4.9/5 rating for charters</p>
             </div>
+
+            <div className="bg-gradient-to-br from-indigo-50 to-blue-50 rounded-[3rem] p-8 border border-blue-100 text-center">
+              <p className="text-sm font-bold text-blue-900 mb-4">Just need a few seats?</p>
+              <Button 
+                onClick={() => router.push('/schedules')}
+                variant="outline"
+                className="w-full border-blue-200 text-blue-700 hover:bg-blue-100 rounded-2xl font-bold"
+              >
+                View Regular Schedules
+              </Button>
+            </div>
           </div>
         </div>
       </main>

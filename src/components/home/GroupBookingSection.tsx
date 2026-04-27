@@ -3,6 +3,7 @@
 import React from "react";
 import { Users, CheckCircle, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import Link from "next/link";
 
 export default function GroupBookingSection() {
   return (
@@ -39,9 +40,11 @@ export default function GroupBookingSection() {
               ))}
             </ul>
 
-            <Button className="h-11 px-6 bg-white text-indigo-900 hover:bg-blue-50 font-bold rounded-xl text-sm shadow-lg group">
-              Request Quote <ArrowRight className="ml-2 w-4 h-4 group-hover:translate-x-1 transition-transform" />
-            </Button>
+            <Link href="/groups">
+              <Button className="h-11 px-6 bg-white text-indigo-900 hover:bg-blue-50 font-bold rounded-xl text-sm shadow-lg group">
+                Request Quote <ArrowRight className="ml-2 w-4 h-4 group-hover:translate-x-1 transition-transform" />
+              </Button>
+            </Link>
           </div>
 
           <div className="relative hidden sm:block">

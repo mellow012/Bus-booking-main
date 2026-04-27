@@ -7,6 +7,7 @@ interface BottomNavTab {
   id: string;
   label: string;
   icon: LucideIcon;
+  badge?: boolean;
 }
 
 interface DashboardBottomNavProps {
@@ -48,6 +49,10 @@ const DashboardBottomNav: React.FC<DashboardBottomNavProps> = ({
               
               {isActive && (
                 <div className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-1 bg-indigo-600 rounded-b-full shadow-[0_1px_4px_rgba(79,70,229,0.4)] animate-in fade-in zoom-in duration-300" />
+              )}
+
+              {tab.badge && !isActive && (
+                <div className="absolute top-2 right-1/4 w-2 h-2 bg-red-500 rounded-full border border-white shadow-sm" />
               )}
             </button>
           );
