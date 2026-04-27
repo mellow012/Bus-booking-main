@@ -186,7 +186,7 @@ export default function NotificationsManagementTab({ userId, companyId, setError
       </div>
 
       {/* Filter Bar */}
-      <div className="bg-white rounded-xl shadow-[0_2px_10px_-4px_rgba(0,0,0,0.1)] border border-gray-100 p-2 flex items-center gap-1">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-2 flex items-center gap-1">
         {(["all", "unread", "read"] as const).map((t) => (
           <button
             key={t}
@@ -203,7 +203,7 @@ export default function NotificationsManagementTab({ userId, companyId, setError
       </div>
 
       {/* Notifications List */}
-      <div className="bg-white rounded-xl shadow-[0_2px_10px_-4px_rgba(0,0,0,0.1)] border border-gray-100 overflow-hidden">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
         {loading ? (
           <div className="p-12 text-center">
             <Loader2 className="w-8 h-8 text-indigo-900 animate-spin mx-auto mb-4" />

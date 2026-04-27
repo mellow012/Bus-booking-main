@@ -25,6 +25,7 @@
     "@supabase/supabase-js": "^2.101.1",
     "@types/pg": "^8.20.0",
     "@types/qrcode": "^1.5.5",
+    "@types/web-push": "^3.6.4",
     "@upstash/ratelimit": "^2.0.8",
     "@upstash/redis": "^1.36.3",
     "class-variance-authority": "^0.7.1",
@@ -33,9 +34,6 @@
     "dotenv": "^17.4.1",
     "driver.js": "^1.4.0",
     "embla-carousel-react": "^8.6.0",
-    "firebase": "^10.14.1",
-    "firebase-admin": "^13.4.0",
-    "firebase-functions": "^6.4.0",
     "fuse.js": "^7.3.0",
     "html5-qrcode": "^2.3.8",
     "jose": "^5.10.0",
@@ -61,6 +59,7 @@
     "tailwind-merge": "^3.3.1",
     "tailwindcss-animate": "^1.0.7",
     "uuid": "^11.1.0",
+    "web-push": "^3.6.7",
     "zod": "^4.1.5"
   },
   "devDependencies": {

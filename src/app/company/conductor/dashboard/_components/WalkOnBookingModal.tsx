@@ -1,7 +1,7 @@
 'use client';
 
 import React, { FC, useState, useEffect } from 'react';
-import { Schedule, Bus, Booking, TripStop } from '@/types';
+import { Schedule, Bus, Booking, TripStop, Route } from '@/types';
 import {
   Bus as BusIcon, Info, CheckCircle, AlertCircle, Loader2,
   Banknote, ChevronLeft, ChevronRight, Check, UserPlus,
@@ -33,6 +33,7 @@ interface WalkOnBookingModalProps {
   currentStopIndex: number;
   onConfirm: (seatNumber: string, data: WalkOnFormData, amount: number) => Promise<void>;
   loading: boolean;
+  route?: Route | null;
 }
 
 const toDate = (v: unknown): Date => {
@@ -43,7 +44,7 @@ const toDate = (v: unknown): Date => {
 };
 
 const WalkOnBookingModal: FC<WalkOnBookingModalProps> = ({
-  isOpen, onClose, trip, bus, existingBookings, stopSequence, currentStopIndex, onConfirm, loading,
+  isOpen, onClose, trip, bus, existingBookings, stopSequence, currentStopIndex, onConfirm, loading, route,
 }) => {
   const [step, setStep] = useState<WalkOnStep>('seat');
   const [selectedSeat, setSelectedSeat] = useState<string | null>(null);
@@ -144,10 +145,10 @@ const WalkOnBookingModal: FC<WalkOnBookingModalProps> = ({
       </div>
       <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-sm">
         <div><p className="text-blue-600 text-[10px] font-bold">From</p>
-          <p className="font-bold text-blue-900 text-xs truncate">{boardingStop?.name ?? trip.departureLocation}</p></div>
+          <p className="font-bold text-blue-900 text-xs truncate">{boardingStop?.name || trip.departureLocation || route?.origin || 'Unknown'}</p></div>
         <div><p className="text-blue-600 text-[10px] font-bold">To</p>
           <p className="font-bold text-blue-900 text-xs truncate">
-            {remainingStops.find(s => s.id === form.destinationStopId)?.name ?? trip.arrivalLocation}
+            {remainingStops.find(s => s.id === form.destinationStopId)?.name || trip.arrivalLocation || route?.destination || 'Unknown'}
           </p></div>
         <div><p className="text-blue-600 text-[10px] font-bold">Date</p>
           <p className="font-bold text-blue-900 text-xs">{format(departure, 'EEE, MMM d')}</p></div>

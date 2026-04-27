@@ -8,7 +8,7 @@ import {
   Building2, Edit3, Save, Camera, Loader2,
   Clock, Calendar, MapPin, Plus, X,
   Phone, Mail, FileText, Globe, CheckCircle,
-  Truck, Route as RouteIcon, Users
+  Bus, Route as RouteIcon, Users
 } from "lucide-react";
 import { OperatingHours, Company } from "@/types";
 import { Button } from "@/components/ui/button";
@@ -181,7 +181,7 @@ const CompanyProfileTab: FC<CompanyProfileTabProps> = ({
       </div>
 
       {/* ── Profile Header Card ── */}
-      <div className="bg-white rounded-xl shadow-[0_2px_10px_-4px_rgba(0,0,0,0.1)] border border-gray-100 overflow-hidden">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
         {/* Banner */}
         <div className="h-32 bg-gradient-to-r from-indigo-900 via-indigo-800 to-blue-900 relative">
           <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'radial-gradient(#fff 1px, transparent 1px)', backgroundSize: '20px 20px' }} />
@@ -234,7 +234,7 @@ const CompanyProfileTab: FC<CompanyProfileTabProps> = ({
             {/* Quick Stats */}
             <div className="flex gap-4 pt-2 shrink-0">
               {[
-                { icon: Truck, value: String(todaysSchedules.length), label: "Today" },
+                { icon: Bus, value: String(todaysSchedules.length), label: "Today" },
                 { icon: RouteIcon, value: String(routes.filter((r: any) => r.isActive).length), label: "Active" },
               ].map(({ icon: Icon, value, label }) => (
                 <div key={label} className="text-center">
@@ -255,7 +255,7 @@ const CompanyProfileTab: FC<CompanyProfileTabProps> = ({
         <form onSubmit={handleUpdate} className="space-y-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* General Info */}
-            <div className="bg-white rounded-xl shadow-[0_2px_10px_-4px_rgba(0,0,0,0.1)] border border-gray-100 p-6">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
               <h3 className="text-base font-bold text-gray-900 flex items-center gap-2 mb-5">
                 <div className="p-1.5 rounded-lg bg-blue-50"><Building2 className="w-4 h-4 text-blue-600" /></div>
                 General Information
@@ -301,7 +301,7 @@ const CompanyProfileTab: FC<CompanyProfileTabProps> = ({
             </div>
 
             {/* Branding & Aesthetic */}
-            <div className="bg-white rounded-xl shadow-[0_2px_10px_-4px_rgba(0,0,0,0.1)] border border-gray-100 p-6">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
               <h3 className="text-base font-bold text-gray-900 flex items-center gap-2 mb-5">
                 <div className="p-1.5 rounded-lg bg-indigo-50"><Camera className="w-4 h-4 text-indigo-600" /></div>
                 Branding & Aesthetic
@@ -361,7 +361,7 @@ const CompanyProfileTab: FC<CompanyProfileTabProps> = ({
               </div>
             </div>
 
-            <div className="bg-white rounded-xl shadow-[0_2px_10px_-4px_rgba(0,0,0,0.1)] border border-gray-100 p-6">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
               <h3 className="text-base font-bold text-gray-900 flex items-center gap-2 mb-5">
                 <div className="p-1.5 rounded-lg bg-indigo-50"><FileText className="w-4 h-4 text-indigo-600" /></div>
                 Company Bio
@@ -375,7 +375,7 @@ const CompanyProfileTab: FC<CompanyProfileTabProps> = ({
             </div>
 
             {/* Branches */}
-            <div className="bg-white rounded-xl shadow-[0_2px_10px_-4px_rgba(0,0,0,0.1)] border border-gray-100 p-6">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
               <h3 className="text-base font-bold text-gray-900 flex items-center gap-2 mb-5">
                 <div className="p-1.5 rounded-lg bg-green-50"><MapPin className="w-4 h-4 text-green-600" /></div>
                 Operating Branches
@@ -418,7 +418,7 @@ const CompanyProfileTab: FC<CompanyProfileTabProps> = ({
           </div>
 
           {/* Operating Hours */}
-          <div className="bg-white rounded-xl shadow-[0_2px_10px_-4px_rgba(0,0,0,0.1)] border border-gray-100 p-6">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
             <h3 className="text-base font-bold text-gray-900 flex items-center gap-2 mb-5">
               <div className="p-1.5 rounded-lg bg-purple-50"><Clock className="w-4 h-4 text-purple-600" /></div>
               Operating Hours
@@ -479,7 +479,7 @@ const CompanyProfileTab: FC<CompanyProfileTabProps> = ({
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">
             {/* Company Details */}
-            <div className="bg-white rounded-xl shadow-[0_2px_10px_-4px_rgba(0,0,0,0.1)] border border-gray-100 p-6">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
               <h3 className="text-base font-bold text-gray-900 flex items-center gap-2 mb-5">
                 <div className="p-1.5 rounded-lg bg-blue-50"><Building2 className="w-4 h-4 text-blue-600" /></div>
                 Company Details
@@ -507,7 +507,7 @@ const CompanyProfileTab: FC<CompanyProfileTabProps> = ({
             </div>
 
             {/* Branches */}
-            <div className="bg-white rounded-xl shadow-[0_2px_10px_-4px_rgba(0,0,0,0.1)] border border-gray-100 p-6">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
               <h3 className="text-base font-bold text-gray-900 flex items-center gap-2 mb-5">
                 <div className="p-1.5 rounded-lg bg-green-50"><MapPin className="w-4 h-4 text-green-600" /></div>
                 Operating Branches ({branches.length})
@@ -535,7 +535,7 @@ const CompanyProfileTab: FC<CompanyProfileTabProps> = ({
             </div>
 
             {/* Today's Schedule */}
-            <div className="bg-white rounded-xl shadow-[0_2px_10px_-4px_rgba(0,0,0,0.1)] border border-gray-100 p-6">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
               <h3 className="text-base font-bold text-gray-900 flex items-center gap-2 mb-5">
                 <div className="p-1.5 rounded-lg bg-blue-50"><Calendar className="w-4 h-4 text-blue-600" /></div>
                 Today&apos;s Schedule ({todaysSchedules.length})
@@ -577,7 +577,7 @@ const CompanyProfileTab: FC<CompanyProfileTabProps> = ({
           {/* Right Sidebar */}
           <div className="space-y-6">
             {/* Operating Hours */}
-            <div className="bg-white rounded-xl shadow-[0_2px_10px_-4px_rgba(0,0,0,0.1)] border border-gray-100 p-6">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
               <h3 className="text-base font-bold text-gray-900 flex items-center gap-2 mb-5">
                 <div className="p-1.5 rounded-lg bg-purple-50"><Clock className="w-4 h-4 text-purple-600" /></div>
                 Terminal Hours
@@ -599,7 +599,7 @@ const CompanyProfileTab: FC<CompanyProfileTabProps> = ({
             </div>
 
             {/* Company Story */}
-            <div className="bg-gradient-to-br from-indigo-900 to-[#1e1b4b] rounded-xl p-6 text-white shadow-[0_8px_20px_-4px_rgba(49,46,129,0.4)] relative overflow-hidden">
+            <div className="bg-gradient-to-br from-indigo-900 to-[#1e1b4b] rounded-xl p-6 text-white shadow-sm relative overflow-hidden">
               <div className="absolute -right-4 -bottom-4 opacity-10">
                 <Building2 className="w-32 h-32" />
               </div>

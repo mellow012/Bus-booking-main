@@ -49,11 +49,10 @@ export const uuidSchema = z
   .string()
   .uuid('Invalid UUID format');
 
-export const firebaseUidSchema = z
+export const authUidSchema = z
   .string()
-  .min(20, 'Invalid Firebase UID')
-  .max(30, 'Invalid Firebase UID')
-  .regex(/^[a-zA-Z0-9]+$/, 'Invalid UID format');
+  .min(1, 'Invalid User ID')
+  .max(100, 'Invalid User ID'); // Keeping it flexible but Supabase uses UUIDs
 
 // ─── Business Data ─────────────────────────────────────────────────────────
 
@@ -108,7 +107,7 @@ export const sortOrderSchema = z.enum(['asc', 'desc']).catch('asc');
 export const bookingSchema = z.object({
   bookingId: uuidSchema,
   scheduleId: uuidSchema,
-  userId: firebaseUidSchema,
+  userId: authUidSchema,
   numberOfPassengers: z
     .number()
     .int()
@@ -139,7 +138,7 @@ export const paymentInitiateSchema = z.object({
 // ─── Notification Data ──────────────────────────────────────────────────────
 
 export const notificationSchema = z.object({
-  recipientIds: z.array(firebaseUidSchema).min(1, 'At least one recipient required'),
+  recipientIds: z.array(authUidSchema).min(1, 'At least one recipient required'),
   title: z.string().min(1, 'Title required').max(200),
   body: z.string().min(1, 'Body required').max(4096),
   data: z.record(z.string(), z.unknown()).optional(),

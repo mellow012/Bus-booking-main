@@ -245,7 +245,7 @@ const PaymentSettings: React.FC<{
             <p className="text-xs text-gray-400 mt-1">Click Edit to connect PayChangu</p>
           </div>
         ) : (
-          <div className="rounded-xl border border-gray-100 overflow-hidden shadow-[0_2px_10px_-4px_rgba(0,0,0,0.1)]">
+          <div className="rounded-xl border border-gray-100 overflow-hidden shadow-sm">
             <div className="flex items-center justify-between px-5 py-4 bg-gray-50 border-b border-gray-200">
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center">
@@ -315,7 +315,7 @@ const PaymentSettings: React.FC<{
         touches our database. Public keys and receive numbers are safe to store as-is.
       </InfoBox>
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
-        <div className="rounded-xl border border-gray-100 overflow-hidden shadow-[0_2px_10px_-4px_rgba(0,0,0,0.1)]">
+        <div className="rounded-xl border border-gray-100 overflow-hidden shadow-sm">
           <div className="flex items-center gap-3 px-5 py-4 bg-gray-50 border-b border-gray-200">
             <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center shrink-0">
               <Smartphone className="w-4 h-4 text-white" />
@@ -436,7 +436,7 @@ const NotificationSettings: React.FC<{
         {NOTIF_ROWS.map(group => (
           <div key={group.group}>
             <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">{group.group}</p>
-            <div className="rounded-xl border border-gray-100 shadow-[0_2px_10px_-4px_rgba(0,0,0,0.1)] divide-y divide-gray-50 overflow-hidden">
+            <div className="rounded-xl border border-gray-100 shadow-sm divide-y divide-gray-50 overflow-hidden">
               {group.items.map(item => (
                 <div key={item.name} className="flex items-center justify-between px-4 py-3.5 bg-white">
                   <div>
@@ -461,7 +461,7 @@ const NotificationSettings: React.FC<{
         {NOTIF_ROWS.map(group => (
           <div key={group.group}>
             <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">{group.group}</p>
-            <div className="rounded-xl border border-gray-100 shadow-[0_2px_10px_-4px_rgba(0,0,0,0.1)] divide-y divide-gray-50 overflow-hidden">
+            <div className="rounded-xl border border-gray-100 shadow-sm divide-y divide-gray-50 overflow-hidden">
               {group.items.map(item => (
                 <Controller key={item.name} name={item.name} control={control}
                   render={({ field }) => (
@@ -535,7 +535,7 @@ const ContactSettings: React.FC<{
       <div className="space-y-5">
         <SectionHeader title="Contact Information" description="How customers and staff can reach you"
           icon={<Mail className="w-5 h-5" />} editMode={false} onToggleEdit={() => setEditMode(true)} />
-        <div className="rounded-xl border border-gray-100 shadow-[0_2px_10px_-4px_rgba(0,0,0,0.1)] divide-y divide-gray-50 overflow-hidden">
+        <div className="rounded-xl border border-gray-100 shadow-sm divide-y divide-gray-50 overflow-hidden">
           {FIELDS.map(f => (
             <div key={f.key} className="flex items-center gap-3.5 px-4 py-3.5 bg-white">
               <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center text-gray-500 shrink-0">{f.icon}</div>
@@ -684,7 +684,7 @@ const SettingsTab: React.FC<SettingsTabProps> = ({ company, setCompany, setError
           })}
         </nav>
       </div>
-      <div className="bg-white rounded-xl shadow-[0_2px_10px_-4px_rgba(0,0,0,0.1)] border border-gray-100 p-6 flex-1">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 flex-1">
         {activeSection === "payment"       && <PaymentSettings      {...shared} />}
         {activeSection === "notifications" && <NotificationSettings {...shared} />}
         {activeSection === "contact"       && <ContactSettings      {...shared} />}

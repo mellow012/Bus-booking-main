@@ -1,771 +1,223 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
-import { useAuth } from '@/contexts/AuthContext';
-import { Company, Schedule, Route, Bus, Booking, TripStop, TripStatus } from '@/types';
-import * as dbActions from '@/lib/actions/db.actions';
-
-import {
-  Loader2, LogOut, Radio, Navigation, Bell, Search, MapPin, 
-  Calendar, LayoutDashboard, User, AlertTriangle, X, UserPlus 
-} from 'lucide-react';
+import React, { useState } from 'react';
+import { Loader2, LogOut, QrCode, Settings, X, Ticket } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
-import TripBuckets from './_components/TripBuckets';
-import TripControlPanel from './_components/TripControlPanel';
-import PassengerManifest from './_components/PassengerManifest';
 import WalkOnBookingModal, { WalkOnFormData } from './_components/WalkOnBookingModal';
+import { buildTripStopSequence } from '@/types';
 import CashCollectionModal from './_components/CashCollectionModal';
-import TripSummaryCard from './_components/TripSummaryCard';
-import NextStopPassengerAlert from './_components/NextStopPassengerAlert';
-import NotificationsManagementTab from "@/components/NotificationsManagementTab";
+import PassengerManifest from './_components/PassengerManifest';
+import ScannerModal from './_components/ScannerModal';
+import OperatorProfileTab from '@/components/OperatorProfileTab';
 
-// Utils
-const buildTripStopSequence = (trip: Schedule, route: Route): TripStop[] => {
-  const origin = { id: '__origin__', name: trip.departureLocation || route.origin, order: -1 };
-  const dest = { id: '__destination__', name: trip.arrivalLocation || route.destination, order: 999 };
-  const midStops = (route.stops || []).map((s, i) => ({ id: s.id, name: s.name, order: i }));
-  const sortedStops = [...midStops].sort((a, b) => a.order - b.order);
-  return [origin, ...sortedStops, dest];
-};
+import { TABS, TabType } from './_lib/constants';
+import { useConductorDashboard } from './_hooks/useConductorDashboard';
+import DashboardTab from './_components/DashboardTab';
+import MyTripsTab from './_components/MyTripsTab';
+import PaymentsTab from './_components/PaymentsTab';
+import ReportsTab from './_components/ReportsTab';
+import * as dbActions from '@/lib/actions/db.actions';
 
 export default function ConductorDashboard() {
-  const { user, userProfile, loading: authLoading, signOut } = useAuth();
-  const router = useRouter();
+  const {
+    user, userProfile, authLoading, signOut,
+    loading, trips, buses, routes, company,
+    selectedTrip, setSelectedTrip, tripBookings,
+    actionLoadingId, globalError, setGlobalError, successMessage, setSuccessMessage,
+    tripStats, handleMarkBoarded, handleMarkNoShow, handleUpdateTripStatus, handleWalkOnBooking, handleScan,
+    fetchInitialData
+  } = useConductorDashboard();
 
-  const [loading, setLoading] = useState(true);
-  const [trips, setTrips] = useState<Schedule[]>([]);
-  const [buses, setBuses] = useState<Bus[]>([]);
-  const [routes, setRoutes] = useState<Route[]>([]);
-  const [company, setCompany] = useState<Company | null>(null);
-
-  // Active Context
-  const [selectedTrip, setSelectedTrip] = useState<Schedule | null>(null);
-  const [tripBookings, setTripBookings] = useState<Booking[]>([]);
-
-  // Modals
+  const [activeTab, setActiveTab] = useState<TabType>('dashboard');
   const [cashModalOpen, setCashModalOpen] = useState(false);
-  const [activeBookingForCash, setActiveBookingForCash] = useState<Booking | null>(null);
+  const [activeBookingForCash, setActiveBookingForCash] = useState<any | null>(null);
   const [walkOnModalOpen, setWalkOnModalOpen] = useState(false);
-
-  // State
-  const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
-  const [globalError, setGlobalError] = useState('');
-
-  const companyId = userProfile?.companyId;
-
-  const fetchInitialData = useCallback(async (isSilent = false) => {
-    if (!companyId || !user) return;
-    try {
-      if (!isSilent) setLoading(true);
-      const uid = userProfile?.uid || user.id;
-
-      // Ensure we only see buses assigned to this conductor
-      const { data: allBuses } = await supabase.from('Bus').select('*').eq('companyId', companyId);
-      const myBuses = (allBuses || []).filter(b => {
-        const cIds = b.conductorIds as string[] | undefined;
-        return cIds && Array.isArray(cIds) && cIds.includes(uid);
-      });
-      setBuses(myBuses as Bus[]);
-
-      const myBusIds = myBuses.map(b => b.id);
-
-      if (myBusIds.length > 0) {
-        const [{ data: sData }, { data: rData }, { data: cData }] = await Promise.all([
-          supabase.from('Schedule').select('*').eq('companyId', companyId).in('busId', myBusIds),
-          supabase.from('Route').select('*').eq('companyId', companyId),
-          supabase.from('Company').select('*').eq('id', companyId).single()
-        ]);
-        
-        const activeTrips = (sData as any[] || []).filter(t => t.status === 'active' && !t.isArchived)
-          .map(t => ({...t, departureDateTime: new Date(t.departureDateTime), arrivalDateTime: new Date(t.arrivalDateTime)}));
-        
-        setTrips(activeTrips as Schedule[]);
-        setRoutes(rData as Route[]);
-        setCompany(cData as Company);
-      } else {
-        setTrips([]);
-        setRoutes([]);
-      }
-    } catch (err) {
-      console.error(err);
-      if (!isSilent) setGlobalError('Failed to load trips.');
-    } finally {
-      if (!isSilent) setLoading(false);
-    }
-  }, [companyId, user, userProfile]);
-
-  useEffect(() => {
-    if (authLoading) return;
-    if (!user || userProfile?.role !== 'conductor') {
-      router.push('/login');
-    } else {
-      fetchInitialData(false);
-      
-      // Auto refresh every 30 seconds silently
-      const intervalId = setInterval(() => {
-        fetchInitialData(true);
-      }, 30000);
-      
-      return () => clearInterval(intervalId);
-    }
-  }, [user, userProfile, authLoading, fetchInitialData, router]);
-
-  // Load bookings when a trip is selected
-  useEffect(() => {
-    const fetchBookings = async () => {
-      if (!selectedTrip) return;
-      const res = await dbActions.getBookingsForSchedule(selectedTrip.id);
-      if (res.success && res.data) {
-        setTripBookings(res.data as Booking[]);
-      } else {
-        console.error('Error fetching bookings:', res.error);
-        setTripBookings([]);
-      }
-    };
-    fetchBookings();
-    
-    // Set up realtime listener for this trip's bookings
-    if (selectedTrip) {
-      const channel = supabase.channel(`trip-${selectedTrip.id}-bookings`)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'Booking', filter: `scheduleId=eq.${selectedTrip.id}` }, () => {
-          fetchBookings();
-        })
-        .subscribe();
-      return () => { supabase.removeChannel(channel); };
-    }
-  }, [selectedTrip?.id]);
-
-  const updateTripOptimistically = (updates: Partial<Schedule>) => {
-    if (!selectedTrip) return;
-    const nt = { ...selectedTrip, ...updates };
-    setSelectedTrip(nt);
-    setTrips(p => p.map(t => t.id === nt.id ? nt : t));
-  };
-
-  const broadcastTripStatus = async (tripId: string, status: TripStatus, data: any) => {
-    try {
-      await supabase.rpc('broadcast_trip_update', { p_schedule_id: tripId, p_status: status, p_data: data });
-    } catch (e) {
-      // Ignore broadcast errors
-    }
-  };
-
-  const handleStartTrip = async () => {
-    if (!selectedTrip) return;
-    setActionLoadingId('trip-control');
-    try {
-      const now = new Date();
-      const firstStop = stopSequence[0];
-      await dbActions.updateSchedule(selectedTrip.id, {
-        tripStatus: 'boarding',
-        currentStopIndex: 0,
-        currentStopId: firstStop.id,
-        departedStops: [],
-        tripStartedAt: now,
-      });
-
-      await dbActions.createActivityLog({
-        userId: user?.id || '',
-        companyId: companyId,
-        scheduleId: selectedTrip.id,
-        action: 'TRIP_STARTED',
-        description: `Trip started at ${firstStop.name}`,
-        metadata: { stopId: firstStop.id, stopName: firstStop.name }
-      });
-
-      updateTripOptimistically({ 
-        tripStatus: 'boarding', 
-        currentStopIndex: 0, 
-        currentStopId: firstStop.id,
-        departedStops: [], 
-        tripStartedAt: now 
-      });
-      await broadcastTripStatus(selectedTrip.id, 'boarding', { currentStopIndex: 0, currentStopId: firstStop.id });
-    } catch (err) {
-      setGlobalError('Failed to start trip.');
-    } finally {
-      setActionLoadingId(null);
-    }
-  };
-
-  const activeRoute = useMemo(() => selectedTrip ? routes.find(r => r.id === selectedTrip.routeId) : null, [selectedTrip, routes]);
-  const stopSequence = useMemo(() => selectedTrip && activeRoute ? buildTripStopSequence(selectedTrip, activeRoute) : [], [selectedTrip, activeRoute]);
-
-  const handleDepartStop = async () => {
-    if (!selectedTrip) return;
-    setActionLoadingId('trip-control');
-    try {
-      const currentIdx = selectedTrip.currentStopIndex ?? 0;
-      const currentStop = stopSequence[currentIdx];
-      const deps = Array.from(new Set([...(selectedTrip.departedStops ?? []), currentStop.id]));
-      
-      await dbActions.updateSchedule(selectedTrip.id, {
-        tripStatus: 'in_transit',
-        departedStops: deps,
-        currentStopId: currentStop.id,
-      });
-
-      await dbActions.createActivityLog({
-        userId: user?.id || '',
-        companyId: companyId,
-        scheduleId: selectedTrip.id,
-        action: 'DEPARTED_STOP',
-        description: `Departed from ${currentStop.name}`,
-        metadata: { stopId: currentStop.id, stopName: currentStop.name, departedStops: deps }
-      });
-
-      updateTripOptimistically({ tripStatus: 'in_transit', departedStops: deps, currentStopId: currentStop.id });
-      await broadcastTripStatus(selectedTrip.id, 'in_transit', { 
-        departedStops: deps, 
-        departedStopName: currentStop.name,
-        currentStopId: currentStop.id 
-      });
-    } finally {
-      setActionLoadingId(null);
-    }
-  };
-
-  const handleArriveNextStop = async () => {
-    if (!selectedTrip) return;
-    setActionLoadingId('trip-control');
-    try {
-      const currentIdx = selectedTrip.currentStopIndex ?? 0;
-      const nextIdx = currentIdx + 1;
-      const nextStop = stopSequence[nextIdx];
-      
-      if (nextIdx >= stopSequence.length - 1) {
-        // Final Stop
-        const now = new Date();
-        await dbActions.updateSchedule(selectedTrip.id, {
-          tripStatus: 'completed',
-          currentStopIndex: nextIdx,
-          currentStopId: nextStop.id,
-          tripCompletedAt: now,
-        } as any);
-
-        await dbActions.createActivityLog({
-          userId: user?.id || '',
-          companyId: companyId,
-          scheduleId: selectedTrip.id,
-          action: 'TRIP_COMPLETED',
-          description: `Trip completed at ${nextStop.name}`,
-          metadata: { stopId: nextStop.id, stopName: nextStop.name }
-        });
-
-        updateTripOptimistically({ tripStatus: 'completed', currentStopIndex: nextIdx, currentStopId: nextStop.id, tripCompletedAt: now });
-        await broadcastTripStatus(selectedTrip.id, 'completed', { completedAt: now, currentStopId: nextStop.id });
-      } else {
-        // Intermediate Stop
-        await dbActions.updateSchedule(selectedTrip.id, {
-          tripStatus: 'arrived',
-          currentStopIndex: nextIdx,
-          currentStopId: nextStop.id,
-        });
-
-        await dbActions.createActivityLog({
-          userId: user?.id || '',
-          companyId: companyId,
-          scheduleId: selectedTrip.id,
-          action: 'ARRIVED_AT_STOP',
-          description: `Arrived at ${nextStop.name}`,
-          metadata: { stopId: nextStop.id, stopName: nextStop.name, stopIndex: nextIdx }
-        });
-
-        updateTripOptimistically({ tripStatus: 'arrived', currentStopIndex: nextIdx, currentStopId: nextStop.id });
-        await broadcastTripStatus(selectedTrip.id, 'arrived', { 
-          currentStopIndex: nextIdx, 
-          arrivedStopName: nextStop.name,
-          currentStopId: nextStop.id 
-        });
-      }
-    } finally {
-      setActionLoadingId(null);
-    }
-  };
-
-  const handleOpenBoarding = async () => {
-    if (!selectedTrip) return;
-    setActionLoadingId('trip-control');
-    try {
-      await dbActions.updateSchedule(selectedTrip.id, { tripStatus: 'boarding' });
-      updateTripOptimistically({ tripStatus: 'boarding' });
-      await broadcastTripStatus(selectedTrip.id, 'boarding', {});
-    } finally {
-      setActionLoadingId(null);
-    }
-  };
-
-  const handleMarkDelayed = async (reason: string) => {
-    if (!selectedTrip) return;
-    setActionLoadingId('trip-control');
-    try {
-      await dbActions.updateSchedule(selectedTrip.id, { 
-        tripStatus: 'delayed',
-        tripNotes: reason 
-      });
-      updateTripOptimistically({ tripStatus: 'delayed', tripNotes: reason });
-      await broadcastTripStatus(selectedTrip.id, 'delayed', { reason });
-    } finally {
-      setActionLoadingId(null);
-    }
-  };
-
-  const handleCashCollection = async (bookingId: string, amount: number) => {
-    setActionLoadingId(bookingId);
-    try {
-      await dbActions.updateBooking(bookingId, {
-        paymentStatus: 'paid',
-        paymentMethod: 'cash',
-        paidAt: new Date() as any,
-      });
-      // Will auto-update via realtime
-    } finally {
-      setActionLoadingId(null);
-    }
-  };
-
-  const handleMarkBoarded = async (bookingId: string, isBoarded: boolean) => {
-    setActionLoadingId(bookingId);
-    try {
-      if (isBoarded) {
-        // Need to ensure cash is paid if they are boarding and haven't paid? We assume Conductor validated it.
-        await dbActions.updateBooking(bookingId, { bookingStatus: 'confirmed' });
-      } else {
-        await dbActions.updateBooking(bookingId, { bookingStatus: 'pending' });
-      }
-    } finally {
-      setActionLoadingId(null);
-    }
-  };
-
-  const handleMarkNoShow = async (bookingId: string, isNoShow: boolean) => {
-    setActionLoadingId(bookingId);
-    try {
-      await dbActions.updateBooking(bookingId, { bookingStatus: isNoShow ? 'no-show' : 'pending' });
-    } finally {
-      setActionLoadingId(null);
-    }
-  };
-
-  const handleWalkOnBooking = async (seatNumber: string, form: WalkOnFormData, amount: number) => {
-    if (!selectedTrip || !companyId) return;
-    setActionLoadingId('walk-on');
-    try {
-      const ref = `W-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
-      const bookingResult = await dbActions.createBooking({
-        bookingReference: ref,
-        scheduleId: selectedTrip.id,
-        companyId,
-        routeId: selectedTrip.routeId,
-        userId: user?.id ?? '', // Conductor's ID
-        totalAmount: selectedTrip.price,
-        currency: 'MWK',
-        bookingStatus: 'confirmed', // Automatically boarded
-        paymentStatus: 'paid', // Cash walk on
-        passengerDetails: [{ name: `${form.firstName} ${form.lastName}`, age: form.age, sex: form.sex }],
-        contactPhone: form.phone,
-        seatNumbers: [seatNumber],
-        paidAt: new Date() as any,
-      } as any);
-
-      if (!bookingResult.success) {
-        throw new Error(bookingResult.error || 'Failed to create booking record');
-      }
-      
-      // Update seats in the database
-      const nb = [...(selectedTrip.bookedSeats || []), seatNumber];
-      const newAvailable = Math.max(0, (selectedTrip.availableSeats ?? 0) - 1);
-      
-      const schedResult = await dbActions.updateSchedule(selectedTrip.id, { 
-        bookedSeats: nb as any,
-        availableSeats: newAvailable
-      });
-
-      if (!schedResult.success) {
-        throw new Error(schedResult.error || 'Booking saved, but seat inventory update failed');
-      }
-
-      updateTripOptimistically({ bookedSeats: nb, availableSeats: newAvailable });
-      setWalkOnModalOpen(false);
-    } catch (err: any) {
-      setGlobalError(`Walk-on booking failed: ${err.message}`);
-    } finally {
-      setActionLoadingId(null);
-    }
-  };
-
-  const [activeTab, setActiveTab] = useState<'overview' | 'trips' | 'profile' | 'notifications'>('overview');
-
-  const stats = useMemo(() => {
-    const now = new Date();
-    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
-
-    const todayTrips = trips.filter(t => {
-      const depDate = new Date(t.departureDateTime);
-      return depDate >= startOfToday && depDate < endOfToday;
-    });
-
-    return {
-      liveCount: trips.filter(t => t.tripStatus === 'boarding' || t.tripStatus === 'in_transit').length,
-      totalToday: todayTrips.length,
-      pendingToday: todayTrips.filter(t => t.tripStatus === 'scheduled' || !t.tripStatus).length,
-    };
-  }, [trips]);
+  const [scannerModalOpen, setScannerModalOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   if (loading || authLoading) {
-    return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <div className="flex flex-col items-center"><Loader2 className="w-10 h-10 text-blue-600 animate-spin mb-4" /><p className="text-gray-500">Loading your assignment workspace...</p></div>
-      </div>
-    );
+    return <div className="min-h-screen bg-[#f8fafc] flex items-center justify-center"><Loader2 className="w-10 h-10 text-indigo-600 animate-spin" /></div>;
   }
 
+  const activeRoute = selectedTrip ? routes.find(r => r.id === selectedTrip.routeId) || null : null;
   const activeBus = selectedTrip ? buses.find(b => b.id === selectedTrip.busId) || null : null;
 
-// Sidebar Item Component used throughout the dashboard
-  const SidebarItem = ({ icon: Icon, label, active, onClick }: any) => (
-    <button
-      onClick={onClick}
-      className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 group
-        ${active 
-          ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' 
-          : 'text-gray-500 hover:text-indigo-600 hover:bg-indigo-50'}`}
-    >
-      <Icon className={`w-5 h-5 transition-transform ${active ? 'scale-110' : 'group-hover:scale-110'}`} />
-      <span className="font-semibold tracking-tight">{label}</span>
-    </button>
-  );
+  const handleWalkOnBookingWrapper = async (seatNumber: string, data: any, amount: number) => {
+    await handleWalkOnBooking(seatNumber, data, amount);
+  };
 
-  const renderOverview = () => {
-    const startOfToday = new Date();
-    startOfToday.setHours(0,0,0,0);
-
-    const firstActiveTrip = trips.find(t => t.tripStatus === 'boarding' || t.tripStatus === 'in_transit') || 
-                            trips.filter(t => (t.tripStatus === 'scheduled' || !t.tripStatus) && new Date(t.departureDateTime) >= startOfToday)
-                                 .sort((a,b) => new Date(a.departureDateTime).getTime() - new Date(b.departureDateTime).getTime())[0];
-    const activeRoute = firstActiveTrip ? routes.find(r => r.id === firstActiveTrip.routeId) : null;
-    const activeBusObj = firstActiveTrip ? buses.find(b => b.id === firstActiveTrip.busId) : null;
-
-    return (
-      <div className="space-y-5 animate-in fade-in slide-in-from-bottom-4 duration-500">
-        {/* Stats — horizontal scroll on mobile */}
-        <div className="flex gap-3 overflow-x-auto pb-2 hide-scrollbar sm:grid sm:grid-cols-3 sm:overflow-visible">
-          <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm relative overflow-hidden group min-w-[140px] shrink-0 sm:min-w-0">
-            <Radio className="w-5 h-5 text-indigo-600 mb-2 relative" />
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest leading-none mb-1 relative">Live Now</p>
-            <p className="text-2xl font-black text-gray-900 relative">{stats.liveCount}</p>
-          </div>
-          <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm relative overflow-hidden group min-w-[140px] shrink-0 sm:min-w-0">
-            <Calendar className="w-5 h-5 text-emerald-600 mb-2 relative" />
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest leading-none mb-1 relative">Today</p>
-            <p className="text-2xl font-black text-gray-900 relative">{stats.totalToday}</p>
-          </div>
-          <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm relative overflow-hidden group min-w-[140px] shrink-0 sm:min-w-0">
-            <Navigation className="w-5 h-5 text-amber-600 mb-2 relative" />
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest leading-none mb-1 relative">Remaining</p>
-            <p className="text-2xl font-black text-gray-900 relative">{stats.pendingToday}</p>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-2xl p-4 sm:p-6 border border-gray-100 shadow-sm">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-base sm:text-lg font-bold text-gray-900 tracking-tight flex items-center gap-2">
-              <Radio className="w-4 h-4 text-indigo-600 animate-pulse" /> System Status
-            </h3>
-            <span className="text-[10px] font-black text-indigo-500 bg-indigo-50 px-2.5 py-1 rounded-full uppercase tracking-widest">Connected</span>
-          </div>
-          
-          {firstActiveTrip ? (
-            <div className="mb-2">
-              <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
-                {firstActiveTrip.tripStatus === 'boarding' || firstActiveTrip.tripStatus === 'in_transit' ? 'Current Active Trip' : 'Next Upcoming Trip'}
-              </p>
-              <div
-                className="w-full bg-gradient-to-r from-indigo-500 to-blue-600 p-4 sm:p-5 rounded-xl border border-indigo-200 flex flex-col sm:flex-row items-start sm:items-center gap-4 text-left shadow-md"
-              >
-                <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center shrink-0 shadow-inner">
-                  <MapPin className="w-6 h-6 text-white" />
-                </div>
-                <div className="flex-1 min-w-0 w-full">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="px-2 py-0.5 bg-white/20 text-white text-[10px] font-bold uppercase rounded-sm tracking-wider">
-                      {firstActiveTrip.tripStatus === 'boarding' ? 'Boarding' : firstActiveTrip.tripStatus === 'in_transit' ? 'In Transit' : 'Scheduled'}
-                    </span>
-                    <span className="text-indigo-100 text-xs font-medium">{activeBusObj?.licensePlate || 'Assigned Bus'}</span>
-                  </div>
-                  <p className="text-white font-extrabold text-lg sm:text-xl truncate leading-tight">
-                    {activeRoute?.origin || firstActiveTrip.departureLocation} → {activeRoute?.destination || firstActiveTrip.arrivalLocation}
-                  </p>
-                  <p className="text-indigo-100 text-sm mt-0.5">
-                    Departing at {new Date(firstActiveTrip.departureDateTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                  </p>
-                </div>
-                <div className="mt-4 sm:mt-0 w-full sm:w-auto flex flex-col sm:flex-row justify-end gap-2 sm:gap-3">
-                  <button
-                    onClick={() => {
-                      setSelectedTrip(firstActiveTrip);
-                      setWalkOnModalOpen(true);
-                    }}
-                    className="bg-white/10 hover:bg-white/20 text-white font-bold text-sm px-4 py-2 sm:py-2.5 rounded-lg flex items-center justify-center gap-2 transition-colors border border-white/20"
-                  >
-                    <UserPlus className="w-4 h-4" /> Walk-on
-                  </button>
-                  <button
-                    onClick={() => {
-                      setSelectedTrip(firstActiveTrip);
-                      setActiveTab('trips');
-                    }}
-                    className="bg-white text-indigo-600 font-bold text-sm px-4 py-2 sm:py-2.5 rounded-lg flex items-center justify-center gap-2 shadow-sm hover:bg-gray-50 transition-colors"
-                  >
-                    Enter Console <Navigation className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            </div>
-          ) : (
-          <div className="bg-gray-50 p-8 rounded-xl text-center border border-dashed border-gray-200">
-            <Navigation className="w-10 h-10 text-gray-300 mx-auto mb-3" />
-            <p className="text-gray-400 font-bold text-xs uppercase tracking-wide">Awaiting assignments...</p>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};
-
-  const renderActiveTab = () => {
+  const renderContent = () => {
     switch (activeTab) {
-      case 'overview':
-        return renderOverview();
-      case 'trips':
-        return (
-          !selectedTrip ? (
-            <TripBuckets trips={trips} buses={buses} routes={routes} onSelect={setSelectedTrip} />
-          ) : (
-            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
-              {selectedTrip.tripStatus === 'completed' ? (
-                <TripSummaryCard trip={selectedTrip} bus={activeBus} bookings={tripBookings} company={company} onRefresh={() => setSelectedTrip(null)} />
-              ) : (
-                <>
-                  <div className="flex items-center justify-between mb-3">
-                    <button onClick={() => setSelectedTrip(null)} className="flex items-center gap-2 text-indigo-600 font-bold text-sm bg-indigo-50 px-4 py-2.5 rounded-xl border border-indigo-100 active:bg-indigo-100 transition-all">
-                      <span>← Back</span>
-                    </button>
-                    <div className="flex items-center gap-2">
-                      <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest hidden sm:block">Live</span>
-                    </div>
-                  </div>
-                  <NextStopPassengerAlert 
-                    tripBookings={tripBookings}
-                    stopSequence={stopSequence}
-                    currentStop={stopSequence[selectedTrip.currentStopIndex ?? 0]}
-                    isBoardingStatus={selectedTrip.tripStatus === 'boarding'}
-                  />
-
-                  <TripControlPanel 
-                    trip={selectedTrip}
-                    stopSequence={stopSequence}
-                    onStartTrip={handleStartTrip}
-                    onDepart={handleDepartStop}
-                    onArriveAtNext={handleArriveNextStop}
-                    onOpenBoarding={handleOpenBoarding}
-                    onMarkDelayed={handleMarkDelayed}
-                    loading={actionLoadingId === 'trip-control'}
-                  />
-
-                  <div className="pt-4 border-t border-gray-100">
-                    <div className="flex items-center justify-between mb-4">
-                      <h2 className="text-lg sm:text-xl font-bold text-gray-900 flex items-center gap-2">
-                         <Radio className="w-4 h-4 text-indigo-500 animate-pulse" /> Manifest
-                      </h2>
-                      <Button onClick={() => setWalkOnModalOpen(true)} className="bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg transition-all rounded-xl font-bold h-10 sm:h-auto hidden sm:flex">
-                        <UserPlus className="w-4 h-4 mr-1.5" /> Walk-on
-                      </Button>
-                    </div>
-
-                    <PassengerManifest 
-                      bookings={tripBookings}
-                      tripStatus={selectedTrip.tripStatus ?? 'scheduled'}
-                      onOpenCashModal={(b) => { setActiveBookingForCash(b); setCashModalOpen(true); }}
-                      onMarkBoarded={handleMarkBoarded}
-                      onMarkNoShow={handleMarkNoShow}
-                      loadingActionId={actionLoadingId}
-                    />
-                  </div>
-
-                  {/* Mobile FAB for Walk-on */}
-                  <button
-                    onClick={() => setWalkOnModalOpen(true)}
-                    className="sm:hidden fixed bottom-20 right-4 w-14 h-14 bg-indigo-600 text-white rounded-2xl shadow-xl shadow-indigo-300 flex items-center justify-center z-40 active:scale-95 transition-transform"
-                  >
-                    <UserPlus className="w-6 h-6" />
-                  </button>
-                </>
-              )}
-            </div>
-          )
-        );
-      case 'profile':
-        return (
-          <div className="bg-white p-5 sm:p-8 rounded-2xl border border-gray-100 shadow-sm max-w-2xl mx-auto">
-            <div className="flex items-center gap-4 sm:gap-6 mb-6">
-              <div className="w-16 h-16 sm:w-20 sm:h-20 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600 text-2xl sm:text-3xl font-bold border border-indigo-100">
-                {userProfile?.firstName?.[0] || 'C'}
-              </div>
-              <div className="min-w-0">
-                <h3 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight truncate">{userProfile?.firstName} {userProfile?.lastName}</h3>
-                <p className="text-indigo-500 font-bold uppercase tracking-widest text-[10px] mt-1">Conductor • Fleet Operations</p>
-              </div>
-            </div>
-            <div className="space-y-3">
-               <div className="p-3.5 bg-gray-50 rounded-xl border border-gray-100">
-                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1">Email</span>
-                  <span className="font-semibold text-gray-700 text-sm break-all">{userProfile?.email}</span>
-               </div>
-               <div className="p-3.5 bg-gray-50 rounded-xl border border-gray-100">
-                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1">Phone</span>
-                  <span className="font-semibold text-gray-700 text-sm">{userProfile?.phone || 'Not set'}</span>
-               </div>
-               <button
-                 onClick={signOut}
-                 className="w-full flex items-center justify-center gap-2 px-4 py-3 text-red-600 bg-red-50 hover:bg-red-100 rounded-xl transition-all font-bold text-sm lg:hidden"
-               >
-                 <LogOut className="w-4 h-4" /> Sign Out
-               </button>
-            </div>
-          </div>
-        );
-      case 'notifications':
-        return (
-          <NotificationsManagementTab
-            userId={user?.id || ""}
-            companyId={userProfile?.companyId || ""}
-            setError={(msg) => setGlobalError(msg)}
-            setSuccess={(msg) => {}}
+      case 'dashboard': return (
+        <DashboardTab 
+          selectedTrip={selectedTrip} trips={trips} routes={routes} buses={buses} tripBookings={tripBookings} tripStats={tripStats}
+          setSelectedTrip={setSelectedTrip} handleUpdateTripStatus={handleUpdateTripStatus} 
+          setScannerModalOpen={setScannerModalOpen} setWalkOnModalOpen={setWalkOnModalOpen} setActiveTab={setActiveTab}
+          searchQuery={searchQuery} setSearchQuery={setSearchQuery} fetchInitialData={fetchInitialData}
+        />
+      );
+      case 'my-trips': return (
+        <MyTripsTab 
+          trips={trips} routes={routes} buses={buses} selectedTrip={selectedTrip} 
+          setSelectedTrip={setSelectedTrip} setActiveTab={setActiveTab}
+        />
+      );
+      case 'passengers': return selectedTrip ? (
+        <div className="max-w-4xl mx-auto">
+          <PassengerManifest 
+            bookings={tripBookings} 
+            tripStatus={selectedTrip.tripStatus || 'scheduled'}
+            onOpenCashModal={(b) => { setActiveBookingForCash(b); setCashModalOpen(true); }}
+            onMarkBoarded={handleMarkBoarded}
+            onMarkNoShow={handleMarkNoShow}
+            loadingActionId={actionLoadingId}
           />
-        );
-      default:
-        return renderOverview();
+        </div>
+      ) : <DashboardTab 
+          selectedTrip={selectedTrip} trips={trips} routes={routes} buses={buses} tripBookings={tripBookings} tripStats={tripStats}
+          setSelectedTrip={setSelectedTrip} handleUpdateTripStatus={handleUpdateTripStatus} 
+          setScannerModalOpen={setScannerModalOpen} setWalkOnModalOpen={setWalkOnModalOpen} setActiveTab={setActiveTab}
+          searchQuery={searchQuery} setSearchQuery={setSearchQuery} fetchInitialData={fetchInitialData}
+        />;
+      case 'payments': return <PaymentsTab tripBookings={tripBookings} />;
+      case 'reports': return selectedTrip ? (
+        <ReportsTab 
+          selectedTrip={selectedTrip} tripBookings={tripBookings} activeRoute={activeRoute} activeBus={activeBus} 
+          handleUpdateTripStatus={handleUpdateTripStatus} 
+        />
+      ) : null;
+      case 'ticket-scanning': return (
+        <div className="max-w-2xl mx-auto bg-white p-12 rounded-3xl border shadow-sm text-center">
+           <QrCode className="w-16 h-16 text-indigo-600 mx-auto mb-6" />
+           <h2 className="text-xl font-bold text-gray-900 mb-2">Scan Ticket</h2>
+           <p className="text-gray-500 text-sm mb-8">Place the passenger's QR code inside the viewfinder</p>
+           <div className="w-64 h-64 border-4 border-indigo-600 rounded-3xl mx-auto mb-10 flex items-center justify-center bg-gray-50 relative overflow-hidden">
+              <div className="absolute inset-0 bg-gradient-to-b from-transparent via-indigo-500/10 to-transparent animate-scan" />
+              <Ticket className="w-12 h-12 text-gray-200" />
+           </div>
+           <Button onClick={() => setScannerModalOpen(true)} className="w-full bg-indigo-600 py-6 rounded-xl font-bold">Initialize Scanner</Button>
+        </div>
+      );
+      case 'profile': return (
+        <OperatorProfileTab 
+           userProfile={userProfile} 
+           setError={setGlobalError} 
+           setSuccess={(msg) => { setGlobalError(''); setSuccessMessage(msg); }} 
+        />
+      );
+      case 'settings': return (
+        <div className="max-w-4xl mx-auto bg-white p-8 rounded-2xl border shadow-sm text-center">
+           <Settings className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+           <p className="text-gray-500 font-bold">Account and device settings coming soon.</p>
+        </div>
+      );
+      default: return null;
     }
   };
 
   return (
-    <div className="min-h-screen bg-[#fafafa] flex font-sans selection:bg-indigo-100 selection:text-indigo-900">
-      {/* ── SIDEBAR ── */}
-      <aside className="hidden lg:flex w-64 bg-white border-r border-gray-100 h-screen sticky top-0 flex-col z-50 overflow-hidden">
-        <div className="p-6 border-b border-gray-100/50">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-200">
-              <Navigation className="w-6 h-6 text-white" strokeWidth={2.5} />
-            </div>
-            <div>
-              <h1 className="font-bold text-gray-900 tracking-tight leading-none uppercase text-sm italic">{company?.name || 'BusOps'}</h1>
-              <span className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest leading-none mt-1 inline-block">Fleet Conductor</span>
-            </div>
+    <div className="min-h-screen bg-[#f8fafc] flex font-sans text-gray-900 selection:bg-indigo-100 selection:text-indigo-900">
+      <aside className="hidden lg:flex w-[280px] bg-white border-r border-gray-100 flex-col sticky top-0 h-screen overflow-hidden shadow-premium z-50">
+        <div className="p-8 border-b border-gray-50 flex items-center gap-3">
+          <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-100 text-white font-bold text-xl">
+             {company?.name?.[0] || 'T'}
+          </div>
+          <div>
+            <h1 className="font-bold tracking-tight text-gray-900 truncate text-base">{company?.name || 'Transport Co.'}</h1>
+            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Company Portal</p>
           </div>
         </div>
-
-        <nav className="flex-1 p-4 space-y-1 overflow-y-auto scrollbar-hide">
-          <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-4 px-2">Operational Console</div>
-          <SidebarItem icon={LayoutDashboard} label="Overview" active={activeTab === 'overview'} onClick={() => setActiveTab('overview')} />
-          <SidebarItem icon={MapPin} label="My Trips" active={activeTab === 'trips'} onClick={() => setActiveTab('trips')} />
-          <SidebarItem icon={Bell} label="Notifications" active={activeTab === 'notifications'} onClick={() => setActiveTab('notifications')} />
-          
-          <div className="pt-6 pb-2">
-            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-4 px-2">Account</div>
-            <SidebarItem icon={User} label="My Profile" active={activeTab === 'profile'} onClick={() => setActiveTab('profile')} />
-          </div>
+        <nav className="flex-1 p-4 space-y-1">
+           {TABS.map(tab => {
+             const Icon = tab.icon;
+             return (
+               <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl transition-all text-[13px] font-bold ${activeTab === tab.id ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100 scale-[1.02]' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'}`}>
+                 <Icon className={`w-5 h-5 ${activeTab === tab.id ? 'text-white' : 'text-gray-400'}`} /> {tab.label}
+               </button>
+             );
+           })}
         </nav>
-
-        <div className="p-4 border-t border-gray-100/50">
-          <button 
-            onClick={signOut} 
-            className="w-full flex items-center gap-3 px-4 py-3 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all duration-300 font-medium group"
-          >
-            <LogOut className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-            <span>Terminate Shift</span>
+        <div className="p-4 mt-auto border-t border-gray-50">
+          <button onClick={signOut} className="w-full flex items-center gap-3 px-4 py-3.5 text-rose-500 hover:bg-rose-50 rounded-2xl transition-all text-[13px] font-bold">
+             <LogOut className="w-5 h-5" /> Logout
           </button>
         </div>
       </aside>
 
-      {/* ── MAIN CONTENT ── */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* Header */}
-        <header className="h-14 sm:h-16 bg-white/80 backdrop-blur-md border-b border-gray-100 flex items-center justify-between px-4 sm:px-8 sticky top-0 z-40">
-          <h2 className="text-base sm:text-lg font-bold text-gray-900 border-l-3 border-indigo-600 pl-3 capitalize tracking-tight">
-            {activeTab === 'trips' ? (selectedTrip ? 'Trip Workspace' : 'My Trips') : activeTab}
-          </h2>
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1.5 bg-emerald-50 px-2 py-1 rounded-full border border-emerald-100">
-              <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <p className="text-[10px] font-bold text-emerald-600 uppercase hidden sm:block">Active</p>
-            </div>
-            <div className="w-9 h-9 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600 font-bold text-sm border border-indigo-100">
-              {userProfile?.firstName?.[0] || 'C'}
-            </div>
-          </div>
+        <header className="h-20 bg-white border-b border-gray-100 px-8 flex items-center justify-between sticky top-0 z-40">
+           <div>
+             <h2 className="text-xl font-extrabold tracking-tight text-gray-900 uppercase">
+                {TABS.find(t => t.id === activeTab)?.label || 'Dashboard'}
+             </h2>
+             <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Real-time Operations Control</p>
+           </div>
+           <div className="flex items-center gap-6">
+             {selectedTrip && activeTab === 'dashboard' && (
+                <div className="bg-gray-50 text-gray-700 px-4 py-2 rounded-lg text-[10px] font-bold border border-gray-200 uppercase tracking-widest">
+                   Trip ID: {selectedTrip.id.substring(0,8)}
+                </div>
+             )}
+             <div className="flex items-center gap-3">
+               <div className="w-10 h-10 bg-indigo-50 border border-indigo-100 rounded-full flex items-center justify-center font-bold text-indigo-700 text-sm">
+                 {userProfile?.firstName?.[0] || 'C'}
+               </div>
+               <div className="hidden sm:block">
+                  <p className="text-[11px] font-black text-gray-900 uppercase tracking-tight">{userProfile?.firstName} {userProfile?.lastName}</p>
+                  <p className="text-[9px] text-indigo-600 font-bold uppercase tracking-widest">Conductor On Duty</p>
+               </div>
+             </div>
+           </div>
         </header>
 
-        <main className="flex-1 p-4 lg:p-8 overflow-y-auto pb-24 lg:pb-8">
+        <main className="flex-1 p-6 lg:p-8 overflow-y-auto">
           {globalError && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-2xl mb-4 text-sm font-bold flex items-center gap-3 animate-in fade-in duration-300">
-              <AlertTriangle className="w-5 h-5 shrink-0" />
-              <span className="flex-1">{globalError}</span>
-              <button onClick={() => setGlobalError('')} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-red-100 shrink-0">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
+             <div className="bg-red-50 text-red-700 px-4 py-3 rounded-xl flex items-center justify-between mb-6 border border-red-100">
+               <span className="font-bold text-sm">{globalError}</span>
+               <button onClick={() => setGlobalError('')}><X className="w-4 h-4" /></button>
+             </div>
           )}
 
-          {renderActiveTab()}
+          {successMessage && (
+             <div className="bg-emerald-50 text-emerald-700 px-4 py-3 rounded-xl flex items-center justify-between mb-6 border border-emerald-100">
+               <span className="font-bold text-sm">{successMessage}</span>
+               <button onClick={() => setSuccessMessage('')}><X className="w-4 h-4" /></button>
+             </div>
+          )}
+
+          {renderContent()}
         </main>
       </div>
 
-      {/* Modals */}
-      <CashCollectionModal 
-        isOpen={cashModalOpen} 
-        onClose={() => { setCashModalOpen(false); setActiveBookingForCash(null); }} 
-        booking={activeBookingForCash}
-        onConfirm={handleCashCollection}
-        loading={actionLoadingId === activeBookingForCash?.id}
-      />
-      
       <WalkOnBookingModal 
-        isOpen={walkOnModalOpen}
-        onClose={() => setWalkOnModalOpen(false)}
-        trip={selectedTrip}
-        bus={activeBus}
-        existingBookings={tripBookings}
-        stopSequence={stopSequence}
-        currentStopIndex={selectedTrip?.currentStopIndex ?? 0}
-        onConfirm={handleWalkOnBooking}
+        isOpen={walkOnModalOpen} 
+        onClose={() => setWalkOnModalOpen(false)} 
+        trip={selectedTrip} 
+        bus={buses.find(b => b.id === selectedTrip?.busId) || null}
+        route={selectedTrip ? (routes.find(r => r.id === selectedTrip.routeId) || null) : null}
+        existingBookings={tripBookings} 
+        stopSequence={selectedTrip ? buildTripStopSequence(selectedTrip, routes.find(r => r.id === selectedTrip.routeId)) : []} 
+        currentStopIndex={selectedTrip?.currentStopIndex || 0}
+        onConfirm={handleWalkOnBookingWrapper} 
         loading={actionLoadingId === 'walk-on'}
       />
-
-      {/* ── MOBILE BOTTOM BAR ── */}
-      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-gray-200 flex items-center justify-around px-2 pt-2 z-50 pb-safe shadow-[0_-4px_20px_rgba(0,0,0,0.08)]">
-        {[
-          { tab: 'overview' as const, icon: LayoutDashboard, label: 'Home' },
-          { tab: 'trips' as const, icon: MapPin, label: 'Trips' },
-          { tab: 'notifications' as const, icon: Bell, label: 'Alerts' },
-          { tab: 'profile' as const, icon: User, label: 'Profile' },
-        ].map(({ tab, icon: Icon, label }) => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`flex flex-col items-center gap-0.5 min-w-[60px] min-h-[48px] justify-center rounded-xl transition-all ${activeTab === tab ? 'text-indigo-600' : 'text-gray-400 active:text-gray-600'}`}
-          >
-            <Icon className="w-6 h-6" />
-            <span className="text-[10px] font-bold">{label}</span>
-            {activeTab === tab && <div className="w-5 h-1 rounded-full bg-indigo-600 mt-0.5" />}
-          </button>
-        ))}
-      </nav>
+      <ScannerModal 
+        isOpen={scannerModalOpen} 
+        onClose={() => setScannerModalOpen(false)} 
+        onScan={handleScan} 
+      />
+      <CashCollectionModal
+        isOpen={cashModalOpen}
+        onClose={() => { setCashModalOpen(false); setActiveBookingForCash(null); }}
+        booking={activeBookingForCash}
+        loading={false}
+        onConfirm={async (id, method) => {
+          await dbActions.updateBooking(id, { paymentStatus: 'paid', paymentMethod: method as any });
+          setCashModalOpen(false);
+          setActiveBookingForCash(null);
+        }}
+      />
     </div>
   );
 }

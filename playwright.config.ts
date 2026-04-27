@@ -3,7 +3,7 @@ import { defineConfig, devices } from '@playwright/test';
 export default defineConfig({
   testDir: './tests',
 
-  // Tests share Firebase state — run sequentially to avoid auth conflicts
+  // Tests share state — run sequentially to avoid auth conflicts
   fullyParallel: false,
   workers:       1,
 
@@ -12,7 +12,7 @@ export default defineConfig({
   reporter:   [['html', { open: 'never' }], ['list']],
 
   use: {
-    baseURL:           'https://bus-booking-main-five.vercel.app',
+    baseURL:           process.env.BASE_URL || 'http://localhost:3000',
     trace:             'on-first-retry',
     screenshot:        'only-on-failure',
     video:             'on-first-retry',

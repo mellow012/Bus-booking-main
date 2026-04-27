@@ -86,27 +86,27 @@ const BookingStatusBadge: FC<{ booking: Booking }> = ({ booking }) => {
   const ps = booking.paymentStatus;
 
   if (bs === "cancelled")
-    return <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest bg-rose-50 text-rose-700 border border-rose-100"><X className="w-3 h-3" />Cancelled</span>;
+    return <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest bg-rose-50 text-rose-700 border border-rose-100"><X className="w-3 h-3" />Cancelled</span>;
 
   if (bs === "confirmed" && ps === "paid")
-    return <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest bg-emerald-50 text-emerald-700 border border-emerald-100"><Check className="w-3 h-3" />Confirmed · Paid</span>;
+    return <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest bg-emerald-50 text-emerald-700 border border-emerald-100"><Check className="w-3 h-3" />Confirmed · Paid</span>;
 
   if (bs === "confirmed" && ps !== "paid")
-    return <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest bg-amber-50 text-amber-700 border border-amber-100"><AlertTriangle className="w-3 h-3" />Confirmed · Unpaid</span>;
+    return <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest bg-amber-50 text-amber-700 border border-amber-100"><AlertTriangle className="w-3 h-3" />Confirmed · Unpaid</span>;
 
   if (bs === "pending" && ps === "paid")
-    return <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest bg-indigo-50 text-indigo-700 border border-indigo-100"><Clock className="w-3 h-3" />Pending · Paid</span>;
+    return <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest bg-indigo-50 text-indigo-700 border border-indigo-100"><Clock className="w-3 h-3" />Pending · Paid</span>;
 
-  return <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest bg-amber-50 text-amber-700 border border-amber-100"><Clock className="w-3 h-3" />Pending</span>;
+  return <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest bg-amber-50 text-amber-700 border border-amber-100"><Clock className="w-3 h-3" />Pending</span>;
 };
 
 const PaymentMethodBadge: FC<{ booking: Booking }> = ({ booking }) => {
   const b = booking as any;
   if (b.paymentMethod === "cash_on_boarding")
-    return <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest bg-emerald-50 text-emerald-700 border border-emerald-100"><Wallet className="w-3 h-3" />Cash</span>;
+    return <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest bg-emerald-50 text-emerald-700 border border-emerald-100"><Wallet className="w-3 h-3" />Cash</span>;
   if (booking.paymentStatus === "paid") {
     const provider = b.paymentProvider || b.paymentMethod || "Online";
-    return <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest bg-indigo-50 text-indigo-700 border border-indigo-100"><CreditCard className="w-3 h-3" />{provider}</span>;
+    return <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest bg-indigo-50 text-indigo-700 border border-indigo-100"><CreditCard className="w-3 h-3" />{provider}</span>;
   }
   return null;
 };
@@ -144,19 +144,19 @@ const SeatMap: FC<{
   }, [bookings]);
 
   return (
-    <div className="bg-white rounded-[2rem] border border-gray-100 overflow-hidden text-left h-full flex flex-col">
+    <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden text-left h-full flex flex-col">
       <div className="p-5 sm:p-6 border-b bg-gray-50/50">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-indigo-600 rounded-xl shadow-md shadow-indigo-100"><BusIcon className="w-4 h-4 text-white" /></div>
             <div>
-              <p className="font-black text-gray-900 text-sm tracking-tight uppercase">{bus.licensePlate}</p>
-              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{bus.busType} · {capacity} seats</p>
+              <p className="font-bold text-gray-900 text-sm tracking-tight uppercase">{bus.licensePlate}</p>
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{bus.busType} · {capacity} seats</p>
             </div>
           </div>
           <div className="text-right">
-            <p className="font-black text-gray-900 text-sm tracking-tight">{fmtTime(toDate(schedule.departureDateTime))}</p>
-            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{fmtDate(toDate(schedule.departureDateTime))}</p>
+            <p className="font-bold text-gray-900 text-sm tracking-tight">{fmtTime(toDate(schedule.departureDateTime))}</p>
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{fmtDate(toDate(schedule.departureDateTime))}</p>
           </div>
         </div>
         <div className="grid grid-cols-3 gap-3 mb-4">
@@ -166,8 +166,8 @@ const SeatMap: FC<{
             { label: "Fill %",  value: `${fill.toFixed(0)}%`, color: "text-indigo-600" },
           ].map(({ label, value, color }) => (
             <div key={label} className="bg-white rounded-xl p-2.5 text-center border border-gray-100 shadow-sm">
-              <p className={`text-base sm:text-lg font-black ${color} tracking-tighter`}>{value}</p>
-              <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">{label}</p>
+              <p className={`text-base sm:text-lg font-bold ${color} tracking-tighter`}>{value}</p>
+              <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">{label}</p>
             </div>
           ))}
         </div>
@@ -179,7 +179,7 @@ const SeatMap: FC<{
 
       <div className="p-5 sm:p-6 flex-1 overflow-y-auto max-h-[500px]">
         <div className="flex justify-center mb-6">
-          <span className="px-5 py-1.5 bg-gray-900 rounded-xl text-white text-[10px] font-black uppercase tracking-widest shadow-lg">🚌 Driver</span>
+          <span className="px-5 py-1.5 bg-gray-900 rounded-xl text-white text-[10px] font-bold uppercase tracking-widest shadow-lg">🚌 Driver</span>
         </div>
         <div className="max-w-[280px] mx-auto space-y-2">
           {rows.map((row, ri) => (
@@ -194,7 +194,7 @@ const SeatMap: FC<{
                     disabled={!booking}
                     onClick={() => booking && onSeatClick(booking)}
                     title={seg ? `${pax?.name ?? "Passenger"} · ${seg.from} → ${seg.to}` : "Available"}
-                    className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl text-xs font-black border-2 transition-all duration-300 ${
+                    className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl text-xs font-bold border-2 transition-all duration-300 ${
                       booking
                         ? "bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100 hover:scale-110 cursor-pointer shadow-sm"
                         : "bg-gray-50 border-gray-100 text-gray-300 cursor-default"
@@ -206,7 +206,7 @@ const SeatMap: FC<{
             </div>
           ))}
         </div>
-        <div className="flex justify-center gap-8 mt-8 text-[10px] font-black uppercase tracking-widest text-gray-400">
+        <div className="flex justify-center gap-8 mt-8 text-[10px] font-bold uppercase tracking-widest text-gray-400">
           <span className="flex items-center gap-2"><span className="w-4 h-4 rounded-lg border-2 border-gray-100 bg-gray-50 inline-block" />Free</span>
           <span className="flex items-center gap-2"><span className="w-4 h-4 rounded-lg border-2 border-rose-200 bg-rose-50 inline-block" />Booked</span>
         </div>
@@ -230,7 +230,7 @@ const BookingDetailModal: FC<{
 
   return (
     <div className="fixed inset-0 bg-black/60 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4 backdrop-blur-sm animate-in fade-in duration-300">
-      <div className="bg-white w-full sm:max-w-lg sm:rounded-[2.5rem] rounded-t-[2.5rem] max-h-[90vh] overflow-y-auto shadow-2xl animate-in slide-in-from-bottom-10 duration-500 text-left">
+      <div className="bg-white w-full sm:max-w-lg sm:rounded-2xl rounded-t-[2.5rem] max-h-[90vh] overflow-y-auto shadow-2xl animate-in slide-in-from-bottom-10 duration-500 text-left">
         <div className="flex justify-center pt-4 sm:hidden">
           <div className="w-12 h-1.5 bg-gray-200 rounded-full" />
         </div>
@@ -238,13 +238,13 @@ const BookingDetailModal: FC<{
         {/* Header */}
         <div className="p-6 sm:p-8 border-b border-gray-50 flex items-start justify-between">
           <div>
-            <p className="text-xl font-black text-gray-900 tracking-tight uppercase">{name}</p>
-            <p className="text-[10px] font-black text-gray-400 tracking-widest mt-1">REF: {booking.bookingReference ?? booking.id.slice(0, 8)}</p>
+            <p className="text-xl font-bold text-gray-900 tracking-tight uppercase">{name}</p>
+            <p className="text-[10px] font-bold text-gray-400 tracking-widest mt-1">REF: {booking.bookingReference ?? booking.id.slice(0, 8)}</p>
             <div className="flex gap-2 mt-4 flex-wrap">
               <BookingStatusBadge booking={booking} />
               <PaymentMethodBadge booking={booking} />
               {partial && (
-                <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-50 text-amber-700 text-[10px] font-black uppercase tracking-widest rounded-full border border-amber-100 shadow-sm">
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-50 text-amber-700 text-[10px] font-bold uppercase tracking-widest rounded-full border border-amber-100 shadow-sm">
                   <ArrowRight className="w-3 h-3" />Segment
                 </span>
               )}
@@ -255,9 +255,9 @@ const BookingDetailModal: FC<{
 
         <div className="p-6 sm:p-8 space-y-6">
           {/* Journey */}
-          <div className="p-5 bg-indigo-50/50 rounded-[2rem] border border-indigo-100">
-            <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest mb-3">JOURNAL PATH</p>
-            <div className="flex items-center gap-3 font-black text-gray-900 text-sm tracking-tight uppercase">
+          <div className="p-5 bg-indigo-50/50 rounded-2xl border border-indigo-100">
+            <p className="text-[9px] font-bold text-indigo-400 uppercase tracking-widest mb-3">JOURNAL PATH</p>
+            <div className="flex items-center gap-3 font-bold text-gray-900 text-sm tracking-tight uppercase">
               <MapPin className="w-4 h-4 text-indigo-600 shrink-0" />
               {seg.from}
               <ArrowRight className="w-4 h-4 text-gray-300 shrink-0" />
@@ -270,11 +270,11 @@ const BookingDetailModal: FC<{
               <div className="mt-4 flex items-center gap-4">
                 <div className="flex items-center gap-2">
                   <Calendar className="w-3.5 h-3.5 text-indigo-300" />
-                  <span className="text-[10px] font-black text-gray-700 uppercase tracking-widest">{fmtDate(dep)}</span>
+                  <span className="text-[10px] font-bold text-gray-700 uppercase tracking-widest">{fmtDate(dep)}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <Clock className="w-3.5 h-3.5 text-indigo-300" />
-                  <span className="text-[10px] font-black text-gray-700 uppercase tracking-widest">{fmtTime(dep)}</span>
+                  <span className="text-[10px] font-bold text-gray-700 uppercase tracking-widest">{fmtTime(dep)}</span>
                 </div>
               </div>
             )}
@@ -282,22 +282,22 @@ const BookingDetailModal: FC<{
 
           {/* Passengers */}
           <div>
-            <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-4">MANIFEST ({booking.passengerDetails?.length ?? 0})</p>
+            <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-4">MANIFEST ({booking.passengerDetails?.length ?? 0})</p>
             <div className="space-y-3 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
               {booking.passengerDetails?.map((pax: any, i: number) => (
                 <div key={i} className="flex items-center justify-between p-4 bg-gray-50/50 rounded-2xl border border-gray-100 group hover:bg-white hover:border-indigo-100 transition-all">
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-white rounded-xl shadow-sm border border-gray-100 flex items-center justify-center text-[11px] font-black text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
+                    <div className="w-8 h-8 bg-white rounded-xl shadow-sm border border-gray-100 flex items-center justify-center text-[11px] font-bold text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
                       {pax.seatNumber?.substring(0, 1)}
                     </div>
                     <div>
-                      <p className="font-black text-gray-900 text-xs uppercase tracking-tight">{pax.name}</p>
+                      <p className="font-bold text-gray-900 text-xs uppercase tracking-tight">{pax.name}</p>
                       <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">
                         {pax.gender || pax.sex || "Pax"} · {pax.contactNumber || "No Contact"}
                       </p>
                     </div>
                   </div>
-                  <span className="px-3 py-1.5 bg-indigo-600 text-white text-[10px] font-black rounded-xl shadow-md shadow-indigo-100">{pax.seatNumber}</span>
+                  <span className="px-3 py-1.5 bg-indigo-600 text-white text-[10px] font-bold rounded-xl shadow-md shadow-indigo-100">{pax.seatNumber}</span>
                 </div>
               ))}
             </div>
@@ -305,12 +305,12 @@ const BookingDetailModal: FC<{
 
           {/* Payment summary */}
           <div className="grid grid-cols-2 gap-4">
-            <div className="p-5 bg-gray-50/50 rounded-[1.5rem] border border-gray-100">
-              <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2">EQUITY</p>
-              <p className="text-xl font-black text-gray-900 tracking-tight">MWK {fmt(booking.totalAmount ?? 0)}</p>
+            <div className="p-5 bg-gray-50/50 rounded-2xl border border-gray-100">
+              <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-2">EQUITY</p>
+              <p className="text-xl font-bold text-gray-900 tracking-tight">MWK {fmt(booking.totalAmount ?? 0)}</p>
             </div>
-            <div className="p-5 bg-gray-50/50 rounded-[1.5rem] border border-gray-100">
-              <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2">CHANNEL</p>
+            <div className="p-5 bg-gray-50/50 rounded-2xl border border-gray-100">
+              <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-2">CHANNEL</p>
               <PaymentMethodBadge booking={booking} />
             </div>
           </div>
@@ -320,21 +320,21 @@ const BookingDetailModal: FC<{
         <div className="p-6 sm:p-8 border-t border-gray-50 flex gap-3 flex-wrap">
           {booking.bookingStatus === "pending" && (
             <button onClick={() => { onConfirm(booking.id); onClose(); }} disabled={actionLoading === booking.id}
-              className="flex-1 flex items-center justify-center gap-3 px-6 py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl text-[11px] font-black uppercase tracking-widest shadow-xl shadow-emerald-100 transition-all active:scale-95 disabled:opacity-50">
+              className="flex-1 flex items-center justify-center gap-3 px-6 py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl text-[11px] font-bold uppercase tracking-widest shadow-xl shadow-emerald-100 transition-all active:scale-95 disabled:opacity-50">
               {actionLoading === booking.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
               Approve
             </button>
           )}
           {booking.paymentStatus === "pending" && booking.bookingStatus !== "cancelled" && (
             <button onClick={() => { onReminder(booking); onClose(); }} disabled={reminderLoading === booking.id}
-              className="flex-1 flex items-center justify-center gap-3 px-6 py-4 border border-amber-200 text-amber-700 bg-amber-50 hover:bg-amber-100 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all active:scale-95 disabled:opacity-50">
+              className="flex-1 flex items-center justify-center gap-3 px-6 py-4 border border-amber-200 text-amber-700 bg-amber-50 hover:bg-amber-100 rounded-2xl text-[11px] font-bold uppercase tracking-widest transition-all active:scale-95 disabled:opacity-50">
               {reminderLoading === booking.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Bell className="w-4 h-4" />}
               Alert
             </button>
           )}
           {(booking.bookingStatus === "pending" || booking.bookingStatus === "confirmed") && (
             <button onClick={() => { onCancel(booking.id); onClose(); }} disabled={actionLoading === booking.id}
-              className="flex-1 flex items-center justify-center gap-3 px-6 py-4 bg-rose-600 hover:bg-rose-700 text-white rounded-2xl text-[11px] font-black uppercase tracking-widest shadow-xl shadow-rose-100 transition-all active:scale-95 disabled:opacity-50">
+              className="flex-1 flex items-center justify-center gap-3 px-6 py-4 bg-rose-600 hover:bg-rose-700 text-white rounded-2xl text-[11px] font-bold uppercase tracking-widest shadow-xl shadow-rose-100 transition-all active:scale-95 disabled:opacity-50">
               {actionLoading === booking.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4" />}
               Nullify
             </button>
@@ -590,7 +590,7 @@ const BookingsTab: FC<BookingsTabProps> = ({ schedules, routes, buses, companyId
       <div className="flex items-center justify-center py-32">
         <div className="text-center">
           <Loader2 className="w-12 h-12 animate-spin text-indigo-600 mx-auto mb-4" />
-          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Synchronizing Manifests…</p>
+          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Synchronizing Manifests…</p>
         </div>
       </div>
     );
@@ -607,7 +607,7 @@ const BookingsTab: FC<BookingsTabProps> = ({ schedules, routes, buses, companyId
           { key: "pending",   label: "PENDING SYNC",   value: String(stats.pending),   icon: Clock, iconColor: "text-amber-600", iconBg: "bg-amber-50" },
          ] as const).map(({ key, label, value, icon: Icon, iconColor, iconBg }) => (
           <button key={label} onClick={() => key && setStatusFilter(key as FilterStatus)}
-            className={`bg-white rounded-[1.5rem] sm:rounded-[2rem] p-5 sm:p-6 relative overflow-hidden flex flex-col justify-between min-h-[140px] border transition-all duration-300 text-left group ${
+            className={`bg-white rounded-2xl sm:rounded-2xl p-5 sm:p-6 relative overflow-hidden flex flex-col justify-between min-h-[140px] border transition-all duration-300 text-left group ${
               statusFilter === key ? "border-indigo-600 ring-4 ring-indigo-50" : "border-gray-100 hover:shadow-xl hover:border-indigo-100"
             }`}>
              <div className="flex justify-between items-start mb-4">
@@ -616,22 +616,22 @@ const BookingsTab: FC<BookingsTabProps> = ({ schedules, routes, buses, companyId
                 </div>
              </div>
              <div>
-                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5">{label}</p>
-                <p className="text-2xl sm:text-3xl font-black text-gray-900 tracking-tighter leading-none">{value}</p>
+                <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">{label}</p>
+                <p className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tighter leading-none">{value}</p>
              </div>
           </button>
          ))}
 
-         <div className="bg-indigo-900 rounded-[1.5rem] sm:rounded-[2rem] p-5 sm:p-6 text-white shadow-2xl shadow-indigo-200 relative overflow-hidden flex flex-col justify-between min-h-[140px] text-left">
+         <div className="bg-indigo-900 rounded-2xl sm:rounded-2xl p-5 sm:p-6 text-white shadow-2xl shadow-indigo-200 relative overflow-hidden flex flex-col justify-between min-h-[140px] text-left">
             <div className="relative z-10 flex justify-between items-start mb-2">
                <div className="p-2.5 bg-white/10 rounded-xl backdrop-blur-md border border-white/10">
                  <Wallet className="w-5 h-5 text-indigo-100" />
                </div>
-               <span className="text-[9px] font-black px-2.5 py-1 rounded-lg bg-emerald-500 text-white flex items-center gap-1 uppercase tracking-widest shadow-lg shadow-emerald-500/20">YIELD PROJ</span>
+               <span className="text-[9px] font-bold px-2.5 py-1 rounded-lg bg-emerald-500 text-white flex items-center gap-1 uppercase tracking-widest shadow-lg shadow-emerald-500/20">YIELD PROJ</span>
             </div>
             <div className="relative z-10">
-               <p className="text-[9px] font-black text-indigo-300/80 uppercase tracking-widest mb-1.5">PROJECTED EQUITY</p>
-               <p className="text-xl sm:text-2xl font-black tracking-tighter leading-none">MWK {fmt(stats.revenue + (stats.pending * 5000))}</p>
+               <p className="text-[9px] font-bold text-indigo-300/80 uppercase tracking-widest mb-1.5">PROJECTED EQUITY</p>
+               <p className="text-xl sm:text-2xl font-bold tracking-tighter leading-none">MWK {fmt(stats.revenue + (stats.pending * 5000))}</p>
             </div>
             <div className="absolute -right-4 -bottom-4 opacity-10">
               <Activity className="w-24 h-24 sm:w-32 sm:h-32" />
@@ -640,11 +640,11 @@ const BookingsTab: FC<BookingsTabProps> = ({ schedules, routes, buses, companyId
       </div>
 
       {/* ── Search & Filters Bar ── */}
-      <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-4 sm:p-6">
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-6">
         <div className="flex flex-col lg:flex-row gap-4 items-center justify-between">
           <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto flex-1 max-w-4xl">
             <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)}
-              className="px-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl text-xs font-black text-gray-700 outline-none focus:ring-2 focus:ring-indigo-600 focus:bg-white transition-all uppercase tracking-widest shrink-0" />
+              className="px-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl text-xs font-bold text-gray-700 outline-none focus:ring-2 focus:ring-indigo-600 focus:bg-white transition-all uppercase tracking-widest shrink-0" />
             
             <div className="relative flex-1">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -657,21 +657,21 @@ const BookingsTab: FC<BookingsTabProps> = ({ schedules, routes, buses, companyId
           <div className="flex items-center gap-2 w-full lg:w-auto">
             {selectedDate && (
               <button onClick={() => setSelectedDate("")}
-                className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-5 py-3 text-[10px] font-black text-rose-600 bg-rose-50 hover:bg-rose-600 hover:text-white rounded-2xl border border-rose-100 transition-all uppercase tracking-widest active:scale-95">
+                className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-5 py-3 text-[10px] font-bold text-rose-600 bg-rose-50 hover:bg-rose-600 hover:text-white rounded-2xl border border-rose-100 transition-all uppercase tracking-widest active:scale-95">
                 <X className="w-3.5 h-3.5" /> Reset
               </button>
             )}
             
             {selectedIds.size > 0 && (
               <button onClick={handleBulkConfirm} disabled={bulkLoading}
-                className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl shadow-emerald-100 transition-all active:scale-95 disabled:opacity-50">
+                className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl text-[10px] font-bold uppercase tracking-widest shadow-xl shadow-emerald-100 transition-all active:scale-95 disabled:opacity-50">
                 {bulkLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckSquare className="w-3.5 h-3.5" />}
                 Authorize {selectedIds.size}
               </button>
             )}
             
             <button onClick={handleExport}
-              className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-5 py-3 text-[10px] font-black text-indigo-600 bg-indigo-50 hover:bg-indigo-600 hover:text-white rounded-2xl border border-indigo-100 transition-all uppercase tracking-widest active:scale-95">
+              className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-5 py-3 text-[10px] font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-600 hover:text-white rounded-2xl border border-indigo-100 transition-all uppercase tracking-widest active:scale-95">
               <Download className="w-3.5 h-3.5" /> CSV
             </button>
             
@@ -691,7 +691,7 @@ const BookingsTab: FC<BookingsTabProps> = ({ schedules, routes, buses, companyId
 
       {/* ── LIST VIEW ── */}
       {viewMode === "list" && filteredBookings.length > 0 && (
-        <div className="bg-white rounded-[2rem] shadow-sm border border-gray-100 overflow-hidden text-left animate-in fade-in duration-500">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden text-left animate-in fade-in duration-500">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[1000px] text-left">
               <thead>
@@ -705,7 +705,7 @@ const BookingsTab: FC<BookingsTabProps> = ({ schedules, routes, buses, companyId
                     </th>
                   )}
                   {["Manifest ID", "Passenger", "Segment Path", "Vessel Config", "Authorized Yield", "Status", "Control"].map(h => (
-                    <th key={h} className="px-8 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                    <th key={h} className="px-8 py-5 text-[10px] font-bold text-gray-400 uppercase tracking-widest">
                       {h}
                     </th>
                   ))}
@@ -737,39 +737,39 @@ const BookingsTab: FC<BookingsTabProps> = ({ schedules, routes, buses, companyId
                       )}
 
                       <td className="px-8 py-6">
-                        <span className="font-mono text-[10px] font-black text-gray-400 bg-gray-50 border border-gray-100 px-2 py-1 rounded-lg group-hover:bg-indigo-600 group-hover:text-white group-hover:border-indigo-600 transition-all">
+                        <span className="font-mono text-[10px] font-bold text-gray-400 bg-gray-50 border border-gray-100 px-2 py-1 rounded-lg group-hover:bg-indigo-600 group-hover:text-white group-hover:border-indigo-600 transition-all">
                           #{booking.bookingReference ?? booking.id.slice(0, 8)}
                         </span>
                       </td>
 
                       <td className="px-8 py-6">
                         <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 bg-indigo-50 rounded-xl flex items-center justify-center text-[10px] font-black text-indigo-600 border border-indigo-100 group-hover:scale-110 transition-transform">
+                          <div className="w-8 h-8 bg-indigo-50 rounded-xl flex items-center justify-center text-[10px] font-bold text-indigo-600 border border-indigo-100 group-hover:scale-110 transition-transform">
                             {passengerName(booking).substring(0, 1)}
                           </div>
                           <div>
-                            <p className="font-black text-gray-900 text-xs uppercase tracking-tight">{passengerName(booking)}</p>
+                            <p className="font-bold text-gray-900 text-xs uppercase tracking-tight">{passengerName(booking)}</p>
                             <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">{booking.passengerDetails?.[0]?.contactNumber || "No Contact"}</p>
                           </div>
                         </div>
                       </td>
 
                       <td className="px-8 py-6">
-                         <div className="flex items-center gap-2 text-xs font-black text-gray-700 uppercase tracking-tight">
+                         <div className="flex items-center gap-2 text-xs font-bold text-gray-700 uppercase tracking-tight">
                             {seg.from} <ArrowRight className="w-3 h-3 text-gray-300" /> {seg.to}
                          </div>
                       </td>
 
                       <td className="px-8 py-6">
                         <div className="flex flex-col gap-1">
-                          <span className="px-2.5 py-1 bg-gray-50 text-gray-600 text-[10px] font-black uppercase tracking-widest rounded-lg border border-gray-100 w-fit">
+                          <span className="px-2.5 py-1 bg-gray-50 text-gray-600 text-[10px] font-bold uppercase tracking-widest rounded-lg border border-gray-100 w-fit">
                             {booking.seatNumbers?.join(", ") || "No Seat"}
                           </span>
                         </div>
                       </td>
 
                       <td className="px-8 py-6">
-                        <p className="text-sm font-black text-gray-900 tracking-tighter">MWK {fmt(booking.totalAmount ?? 0)}</p>
+                        <p className="text-sm font-bold text-gray-900 tracking-tighter">MWK {fmt(booking.totalAmount ?? 0)}</p>
                       </td>
 
                       <td className="px-8 py-6">
@@ -792,7 +792,7 @@ const BookingsTab: FC<BookingsTabProps> = ({ schedules, routes, buses, companyId
           {/* Pagination */}
           {totalPages > 1 && (
             <div className="p-6 sm:p-8 bg-gray-50/50 border-t border-gray-50 flex items-center justify-between">
-              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Page {pageIndex + 1} of {totalPages}</p>
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Page {pageIndex + 1} of {totalPages}</p>
               <div className="flex gap-2">
                 <button disabled={pageIndex === 0} onClick={() => setPageIndex(p => p - 1)}
                   className="p-2 bg-white rounded-xl border border-gray-200 text-gray-400 hover:text-indigo-600 disabled:opacity-30 transition-all">

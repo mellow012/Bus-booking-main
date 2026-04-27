@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { Bus, Schedule, Route } from '@/types';
+import AlertMessage from './AlertMessage';
 
 interface SeatSelectionProps {
   bus: Bus;
@@ -100,10 +101,10 @@ const SeatSelection: React.FC<SeatSelectionProps> = ({
     (seat: string) => {
       if (disabled || isSeatBooked(seat)) return;
 
-      setInternalSelectedSeats((prev) => {
+      setInternalSelectedSeats((prev: string[]) => {
         if (prev.includes(seat)) {
           setError('');
-          return prev.filter((s) => s !== seat);
+          return prev.filter((s: string) => s !== seat);
         }
 
         if (prev.length >= passengers) {
@@ -210,9 +211,13 @@ const SeatSelection: React.FC<SeatSelectionProps> = ({
 
       {/* Error */}
       {error && (
-        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg" role="alert">
-          <p className="text-red-700 text-sm font-medium">{error}</p>
-        </div>
+        <AlertMessage 
+          type="error" 
+          message={error} 
+          onClose={() => setError('')} 
+          autoClose={true} 
+          className="mb-4"
+        />
       )}
 
       {/* Selected seats summary */}
@@ -249,7 +254,7 @@ const SeatSelection: React.FC<SeatSelectionProps> = ({
       {/* Seat Grid */}
       <div className="max-w-lg mx-auto mb-6">
         <div className="space-y-3">
-          {seatLayout.map((row, rowIndex) => {
+          {seatLayout.map((row: (string | null)[], rowIndex: number) => {
             const { aislePosition } = layoutConfig;
             return (
               <div key={rowIndex} className="flex items-center justify-center gap-2">
@@ -260,7 +265,7 @@ const SeatSelection: React.FC<SeatSelectionProps> = ({
 
                 {/* Left seats */}
                 <div className="flex gap-1">
-                  {row.slice(0, aislePosition).map((seat, colIndex) => {
+                  {row.slice(0, aislePosition).map((seat: string | null, colIndex: number) => {
                     if (!seat)
                       return (
                         <div key={`spacer-left-${rowIndex}-${colIndex}`} className="w-10 h-10" />
@@ -290,7 +295,7 @@ const SeatSelection: React.FC<SeatSelectionProps> = ({
 
                 {/* Right seats */}
                 <div className="flex gap-1">
-                  {row.slice(aislePosition).map((seat, colIndex) => {
+                  {row.slice(aislePosition).map((seat: string | null, colIndex: number) => {
                     if (!seat)
                       return (
                         <div key={`spacer-right-${rowIndex}-${colIndex}`} className="w-10 h-10" />

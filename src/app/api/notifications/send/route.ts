@@ -8,7 +8,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth-utils';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
-import { sendNotificationToUser, broadcastNotification } from '@/lib/fcmService';
+// Mocked FCM service (Firebase removed during migration)
+const broadcastNotification = async (recipientIds: string[], data: any) => {
+  return { results: {}, totalSent: 0 };
+};
 import { z } from 'zod';
 import { notificationSchema } from '@/lib/validationSchemas';
 

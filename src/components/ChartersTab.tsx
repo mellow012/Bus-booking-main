@@ -109,7 +109,7 @@ export default function ChartersTab({ companyId, setError, setSuccess }: Charter
 
       <div className="grid gap-6">
         {requests.map((req) => (
-          <div key={req.id} className="bg-white rounded-3xl border border-gray-100 shadow-sm hover:shadow-xl transition-all duration-500 overflow-hidden group">
+          <div key={req.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-xl transition-all duration-500 overflow-hidden group">
             <div className="p-6">
               <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
                 <div className="flex items-center gap-4">
@@ -119,17 +119,17 @@ export default function ChartersTab({ companyId, setError, setSuccess }: Charter
                   <div>
                     <h3 className="font-bold text-gray-900 text-lg">{req.organizerName}</h3>
                     <div className="flex items-center gap-2 mt-1">
-                       <span className="text-[10px] font-black text-indigo-500 bg-indigo-50 px-2 py-0.5 rounded-full uppercase tracking-widest">
+                       <span className="text-[10px] font-bold text-indigo-500 bg-indigo-50 px-2 py-0.5 rounded-full uppercase tracking-widest">
                           {req.estimatedPax} Pax
                        </span>
-                       <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                       <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
                           Requested {format(new Date(req.createdAt), 'MMM d, HH:mm')}
                        </span>
                     </div>
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="text-[10px] font-black text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full uppercase tracking-widest border border-emerald-100">
+                  <p className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full uppercase tracking-widest border border-emerald-100">
                     {req.status}
                   </p>
                 </div>
@@ -165,7 +165,7 @@ export default function ChartersTab({ companyId, setError, setSuccess }: Charter
               </div>
 
               {quotingId === req.id ? (
-                <div className="p-6 bg-indigo-50/50 rounded-3xl border border-indigo-100 animate-in slide-in-from-top-2 duration-300">
+                <div className="p-6 bg-indigo-50/50 rounded-2xl border border-indigo-100 animate-in slide-in-from-top-2 duration-300">
                    <div className="grid md:grid-cols-2 gap-4 mb-4">
                       <div className="space-y-2">
                         <label className="text-xs font-bold text-indigo-900 uppercase tracking-widest ml-1">Your Quote (MWK)</label>
@@ -222,7 +222,7 @@ export default function ChartersTab({ companyId, setError, setSuccess }: Charter
         {requests.length === 0 && (
           <div className="text-center py-20 bg-gray-50 rounded-[3rem] border border-dashed border-gray-200">
              <BusIcon className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-             <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">No Charter Requests in your region</p>
+             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">No Charter Requests in your region</p>
           </div>
         )}
       </div>

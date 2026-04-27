@@ -37,6 +37,8 @@ model User {
   notifications    Notification[]
   reservations     SeatReservation[]
   company          Company?          @relation("CompanyStaff", fields: [companyId], references: [id])
+  conversations    Conversation[]    @relation("UserConversations")
+  sentMessages     ChatMessage[]
 }
 
 model Company {
@@ -69,6 +71,7 @@ model Company {
   scheduleTemplates    ScheduleTemplate[]
   charterQuotes        GroupCharterQuote[]
   staff                User[]             @relation("CompanyStaff")
+  conversations        Conversation[]
 }
 
 model Bus {
@@ -181,6 +184,11 @@ model Booking {
   contactPhone     String?
   createdAt        DateTime  @default(now())
   routeId          String?
+  isWalkOn         Boolean   @default(false)
+  bookedBy         String?
+  originStopId     String?
+  destinationStopId String?
+  metadata         Json?
   company          Company   @relation(fields: [companyId], references: [id])
   schedule         Schedule  @relation(fields: [scheduleId], references: [id])
   user             User      @relation(fields: [userId], references: [id])
@@ -220,6 +228,36 @@ model Notification {
   data      Json?
   createdAt DateTime  @default(now())
   user      User      @relation(fields: [userId], references: [id])
+}
+
+model Conversation {
+  id           String         @id @default(uuid())
+  companyId    String
+  name         String?        // Useful for Broadcast or Group chats
+  isBroadcast  Boolean        @default(false)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  company      Company        @relation(fields: [companyId], references: [id])
+  participants User[]         @relation("UserConversations")
+  messages     ChatMessage[]
+
+  @@index([companyId])
+}
+
+model ChatMessage {
+  id             String       @id @default(uuid())
+  conversationId String
+  senderId       String
+  content        String?
+  mediaUrl       String?
+  mediaType      String?      // image, video, file
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+  sender         User         @relation(fields: [senderId], references: [id])
+
+  @@index([conversationId])
+  @@index([senderId])
 }
 
 model SeatReservation {

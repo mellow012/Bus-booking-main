@@ -72,6 +72,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const { data } = await response.json();
         if (data) {
           setUserProfile(data as UserProfile);
+
+          // ── Auto-activate team members on first sign-in ──
+          const isTeamRole = ['operator', 'conductor'].includes(data.role);
+          const needsActivation = isTeamRole && data.invitationSent && (!data.isActive || !data.setupCompleted);
+
+          if (needsActivation) {
+            try {
+              const activateRes = await fetch('/api/auth/profile', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  isActive: true,
+                  setupCompleted: true,
+                  passwordSet: true,
+                }),
+              });
+              if (activateRes.ok) {
+                const { data: updatedData } = await activateRes.json();
+                if (updatedData) setUserProfile(updatedData as UserProfile);
+              }
+            } catch (activateErr) {
+              console.error('[AuthContext] Auto-activate failed:', activateErr);
+            }
+          }
         } else {
           // Initialize profile if not exists
           const initRes = await fetch('/api/auth/profile', {

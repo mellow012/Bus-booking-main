@@ -7,11 +7,8 @@
 //   2. Delegates session refresh to the Supabase SSR helper
 //   3. Redirects unauthenticated users away from protected routes → /login
 //   4. Redirects authenticated users away from /login and /register → /
-//   5. Forwards x-user-id header downstream for API route convenience
-//
-// WHAT THIS DOES NOT DO (handled by AuthContext client-side route guard):
-//   Role-based access control (e.g. preventing a conductor from accessing
-//   /company/admin). The SQL profile is the source of truth for roles.
+//   5. Enforces role-based access control (RBAC) on dashboard routes
+//   6. Forwards x-user-id, x-user-email, x-user-role headers downstream
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -33,6 +30,25 @@ const PROTECTED_ROUTES = [
 
 // Routes that logged-in users should be bounced away from
 const AUTH_ROUTES = ['/login', '/register'];
+
+// ─── RBAC: which roles may access which route prefixes ────────────────────────
+//
+// If a user is authenticated but their role is NOT in the allowed list,
+// they are redirected to /unauthorized.
+//
+// The role is read from the Supabase JWT user_metadata.role field, which is
+// synced from our Postgres User table on login and staff invitation.
+// If the metadata has not been synced yet the RBAC check is skipped gracefully
+// (the client-side AuthContext guard acts as a secondary safety layer).
+//
+type AppRole = 'superadmin' | 'company_admin' | 'operator' | 'conductor' | 'customer';
+
+const ROLE_ROUTE_MAP: Array<{ prefix: string; allowed: AppRole[] }> = [
+  { prefix: '/admin',             allowed: ['superadmin'] },
+  { prefix: '/company/admin',     allowed: ['company_admin', 'superadmin'] },
+  { prefix: '/company/operator',  allowed: ['operator', 'company_admin', 'superadmin'] },
+  { prefix: '/company/conductor', allowed: ['conductor', 'company_admin', 'superadmin'] },
+];
 
 // ─── CSRF helper ──────────────────────────────────────────────────────────────
 
@@ -61,19 +77,16 @@ export async function middleware(request: NextRequest) {
 
   // CSRF guard for state-changing requests
   if (!isCsrfSafe(request)) {
+    console.warn(`[middleware] CSRF violation blocked: ${request.method} ${pathname}`);
     return new NextResponse('Forbidden', { status: 403 });
   }
 
   // ── Refresh Supabase session & get the current user ────────────────────────
   // updateSession() MUST be called before any redirect logic to ensure
   // the session cookie is refreshed on every request.
-  const { supabaseResponse, user } = await updateSession(request);
+  const { supabaseResponse, user, role } = await updateSession(request);
 
   const isAuth = !!user;
-
-  console.log(
-    `[middleware] ${pathname} | user=${user?.email ?? 'ANONYMOUS'} | auth=${isAuth}`
-  );
 
   // ── Redirect authenticated users away from login/register ─────────────────
   if (isAuth && AUTH_ROUTES.some(r => pathname.startsWith(r))) {
@@ -88,10 +101,25 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
+  // ── RBAC: Enforce role-based access for authenticated users ───────────────
+  // Only enforce when the role is present in JWT metadata.
+  // If role is missing (metadata not yet synced), skip and let client-side guard handle it.
+  if (isAuth && role) {
+    const matched = ROLE_ROUTE_MAP.find(entry => pathname.startsWith(entry.prefix));
+    if (matched && !matched.allowed.includes(role as AppRole)) {
+      console.warn(
+        `[middleware] RBAC blocked: role="${role}" tried to access "${pathname}" ` +
+        `(allowed: ${matched.allowed.join(', ')})`
+      );
+      return NextResponse.redirect(new URL('/unauthorized', request.url));
+    }
+  }
+
   // ── Forward user identity header to downstream API handlers ───────────────
   if (user) {
     supabaseResponse.headers.set('x-user-id', user.id);
     supabaseResponse.headers.set('x-user-email', user.email ?? '');
+    if (role) supabaseResponse.headers.set('x-user-role', role);
   }
 
   return supabaseResponse;

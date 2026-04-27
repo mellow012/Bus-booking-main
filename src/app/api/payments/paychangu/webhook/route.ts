@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import type { Prisma } from '@prisma/client';
 import crypto from 'crypto';
+import { logger } from '@/lib/logger';
 
 const APP_URL = (process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000').replace(/\/$/, '');
 
@@ -69,7 +70,11 @@ export async function POST(req: NextRequest) {
       crypto.timingSafeEqual(sigBuffer, expectedBuffer);
 
     if (!signatureValid) {
-      console.warn('[paychangu/webhook] Invalid signature — ignoring');
+      await logger.logSecurityEvent(
+        '[paychangu/webhook] Invalid signature — request rejected',
+        undefined,
+        { action: 'webhook_signature_invalid', metadata: { tx_ref: 'unknown' } }
+      );
       return NextResponse.json({ received: true });
     }
 
@@ -173,10 +178,19 @@ export async function POST(req: NextRequest) {
       });
     });
 
+    await logger.logPayment(
+      `[paychangu/webhook] Payment ${paymentStatus} for booking ${booking.id}`,
+      booking.id,
+      0, // amount not in webhook payload; tracked in DB
+      'paychangu',
+      paymentStatus === 'paid',
+      { metadata: { tx_ref, status: normalised } }
+    );
+
     return NextResponse.json({ received: true });
 
   } catch (err: any) {
-    console.error('[paychangu/webhook]', err);
+    await logger.logError('payment', '[paychangu/webhook] Unhandled error', err);
     return NextResponse.json({ received: true, warning: err.message });
   }
 }

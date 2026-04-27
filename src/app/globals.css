@@ -169,6 +169,35 @@
   user-select: none;
 }
 
+/* ── Premium UI Utilities ── */
+.shadow-premium {
+  box-shadow: 
+    0 1px 2px rgba(0,0,0,0.05), 
+    0 4px 12px rgba(0,0,0,0.05), 
+    0 12px 24px -4px rgba(0,0,0,0.02);
+}
+
+.glass {
+  @apply bg-white/70 backdrop-blur-md border border-white/20;
+}
+
+.bg-premium-gradient {
+  @apply bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800;
+}
+
+.focus-premium {
+  @apply focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2;
+}
+
+/* Spacing Helpers */
+.p-container {
+  @apply px-4 sm:px-6 lg:px-8;
+}
+
+.m-section {
+  @apply my-12 sm:my-16 lg:my-20;
+}
+
 @media (max-width: 640px) {
   .conductor-action-btn {
     min-height: 56px;

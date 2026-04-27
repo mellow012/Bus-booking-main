@@ -51,7 +51,7 @@ function KineticStatCard({ title, value, icon: Icon, iconBg, iconColor, subtitle
   subtitle?: string;
 }) {
   return (
-    <div className="bg-white rounded-2xl sm:rounded-3xl shadow-[0_8px_30px_-10px_rgba(0,0,0,0.05)] p-4 sm:p-6 relative overflow-hidden flex flex-col justify-between min-h-[140px] sm:min-h-[160px] border border-gray-100 group hover:shadow-[0_20px_40px_-15px_rgba(0,0,0,0.1)] transition-all duration-500 text-left">
+    <div className="bg-white rounded-2xl sm:rounded-2xl shadow-sm p-4 sm:p-6 relative overflow-hidden flex flex-col justify-between min-h-[140px] sm:min-h-[160px] border border-gray-100 group hover:shadow-sm transition-all duration-500 text-left">
       <div className="absolute -right-8 -top-8 w-24 h-24 bg-indigo-600/5 rounded-full blur-3xl group-hover:bg-indigo-600/10 transition-colors"></div>
 
       <div className="flex justify-between items-start mb-4 relative z-10">
@@ -60,8 +60,8 @@ function KineticStatCard({ title, value, icon: Icon, iconBg, iconColor, subtitle
         </div>
       </div>
       <div className="relative z-10">
-        <p className="text-[9px] sm:text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">{title}</p>
-        <p className="text-2xl sm:text-3xl font-black text-gray-900 leading-none tracking-tight">{value}</p>
+        <p className="text-[9px] sm:text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">{title}</p>
+        <p className="text-2xl sm:text-3xl font-bold text-gray-900 leading-none tracking-tight">{value}</p>
         {subtitle && <p className="text-[10px] sm:text-[11px] font-bold text-gray-400 mt-2 flex items-center gap-1.5"><Sparkles className="w-3 h-3 text-indigo-400" /> {subtitle}</p>}
       </div>
     </div>
@@ -301,11 +301,11 @@ const DailyReportsTab: FC<DailyReportsTabProps> = ({
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-black text-gray-900 tracking-tight flex items-center gap-3 uppercase">
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight flex items-center gap-3 uppercase">
             YIELD INTELLIGENCE
             <Activity className="w-5 h-5 text-indigo-600" />
           </h1>
-          <p className="text-[10px] sm:text-[11px] font-black text-gray-400 uppercase tracking-widest mt-1.5 flex items-center gap-2">
+          <p className="text-[10px] sm:text-[11px] font-bold text-gray-400 uppercase tracking-widest mt-1.5 flex items-center gap-2">
             Performance analytics & daily operational audit
           </p>
         </div>
@@ -322,7 +322,7 @@ const DailyReportsTab: FC<DailyReportsTabProps> = ({
           <button
             onClick={handleGenerateReport}
             disabled={generating || daySchedules.length === 0}
-            className="group bg-indigo-600 text-white px-8 py-3.5 rounded-2xl text-[11px] font-black uppercase tracking-widest shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-3"
+            className="group bg-indigo-600 text-white px-8 py-3.5 rounded-2xl text-[11px] font-bold uppercase tracking-widest shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-3"
           >
             {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4 group-hover:rotate-12 transition-transform" />}
             Generate Intelligence
@@ -366,10 +366,10 @@ const DailyReportsTab: FC<DailyReportsTabProps> = ({
 
       {/* Report Table */}
       {selectedReport ? (
-        <div className="bg-white rounded-[1.5rem] sm:rounded-[2.5rem] shadow-[0_8px_30px_-10px_rgba(0,0,0,0.05)] border border-gray-100 overflow-hidden text-left">
+        <div className="bg-white rounded-2xl sm:rounded-2xl shadow-sm border border-gray-100 overflow-hidden text-left">
           <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between p-5 sm:p-8 border-b border-gray-50 gap-4">
             <div>
-              <h2 className="text-xs sm:text-sm font-black text-gray-900 uppercase tracking-widest flex items-center gap-2">
+              <h2 className="text-xs sm:text-sm font-bold text-gray-900 uppercase tracking-widest flex items-center gap-2">
                 <BarChart3 className="w-4 h-4 text-indigo-600" /> Operational Audit — {new Date(selectedReport.date).toLocaleDateString()}
               </h2>
               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Granular vessel performance breakdown</p>
@@ -377,13 +377,13 @@ const DailyReportsTab: FC<DailyReportsTabProps> = ({
             <div className="flex gap-2 sm:gap-3">
               <button
                 onClick={() => window.print()}
-                className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 sm:px-5 py-2.5 bg-gray-50 hover:bg-gray-100 text-gray-700 text-[9px] sm:text-[10px] font-black uppercase tracking-widest rounded-xl border border-gray-100 transition-all active:scale-95"
+                className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 sm:px-5 py-2.5 bg-gray-50 hover:bg-gray-100 text-gray-700 text-[9px] sm:text-[10px] font-bold uppercase tracking-widest rounded-xl border border-gray-100 transition-all active:scale-95"
               >
                 <Printer className="w-3.5 h-3.5" /> PRINT
               </button>
               <button
                 onClick={() => handleDownloadReport(selectedReport)}
-                className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 sm:px-5 py-2.5 bg-indigo-50 hover:bg-indigo-600 hover:text-white text-indigo-700 text-[9px] sm:text-[10px] font-black uppercase tracking-widest rounded-xl border border-indigo-100 transition-all active:scale-95"
+                className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 sm:px-5 py-2.5 bg-indigo-50 hover:bg-indigo-600 hover:text-white text-indigo-700 text-[9px] sm:text-[10px] font-bold uppercase tracking-widest rounded-xl border border-indigo-100 transition-all active:scale-95"
               >
                 <Download className="w-3.5 h-3.5" /> EXPORT CSV
               </button>
@@ -394,43 +394,43 @@ const DailyReportsTab: FC<DailyReportsTabProps> = ({
             <table className="w-full min-w-[1000px]">
               <thead>
                 <tr className="bg-gray-50/30">
-                  <th className="px-6 sm:px-8 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest text-left">Route Corridor</th>
-                  <th className="px-6 sm:px-8 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest text-left">Vessel</th>
-                  <th className="px-6 sm:px-8 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest text-left">Departure</th>
-                  <th className="px-6 sm:px-8 py-5 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">Volume</th>
-                  <th className="px-6 sm:px-8 py-5 text-right text-[10px] font-black text-gray-400 uppercase tracking-widest">Equity</th>
-                  <th className="px-6 sm:px-8 py-5 text-right text-[10px] font-black text-gray-400 uppercase tracking-widest">Saturation</th>
+                  <th className="px-6 sm:px-8 py-5 text-[10px] font-bold text-gray-400 uppercase tracking-widest text-left">Route Corridor</th>
+                  <th className="px-6 sm:px-8 py-5 text-[10px] font-bold text-gray-400 uppercase tracking-widest text-left">Vessel</th>
+                  <th className="px-6 sm:px-8 py-5 text-[10px] font-bold text-gray-400 uppercase tracking-widest text-left">Departure</th>
+                  <th className="px-6 sm:px-8 py-5 text-center text-[10px] font-bold text-gray-400 uppercase tracking-widest">Volume</th>
+                  <th className="px-6 sm:px-8 py-5 text-right text-[10px] font-bold text-gray-400 uppercase tracking-widest">Equity</th>
+                  <th className="px-6 sm:px-8 py-5 text-right text-[10px] font-bold text-gray-400 uppercase tracking-widest">Saturation</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {selectedReport.scheduleDetails.map((s, idx) => (
                   <tr key={idx} className="hover:bg-indigo-50/20 transition-all duration-300 group">
                     <td className="px-6 sm:px-8 py-6">
-                      <p className="text-sm font-black text-gray-900 uppercase tracking-tight group-hover:text-indigo-600 transition-colors">{s.route}</p>
+                      <p className="text-sm font-bold text-gray-900 uppercase tracking-tight group-hover:text-indigo-600 transition-colors">{s.route}</p>
                       <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-1">EN-MW REGIONAL</p>
                     </td>
                     <td className="px-6 sm:px-8 py-6">
                       <div className="flex items-center gap-2.5">
                         <BusIcon className="w-4 h-4 text-indigo-300" />
-                        <span className="text-xs font-black text-gray-600 uppercase tracking-widest">{s.bus} <span className="text-[9px] text-gray-400">• {s.busType}</span></span>
+                        <span className="text-xs font-bold text-gray-600 uppercase tracking-widest">{s.bus} <span className="text-[9px] text-gray-400">• {s.busType}</span></span>
                       </div>
                     </td>
                     <td className="px-6 sm:px-8 py-6">
                       <div className="flex flex-col">
-                        <span className="text-xs font-black text-gray-900">{new Date(s.departureTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                        <span className="text-xs font-bold text-gray-900">{new Date(s.departureTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
                         <span className="text-[9px] font-bold text-emerald-500 uppercase tracking-widest">{s.status}</span>
                       </div>
                     </td>
                     <td className="px-6 sm:px-8 py-6 text-center">
                       <div className="flex flex-col items-center">
-                        <span className="text-sm font-black text-gray-900 tracking-tight">{s.bookings.total}</span>
-                        <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">{s.bookings.boarded} boarded</span>
+                        <span className="text-sm font-bold text-gray-900 tracking-tight">{s.bookings.total}</span>
+                        <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">{s.bookings.boarded} boarded</span>
                       </div>
                     </td>
-                    <td className="px-6 sm:px-8 py-6 text-right font-black text-gray-900 text-sm tracking-tight">MWK {fmt(s.revenue)}</td>
+                    <td className="px-6 sm:px-8 py-6 text-right font-bold text-gray-900 text-sm tracking-tight">MWK {fmt(s.revenue)}</td>
                     <td className="px-6 sm:px-8 py-6 text-right">
                       <div className="flex flex-col items-end">
-                        <span className="text-xs font-black text-gray-900 mb-2">{s.occupancyRate.toFixed(1)}%</span>
+                        <span className="text-xs font-bold text-gray-900 mb-2">{s.occupancyRate.toFixed(1)}%</span>
                         <div className="w-24 h-1.5 bg-gray-50 rounded-full border border-gray-100 overflow-hidden">
                           <div className={`h-full transition-all duration-1000 ${s.occupancyRate > 80 ? 'bg-rose-500' : 'bg-indigo-600'}`} style={{ width: `${s.occupancyRate}%` }} />
                         </div>
@@ -439,7 +439,7 @@ const DailyReportsTab: FC<DailyReportsTabProps> = ({
                   </tr>
                 ))}
               </tbody>
-              <tfoot className="bg-indigo-900 text-white font-black uppercase tracking-widest text-[10px] sm:text-[11px]">
+              <tfoot className="bg-indigo-900 text-white font-bold uppercase tracking-widest text-[10px] sm:text-[11px]">
                 <tr>
                   <td colSpan={3} className="px-6 sm:px-8 py-5 sm:py-6 text-left">AGGREGATED DAILY METRICS</td>
                   <td className="px-6 sm:px-8 py-5 sm:py-6 text-center">{selectedReport.totalBookings} UNITS</td>
@@ -451,29 +451,29 @@ const DailyReportsTab: FC<DailyReportsTabProps> = ({
           </div>
         </div>
       ) : (
-        <div className="bg-white rounded-[1.5rem] sm:rounded-[2.5rem] shadow-[0_8px_30px_-10px_rgba(0,0,0,0.05)] border border-gray-100 p-12 sm:p-24 text-center">
-          <div className="w-16 h-16 sm:w-20 sm:h-20 bg-gray-50 rounded-[1.5rem] sm:rounded-[2rem] flex items-center justify-center mx-auto mb-6 border border-gray-50">
+        <div className="bg-white rounded-2xl sm:rounded-2xl shadow-sm border border-gray-100 p-12 sm:p-24 text-center">
+          <div className="w-16 h-16 sm:w-20 sm:h-20 bg-gray-50 rounded-2xl sm:rounded-2xl flex items-center justify-center mx-auto mb-6 border border-gray-50">
             <BarChart3 className="w-8 h-8 text-gray-200" />
           </div>
-          <h3 className="text-xs sm:text-sm font-black text-gray-900 uppercase tracking-widest mb-2">Audit Pipeline Empty</h3>
+          <h3 className="text-xs sm:text-sm font-bold text-gray-900 uppercase tracking-widest mb-2">Audit Pipeline Empty</h3>
           <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-8 max-w-xs mx-auto leading-relaxed">Select a temporal window and execute intelligence generation to view metrics.</p>
           <div className="flex flex-col sm:flex-row justify-center gap-4">
-            <div className="text-left bg-gray-50 border border-gray-100 rounded-2xl sm:rounded-3xl p-5 sm:p-6 w-full sm:w-48 group hover:bg-white hover:shadow-xl hover:shadow-indigo-50 transition-all duration-500">
-              <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2 group-hover:text-indigo-400 transition-colors">Manifest Active</p>
-              <p className="text-xl sm:text-2xl font-black text-gray-900 tracking-tighter">{daySchedules.length} TRIPS</p>
+            <div className="text-left bg-gray-50 border border-gray-100 rounded-2xl sm:rounded-2xl p-5 sm:p-6 w-full sm:w-48 group hover:bg-white hover:shadow-xl hover:shadow-indigo-50 transition-all duration-500">
+              <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-2 group-hover:text-indigo-400 transition-colors">Manifest Active</p>
+              <p className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tighter">{daySchedules.length} TRIPS</p>
             </div>
-            <div className="text-left bg-gray-50 border border-gray-100 rounded-2xl sm:rounded-3xl p-5 sm:p-6 w-full sm:w-48 group hover:bg-white hover:shadow-xl hover:shadow-emerald-50 transition-all duration-500">
-              <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2 group-hover:text-emerald-400 transition-colors">Volume Pending</p>
-              <p className="text-xl sm:text-2xl font-black text-gray-900 tracking-tighter">{dayBookings.length} BOK</p>
+            <div className="text-left bg-gray-50 border border-gray-100 rounded-2xl sm:rounded-2xl p-5 sm:p-6 w-full sm:w-48 group hover:bg-white hover:shadow-xl hover:shadow-emerald-50 transition-all duration-500">
+              <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-2 group-hover:text-emerald-400 transition-colors">Volume Pending</p>
+              <p className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tighter">{dayBookings.length} BOK</p>
             </div>
           </div>
         </div>
       )}
 
       {daySchedules.length === 0 && (
-        <div className="bg-rose-50 rounded-[1.5rem] sm:rounded-[2.5rem] border border-rose-100 p-12 sm:p-16 text-center">
+        <div className="bg-rose-50 rounded-2xl sm:rounded-2xl border border-rose-100 p-12 sm:p-16 text-center">
           <AlertTriangle className="w-10 h-10 sm:w-12 sm:h-12 text-rose-300 mx-auto mb-4" />
-          <h3 className="text-[10px] sm:text-xs font-black text-rose-900 uppercase tracking-widest mb-2">Data Nullify</h3>
+          <h3 className="text-[10px] sm:text-xs font-bold text-rose-900 uppercase tracking-widest mb-2">Data Nullify</h3>
           <p className="text-[9px] sm:text-[10px] font-bold text-rose-400 uppercase tracking-widest">No scheduled operations detected for the selected period.</p>
         </div>
       )}

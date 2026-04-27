@@ -536,16 +536,17 @@ export function getCompanyId(profile: UserProfile): string | undefined {
 
 // ─── Trip lifecycle helpers ───────────────────────────────────────────────────
 
-export function buildTripStopSequence(schedule: Schedule): TripStop[] {
-  const intermediate = (schedule.stops || [])
+export function buildTripStopSequence(schedule: Schedule, route?: Route | null): TripStop[] {
+  const stopsToUse = (schedule.stops && schedule.stops.length > 0) ? schedule.stops : (route?.stops || []);
+  const intermediate = stopsToUse
     .slice()
     .sort((a, b) => a.order - b.order)
     .map(s => ({ id: s.id, name: s.name, order: s.order }));
 
   return [
-    { id: '__origin__',      name: schedule.departureLocation, order: -1  },
+    { id: '__origin__',      name: schedule.departureLocation || route?.origin || 'Origin', order: -1  },
     ...intermediate,
-    { id: '__destination__', name: schedule.arrivalLocation,   order: 999 },
+    { id: '__destination__', name: schedule.arrivalLocation || route?.destination || 'Destination',   order: 999 },
   ];
 }
 
@@ -574,4 +575,32 @@ export function getNextTripStop(schedule: Schedule): TripStop | null {
   }
   const stops = buildTripStopSequence(schedule);
   return stops[(schedule.currentStopIndex ?? 0) + 1] ?? null;
+}
+
+// ─── Messaging ────────────────────────────────────────────────────────────────
+
+export interface Conversation extends BaseEntity {
+  id: string;
+  companyId: string;
+  name?: string | null;
+  isBroadcast: boolean;
+  participants: {
+    id: string;
+    email: string;
+    firstName?: string;
+    lastName?: string;
+    role?: string;
+    profilePicture?: string;
+  }[];
+  messages?: ChatMessage[];
+}
+
+export interface ChatMessage extends BaseEntity {
+  id: string;
+  conversationId: string;
+  senderId: string;
+  content?: string | null;
+  mediaUrl?: string | null;
+  mediaType?: string | null; // 'image' | 'video' | 'file'
+  sender?: UserProfile;
 }

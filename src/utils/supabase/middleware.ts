@@ -32,5 +32,7 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  return { supabaseResponse, user };
+  const role = user?.user_metadata?.role;
+
+  return { supabaseResponse, user, role };
 }

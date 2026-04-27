@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import Modal from '@/components/Modals';
 import {
   Trash2, UserPlus, ShieldCheck, Ban, RefreshCw, Send,
-  Users, Truck, MapPin, Edit3, X, Check, Clock, Mail,
+  Users, Bus, MapPin, Edit3, X, Check, Clock, Mail,
   AlertTriangle, ChevronRight, Loader2, Sparkles, User,
   Building2, Shield, UserCog, BadgeCheck
 } from 'lucide-react';
@@ -45,7 +45,7 @@ const ROLE_CONFIG = {
   conductor: {
     label: 'Field Personnel', plural: 'Transit Crew',
     description: 'Trip Execution & Validation',
-    icon: Truck, color: 'emerald',
+    icon: Bus, color: 'emerald',
     badge: 'bg-emerald-50 text-emerald-700 border-emerald-100',
     tab:   'border-emerald-600 text-emerald-700 bg-emerald-50/50',
     permissions: 'Operational. Limited to viewing assigned manifests, validating passenger credentials, and real-time trip status reporting.',
@@ -74,7 +74,7 @@ const StatusBadge: React.FC<{ status?: string }> = ({ status }) => {
   };
   const Icon = safeStatus === 'active' ? BadgeCheck : safeStatus === 'pending' ? Clock : X;
   return (
-    <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-[10px] font-black uppercase tracking-widest border shadow-sm ${map[safeStatus] ?? 'bg-slate-50 text-slate-600 border-slate-200'}`}>
+    <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-[10px] font-bold uppercase tracking-widest border shadow-sm ${map[safeStatus] ?? 'bg-slate-50 text-slate-600 border-slate-200'}`}>
       <Icon className="w-3.5 h-3.5" />
       {safeStatus}
     </span>
@@ -126,11 +126,18 @@ const TeamManagementTab: React.FC<TeamManagementTabProps> = ({
           .in('role', ['operator', 'conductor']);
           
         if (!membersError && membersData) {
-          setMembers(membersData.map(m => ({
-            ...m,
-            name: m.name || `${m.firstName} ${m.lastName}`.trim(),
-            createdAt: new Date(m.createdAt),
-          } as TeamMember)));
+          setMembers(membersData.map(m => {
+            let status: 'active' | 'inactive' | 'pending' = 'active';
+            if (!m.setupCompleted && m.invitationSent) status = 'pending';
+            else if (!m.isActive) status = 'inactive';
+
+            return {
+              ...m,
+              name: m.name || `${m.firstName} ${m.lastName}`.trim(),
+              createdAt: new Date(m.createdAt),
+              status,
+            } as TeamMember;
+          }));
         }
       } catch (e: unknown) {
         setError(`Failed to load team: ${(e as any).message}`);
@@ -149,11 +156,18 @@ const TeamManagementTab: React.FC<TeamManagementTabProps> = ({
       .in('role', ['operator', 'conductor']);
       
     if (!membersError && data) {
-      setMembers(data.map(m => ({
-        ...m,
-        name: m.name || `${m.firstName} ${m.lastName}`.trim(),
-        createdAt: new Date(m.createdAt),
-      } as TeamMember)));
+      setMembers(data.map(m => {
+        let status: 'active' | 'inactive' | 'pending' = 'active';
+        if (!m.setupCompleted && m.invitationSent) status = 'pending';
+        else if (!m.isActive) status = 'inactive';
+
+        return {
+          ...m,
+          name: m.name || `${m.firstName} ${m.lastName}`.trim(),
+          createdAt: new Date(m.createdAt),
+          status,
+        } as TeamMember;
+      }));
     }
   };
 
@@ -207,11 +221,20 @@ const TeamManagementTab: React.FC<TeamManagementTabProps> = ({
     if (!editingMember) return;
     setActionLoading(true);
     try {
-      const patch: any = { status: editData.status };
-      if (editingMember.role === 'operator') patch.region = editData.region;
-      
-      const result = await dbActions.updateUser(editingMember.id, patch);
-      if (!result.success) throw new Error(result.error);
+      const updatePayload: any = {
+        isActive: editData.status === 'active',
+        updatedAt: new Date().toISOString(),
+      };
+      if (editingMember.role === 'operator') updatePayload.region = editData.region;
+      // If setting to active, also mark setupCompleted
+      if (editData.status === 'active') updatePayload.setupCompleted = true;
+
+      const { error } = await supabase
+        .from('User')
+        .update(updatePayload)
+        .eq('id', editingMember.id);
+
+      if (error) throw error;
       
       setMembers(prev => prev.map(m =>
         m.id === editingMember.id
@@ -250,12 +273,26 @@ const TeamManagementTab: React.FC<TeamManagementTabProps> = ({
     if (!confirm(`${m.status === 'active' ? 'Deactivate' : 'Activate'} ${m.name}?`)) return;
     setActionLoading(true);
     try {
-      const newStatus = m.status === 'active' ? 'inactive' : 'active';
-      const result = await dbActions.updateUser(m.id, { status: newStatus } as any);
-      if (!result.success) throw new Error(result.error);
+      const isCurrentlyActive = m.status === 'active';
+      const newIsActive = !isCurrentlyActive;
+
+      const updatePayload: any = {
+        isActive: newIsActive,
+        updatedAt: new Date().toISOString(),
+      };
+      // When activating, also mark setupCompleted so they're fully operational
+      if (newIsActive) updatePayload.setupCompleted = true;
+
+      const { error } = await supabase
+        .from('User')
+        .update(updatePayload)
+        .eq('id', m.id);
+
+      if (error) throw error;
       
+      const newStatus = newIsActive ? 'active' : 'inactive';
       setMembers(prev => prev.map(x => x.id === m.id ? { ...x, status: newStatus as any } : x));
-      setSuccess(`${m.name} ${newStatus === 'active' ? 'activated' : 'deactivated'}`);
+      setSuccess(`${m.name} ${newIsActive ? 'activated' : 'deactivated'}`);
     } catch (e: unknown) {
       setError((e as any).message);
     } finally {
@@ -294,22 +331,22 @@ const TeamManagementTab: React.FC<TeamManagementTabProps> = ({
       {/* ── Header ── */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6 text-left">
         <div>
-          <h2 className="text-2xl sm:text-3xl font-black text-gray-900 tracking-tight flex items-center gap-3 uppercase">
+          <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight flex items-center gap-3 uppercase">
              TEAM HIERARCHY
              <Shield className="w-5 h-5 text-indigo-600" />
           </h2>
-          <p className="text-[10px] sm:text-[11px] font-black text-gray-400 uppercase tracking-widest mt-1.5 flex items-center gap-2">
+          <p className="text-[10px] sm:text-[11px] font-bold text-gray-400 uppercase tracking-widest mt-1.5 flex items-center gap-2">
             Control personnel access & operational roles
           </p>
         </div>
         <div className="flex flex-wrap gap-3">
           <button onClick={() => openAdd('operator')}
-            className="flex-1 sm:flex-none group flex items-center justify-center gap-2 px-6 py-3 bg-white border border-gray-100 rounded-2xl text-[11px] font-black uppercase tracking-widest text-gray-900 shadow-sm hover:shadow-lg hover:border-indigo-100 hover:text-indigo-600 transition-all active:scale-95">
+            className="flex-1 sm:flex-none group flex items-center justify-center gap-2 px-6 py-3 bg-white border border-gray-100 rounded-2xl text-[11px] font-bold uppercase tracking-widest text-gray-900 shadow-sm hover:shadow-lg hover:border-indigo-100 hover:text-indigo-600 transition-all active:scale-95">
             <UserCog className="w-4 h-4 group-hover:rotate-12 transition-transform" /> Recruit Operator
           </button>
           <button onClick={() => openAdd('conductor')}
-            className="flex-1 sm:flex-none group flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-2xl text-[11px] font-black uppercase tracking-widest shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95">
-            <Truck className="w-4 h-4 group-hover:translate-x-1 transition-transform" /> Recruit Conductor
+            className="flex-1 sm:flex-none group flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-2xl text-[11px] font-bold uppercase tracking-widest shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95">
+            <Bus className="w-4 h-4 group-hover:translate-x-1 transition-transform" /> Recruit Conductor
           </button>
         </div>
       </div>
@@ -324,7 +361,7 @@ const TeamManagementTab: React.FC<TeamManagementTabProps> = ({
           
           return (
             <button key={role} onClick={() => setActiveTab(role)}
-              className={`p-6 sm:p-8 bg-white rounded-[2rem] sm:rounded-[2.5rem] shadow-[0_8px_30px_-10px_rgba(0,0,0,0.05)] border transition-all duration-500 flex flex-col text-left relative overflow-hidden group ${
+              className={`p-6 sm:p-8 bg-white rounded-2xl sm:rounded-2xl shadow-sm border transition-all duration-500 flex flex-col text-left relative overflow-hidden group ${
                 isActive ? 'border-indigo-600 ring-2 ring-indigo-50 shadow-indigo-50' : 'border-gray-50 hover:border-indigo-200'
               }`}>
               <div className="absolute -right-8 -top-8 w-32 h-32 bg-indigo-600/5 rounded-full blur-3xl group-hover:bg-indigo-600/10 transition-colors"></div>
@@ -333,18 +370,18 @@ const TeamManagementTab: React.FC<TeamManagementTabProps> = ({
                 <div className={`p-4 rounded-2xl ${isActive ? 'bg-indigo-600 text-white' : 'bg-slate-50 text-indigo-400'} shadow-sm transition-all duration-500`}>
                   <Icon className="w-6 h-6" />
                 </div>
-                {isActive && <div className="w-3 h-3 rounded-full bg-indigo-600 shadow-[0_0_12px_rgba(79,70,229,0.5)] animate-pulse" />}
+                {isActive && <div className="w-3 h-3 rounded-full bg-indigo-600 shadow-sm animate-pulse" />}
               </div>
               
               <div className="relative z-10">
-                 <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-1">{cfg.plural}</p>
-                 <p className="text-3xl sm:text-4xl font-black text-gray-900 leading-none tracking-tighter mb-4">{s.total}</p>
+                 <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em] mb-1">{cfg.plural}</p>
+                 <p className="text-3xl sm:text-4xl font-bold text-gray-900 leading-none tracking-tighter mb-4">{s.total}</p>
                  <div className="flex flex-wrap items-center gap-4">
-                    <span className="flex items-center gap-2 text-[10px] font-black text-emerald-600 uppercase tracking-widest bg-emerald-50 px-2.5 py-1 rounded-xl border border-emerald-100">
+                    <span className="flex items-center gap-2 text-[10px] font-bold text-emerald-600 uppercase tracking-widest bg-emerald-50 px-2.5 py-1 rounded-xl border border-emerald-100">
                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> {s.active} Operational
                     </span>
                     {s.pending > 0 && (
-                       <span className="flex items-center gap-2 text-[10px] font-black text-amber-600 uppercase tracking-widest bg-amber-50 px-2.5 py-1 rounded-xl border border-amber-100">
+                       <span className="flex items-center gap-2 text-[10px] font-bold text-amber-600 uppercase tracking-widest bg-amber-50 px-2.5 py-1 rounded-xl border border-amber-100">
                           <div className="w-1.5 h-1.5 rounded-full bg-amber-500" /> {s.pending} Pending
                        </span>
                     )}
@@ -356,7 +393,7 @@ const TeamManagementTab: React.FC<TeamManagementTabProps> = ({
       </div>
 
       {/* ── Table card ── */}
-      <div className="bg-white rounded-[2rem] sm:rounded-[2.5rem] shadow-[0_8px_30px_-10px_rgba(0,0,0,0.05)] border border-gray-100 overflow-hidden text-left">
+      <div className="bg-white rounded-2xl sm:rounded-2xl shadow-sm border border-gray-100 overflow-hidden text-left">
         {/* Tab Header Bar */}
         <div className="flex p-2 bg-gray-50/50">
           {(['operator', 'conductor'] as TeamRole[]).map(role => {
@@ -366,7 +403,7 @@ const TeamManagementTab: React.FC<TeamManagementTabProps> = ({
               <button 
                 key={role} 
                 onClick={() => setActiveTab(role)}
-                className={`flex items-center justify-center gap-3 px-4 sm:px-8 py-3 sm:py-4 rounded-2xl text-[10px] sm:text-[11px] font-black uppercase tracking-widest transition-all flex-1 ${
+                className={`flex items-center justify-center gap-3 px-4 sm:px-8 py-3 sm:py-4 rounded-2xl text-[10px] sm:text-[11px] font-bold uppercase tracking-widest transition-all flex-1 ${
                   isActive 
                     ? 'bg-white text-indigo-600 shadow-sm border border-gray-100' 
                     : 'text-gray-400 hover:text-gray-600 hover:bg-white/50'
@@ -391,7 +428,7 @@ const TeamManagementTab: React.FC<TeamManagementTabProps> = ({
               <thead>
                 <tr className="border-b border-gray-50 bg-gray-50/20">
                   {["Personnel Identity", "Digital Access", ...(activeTab === 'operator' ? ["Deployment Region"] : []), "Operational Status", "Execution Control"].map(h => (
-                    <th key={h} className="px-8 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">{h}</th>
+                    <th key={h} className="px-8 py-6 text-[10px] font-bold text-gray-400 uppercase tracking-widest">{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -400,11 +437,11 @@ const TeamManagementTab: React.FC<TeamManagementTabProps> = ({
                   <tr>
                     <td colSpan={activeTab === 'operator' ? 5 : 4} className="px-8 py-24 text-center">
                       <div className="flex flex-col items-center gap-4 text-gray-300">
-                        <div className="w-16 h-16 bg-gray-50 rounded-[2rem] flex items-center justify-center border border-gray-50">
+                        <div className="w-16 h-16 bg-gray-50 rounded-2xl flex items-center justify-center border border-gray-50">
                            {React.createElement(ROLE_CONFIG[activeTab].icon, { className: "w-8 h-8 opacity-20" })}
                         </div>
-                        <p className="text-[11px] font-black uppercase tracking-widest text-gray-400">No {activeTab} records identified</p>
-                        <button onClick={() => openAdd(activeTab)} className="text-[11px] font-black uppercase tracking-widest text-indigo-600 hover:text-indigo-700 bg-indigo-50 px-4 py-2 rounded-xl border border-indigo-100 transition-all">
+                        <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400">No {activeTab} records identified</p>
+                        <button onClick={() => openAdd(activeTab)} className="text-[11px] font-bold uppercase tracking-widest text-indigo-600 hover:text-indigo-700 bg-indigo-50 px-4 py-2 rounded-xl border border-indigo-100 transition-all">
                           Initiate Recruitment
                         </button>
                       </div>
@@ -414,14 +451,14 @@ const TeamManagementTab: React.FC<TeamManagementTabProps> = ({
                   <tr key={member.id} className="hover:bg-indigo-50/20 transition-all duration-300 group">
                     <td className="px-8 py-6">
                       <div className="flex items-center gap-4">
-                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-sm font-black border group-hover:scale-110 transition-transform ${
+                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-sm font-bold border group-hover:scale-110 transition-transform ${
                           member.role === 'operator' ? 'bg-indigo-50 text-indigo-600 border-indigo-100' : 'bg-emerald-50 text-emerald-600 border-emerald-100'
                         }`}>
                           {initials(member.name)}
                         </div>
                         <div>
-                          <p className="text-sm font-black text-gray-900 uppercase tracking-tight">{member.name || 'ANONYMOUS UNIT'}</p>
-                          <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest mt-1">ID: {member.id.substring(0,8).toUpperCase()}</p>
+                          <p className="text-sm font-bold text-gray-900 uppercase tracking-tight">{member.name || 'ANONYMOUS UNIT'}</p>
+                          <p className="text-[9px] font-bold text-indigo-400 uppercase tracking-widest mt-1">ID: {member.id.substring(0,8).toUpperCase()}</p>
                         </div>
                       </div>
                     </td>
@@ -440,12 +477,12 @@ const TeamManagementTab: React.FC<TeamManagementTabProps> = ({
                         {member.region ? (
                           <div className="flex items-center gap-2.5">
                             <MapPin className="w-4 h-4 text-rose-300" />
-                            <span className="text-xs font-black text-gray-900 uppercase tracking-tight">{member.region}</span>
+                            <span className="text-xs font-bold text-gray-900 uppercase tracking-tight">{member.region}</span>
                           </div>
                         ) : (
                           <div className="inline-flex items-center gap-2 px-2.5 py-1 bg-rose-50 border border-rose-100 rounded-lg">
                             <AlertTriangle className="w-3 h-3 text-rose-500" />
-                            <span className="text-[9px] font-black text-rose-700 uppercase tracking-widest">Unassigned</span>
+                            <span className="text-[9px] font-bold text-rose-700 uppercase tracking-widest">Unassigned</span>
                           </div>
                         )}
                       </td>
@@ -496,7 +533,7 @@ const TeamManagementTab: React.FC<TeamManagementTabProps> = ({
               const sel  = addingRole === role;
               return (
                 <button key={role} type="button" onClick={() => setAddingRole(role)}
-                  className={`relative flex flex-col items-center gap-3 p-6 rounded-[2rem] border-2 transition-all duration-300 ${
+                  className={`relative flex flex-col items-center gap-3 p-6 rounded-2xl border-2 transition-all duration-300 ${
                     sel
                       ? `border-indigo-600 bg-indigo-50/50`
                       : 'border-gray-50 bg-gray-50/30 text-gray-300 hover:border-gray-200'
@@ -505,7 +542,7 @@ const TeamManagementTab: React.FC<TeamManagementTabProps> = ({
                     <Icon className="w-6 h-6" />
                   </div>
                   <div className="text-center">
-                    <p className={`text-[11px] font-black uppercase tracking-widest ${sel ? 'text-indigo-600' : 'text-gray-400'}`}>{cfg.label}</p>
+                    <p className={`text-[11px] font-bold uppercase tracking-widest ${sel ? 'text-indigo-600' : 'text-gray-400'}`}>{cfg.label}</p>
                     <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-1">{cfg.description}</p>
                   </div>
                   {sel && <div className="absolute top-4 right-4"><BadgeCheck className="w-5 h-5 text-indigo-600" /></div>}
@@ -516,7 +553,7 @@ const TeamManagementTab: React.FC<TeamManagementTabProps> = ({
 
           <div className="space-y-4">
             <div>
-              <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Personnel Name</label>
+              <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Personnel Name</label>
               <div className="relative">
                  <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
                  <input type="text" value={newMember.name} onChange={e => setNewMember({ ...newMember, name: e.target.value })}
@@ -526,7 +563,7 @@ const TeamManagementTab: React.FC<TeamManagementTabProps> = ({
             </div>
 
             <div>
-              <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Primary Access Email</label>
+              <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Primary Access Email</label>
               <div className="relative">
                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
                  <input type="email" value={newMember.email} onChange={e => setNewMember({ ...newMember, email: e.target.value })}
@@ -537,7 +574,7 @@ const TeamManagementTab: React.FC<TeamManagementTabProps> = ({
 
             {addingRole === 'operator' && (
               <div>
-                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Strategic Deployment Zone</label>
+                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Strategic Deployment Zone</label>
                 {branches.length > 0 ? (
                   <div className="relative">
                     <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
@@ -560,17 +597,17 @@ const TeamManagementTab: React.FC<TeamManagementTabProps> = ({
 
           <div className="p-4 bg-indigo-900 rounded-2xl text-white/90 relative overflow-hidden">
              <div className="absolute right-0 top-0 w-24 h-24 bg-white/5 rounded-full blur-2xl -mr-12 -mt-12"></div>
-             <p className="text-[9px] font-black uppercase tracking-[0.2em] mb-2 text-white/50">AUTHORIZATION LEVEL</p>
+             <p className="text-[9px] font-bold uppercase tracking-[0.2em] mb-2 text-white/50">AUTHORIZATION LEVEL</p>
              <p className="text-[11px] font-bold leading-relaxed">{ROLE_CONFIG[addingRole].permissions}</p>
           </div>
 
           <div className="flex gap-3 pt-6 border-t border-gray-50">
             <button type="button" onClick={() => setShowAddModal(false)}
-              className="flex-1 px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-[11px] font-black uppercase tracking-widest text-gray-400 bg-gray-50 hover:bg-gray-100 rounded-2xl transition-all">
+              className="flex-1 px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-[11px] font-bold uppercase tracking-widest text-gray-400 bg-gray-50 hover:bg-gray-100 rounded-2xl transition-all">
               Abort
             </button>
             <button type="submit" disabled={actionLoading}
-              className="flex-[2] flex items-center justify-center gap-3 px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-[11px] font-black uppercase tracking-widest text-white bg-indigo-600 hover:bg-indigo-700 rounded-2xl shadow-xl shadow-indigo-100 transition-all disabled:opacity-50 active:scale-95">
+              className="flex-[2] flex items-center justify-center gap-3 px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-[11px] font-bold uppercase tracking-widest text-white bg-indigo-600 hover:bg-indigo-700 rounded-2xl shadow-xl shadow-indigo-100 transition-all disabled:opacity-50 active:scale-95">
               {actionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
               Dispatch Credentials
             </button>
@@ -583,19 +620,19 @@ const TeamManagementTab: React.FC<TeamManagementTabProps> = ({
         title="Override Personnel Config">
         {editingMember && (
           <form onSubmit={handleEdit} className="space-y-6 text-left">
-            <div className="flex items-center gap-5 p-4 sm:p-6 bg-slate-50 rounded-[2rem] border border-gray-100">
-              <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-2xl bg-white flex items-center justify-center text-lg sm:text-xl font-black text-indigo-600 shadow-sm border border-gray-100">
+            <div className="flex items-center gap-5 p-4 sm:p-6 bg-slate-50 rounded-2xl border border-gray-100">
+              <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-2xl bg-white flex items-center justify-center text-lg sm:text-xl font-bold text-indigo-600 shadow-sm border border-gray-100">
                  {initials(editingMember.name)}
               </div>
               <div>
-                <p className="text-base sm:text-lg font-black text-gray-900 uppercase tracking-tight leading-none">{editingMember.name}</p>
+                <p className="text-base sm:text-lg font-bold text-gray-900 uppercase tracking-tight leading-none">{editingMember.name}</p>
                 <p className="text-[9px] sm:text-[10px] font-bold text-gray-400 mt-1 uppercase tracking-widest">USER_REF: {editingMember.id.substring(0,8)}</p>
               </div>
             </div>
 
             {editingMember.role === 'operator' && (
               <div>
-                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Relocate Strategic Zone</label>
+                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Relocate Strategic Zone</label>
                 <div className="relative">
                   <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
                   <select value={editData.region} onChange={e => setEditData({ ...editData, region: e.target.value })}
@@ -608,11 +645,11 @@ const TeamManagementTab: React.FC<TeamManagementTabProps> = ({
             )}
 
             <div>
-              <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Operational state</label>
+              <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Operational state</label>
               <div className="grid grid-cols-3 gap-2 sm:gap-3">
                 {(['active', 'inactive', 'pending'] as const).map(s => (
                   <button key={s} type="button" onClick={() => setEditData({ ...editData, status: s })}
-                    className={`py-3 rounded-2xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest border-2 transition-all ${
+                    className={`py-3 rounded-2xl text-[9px] sm:text-[10px] font-bold uppercase tracking-widest border-2 transition-all ${
                       editData.status === s
                         ? s === 'active'   ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
                         : s === 'inactive' ? 'border-slate-400 bg-slate-50 text-slate-700'
@@ -627,11 +664,11 @@ const TeamManagementTab: React.FC<TeamManagementTabProps> = ({
 
             <div className="flex gap-3 pt-6 border-t border-gray-50">
               <button type="button" onClick={() => { setShowEditModal(false); setEditingMember(null); }}
-                className="flex-1 px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-[11px] font-black uppercase tracking-widest text-gray-400 bg-gray-50 hover:bg-gray-100 rounded-2xl transition-all">
+                className="flex-1 px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-[11px] font-bold uppercase tracking-widest text-gray-400 bg-gray-50 hover:bg-gray-100 rounded-2xl transition-all">
                 Cancel
               </button>
               <button type="submit" disabled={actionLoading}
-                className="flex-[2] flex items-center justify-center gap-3 px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-[11px] font-black uppercase tracking-widest text-white bg-indigo-600 hover:bg-indigo-700 rounded-2xl shadow-xl shadow-indigo-100 transition-all disabled:opacity-50 active:scale-95">
+                className="flex-[2] flex items-center justify-center gap-3 px-4 sm:px-6 py-3 sm:py-4 text-[10px] sm:text-[11px] font-bold uppercase tracking-widest text-white bg-indigo-600 hover:bg-indigo-700 rounded-2xl shadow-xl shadow-indigo-100 transition-all disabled:opacity-50 active:scale-95">
                 {actionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Apply Overrides'}
               </button>
             </div>

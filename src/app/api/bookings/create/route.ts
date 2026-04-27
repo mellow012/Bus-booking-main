@@ -10,6 +10,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth-utils';
 import { prisma } from '@/lib/prisma';
 import type { Prisma } from '@prisma/client';
+import { logger } from '@/lib/logger';
+import { getClientIp } from '@/lib/rateLimiter';
 
 interface PassengerDetail {
   firstName:            string;
@@ -322,6 +324,14 @@ export async function POST(req: NextRequest) {
       return b;
     });
 
+    // Structured success log
+    await logger.logBooking('created', result.id, {
+      userId,
+      companyId,
+      scheduleId,
+      metadata: { bookingReference, totalAmount, fareSource, isSegment },
+    });
+
     return NextResponse.json({
       bookingId:        result.id,
       bookingReference,
@@ -336,7 +346,9 @@ export async function POST(req: NextRequest) {
     });
 
   } catch (err: any) {
-    console.error('[bookings/create]', err);
+    await logger.logError('booking', '[bookings/create] Failed to create booking', err, {
+      ip: getClientIp(req),
+    });
     return NextResponse.json(
       { error: 'Failed to create booking: ' + (err.message || 'Server error') },
       { status: 500 },

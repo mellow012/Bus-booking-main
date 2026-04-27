@@ -7,13 +7,15 @@ import { useAuth } from '@/contexts/AuthContext';
 import {
   Loader2, AlertCircle, User, Mail, Phone, Shield,
   Calendar, CreditCard, Activity, Settings, ChevronRight, Award, Trash2,
-  Key, RefreshCw, TrendingUp, MapPin, Bus, DollarSign, CheckCircle, Clock, XCircle, AlertTriangle,
+  Key, RefreshCw, TrendingUp, MapPin, Bus as BusIcon, DollarSign, CheckCircle, Clock, XCircle, AlertTriangle,
   Edit, Eye, EyeOff, Users, ExternalLink, Search, Copy, Download, BarChart3, Smartphone, Bell, Zap, FileText, Share2, History as HistoryIcon
 } from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
 import AlertMessage from '../../components/AlertMessage';
 import ProfilePageSkeleton from '@/components/ui/ProfilePageSkeleton';
 import ConfirmationModal from '@/components/ui/ConfirmationModal';
+import OperatorProfileTab from '@/components/OperatorProfileTab';
+import { isCompanyRole, UserRole } from '@/types/core';
 
 interface UserProfile {
   id: string;
@@ -24,7 +26,7 @@ interface UserProfile {
   nationalId?: string;
   sex?: string;
   currentAddress?: string;
-  role: string;
+  role: UserRole;
   createdAt: Date;
   updatedAt?: Date;
   [key: string]: unknown;
@@ -275,10 +277,10 @@ const ProfilePage: React.FC = () => {
       return;
     }
 
-    if (userProfile?.role !== 'customer') {
-      router.push(userProfile?.role === 'superadmin' ? '/admin' : '/company/admin');
-      return;
-    }
+    if (!userProfile) return;
+
+    // We allow all roles to access profile, but non-customers see a simplified staff profile
+    const isStaff = isCompanyRole(userProfile.role);
 
     const fetchData = async () => {
       setLoading(true);
@@ -513,7 +515,7 @@ const ProfilePage: React.FC = () => {
 
   const tabs = [
     { id: 'overview', label: 'Overview', icon: Activity },
-    { id: 'bookings', label: 'My Bookings', icon: Bus },
+    { id: 'bookings', label: 'My Bookings', icon: BusIcon },
     { id: 'payments', label: 'Payments', icon: CreditCard },
     { id: 'settings', label: 'Settings', icon: Settings },
     { id: 'security', label: 'Security', icon: Shield },
@@ -523,10 +525,38 @@ const ProfilePage: React.FC = () => {
 
   if (loading) return <ProfilePageSkeleton />;
 
-  if (!profile || userProfile?.role !== 'customer') {
+  if (!profile) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-6">
         <AlertMessage type="error" message={error || 'Access denied'} onClose={() => router.push('/')} />
+      </div>
+    );
+  }
+
+  const isStaff = isCompanyRole(profile.role);
+
+  if (isStaff) {
+    return (
+      <div className="min-h-screen bg-slate-50/50 py-12 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-4xl mx-auto">
+          <div className="mb-8 flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Staff Profile</h1>
+              <p className="text-gray-500 mt-1 uppercase text-xs font-bold tracking-widest">{profile.role} Management Console</p>
+            </div>
+            <button
+              onClick={() => router.back()}
+              className="text-gray-500 hover:text-gray-900 font-bold text-sm flex items-center gap-2"
+            >
+              <ChevronRight className="w-4 h-4 rotate-180" /> Back to Dashboard
+            </button>
+          </div>
+          <OperatorProfileTab
+            userProfile={userProfile}
+            setError={setError}
+            setSuccess={setSuccess}
+          />
+        </div>
       </div>
     );
   }
@@ -593,8 +623,8 @@ const ProfilePage: React.FC = () => {
                 <button
                   onClick={() => setEditProfile(!editProfile)}
                   className={`flex-1 sm:flex-none px-6 py-3 rounded-2xl font-bold transition-all duration-300 flex items-center justify-center space-x-2 ${editProfile
-                      ? 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                      : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-lg shadow-indigo-200'
+                    ? 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-lg shadow-indigo-200'
                     }`}
                 >
                   {editProfile ? <XCircle className="w-4 h-4" /> : <Edit className="w-4 h-4" />}
@@ -616,7 +646,7 @@ const ProfilePage: React.FC = () => {
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-8">
             <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100 hover:shadow-xl transition-all">
               <div className="flex items-center justify-between mb-4">
-                <div className="p-3 bg-blue-50 rounded-xl"><Bus className="w-6 h-6 text-blue-600" /></div>
+                <div className="p-3 bg-blue-50 rounded-xl"><BusIcon className="w-6 h-6 text-blue-600" /></div>
                 <div className="text-right">
                   <p className="text-2xl font-bold text-gray-900">{bookingStats.total}</p>
                   <p className="text-sm text-gray-600">Total Bookings</p>
@@ -670,8 +700,8 @@ const ProfilePage: React.FC = () => {
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
                   className={`flex items-center space-x-2 px-6 py-2.5 rounded-2xl transition-all duration-300 font-bold text-sm whitespace-nowrap ${activeTab === tab.id
-                      ? 'bg-white text-indigo-600 shadow-sm'
-                      : 'text-gray-500 hover:text-gray-900'
+                    ? 'bg-white text-indigo-600 shadow-sm'
+                    : 'text-gray-500 hover:text-gray-900'
                     }`}
                 >
                   <tab.icon className={`w-4 h-4 ${activeTab === tab.id ? 'text-indigo-600' : 'text-gray-400'}`} />
@@ -793,7 +823,7 @@ const ProfilePage: React.FC = () => {
                       {nextTrip && (
                         <div className="mb-10 bg-gradient-to-br from-indigo-600 to-blue-700 rounded-[32px] p-6 sm:p-8 text-white shadow-2xl shadow-indigo-200 relative overflow-hidden group">
                           <div className="absolute top-0 right-0 p-8 transform translate-x-10 -translate-y-10 transition-transform duration-700 group-hover:translate-x-6 group-hover:-translate-y-6">
-                            <Bus className="w-48 h-48 text-white/10 rotate-12" />
+                            <BusIcon className="w-48 h-48 text-white/10 rotate-12" />
                           </div>
 
                           <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
@@ -909,7 +939,7 @@ const ProfilePage: React.FC = () => {
                         <h3 className="text-lg font-bold text-gray-900 mb-4">Quick Actions</h3>
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                           {[
-                            { icon: <Bus className="w-6 h-6 text-blue-600" />, bg: 'bg-blue-100', hoverBorder: 'hover:border-blue-300', label: 'Book a Trip', sub: 'Find & book tickets', action: () => router.push('/schedules') },
+                            { icon: <BusIcon className="w-6 h-6 text-blue-600" />, bg: 'bg-blue-100', hoverBorder: 'hover:border-blue-300', label: 'Book a Trip', sub: 'Find & book tickets', action: () => router.push('/schedules') },
                             { icon: <HistoryIcon className="w-6 h-6 text-green-600" />, bg: 'bg-green-100', hoverBorder: 'hover:border-green-300', label: 'My Bookings', sub: `${bookingStats.total} total trips`, action: () => setActiveTab('bookings') },
                             { icon: <CreditCard className="w-6 h-6 text-purple-600" />, bg: 'bg-purple-100', hoverBorder: 'hover:border-purple-300', label: 'Payments', sub: 'Manage payments', action: () => setActiveTab('payments') },
                             { icon: <ExternalLink className="w-6 h-6 text-orange-600" />, bg: 'bg-orange-100', hoverBorder: 'hover:border-orange-300', label: 'Explore Routes', sub: 'via Busbud', action: () => window.open('https://www.busbud.com/', '_blank') },
@@ -932,7 +962,7 @@ const ProfilePage: React.FC = () => {
                             bookAgainRoutes.map((b) => (
                               <div key={b.id} className="p-4 bg-white/50 border border-white/50 rounded-2xl flex flex-col items-center gap-2 group">
                                 <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-500 group-hover:bg-indigo-600 group-hover:text-white transition-all">
-                                  <Bus className="w-5 h-5" />
+                                  <BusIcon className="w-5 h-5" />
                                 </div>
                                 <p className="text-xs font-bold text-gray-900">{b.origin} to {b.destination}</p>
                                 <button onClick={() => router.push(`/schedules?from=${b.origin}&to=${b.destination}`)}
@@ -998,7 +1028,7 @@ const ProfilePage: React.FC = () => {
                                   </div>
                                 </div>
                                 <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-gray-500 font-medium">
-                                  <span className="flex items-center"><Bus className="w-4 h-4 mr-2 text-gray-300" /> {booking.companyName}</span>
+                                  <span className="flex items-center"><BusIcon className="w-4 h-4 mr-2 text-gray-300" /> {booking.companyName}</span>
                                   <span className="flex items-center"><Calendar className="w-4 h-4 mr-2 text-gray-300" /> {booking.departureDate.toLocaleDateString()}</span>
                                   <span className="flex items-center"><Clock className="w-4 h-4 mr-2 text-gray-300" /> {booking.departureDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                                 </div>
@@ -1047,7 +1077,7 @@ const ProfilePage: React.FC = () => {
                       </div>
                     ) : (
                       <div className="text-center py-20 bg-gray-50/50 rounded-[32px] border border-dashed border-gray-200">
-                        <Bus className="w-12 h-12 mx-auto mb-4 text-gray-200" />
+                        <BusIcon className="w-12 h-12 mx-auto mb-4 text-gray-200" />
                         <p className="text-gray-500 font-medium font-bold uppercase tracking-widest">No bookings found matching your filters.</p>
                       </div>
                     )}
@@ -1264,7 +1294,7 @@ const ProfilePage: React.FC = () => {
                   <div className="space-y-1">
                     {[
                       { icon: <MapPin className="w-4 h-4" />, label: 'Fav Destination', value: travelInsights.mostVisitedDestination || 'N/A', bg: 'bg-blue-50', text: 'text-blue-600' },
-                      { icon: <Bus className="w-4 h-4" />, label: 'Pref. Operator', value: travelInsights.favoriteCompany || 'N/A', bg: 'bg-green-50', text: 'text-green-600' },
+                      { icon: <BusIcon className="w-4 h-4" />, label: 'Pref. Operator', value: travelInsights.favoriteCompany || 'N/A', bg: 'bg-green-50', text: 'text-green-600' },
                       { icon: <Zap className="w-4 h-4" />, label: 'Trip Pace', value: travelInsights.travelFrequency, bg: 'bg-purple-50', text: 'text-purple-600' },
                       { icon: <DollarSign className="w-4 h-4" />, label: 'Avg Ticket', value: bookingStats.total > 0 ? `MWK ${Math.round(bookingStats.avgBookingValue).toLocaleString()}` : 'N/A', bg: 'bg-yellow-50', text: 'text-yellow-600' },
                     ].map((item, i) => (

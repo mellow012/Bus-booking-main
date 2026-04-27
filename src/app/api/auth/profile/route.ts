@@ -26,10 +26,6 @@ export async function GET(req: NextRequest) {
   }
 }
 
-/**
- * PATCH /api/auth/profile
- * Update the authenticated user's profile in SQL.
- */
 export async function PATCH(req: NextRequest) {
   try {
     const user = await getCurrentUser(req);
@@ -38,7 +34,27 @@ export async function PATCH(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { success, data, error } = await dbActions.syncUser(user.id, body);
+    
+    // Whitelist only safe fields to prevent privilege escalation (e.g. updating 'role')
+    const updatableFields = [
+      'firstName', 'lastName', 'phone', 'nationalId', 'sex', 
+      'currentAddress', 'setupCompleted', 'isActive', 'emailVerified',
+      'passwordSet', 'invitationSent' // Needed for conductor/operator auto-activation
+    ];
+
+    const sanitizedData: Record<string, any> = {};
+    updatableFields.forEach(field => {
+      if (body[field] !== undefined) {
+        sanitizedData[field] = body[field];
+      }
+    });
+
+    // Special case for email - usually handled by Auth, but keep in sync if provided
+    if (body.email) {
+      sanitizedData.email = body.email;
+    }
+
+    const { success, data, error } = await dbActions.syncUser(user.id, sanitizedData);
     
     if (!success) {
       return NextResponse.json({ error }, { status: 500 });

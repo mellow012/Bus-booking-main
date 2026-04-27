@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { Schedule, Route, Bus, Company } from '@/types';
+import AlertMessage from './AlertMessage';
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
 
@@ -106,7 +107,7 @@ export default function AvailableRoutes({ limit }: AvailableRoutesProps) {
 
   return (
     <section aria-label="Available Bus Schedules">
-      {error && <p className="text-red-500 mb-4 text-center" role="alert">{error}</p>}
+      {error && <AlertMessage type="error" message={error} onClose={() => setError('')} />}
       {openRoutes.length > 0 ? (
         <div className="space-y-4">
           {openRoutes.map((result) => (

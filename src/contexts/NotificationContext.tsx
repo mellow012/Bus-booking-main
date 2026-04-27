@@ -8,6 +8,7 @@ import React, {
 } from 'react';
 import { Bell, X, Check, CheckCheck, Trash2 } from 'lucide-react';
 import { Notification } from '@/types/index';
+import { createClient } from '@/utils/supabase/client';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -61,10 +62,6 @@ export const NotificationProvider: React.FC<{ children: ReactNode; userId?: stri
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isLoading, setIsLoading]         = useState(true);
   const [error, setError]                 = useState<string | null>(null);
-  const pollingIntervalRef                = useRef<NodeJS.Timeout | null>(null);
-
-  // Polling interval: 5 seconds for notifications (balance between freshness and load)
-  const POLLING_INTERVAL = 5000;
 
   const fetchNotifications = useCallback(async () => {
     if (!userId) return;
@@ -73,12 +70,6 @@ export const NotificationProvider: React.FC<{ children: ReactNode; userId?: stri
       const response = await fetch('/api/notifications/list?userId=' + userId);
       
       if (response.status === 401) {
-        // If unauthorized, stop polling as the session is likely expired or invalid.
-        // This prevents the console from being flooded with 401 errors every interval.
-        if (pollingIntervalRef.current) {
-          clearInterval(pollingIntervalRef.current);
-          pollingIntervalRef.current = null;
-        }
         return;
       }
 
@@ -109,13 +100,25 @@ export const NotificationProvider: React.FC<{ children: ReactNode; userId?: stri
     // Initial load
     fetchNotifications();
 
-    // Set up polling
-    pollingIntervalRef.current = setInterval(fetchNotifications, POLLING_INTERVAL);
+    // Set up Supabase Realtime
+    const supabase = createClient();
+    const channel = supabase
+      .channel(`user-notifications-${userId}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'Notification', filter: `userId=eq.${userId}` },
+        (payload) => {
+          const newNotification = payload.new as Notification;
+          setNotifications((prev) => [newNotification, ...prev]);
+          import('react-hot-toast').then(({ default: toast }) => {
+            toast(newNotification.title, { icon: '🔔' });
+          });
+        }
+      )
+      .subscribe();
 
     return () => {
-      if (pollingIntervalRef.current) {
-        clearInterval(pollingIntervalRef.current);
-      }
+      supabase.removeChannel(channel);
     };
   }, [userId, fetchNotifications]);
 
@@ -212,22 +215,22 @@ export const NotificationBell: React.FC<{ userId: string; className?: string }> 
     <div className={`relative ${className ?? ''}`} ref={dropdownRef}>
       <button
         onClick={() => setIsOpen(prev => !prev)}
-        className="relative p-2 rounded-xl hover:bg-gray-100 transition-colors"
+        className="relative p-2 rounded-xl hover:bg-gray-100 transition-all duration-300 group active:scale-90"
         aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ''}`}
       >
-        <Bell className="w-6 h-6 text-gray-600 hover:text-blue-600" />
+        <Bell className="w-6 h-6 text-gray-600 group-hover:text-blue-600 transition-colors" />
         {unreadCount > 0 && (
-          <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center animate-pulse">
+          <span className="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-[10px] font-black rounded-full w-4.5 h-4.5 flex items-center justify-center border-2 border-white shadow-sm transition-all animate-in zoom-in">
             {unreadCount > 99 ? '99+' : unreadCount}
           </span>
         )}
       </button>
 
       {isOpen && (
-        <div className="fixed md:absolute inset-x-4 md:inset-x-auto md:right-0 mt-2 top-20 md:top-full md:w-80 bg-white shadow-xl rounded-xl z-50 border border-gray-200 overflow-hidden animate-in fade-in slide-in-from-top-5 duration-200">
+        <div className="fixed md:absolute inset-x-4 md:inset-x-auto md:right-0 mt-3 top-20 md:top-full md:w-[360px] bg-white/95 glass rounded-[1.5rem] shadow-premium z-50 overflow-hidden animate-in fade-in slide-in-from-top-5 duration-300">
           {/* Header */}
-          <div className="px-4 py-3 border-b border-gray-100 flex justify-between items-center">
-            <h3 className="font-semibold text-gray-900">Notifications</h3>
+          <div className="px-5 py-4 border-b border-gray-100/50 flex justify-between items-center bg-gray-50/50">
+            <h3 className="font-bold text-gray-900 text-[15px]">Notifications</h3>
             <div className="flex gap-1">
               {unreadCount > 0 && (
                 <button

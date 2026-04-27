@@ -213,7 +213,7 @@ const Header: React.FC = () => {
                           <Calendar className="w-4 h-4" /><span>{t('myBookings')}</span>
                         </Link>
                       )}
-                      {(isCustomer || isOperator) && (
+                      {isCustomer && (
                         <Link href="/profile" onClick={() => setIsUserMenuOpen(false)} className="flex items-center space-x-3 px-4 py-2 text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors duration-200">
                           <User className="w-4 h-4" /><span>{t('profile')}</span>
                         </Link>
@@ -245,7 +245,11 @@ const Header: React.FC = () => {
               </div>
             )}
 
-            <button className="md:hidden p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all duration-200" onClick={() => setIsMenuOpen(!isMenuOpen)}>
+            <button 
+              className="md:hidden p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all duration-300 active:scale-90" 
+              onClick={() => setIsMenuOpen(!isMenuOpen)}
+              aria-label={isMenuOpen ? "Close menu" : "Open menu"}
+            >
               {isMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
             </button>
           </div>
@@ -254,65 +258,70 @@ const Header: React.FC = () => {
 
       {/* Mobile menu */}
       {isMenuOpen && (
-        <div className="md:hidden fixed inset-x-0 top-full bg-white/95 backdrop-blur-lg border-t border-gray-200/50 z-40 max-h-[calc(100vh-80px)] overflow-y-auto">
-          <div className="max-w-7xl mx-auto px-4 py-4 space-y-4">
-            <nav className="space-y-2">
-              {navigationItems.map(item => {
-                const active = isActivePage(item.href);
-                return (
-                  <Link key={item.href} href={item.href} onClick={() => setIsMenuOpen(false)}
-                    className={`flex items-center space-x-3 p-3 rounded-xl font-medium transition-all duration-200 ${active ? 'bg-blue-100 text-blue-700' : 'text-gray-700 hover:bg-gray-100'}`}>
-                    <item.icon className="w-5 h-5" /><span>{item.label}</span>
-                  </Link>
-                );
-              })}
-            </nav>
-            {loading ? (
-              <div className="pt-4 border-t border-gray-200"><UserSkeleton /></div>
-            ) : user ? (
-              <div className="pt-4 border-t border-gray-200 space-y-3">
-                <div className="flex items-center space-x-3 p-3 bg-gray-50 rounded-xl">
-                  <UserAvatar user={user} userProfile={userProfile} />
-                  <div className="min-w-0 flex-1">
-                    <div className="font-semibold text-gray-900 truncate">{displayName}</div>
-                    <div className="text-sm text-gray-500 truncate">{user?.email}</div>
+        <>
+          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 lg:hidden" onClick={() => setIsMenuOpen(false)} />
+          <div className="md:hidden fixed inset-x-4 top-20 bg-white/95 glass rounded-3xl shadow-2xl z-50 max-h-[calc(100vh-120px)] overflow-y-auto animate-in fade-in zoom-in-95 duration-300">
+            <div className="p-6 space-y-6">
+              <nav className="space-y-1">
+                {navigationItems.map(item => {
+                  const active = isActivePage(item.href);
+                  return (
+                    <Link key={item.href} href={item.href} onClick={() => setIsMenuOpen(false)}
+                      className={`flex items-center space-x-3 p-4 rounded-2xl font-bold transition-all duration-200 ${active ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' : 'text-gray-700 hover:bg-gray-100'}`}>
+                      <item.icon className={`w-5 h-5 ${active ? 'text-white' : 'text-gray-400'}`} /><span>{item.label}</span>
+                    </Link>
+                  );
+                })}
+              </nav>
+              {loading ? (
+                <div className="pt-6 border-t border-gray-100"><UserSkeleton /></div>
+              ) : user ? (
+                <div className="pt-6 border-t border-gray-100 space-y-4">
+                  <div className="flex items-center space-x-3 p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                    <UserAvatar user={user} userProfile={userProfile} />
+                    <div className="min-w-0 flex-1">
+                      <div className="font-bold text-gray-900 truncate">{displayName}</div>
+                      <div className="text-[10px] text-gray-500 truncate uppercase font-black tracking-widest">{user?.email}</div>
+                    </div>
                   </div>
+                  <div className="grid grid-cols-1 gap-2">
+                    {isConductor ? (
+                      <Link href="/company/conductor/dashboard" onClick={() => setIsMenuOpen(false)} className="flex items-center space-x-3 p-4 bg-indigo-50 text-indigo-700 rounded-2xl font-bold border border-indigo-100">
+                        <BusIcon className="w-5 h-5" /><span>{t('conductorDashboard')}</span>
+                      </Link>
+                    ) : (
+                      <>
+                        {adminRoute && (
+                          <Link href={adminRoute} onClick={() => setIsMenuOpen(false)} className="flex items-center space-x-3 p-4 bg-purple-50 text-purple-700 rounded-2xl font-bold border border-purple-100">
+                            <Shield className="w-5 h-5" /><span>{adminLabel}</span>
+                          </Link>
+                        )}
+                        {isCustomer && (
+                          <Link href="/bookings" onClick={() => setIsMenuOpen(false)} className="flex items-center space-x-3 p-4 text-gray-700 hover:bg-gray-50 rounded-2xl font-bold">
+                            <Calendar className="w-5 h-5 text-gray-400" /><span>{t('myBookings')}</span>
+                          </Link>
+                        )}
+                        {isCustomer && (
+                          <Link href="/profile" onClick={() => setIsMenuOpen(false)} className="flex items-center space-x-3 p-4 text-gray-700 hover:bg-gray-50 rounded-2xl font-bold">
+                            <User className="w-5 h-5 text-gray-400" /><span>{t('profile')}</span>
+                          </Link>
+                        )}
+                      </>
+                    )}
+                  </div>
+                  <button onClick={handleLogout} className="flex items-center justify-center space-x-3 w-full p-4 text-rose-600 hover:bg-rose-50 rounded-2xl font-bold border border-rose-100 transition-all active:scale-95">
+                    <LogOut className="w-5 h-5" /><span>{t('signOut')}</span>
+                  </button>
                 </div>
-                {isConductor ? (
-                  <Link href="/company/conductor/dashboard" onClick={() => setIsMenuOpen(false)} className="flex items-center space-x-3 p-3 bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-700 rounded-xl font-medium">
-                    <BusIcon className="w-5 h-5" /><span>{t('conductorDashboard')}</span>
-                  </Link>
-                ) : (
-                  <>
-                    {adminRoute && (
-                      <Link href={adminRoute} onClick={() => setIsMenuOpen(false)} className="flex items-center space-x-3 p-3 bg-gradient-to-r from-purple-100 to-pink-100 text-purple-700 rounded-xl font-medium">
-                        <Shield className="w-5 h-5" /><span>{adminLabel}</span>
-                      </Link>
-                    )}
-                    {isCustomer && (
-                      <Link href="/bookings" onClick={() => setIsMenuOpen(false)} className="flex items-center space-x-3 p-3 text-gray-700 hover:bg-gray-100 rounded-xl">
-                        <Calendar className="w-5 h-5" /><span>{t('myBookings')}</span>
-                      </Link>
-                    )}
-                    {(isCustomer || isOperator) && (
-                      <Link href="/profile" onClick={() => setIsMenuOpen(false)} className="flex items-center space-x-3 p-3 text-gray-700 hover:bg-gray-100 rounded-xl">
-                        <User className="w-5 h-5" /><span>{t('profile')}</span>
-                      </Link>
-                    )}
-                  </>
-                )}
-                <button onClick={handleLogout} className="flex items-center space-x-3 w-full p-3 text-red-600 hover:bg-red-50 rounded-xl">
-                  <LogOut className="w-5 h-5" /><span>{t('signOut')}</span>
-                </button>
-              </div>
-            ) : (
-              <div className="pt-4 border-t border-gray-200 space-y-3">
-                <Link href="/login" onClick={() => setIsMenuOpen(false)} className="flex items-center justify-center p-3 text-gray-700 hover:bg-gray-100 rounded-xl font-medium">{t('signIn')}</Link>
-                <Link href="/register" onClick={() => setIsMenuOpen(false)} className="flex items-center justify-center p-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-medium shadow-lg">{t('getStarted')}</Link>
-              </div>
-            )}
+              ) : (
+                <div className="pt-6 border-t border-gray-100 space-y-3">
+                  <Link href="/login" onClick={() => setIsMenuOpen(false)} className="flex items-center justify-center p-4 text-gray-700 hover:bg-gray-50 rounded-2xl font-bold border border-gray-100">{t('signIn')}</Link>
+                  <Link href="/register" onClick={() => setIsMenuOpen(false)} className="flex items-center justify-center p-4 bg-blue-600 text-white rounded-2xl font-bold shadow-lg shadow-blue-100 active:scale-95 transition-all">{t('getStarted')}</Link>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
+        </>
       )}
     </header>
   );

@@ -173,7 +173,8 @@ export async function PATCH(
     const updated = await prisma.booking.update({
       where: { id: bookingId },
       data: {
-        ...(body.paymentStatus && { paymentStatus: body.paymentStatus }),
+        // DO NOT allow updating paymentStatus or bookingStatus via client PATCH.
+        // These must be updated via payment webhooks or admin actions only.
         ...(body.paymentMethod && { paymentMethod: body.paymentMethod }),
         updatedAt: new Date(),
       },

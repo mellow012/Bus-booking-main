@@ -12,7 +12,7 @@ import {
 import {
   DollarSign, Download, Filter, Search, CreditCard,
   TrendingUp, Clock, CheckCircle, XCircle, AlertCircle,
-  Eye, RefreshCw, Truck, BarChart3, Activity, ArrowRight,
+  Eye, RefreshCw, Bus as BusIcon, BarChart3, Activity, ArrowRight,
   Wallet, Sparkles, MapPin, Calendar, User, Mail, Loader2
 } from "lucide-react";
 
@@ -94,7 +94,7 @@ function KineticStatCard({ title, value, icon: Icon, iconBg, iconColor, subtitle
   subtitle?: string;
 }) {
   return (
-    <div className="bg-white rounded-2xl sm:rounded-3xl shadow-[0_8px_30px_-10px_rgba(0,0,0,0.05)] p-4 sm:p-5 relative overflow-hidden flex flex-col justify-between min-h-[120px] sm:min-h-[140px] border border-gray-100 group hover:shadow-[0_20px_40px_-15px_rgba(0,0,0,0.1)] transition-all duration-500 text-left">
+    <div className="bg-white rounded-2xl sm:rounded-2xl shadow-sm p-4 sm:p-5 relative overflow-hidden flex flex-col justify-between min-h-[120px] sm:min-h-[140px] border border-gray-100 group hover:shadow-sm transition-all duration-500 text-left">
       <div className="absolute -right-8 -top-8 w-24 h-24 bg-indigo-600/5 rounded-full blur-3xl group-hover:bg-indigo-600/10 transition-colors"></div>
       <div className="flex justify-between items-start mb-3 sm:mb-4 relative z-10">
         <div className={`p-2.5 rounded-2xl ${iconBg} shadow-sm border border-white/50 group-hover:scale-110 transition-transform duration-500`}>
@@ -102,8 +102,8 @@ function KineticStatCard({ title, value, icon: Icon, iconBg, iconColor, subtitle
         </div>
       </div>
       <div className="relative z-10">
-        <p className="text-[9px] sm:text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">{title}</p>
-        <p className="text-xl sm:text-2xl font-black text-gray-900 leading-none tracking-tight">{value}</p>
+        <p className="text-[9px] sm:text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">{title}</p>
+        <p className="text-xl sm:text-2xl font-bold text-gray-900 leading-none tracking-tight">{value}</p>
         {subtitle && <p className="text-[10px] sm:text-[11px] font-bold text-gray-400 mt-2 flex items-center gap-1.5"><Sparkles className="w-3 h-3 text-indigo-400" /> {subtitle}</p>}
       </div>
     </div>
@@ -308,7 +308,7 @@ const PaymentsTab: React.FC<PaymentsTabProps> = ({
       failed: 'bg-rose-50 text-rose-700 border-rose-100',
     };
     return (
-      <span className={`inline-flex items-center px-2.5 py-1 rounded-xl text-[10px] font-black uppercase tracking-widest border shadow-sm ${map[status.toLowerCase()] || 'bg-slate-50 text-slate-600 border-slate-100'}`}>
+      <span className={`inline-flex items-center px-2.5 py-1 rounded-xl text-[10px] font-bold uppercase tracking-widest border shadow-sm ${map[status.toLowerCase()] || 'bg-slate-50 text-slate-600 border-slate-100'}`}>
         {status}
       </span>
     );
@@ -351,14 +351,14 @@ const PaymentsTab: React.FC<PaymentsTabProps> = ({
         <KineticStatCard
           title="ACTIVE FLEET"
           value={String(stats.activeBuses)}
-          icon={Truck}
+          icon={BusIcon}
           iconBg="bg-purple-50" iconColor="text-purple-600"
           subtitle="Contributing vessels"
         />
       </div>
 
       {/* Controls */}
-      <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-4 sm:p-6">
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-6">
         <div className="flex flex-col lg:flex-row items-center justify-between gap-4">
           <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto flex-1 max-w-4xl">
             <div className="relative flex-1">
@@ -372,7 +372,7 @@ const PaymentsTab: React.FC<PaymentsTabProps> = ({
               />
             </div>
             <select value={statusFilter} onChange={e => setStatusFilter(e.target.value as any)}
-              className="px-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl text-[10px] font-black text-gray-700 outline-none focus:ring-2 focus:ring-indigo-600 focus:bg-white transition-all uppercase tracking-widest">
+              className="px-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl text-[10px] font-bold text-gray-700 outline-none focus:ring-2 focus:ring-indigo-600 focus:bg-white transition-all uppercase tracking-widest">
               <option value="all">All States</option>
               <option value="paid">Settled</option>
               <option value="pending">Pending</option>
@@ -380,20 +380,20 @@ const PaymentsTab: React.FC<PaymentsTabProps> = ({
             </select>
           </div>
           <button onClick={exportToCSV}
-            className="w-full lg:w-auto flex items-center justify-center gap-2 px-6 py-4 bg-indigo-50 text-indigo-700 hover:bg-indigo-600 hover:text-white rounded-2xl text-[10px] font-black uppercase tracking-widest border border-indigo-100 transition-all active:scale-95">
+            className="w-full lg:w-auto flex items-center justify-center gap-2 px-6 py-4 bg-indigo-50 text-indigo-700 hover:bg-indigo-600 hover:text-white rounded-2xl text-[10px] font-bold uppercase tracking-widest border border-indigo-100 transition-all active:scale-95">
             <Download className="w-4 h-4" /> Export Ledger
           </button>
         </div>
       </div>
 
       {/* Transactions Table */}
-      <div className="bg-white rounded-[2.5rem] shadow-[0_8px_30px_-10px_rgba(0,0,0,0.05)] border border-gray-100 overflow-hidden">
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[900px]">
             <thead>
               <tr className="border-b border-gray-50 bg-gray-50/20">
                 {["Transaction Ref", "Beneficiary Identity", "Manifest Corridor", "Equity Value", "Method", "Date", "Status", "Control"].map(h => (
-                  <th key={h} className="px-8 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">{h}</th>
+                  <th key={h} className="px-8 py-6 text-[10px] font-bold text-gray-400 uppercase tracking-widest">{h}</th>
                 ))}
               </tr>
             </thead>
@@ -401,40 +401,40 @@ const PaymentsTab: React.FC<PaymentsTabProps> = ({
               {filteredTransactions.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="px-8 py-24 text-center">
-                    <p className="text-[11px] font-black text-gray-300 uppercase tracking-widest">No financial records identified</p>
+                    <p className="text-[11px] font-bold text-gray-300 uppercase tracking-widest">No financial records identified</p>
                   </td>
                 </tr>
               ) : filteredTransactions.map(t => (
                 <tr key={t.id} className="hover:bg-indigo-50/20 transition-all duration-300 group">
                   <td className="px-8 py-6">
-                    <span className="font-mono text-[10px] font-black text-indigo-600 bg-indigo-50 px-2 py-1 rounded-lg border border-indigo-100">
+                    <span className="font-mono text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded-lg border border-indigo-100">
                       {t.bookingReference}
                     </span>
                   </td>
                   <td className="px-8 py-6">
                     <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 bg-slate-50 rounded-xl flex items-center justify-center text-[10px] font-black text-slate-400 border border-slate-100 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
+                      <div className="w-8 h-8 bg-slate-50 rounded-xl flex items-center justify-center text-[10px] font-bold text-slate-400 border border-slate-100 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
                         {t.customerName?.substring(0, 1)}
                       </div>
                       <div>
-                        <p className="text-sm font-black text-gray-900 uppercase tracking-tight">{t.customerName}</p>
+                        <p className="text-sm font-bold text-gray-900 uppercase tracking-tight">{t.customerName}</p>
                         <p className="text-[9px] font-bold text-gray-400 lowercase">{t.customerEmail}</p>
                       </div>
                     </div>
                   </td>
                   <td className="px-8 py-6">
-                    <div className="flex items-center gap-2 text-xs font-black text-gray-700 uppercase tracking-tight">
+                    <div className="flex items-center gap-2 text-xs font-bold text-gray-700 uppercase tracking-tight">
                       {t.routeOrigin} <ArrowRight className="w-3 h-3 text-gray-300" /> {t.routeDestination}
                     </div>
                   </td>
                   <td className="px-8 py-6">
-                    <p className="text-sm font-black text-gray-900 tracking-tight">MWK {t.totalAmount.toLocaleString()}</p>
+                    <p className="text-sm font-bold text-gray-900 tracking-tight">MWK {t.totalAmount.toLocaleString()}</p>
                   </td>
                   <td className="px-8 py-6">
-                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest bg-gray-50 px-2 py-1 rounded-lg border border-gray-100">{t.paymentMethod}</span>
+                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest bg-gray-50 px-2 py-1 rounded-lg border border-gray-100">{t.paymentMethod}</span>
                   </td>
                   <td className="px-8 py-6">
-                    <p className="text-[10px] font-black text-gray-900 uppercase tracking-widest">{t.bookingDate.toLocaleDateString('en-GB')}</p>
+                    <p className="text-[10px] font-bold text-gray-900 uppercase tracking-widest">{t.bookingDate.toLocaleDateString('en-GB')}</p>
                     <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">{t.bookingDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
                   </td>
                   <td className="px-8 py-6">
@@ -456,32 +456,32 @@ const PaymentsTab: React.FC<PaymentsTabProps> = ({
       {/* Transaction Modal */}
       {selectedTransaction && (
         <div className="fixed inset-0 bg-black/60 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4 backdrop-blur-sm animate-in fade-in duration-300 text-left">
-          <div className="bg-white w-full sm:max-w-lg sm:rounded-[2.5rem] rounded-t-[2.5rem] max-h-[90vh] overflow-y-auto shadow-2xl animate-in slide-in-from-bottom-10 duration-500">
+          <div className="bg-white w-full sm:max-w-lg sm:rounded-2xl rounded-t-[2.5rem] max-h-[90vh] overflow-y-auto shadow-2xl animate-in slide-in-from-bottom-10 duration-500">
             <div className="p-6 sm:p-8 border-b border-gray-50 flex items-start justify-between">
               <div>
-                <p className="text-xl font-black text-gray-900 tracking-tight uppercase">TRANSACTION LEDGER</p>
-                <p className="text-[10px] font-black text-gray-400 tracking-widest mt-1">REF: {selectedTransaction.bookingReference}</p>
+                <p className="text-xl font-bold text-gray-900 tracking-tight uppercase">TRANSACTION LEDGER</p>
+                <p className="text-[10px] font-bold text-gray-400 tracking-widest mt-1">REF: {selectedTransaction.bookingReference}</p>
               </div>
               <button onClick={() => setSelectedTransaction(null)} className="p-2.5 bg-gray-50 hover:bg-gray-100 rounded-2xl text-gray-400 transition-colors"><XCircle className="w-5 h-5" /></button>
             </div>
 
             <div className="p-6 sm:p-8 space-y-6">
-              <div className="p-5 bg-indigo-50/50 rounded-[2rem] border border-indigo-100">
+              <div className="p-5 bg-indigo-50/50 rounded-2xl border border-indigo-100">
                 <div className="flex items-center justify-between mb-4">
-                  <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest">MANIFEST VALUE</p>
+                  <p className="text-[9px] font-bold text-indigo-400 uppercase tracking-widest">MANIFEST VALUE</p>
                   {getStatusBadge(selectedTransaction.paymentStatus)}
                 </div>
-                <p className="text-3xl font-black text-gray-900 tracking-tighter">MWK {selectedTransaction.totalAmount.toLocaleString()}</p>
+                <p className="text-3xl font-bold text-gray-900 tracking-tighter">MWK {selectedTransaction.totalAmount.toLocaleString()}</p>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="p-4 bg-gray-50/50 rounded-2xl border border-gray-100">
-                  <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">CORRIDOR</p>
-                  <p className="text-xs font-black text-gray-900 uppercase truncate">{selectedTransaction.routeOrigin} → {selectedTransaction.routeDestination}</p>
+                  <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-1">CORRIDOR</p>
+                  <p className="text-xs font-bold text-gray-900 uppercase truncate">{selectedTransaction.routeOrigin} → {selectedTransaction.routeDestination}</p>
                 </div>
                 <div className="p-4 bg-gray-50/50 rounded-2xl border border-gray-100">
-                  <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">METHOD</p>
-                  <p className="text-xs font-black text-gray-900 uppercase">{selectedTransaction.paymentMethod}</p>
+                  <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-1">METHOD</p>
+                  <p className="text-xs font-bold text-gray-900 uppercase">{selectedTransaction.paymentMethod}</p>
                 </div>
               </div>
 
@@ -489,22 +489,22 @@ const PaymentsTab: React.FC<PaymentsTabProps> = ({
                 <div className="flex items-center gap-3">
                   <User className="w-4 h-4 text-gray-300" />
                   <div>
-                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">CLIENT</p>
-                    <p className="text-sm font-black text-gray-900 uppercase">{selectedTransaction.customerName}</p>
+                    <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">CLIENT</p>
+                    <p className="text-sm font-bold text-gray-900 uppercase">{selectedTransaction.customerName}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
                   <Mail className="w-4 h-4 text-gray-300" />
                   <div>
-                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">DIGITAL CONTACT</p>
-                    <p className="text-sm font-black text-gray-900 lowercase">{selectedTransaction.customerEmail}</p>
+                    <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">DIGITAL CONTACT</p>
+                    <p className="text-sm font-bold text-gray-900 lowercase">{selectedTransaction.customerEmail}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
-                  <Truck className="w-4 h-4 text-gray-300" />
+                  <BusIcon className="w-4 h-4 text-gray-300" />
                   <div>
-                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">ASSIGNED VESSEL</p>
-                    <p className="text-sm font-black text-gray-900 uppercase">{selectedTransaction.busLicensePlate}</p>
+                    <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">ASSIGNED VESSEL</p>
+                    <p className="text-sm font-bold text-gray-900 uppercase">{selectedTransaction.busLicensePlate}</p>
                   </div>
                 </div>
               </div>
@@ -512,7 +512,7 @@ const PaymentsTab: React.FC<PaymentsTabProps> = ({
 
             <div className="p-6 sm:p-8 border-t border-gray-50">
               <button onClick={() => setSelectedTransaction(null)}
-                className="w-full py-4 bg-indigo-600 text-white rounded-2xl text-[11px] font-black uppercase tracking-widest shadow-xl shadow-indigo-100 active:scale-95 transition-all">
+                className="w-full py-4 bg-indigo-600 text-white rounded-2xl text-[11px] font-bold uppercase tracking-widest shadow-xl shadow-indigo-100 active:scale-95 transition-all">
                 Acknowledge
               </button>
             </div>

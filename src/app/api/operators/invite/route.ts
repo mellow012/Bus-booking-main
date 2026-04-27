@@ -3,6 +3,7 @@ import { createAdminClient } from '@/utils/supabase/admin';
 import { prisma } from '@/lib/prisma';
 import type { Prisma } from '@prisma/client';
 import { sendOperatorInviteEmail } from '@/lib/email-service';
+import { logger } from '@/lib/logger';
 
 type TeamRole = 'operator' | 'conductor';
 
@@ -64,10 +65,16 @@ export async function POST(request: NextRequest): Promise<NextResponse<ApiRespon
     }
 
     // 3. Create Supabase Auth User
+    // IMPORTANT: We embed the role in user_metadata so it is available in the
+    // Supabase JWT and can be read by the middleware for RBAC without a DB call.
     const { data: { user: userRecord }, error: createError } = await adminClient.auth.admin.createUser({
       email: trimmedEmail,
       email_confirm: false,
-      user_metadata: { full_name: name.trim() },
+      user_metadata: {
+        full_name: name.trim(),
+        role,           // e.g. 'operator' | 'conductor'
+        companyId,      // used by middleware for multi-tenant safety
+      },
     });
 
     if (createError || !userRecord) {
@@ -147,6 +154,11 @@ export async function POST(request: NextRequest): Promise<NextResponse<ApiRespon
       role
     );
 
+    await logger.logSuccess('auth', `Team member invited: ${role} (${trimmedEmail})`, {
+      action: 'invite_team_member',
+      metadata: { role, companyId, operatorId },
+    });
+
     return NextResponse.json({
       success: true,
       message: `${role === 'conductor' ? 'Conductor' : 'Operator'} invitation sent successfully!`,
@@ -154,7 +166,9 @@ export async function POST(request: NextRequest): Promise<NextResponse<ApiRespon
     });
 
   } catch (error: any) {
-    console.error('Error inviting team member:', error);
+    await logger.logError('auth', 'Error inviting team member', error, {
+      action: 'invite_team_member_failed',
+    });
     return NextResponse.json(
       { success: false, error: error.message || 'Failed to send invite', message: '' },
       { status: 500 }

@@ -9,7 +9,6 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { ToastContainer } from "@/components/ToastContainer";
 import { EmailVerificationBannerLayout } from "@/components/EmailVerificationBannerLayout";
-import { FCMInitializer } from "@/components/FCMInitializer";
 import { NotificationProviderWrapper } from "@/components/NotificationProviderWrapper";
 
 const inter = Inter({ subsets: ["latin"] });
@@ -19,8 +18,11 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "TibhukeBus - Multi-Company Bus Booking Platform",
-  description: "Book and pay for bus tickets from multiple companies.",
+  title: {
+    template: "%s | TibhukeBus",
+    default: "TibhukeBus - Malawi's #1 Bus Booking Platform",
+  },
+  description: "Find, compare and book bus seats instantly across Malawi. Secure payments via Airtel Money, Mpamba, and Visa. Real-time availability for all major routes.",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
@@ -31,6 +33,28 @@ export const metadata: Metadata = {
     icon: "/tibhukebus_logo_transparent.png",
     shortcut: "/tibhukebus_logo_transparent.png",
     apple: "/tibhukebus_logo_transparent.png",
+  },
+  openGraph: {
+    type: "website",
+    locale: "en_MW",
+    url: "https://tibhukebus.com",
+    siteName: "TibhukeBus",
+    title: "TibhukeBus - Travel Anywhere in Malawi",
+    description: "Book and pay for bus tickets instantly from multiple companies. The fastest way to travel across Malawi.",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "TibhukeBus - Bus Booking Platform",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "TibhukeBus - Travel Anywhere in Malawi",
+    description: "Book and pay for bus tickets instantly. Secure payments and real-time availability.",
+    images: ["/og-image.png"],
   },
   other: {
     "mobile-web-app-capable": "yes",
@@ -59,7 +83,6 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                   </main>
                   <Footer />
                 </div>
-                <FCMInitializer />
                 <ToastContainer />
               </ToastProvider>
             </NotificationProviderWrapper>
