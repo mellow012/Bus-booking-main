@@ -51,6 +51,7 @@ export const useRealtimeBookings = (
     if (!companyId?.trim()) return;
 
     const fetchBookings = async () => {
+      if (!companyId?.trim() || document.visibilityState !== 'visible') return;
       const { data, error } = await supabase
         .from('Booking')
         .select('*, Payment(*)')
@@ -98,7 +99,15 @@ export const useRealtimeBookings = (
       )
       .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') fetchBookings();
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      supabase.removeChannel(channel);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
   }, [companyId, showAlert, activeTab]);
 
   return { bookings, setBookings, realtimeStatus };

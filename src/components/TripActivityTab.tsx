@@ -46,9 +46,22 @@ export default function TripActivityTab({ companyId, schedules, routes, showAler
   };
 
   useEffect(() => {
+    const silentRefresh = () => {
+      if (document.visibilityState === 'visible') fetchLogs();
+    };
+
     fetchLogs();
-    const interval = setInterval(fetchLogs, 15000); // Polling for updates
-    return () => clearInterval(interval);
+    const interval = setInterval(silentRefresh, 15000); // Polling for updates
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') fetchLogs();
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
   }, [companyId]);
 
   const filteredLogs = useMemo(() => {

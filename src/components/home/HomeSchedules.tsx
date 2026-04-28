@@ -54,9 +54,22 @@ export default function HomeSchedules() {
   }, []);
 
   useEffect(() => {
+    const silentRefresh = () => {
+      if (document.visibilityState === 'visible') fetchSchedules(false);
+    };
+
     fetchSchedules();
-    pollingIntervalRef.current = setInterval(() => fetchSchedules(false), 45000);
-    return () => { if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current); };
+    pollingIntervalRef.current = setInterval(silentRefresh, 45000);
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') fetchSchedules(false);
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
   }, [fetchSchedules]);
 
   useEffect(() => {

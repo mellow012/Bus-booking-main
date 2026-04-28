@@ -64,10 +64,23 @@ export default function NotificationsPage() {
 
   // Initial load and polling
   useEffect(() => {
+    const silentRefresh = () => {
+      if (document.visibilityState === 'visible') fetchNotifications(1, true);
+    };
+
     fetchNotifications(1);
     // Poll for new notifications every 10 seconds
-    const interval = setInterval(() => fetchNotifications(1, true), 10000);
-    return () => clearInterval(interval);
+    const interval = setInterval(silentRefresh, 10000);
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') fetchNotifications(1, true);
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
   }, [fetchNotifications]);
 
   // Mark single notification as read

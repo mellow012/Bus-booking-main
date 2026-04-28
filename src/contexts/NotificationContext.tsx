@@ -109,6 +109,12 @@ export const NotificationProvider: React.FC<{ children: ReactNode; userId?: stri
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'Notification', filter: `userId=eq.${userId}` },
         (payload) => {
+          // If tab is hidden, we'll sync everything when they come back
+          // but for toast notifications, we might still want it? 
+          // User asked to "prevent refresh", usually meaning data refresh.
+          // Let's stick to the pattern: only update state if visible.
+          if (document.visibilityState !== 'visible') return;
+          
           const newNotification = payload.new as Notification;
           setNotifications((prev) => [newNotification, ...prev]);
           import('react-hot-toast').then(({ default: toast }) => {
@@ -118,8 +124,14 @@ export const NotificationProvider: React.FC<{ children: ReactNode; userId?: stri
       )
       .subscribe();
 
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') fetchNotifications();
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
     return () => {
       supabase.removeChannel(channel);
+      document.removeEventListener('visibilitychange', handleVisibility);
     };
   }, [userId, fetchNotifications]);
 

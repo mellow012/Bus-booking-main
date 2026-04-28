@@ -188,20 +188,36 @@ export default function OperatorDashboard() {
     fetchInitialData();
   }, [user, userProfile, authLoading, router, fetchInitialData]);
 
-  // Real-time Subscriptions
+  // Real-time Subscriptions + visibility-aware polling
   useEffect(() => {
     if (!companyId) return;
+
+    // Only refresh when the tab is actually visible
+    const silentRefresh = () => {
+      if (document.visibilityState === 'visible') fetchInitialData(true);
+    };
+
     const channels = [
-      supabase.channel('ops-schedules').on('postgres_changes', { event: '*', schema: 'public', table: 'Schedule', filter: `companyId=eq.${companyId}` }, () => fetchInitialData(true)).subscribe(),
-      supabase.channel('ops-bookings').on('postgres_changes', { event: '*', schema: 'public', table: 'Booking', filter: `companyId=eq.${companyId}` }, () => fetchInitialData(true)).subscribe(),
+      supabase.channel('ops-schedules').on('postgres_changes', { event: '*', schema: 'public', table: 'Schedule', filter: `companyId=eq.${companyId}` }, silentRefresh).subscribe(),
+      supabase.channel('ops-bookings').on('postgres_changes', { event: '*', schema: 'public', table: 'Booking', filter: `companyId=eq.${companyId}` }, silentRefresh).subscribe(),
       supabase.channel('ops-location').on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'ActivityLog', filter: `companyId=eq.${companyId}` }, (payload) => {
-        if ((payload.new as any).action === 'LOCATION_SYNC') {
-           fetchInitialData(true);
-        }
+        if ((payload.new as any).action === 'LOCATION_SYNC') silentRefresh();
       }).subscribe(),
     ];
-    const pollInterval = setInterval(() => fetchInitialData(true), 30000);
-    return () => { channels.forEach(c => supabase.removeChannel(c)); clearInterval(pollInterval); };
+
+    const pollInterval = setInterval(silentRefresh, 30000);
+
+    // When tab becomes visible again, do one clean refresh instead of queueing many
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') fetchInitialData(true);
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      channels.forEach(c => supabase.removeChannel(c));
+      clearInterval(pollInterval);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
   }, [companyId, fetchInitialData]);
 
   // Stats for Operator "Daily Snapshot"

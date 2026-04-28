@@ -93,9 +93,22 @@ export function useConductorDashboard() {
   useEffect(() => {
     if (authLoading) return;
     if (user && userProfile?.role === 'conductor') {
+      const silentRefresh = () => {
+        if (document.visibilityState === 'visible') fetchInitialData(true);
+      };
+      
       fetchInitialData(false);
-      const intervalId = setInterval(() => fetchInitialData(true), 30000);
-      return () => clearInterval(intervalId);
+      const intervalId = setInterval(silentRefresh, 30000);
+
+      const handleVisibility = () => {
+        if (document.visibilityState === 'visible') fetchInitialData(true);
+      };
+      document.addEventListener('visibilitychange', handleVisibility);
+
+      return () => {
+        clearInterval(intervalId);
+        document.removeEventListener('visibilitychange', handleVisibility);
+      };
     }
   }, [user, userProfile, authLoading, fetchInitialData]);
 
@@ -104,6 +117,7 @@ export function useConductorDashboard() {
     if (typeof window === 'undefined' || !navigator.geolocation || !user) return;
 
     const syncLocation = () => {
+      if (document.visibilityState !== 'visible') return;
       navigator.geolocation.getCurrentPosition(
         async (pos) => {
           await dbActions.syncBusLocation({
@@ -128,7 +142,7 @@ export function useConductorDashboard() {
 
   useEffect(() => {
     const fetchBookings = async () => {
-      if (!selectedTrip) return;
+      if (!selectedTrip || document.visibilityState !== 'visible') return;
       const res = await dbActions.getBookingsForSchedule(selectedTrip.id);
       if (res.success && res.data) setTripBookings(res.data as Booking[]);
       else setTripBookings([]);
@@ -139,7 +153,16 @@ export function useConductorDashboard() {
       const channel = supabase.channel(`trip-${selectedTrip.id}-bookings`)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'Booking', filter: `scheduleId=eq.${selectedTrip.id}` }, () => fetchBookings())
         .subscribe();
-      return () => { supabase.removeChannel(channel); };
+      
+      const handleVisibility = () => {
+        if (document.visibilityState === 'visible') fetchBookings();
+      };
+      document.addEventListener('visibilitychange', handleVisibility);
+
+      return () => { 
+        supabase.removeChannel(channel); 
+        document.removeEventListener('visibilitychange', handleVisibility);
+      };
     }
   }, [selectedTrip?.id]);
 
