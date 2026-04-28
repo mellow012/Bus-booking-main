@@ -177,7 +177,7 @@ export type UserProfile =
 // ─── Bus ──────────────────────────────────────────────────────────────────────
 
 export type BusType   = 'AC' | 'Non-AC' | 'Sleeper' | 'Semi-Sleeper' | 'Luxury' | 'Economy' | 'Minibus';
-export type BusStatus = 'active' | 'inactive' | 'maintenance';
+export type BusStatus = 'active' | 'inactive' | 'maintenance' | 'on_trip';
 export type FuelType  = 'diesel' | 'petrol' | 'electric' | 'hybrid';
 
 export interface InsuranceDetails {

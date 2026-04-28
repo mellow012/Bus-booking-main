@@ -18,6 +18,7 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://tibhukebus.com'),
   title: {
     template: "%s | TibhukeBus",
     default: "TibhukeBus - Malawi's #1 Bus Booking Platform",

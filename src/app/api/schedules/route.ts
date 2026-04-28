@@ -123,6 +123,8 @@ export async function GET(request: NextRequest) {
         const bus = sch.bus;
         const company = sch.company;
 
+        if (!route || !bus || !company) return null;
+
         // Filter by city names if specified
         if (from && !route.origin.toLowerCase().includes(from)) return null;
         if (to && !route.destination.toLowerCase().includes(to)) return null;

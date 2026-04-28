@@ -1,6 +1,6 @@
 "use client";
 
-import { FC, useState, useMemo, useCallback, useEffect } from "react";
+import React, { FC, useState, useMemo, useCallback, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import * as dbActions from "@/lib/actions/db.actions";
 import { useAppToast } from "@/contexts/ToastContext";
@@ -421,7 +421,7 @@ const BookingsTab: FC<BookingsTabProps> = ({ schedules, routes, buses, companyId
   const schedulesByDate = useMemo(() => {
     const map = new Map<string, Set<string>>();
     schedules.forEach(s => {
-      if (s.status === "archived") return;
+      if (s.status === "archived" || (s as any).isArchived) return;
       const ds = toDate(s.departureDateTime).toISOString().split("T")[0];
       if (!map.has(ds)) map.set(ds, new Set());
       map.get(ds)!.add(s.id);
@@ -454,7 +454,13 @@ const BookingsTab: FC<BookingsTabProps> = ({ schedules, routes, buses, companyId
         if (!hit) return false;
       }
       return true;
-    }).sort((a, b) => toDate(b.createdAt).getTime() - toDate(a.createdAt).getTime());
+    }).sort((a, b) => {
+      const scA = schedules.find(s => s.id === a.scheduleId);
+      const scB = schedules.find(s => s.id === b.scheduleId);
+      const dA = scA ? toDate(scA.departureDateTime).getTime() : 0;
+      const dB = scB ? toDate(scB.departureDateTime).getTime() : 0;
+      return dB - dA || toDate(b.createdAt).getTime() - toDate(a.createdAt).getTime();
+    });
   }, [bookings, scheduleIdsForDate, statusFilter, search, schedules, routes]);
 
   const bySchedule = useMemo(() => {
@@ -641,6 +647,24 @@ const BookingsTab: FC<BookingsTabProps> = ({ schedules, routes, buses, companyId
 
       {/* ── Search & Filters Bar ── */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-6">
+        {/* Quick date filters */}
+        <div className="flex flex-wrap gap-2 mb-4">
+          {[
+            { label: "All", value: "" },
+            { label: "Today", value: todayStr() },
+            { label: "Yesterday", value: (() => { const d = new Date(); d.setDate(d.getDate() - 1); return d.toISOString().split("T")[0]; })() },
+          ].map(f => (
+            <button key={f.label} onClick={() => setSelectedDate(f.value)}
+              className={`px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all active:scale-95 ${
+                selectedDate === f.value
+                  ? "bg-indigo-600 text-white shadow-lg shadow-indigo-100"
+                  : "bg-gray-50 text-gray-500 border border-gray-100 hover:bg-indigo-50 hover:text-indigo-600"
+              }`}>
+              {f.label}
+            </button>
+          ))}
+        </div>
+
         <div className="flex flex-col lg:flex-row gap-4 items-center justify-between">
           <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto flex-1 max-w-4xl">
             <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)}
@@ -712,79 +736,104 @@ const BookingsTab: FC<BookingsTabProps> = ({ schedules, routes, buses, companyId
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {paginatedRows.map(booking => {
-                  const sc      = schedules.find(s => s.id === booking.scheduleId);
-                  const route   = routes.find(r => r.id === sc?.routeId);
-                  const seg     = passengerSegment(booking, route);
-                  const busy    = actionLoading === booking.id;
-                  const isPending = booking.bookingStatus === "pending";
-                  const isSelected = selectedIds.has(booking.id);
+                {(() => {
+                  let lastDateLabel = '';
+                  return paginatedRows.map(booking => {
+                    const sc      = schedules.find(s => s.id === booking.scheduleId);
+                    const route   = routes.find(r => r.id === sc?.routeId);
+                    const seg     = passengerSegment(booking, route);
+                    const busy    = actionLoading === booking.id;
+                    const isPending = booking.bookingStatus === "pending";
+                    const isSelected = selectedIds.has(booking.id);
 
-                  return (
-                    <tr key={booking.id} className={`transition-all duration-300 group ${isSelected ? "bg-indigo-50/50" : "hover:bg-gray-50/50"}`}>
-                      {isAdmin && (
-                        <td className="px-8 py-6">
-                          {isPending && (
-                            <input type="checkbox" checked={isSelected}
-                              onChange={e => {
-                                const next = new Set(selectedIds);
-                                e.target.checked ? next.add(booking.id) : next.delete(booking.id);
-                                setSelectedIds(next);
-                              }}
-                              className="rounded-lg border-gray-200 text-indigo-600 w-4 h-4" />
+                    // Date grouping
+                    const tripDate = sc ? toDate(sc.departureDateTime) : toDate(booking.createdAt);
+                    const dateLabel = fmtDate(tripDate);
+                    const showDateHeader = dateLabel !== lastDateLabel;
+                    lastDateLabel = dateLabel;
+                    const colCount = isAdmin ? 8 : 7;
+
+                    return (
+                      <React.Fragment key={`row-${booking.id}`}>
+                        {showDateHeader && (
+                          <tr className="bg-indigo-50/40">
+                            <td colSpan={colCount} className="px-8 py-3">
+                              <div className="flex items-center gap-2">
+                                <Calendar className="w-3.5 h-3.5 text-indigo-400" />
+                                <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest">{dateLabel}</span>
+                                <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest ml-2">
+                                  {fmtTime(tripDate)} departure
+                                </span>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                        <tr className={`transition-all duration-300 group ${isSelected ? "bg-indigo-50/50" : "hover:bg-gray-50/50"}`}>
+                          {isAdmin && (
+                            <td className="px-8 py-6">
+                              {isPending && (
+                                <input type="checkbox" checked={isSelected}
+                                  onChange={e => {
+                                    const next = new Set(selectedIds);
+                                    e.target.checked ? next.add(booking.id) : next.delete(booking.id);
+                                    setSelectedIds(next);
+                                  }}
+                                  className="rounded-lg border-gray-200 text-indigo-600 w-4 h-4" />
+                              )}
+                            </td>
                           )}
-                        </td>
-                      )}
 
-                      <td className="px-8 py-6">
-                        <span className="font-mono text-[10px] font-bold text-gray-400 bg-gray-50 border border-gray-100 px-2 py-1 rounded-lg group-hover:bg-indigo-600 group-hover:text-white group-hover:border-indigo-600 transition-all">
-                          #{booking.bookingReference ?? booking.id.slice(0, 8)}
-                        </span>
-                      </td>
+                          <td className="px-8 py-6">
+                            <span className="font-mono text-[10px] font-bold text-gray-400 bg-gray-50 border border-gray-100 px-2 py-1 rounded-lg group-hover:bg-indigo-600 group-hover:text-white group-hover:border-indigo-600 transition-all">
+                              #{booking.bookingReference ?? booking.id.slice(0, 8)}
+                            </span>
+                          </td>
 
-                      <td className="px-8 py-6">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 bg-indigo-50 rounded-xl flex items-center justify-center text-[10px] font-bold text-indigo-600 border border-indigo-100 group-hover:scale-110 transition-transform">
-                            {passengerName(booking).substring(0, 1)}
-                          </div>
-                          <div>
-                            <p className="font-bold text-gray-900 text-xs uppercase tracking-tight">{passengerName(booking)}</p>
-                            <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">{booking.passengerDetails?.[0]?.contactNumber || "No Contact"}</p>
-                          </div>
-                        </div>
-                      </td>
+                          <td className="px-8 py-6">
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 bg-indigo-50 rounded-xl flex items-center justify-center text-[10px] font-bold text-indigo-600 border border-indigo-100 group-hover:scale-110 transition-transform">
+                                {passengerName(booking).substring(0, 1)}
+                              </div>
+                              <div>
+                                <p className="font-bold text-gray-900 text-xs uppercase tracking-tight">{passengerName(booking)}</p>
+                                <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">{booking.passengerDetails?.[0]?.contactNumber || "No Contact"}</p>
+                              </div>
+                            </div>
+                          </td>
 
-                      <td className="px-8 py-6">
-                         <div className="flex items-center gap-2 text-xs font-bold text-gray-700 uppercase tracking-tight">
-                            {seg.from} <ArrowRight className="w-3 h-3 text-gray-300" /> {seg.to}
-                         </div>
-                      </td>
+                          <td className="px-8 py-6">
+                             <div className="flex items-center gap-2 text-xs font-bold text-gray-700 uppercase tracking-tight">
+                                {seg.from} <ArrowRight className="w-3 h-3 text-gray-300" /> {seg.to}
+                             </div>
+                          </td>
 
-                      <td className="px-8 py-6">
-                        <div className="flex flex-col gap-1">
-                          <span className="px-2.5 py-1 bg-gray-50 text-gray-600 text-[10px] font-bold uppercase tracking-widest rounded-lg border border-gray-100 w-fit">
-                            {booking.seatNumbers?.join(", ") || "No Seat"}
-                          </span>
-                        </div>
-                      </td>
+                          <td className="px-8 py-6">
+                            <div className="flex flex-col gap-1">
+                              <span className="px-2.5 py-1 bg-gray-50 text-gray-600 text-[10px] font-bold uppercase tracking-widest rounded-lg border border-gray-100 w-fit">
+                                {booking.seatNumbers?.join(", ") || "No Seat"}
+                              </span>
+                            </div>
+                          </td>
 
-                      <td className="px-8 py-6">
-                        <p className="text-sm font-bold text-gray-900 tracking-tighter">MWK {fmt(booking.totalAmount ?? 0)}</p>
-                      </td>
+                          <td className="px-8 py-6">
+                            <p className="text-sm font-bold text-gray-900 tracking-tighter">MWK {fmt(booking.totalAmount ?? 0)}</p>
+                          </td>
 
-                      <td className="px-8 py-6">
-                        <BookingStatusBadge booking={booking} />
-                      </td>
+                          <td className="px-8 py-6">
+                            <BookingStatusBadge booking={booking} />
+                          </td>
 
-                      <td className="px-8 py-6">
-                        <button onClick={() => setSelectedBooking(booking)}
-                          className="p-2.5 bg-gray-50 hover:bg-indigo-600 hover:text-white rounded-xl text-gray-400 transition-all active:scale-95 border border-gray-100 hover:border-indigo-600">
-                          <Eye className="w-4 h-4" />
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
+                          <td className="px-8 py-6">
+                            <button onClick={() => setSelectedBooking(booking)}
+                              className="p-2.5 bg-gray-50 hover:bg-indigo-600 hover:text-white rounded-xl text-gray-400 transition-all active:scale-95 border border-gray-100 hover:border-indigo-600">
+                              <Eye className="w-4 h-4" />
+                            </button>
+                          </td>
+                        </tr>
+                      </React.Fragment>
+                    );
+                  });
+                })()}
               </tbody>
             </table>
           </div>

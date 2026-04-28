@@ -161,6 +161,12 @@ model Schedule {
   route             Route             @relation(fields: [routeId], references: [id])
   reservations      SeatReservation[]
   activities        ActivityLog[]
+
+  @@index([companyId])
+  @@index([busId])
+  @@index([routeId])
+  @@index([departureDateTime])
+  @@index([status])
 }
 
 model Booking {

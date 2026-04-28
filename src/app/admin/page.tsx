@@ -49,7 +49,7 @@ import {
   Gift,
   Menu,
 } from 'lucide-react';
-import AlertMessage from '../../components/AlertMessage';
+import AlertMessage from '@/components/AlertMessage';
 import { Company, UserProfile, Booking, Schedule, Route, Bus, OperatorProfile, ConductorProfile, Promotion } from '@/types/index';
 import TabButton from '@/components/tabButton';
 import DashboardBottomNav from "@/components/DashboardBottomNav";

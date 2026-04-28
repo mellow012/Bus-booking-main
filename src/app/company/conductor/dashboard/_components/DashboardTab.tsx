@@ -1,8 +1,8 @@
 'use client';
 
-import { Bus as BusIcon, QrCode, Search, Ticket, CheckCircle, MapPin, Users, FileText } from 'lucide-react';
+import { MapPin, Users, FileText, ArrowRight, Play, Navigation, Flag, CheckCircle2, Bus as BusIcon, QrCode, Search, Ticket, CheckCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Schedule, Route, Bus, Booking } from '@/types';
+import { Schedule, Route, Bus, Booking, buildTripStopSequence } from '@/types';
 
 interface DashboardTabProps {
   selectedTrip: Schedule | null;
@@ -12,7 +12,7 @@ interface DashboardTabProps {
   tripBookings: Booking[];
   tripStats: { totalPax: number; boarded: number; pending: number; cancelled: number };
   setSelectedTrip: (trip: Schedule) => void;
-  handleUpdateTripStatus: (status: any) => void;
+  handleUpdateTripStatus: (status: any, extra?: any) => void;
   setScannerModalOpen: (open: boolean) => void;
   setWalkOnModalOpen: (open: boolean) => void;
   setActiveTab: (tab: any) => void;
@@ -77,22 +77,71 @@ export default function DashboardTab({
                <p className="text-xs text-gray-400 font-semibold mb-1 uppercase tracking-wider">Departure</p>
                <p className="text-sm font-bold text-gray-900">{new Date(bestCandidate.departureDateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
             </div>
-            {isUpcoming ? (
+            {bestCandidate.tripStatus === 'scheduled' || !bestCandidate.tripStatus ? (
               <Button 
                 onClick={() => { setSelectedTrip(bestCandidate); handleUpdateTripStatus('boarding'); }}
                 className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl px-6 h-12 font-bold shadow-lg shadow-emerald-100"
               >
-                 Start Boarding
+                 <Play className="w-4 h-4 mr-2" /> Start Boarding
+              </Button>
+            ) : bestCandidate.tripStatus === 'boarding' ? (
+              <Button 
+                onClick={() => { 
+                  if(confirm("Confirm departure from origin?")) {
+                    handleUpdateTripStatus('in_transit', { currentStopIndex: 0, currentStopId: '__origin__' }); 
+                  }
+                }}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl px-6 h-12 font-bold shadow-lg shadow-indigo-100 animate-pulse"
+              >
+                 <Navigation className="w-4 h-4 mr-2" /> Depart Origin
+              </Button>
+            ) : bestCandidate.tripStatus === 'in_transit' ? (
+              <div className="flex items-center gap-3">
+                 <div className="text-right hidden sm:block">
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">En Route To</p>
+                    <p className="text-sm font-bold text-gray-900">{buildTripStopSequence(bestCandidate, activeRoute)[(bestCandidate.currentStopIndex || 0) + 1]?.name || 'Final Destination'}</p>
+                 </div>
+                 <Button 
+                  onClick={() => {
+                    const stops = buildTripStopSequence(bestCandidate, activeRoute);
+                    const nextIndex = (bestCandidate.currentStopIndex || 0) + 1;
+                    const nextStop = stops[nextIndex];
+                    
+                    if (nextStop?.id === '__destination__') {
+                      if(confirm("Arrived at final destination? This will complete the trip.")) {
+                        handleUpdateTripStatus('completed', { currentStopIndex: nextIndex, currentStopId: '__destination__' });
+                      }
+                    } else {
+                      if(confirm(`Confirm arrival at ${nextStop?.name}?`)) {
+                        handleUpdateTripStatus('arrived', { currentStopIndex: nextIndex, currentStopId: nextStop.id });
+                      }
+                    }
+                  }}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl px-6 h-12 font-bold shadow-lg shadow-indigo-100"
+                >
+                   {((bestCandidate.currentStopIndex || 0) + 1) >= (buildTripStopSequence(bestCandidate, activeRoute).length - 1) 
+                     ? <><Flag className="w-4 h-4 mr-2" /> Arrive</>
+                     : <><ArrowRight className="w-4 h-4 mr-2" /> Next Stop</>
+                   }
+                </Button>
+              </div>
+            ) : bestCandidate.tripStatus === 'arrived' ? (
+              <Button 
+                onClick={() => {
+                  const stops = buildTripStopSequence(bestCandidate, activeRoute);
+                  const currentStop = stops[bestCandidate.currentStopIndex || 0];
+                  if(confirm(`Confirm departure from ${currentStop?.name}?`)) {
+                    handleUpdateTripStatus('in_transit');
+                  }
+                }}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl px-6 h-12 font-bold shadow-lg shadow-emerald-100"
+              >
+                 <Navigation className="w-4 h-4 mr-2" /> Resume Trip
               </Button>
             ) : (
-              <div className="flex items-center gap-6">
-                 <div>
-                    <p className="text-xs text-gray-400 font-semibold mb-1 uppercase tracking-wider">Bus</p>
-                    <p className="text-sm font-bold text-gray-900">{activeBus?.licensePlate || 'N/A'}</p>
-                 </div>
-                 <span className="px-4 py-2 rounded-lg text-xs font-bold bg-green-50 text-green-600">
-                    On Time
-                 </span>
+              <div className="flex items-center gap-2">
+                 <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+                 <span className="text-sm font-bold text-emerald-600 uppercase tracking-widest">Completed</span>
               </div>
             )}
          </div>
@@ -112,8 +161,8 @@ export default function DashboardTab({
             <p className="text-3xl font-black text-amber-500">{tripStats.pending}</p>
          </div>
          <div className="bg-white rounded-[20px] p-6 border border-gray-100 shadow-sm flex flex-col justify-center">
-            <p className="text-xs font-semibold text-gray-500 mb-2">Cancelled</p>
-            <p className="text-3xl font-black text-rose-500">{tripStats.cancelled}</p>
+            <p className="text-xs font-semibold text-gray-500 mb-2">Seats Left</p>
+            <p className="text-3xl font-black text-rose-500">{(activeBus?.capacity || 0) - tripStats.totalPax}</p>
          </div>
       </div>
 
@@ -172,7 +221,7 @@ export default function DashboardTab({
                        <p className="text-xs font-mono font-bold text-gray-500">{b.bookingReference || b.id.substring(0,8).toUpperCase()}</p>
                        <p className="text-xs font-semibold text-gray-500 w-16">{new Date(b.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
                        <div className="flex items-center gap-1.5 w-24 justify-end">
-                          <CheckCircle className="w-3.5 h-3.5 text-emerald-500" />
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
                           <span className="text-xs font-bold text-emerald-600">Checked In</span>
                        </div>
                     </div>

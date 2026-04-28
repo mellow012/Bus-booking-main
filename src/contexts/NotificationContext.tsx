@@ -20,7 +20,8 @@ export type NotificationType =
   | 'promotion'
   | 'alert'
   | 'cancellation'
-  | 'cancellation_requested';
+  | 'cancellation_requested'
+  | 'trip_update';
 
 export interface SendNotificationParams {
   userId: string;

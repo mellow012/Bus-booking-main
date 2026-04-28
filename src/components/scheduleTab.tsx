@@ -375,7 +375,8 @@ const SchedulesTab: FC<SchedulesTabProps> = ({
           setShowAddTemplateModal(false);
         } else throw new Error(result.error);
       } else if (selectedTemplate) {
-        const result = await dbActions.updateScheduleTemplate(selectedTemplate.id, templateFormData);
+        const { availableSeats, ...updatableTemplateData } = templateFormData;
+        const result = await dbActions.updateScheduleTemplate(selectedTemplate.id, updatableTemplateData);
         if (result.success) {
           setTemplates(prev => prev.map(t => t.id === selectedTemplate.id ? (result.data as unknown as ScheduleTemplate) : t));
           setSuccess("Template architecture updated!");
@@ -628,7 +629,10 @@ const SchedulesTab: FC<SchedulesTabProps> = ({
                   </div>
 
                   <div className="mt-auto pt-6 border-t border-gray-50 flex gap-2">
-                     <button className="flex-1 flex items-center justify-center gap-2 px-4 py-3.5 bg-gray-50 text-gray-700 hover:bg-gray-100 rounded-2xl transition-all text-[10px] font-bold uppercase tracking-widest border border-gray-100">
+                     <button 
+                       onClick={() => handleEditClick(schedule)}
+                       className="flex-1 flex items-center justify-center gap-2 px-4 py-3.5 bg-gray-50 text-gray-700 hover:bg-gray-100 rounded-2xl transition-all text-[10px] font-bold uppercase tracking-widest border border-gray-100"
+                     >
                        <Eye className="w-4 h-4" /> View
                      </button>
                      <button 

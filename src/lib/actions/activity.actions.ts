@@ -66,25 +66,23 @@ export async function createNotification(data: {
   type: string;
   priority?: string;
   actionUrl?: string;
-  data: object;
+  data?: any;
 }) {
   try {
-    const notification = await (prisma as unknown as {
-      notification: { create: (o: object) => Promise<unknown> }
-    }).notification.create({
+    const notification = await prisma.notification.create({
       data: {
-        userId: data.userId as string,
-        title: data.title as string,
-        message: data.message as string,
-        type: data.type as string,
-        priority: (data.priority as string) || 'medium',
-        actionUrl: data.actionUrl as string,
-        data: data.data as object,
+        userId: data.userId,
+        title: data.title,
+        message: data.message,
+        type: data.type,
+        priority: data.priority || 'medium',
+        actionUrl: data.actionUrl || null,
+        data: data.data || {},
       },
     });
     return { success: true, data: notification };
-  } catch (error: unknown) {
+  } catch (error: any) {
     console.error('Error creating notification:', error);
-    return { success: false, error: (error as Error).message };
+    return { success: false, error: error.message };
   }
 }

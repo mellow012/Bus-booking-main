@@ -1,7 +1,7 @@
 "use client";
 import { useMemo } from "react";
 import {
-  DollarSign, Bus as BusIcon, TrendingUp, AlertTriangle, CheckCircle, MapPin, Ticket, RefreshCcw, Bell, Wallet, UserPlus, CreditCard
+  DollarSign, Bus as BusIcon, TrendingUp, AlertTriangle, CheckCircle, MapPin, Ticket, RefreshCcw, Bell, Wallet, UserPlus, CreditCard, Navigation
 } from "lucide-react";
 import { Company, Schedule, Route, Bus, Booking } from "@/types";
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
@@ -29,6 +29,7 @@ const toDate = (date: any): Date => {
 };
 
 const fmt = (n: number) => n.toLocaleString("en-MW");
+const fmtTime = (d: Date) => d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
 function AdminStatCard({ title, value, icon: Icon, trend }: { title: string; value: string; icon: any; trend?: string }) {
   return (
@@ -101,6 +102,17 @@ export default function OverviewTab({ dashboardData, realtimeStatus, setActiveTa
       .sort((a, b) => b.rev - a.rev)
       .slice(0, 5);
   }, [bookings, routes]);
+  
+  const liveTrip = useMemo(() => {
+    const current = schedules.find(s => s.tripStatus === 'in_transit' || s.tripStatus === 'boarding');
+    if (current) return current;
+    
+    const upcoming = [...schedules]
+      .filter(s => s.tripStatus === 'scheduled' || !s.tripStatus)
+      .sort((a,b) => toDate(a.departureDateTime).getTime() - toDate(b.departureDateTime).getTime());
+    
+    return upcoming[0] || null;
+  }, [schedules]);
 
   const chartData = useMemo(() => {
     // Generate last 7 days of real data
@@ -135,6 +147,52 @@ export default function OverviewTab({ dashboardData, realtimeStatus, setActiveTa
            </div>
         </div>
       </div>
+
+      {/* ── Live Trip Insight ── */}
+      {liveTrip && (
+        <div className="bg-indigo-900 rounded-[32px] p-8 mb-8 text-white relative overflow-hidden group shadow-2xl border border-indigo-800">
+          <div className="absolute top-0 right-0 p-12 opacity-10 group-hover:scale-110 transition-transform duration-700">
+             <BusIcon className="w-48 h-48" />
+          </div>
+          <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-8">
+            <div className="flex flex-col sm:flex-row items-center gap-6">
+              <div className="w-20 h-20 bg-white/10 rounded-3xl flex items-center justify-center border border-white/20 backdrop-blur-md shadow-inner">
+                <Navigation className={`w-10 h-10 ${liveTrip.tripStatus === 'in_transit' ? 'text-emerald-400 animate-pulse' : 'text-indigo-300'}`} />
+              </div>
+              <div className="text-center sm:text-left">
+                <p className="text-[10px] font-black text-indigo-300 uppercase tracking-widest mb-2 flex items-center justify-center sm:justify-start gap-2">
+                  <span className={`w-2 h-2 rounded-full ${liveTrip.tripStatus === 'in_transit' ? 'bg-emerald-400' : 'bg-indigo-400'}`} />
+                  {liveTrip.tripStatus === 'in_transit' ? 'Currently In Transit' : 
+                   liveTrip.tripStatus === 'boarding' ? 'Vessel Boarding' : 'Next Strategic Deployment'}
+                </p>
+                <h2 className="text-3xl font-black tracking-tighter uppercase leading-none mb-3">
+                  {routes.find(r => r.id === liveTrip.routeId)?.name || 'Direct Corridor'}
+                </h2>
+                <div className="flex flex-wrap items-center justify-center sm:justify-start gap-3">
+                  <span className="text-[10px] font-black text-white uppercase tracking-widest bg-indigo-800/50 border border-indigo-700/50 px-4 py-2 rounded-xl">
+                    {new Date(liveTrip.departureDateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} Departure
+                  </span>
+                  <span className="text-[10px] font-black text-white uppercase tracking-widest bg-indigo-800/50 border border-indigo-700/50 px-4 py-2 rounded-xl">
+                    Bus {buses.find(b => b.id === liveTrip.busId)?.licensePlate || 'N/A'}
+                  </span>
+                </div>
+              </div>
+            </div>
+            
+            <div className="flex items-center justify-center lg:justify-end gap-10">
+              <div className="text-center lg:text-right border-l lg:border-l-0 lg:border-r border-white/10 px-8">
+                <p className="text-[10px] font-bold text-indigo-300 uppercase tracking-widest mb-1">Saturation</p>
+                <p className="text-4xl font-black tracking-tighter">
+                  {((bookings.filter(b => b.scheduleId === liveTrip.id).length / (buses.find(b => b.id === liveTrip.busId)?.capacity || 1)) * 100).toFixed(0)}%
+                </p>
+              </div>
+              <button onClick={() => setActiveTab('schedules')} className="bg-white text-indigo-900 px-10 py-5 rounded-[24px] text-[11px] font-black uppercase tracking-widest shadow-2xl hover:bg-indigo-50 transition-all active:scale-95 hover:shadow-indigo-500/20">
+                Optimize Operations
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Top 6 KPI Cards ── */}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">

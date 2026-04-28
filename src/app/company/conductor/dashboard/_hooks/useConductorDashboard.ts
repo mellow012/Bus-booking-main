@@ -100,6 +100,33 @@ export function useConductorDashboard() {
   }, [user, userProfile, authLoading, fetchInitialData]);
 
   useEffect(() => {
+    if (!selectedTrip || selectedTrip.tripStatus !== 'in_transit') return;
+    if (typeof window === 'undefined' || !navigator.geolocation || !user) return;
+
+    const syncLocation = () => {
+      navigator.geolocation.getCurrentPosition(
+        async (pos) => {
+          await dbActions.syncBusLocation({
+            busId: selectedTrip.busId,
+            scheduleId: selectedTrip.id,
+            userId: user.id,
+            latitude: pos.coords.latitude,
+            longitude: pos.coords.longitude,
+            speed: pos.coords.speed || undefined,
+            heading: pos.coords.heading || undefined,
+          });
+        },
+        (err) => console.warn("Location sync failed:", err),
+        { enableHighAccuracy: true }
+      );
+    };
+
+    syncLocation();
+    const id = setInterval(syncLocation, 60000); // Sync every minute
+    return () => clearInterval(id);
+  }, [selectedTrip?.id, selectedTrip?.tripStatus]);
+
+  useEffect(() => {
     const fetchBookings = async () => {
       if (!selectedTrip) return;
       const res = await dbActions.getBookingsForSchedule(selectedTrip.id);
@@ -156,13 +183,24 @@ export function useConductorDashboard() {
     }
   };
 
-  const handleUpdateTripStatus = async (newStatus: TripStatus) => {
-    if (!selectedTrip) return;
+  const handleUpdateTripStatus = async (newStatus: TripStatus, extra?: any) => {
+    if (!selectedTrip || !user) return;
     try {
-      const res = await dbActions.updateSchedule(selectedTrip.id, { tripStatus: newStatus });
-      if (res.success) setSelectedTrip(res.data as Schedule);
-    } catch (err) {
-      setGlobalError('Failed to update trip status');
+      const res = await dbActions.updateTripLifecycle({
+        scheduleId: selectedTrip.id,
+        newStatus,
+        userId: user.id,
+        ...extra
+      });
+      if (res.success) {
+        setSelectedTrip(res.data as Schedule);
+        setSuccessMessage(`Trip status updated to ${newStatus.replace('_', ' ')}`);
+        setTimeout(() => setSuccessMessage(''), 5000);
+      } else {
+        throw new Error(res.error);
+      }
+    } catch (err: any) {
+      setGlobalError(err.message || 'Failed to update trip status');
     }
   };
 

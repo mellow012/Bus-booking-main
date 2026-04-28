@@ -228,7 +228,7 @@ export default function ConductorDashboard() {
 
       {/* Bottom Nav for Mobile */}
       <DashboardBottomNav 
-        tabs={TABS.slice(0, 5).map(t => ({
+        tabs={TABS.slice(0, 4).map(t => ({
           ...t,
           badge: t.id === 'dashboard' ? unreadCount > 0 : false
         }))} 

@@ -22,3 +22,4 @@ export * from './fleet.actions';
 export * from './company.actions';
 export * from './activity.actions';
 export * from './messaging.actions';
+export * from './trip.actions';
