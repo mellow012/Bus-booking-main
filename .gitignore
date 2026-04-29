@@ -104,3 +104,7 @@ public/fallback-*.js
 
 # Clutter
 "public/Airtel Money Uganda Logo PNG Vector (PDF) Free Download.jpg"
+
+# Database seeds
+prisma/seed*.ts
+scripts/seed*.js
