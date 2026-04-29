@@ -32,9 +32,10 @@ export const getScheduleCategory = (s: EnhancedSchedule): string => {
   const now = new Date();
   const currentHour = now.getHours();
   
-  // Boarding Now if within 4 hours (and >= -1 hours)
+  // Active Now if within 4 hours (and >= -1 hours) or in transit/arrived
   const hoursDiff = hours - currentHour;
-  if (s.status === 'boarding' || (isToday(s.date) && hoursDiff >= -1 && hoursDiff <= 4)) {
+  const isActive = ['boarding', 'en_route', 'arrived'].includes(s.status);
+  if (isActive || (isToday(s.date) && hoursDiff >= -1 && hoursDiff <= 4)) {
     return "Boarding Now";
   }
 

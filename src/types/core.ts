@@ -315,6 +315,7 @@ export interface Schedule extends BaseEntity {
 
   status: ScheduleStatus;
   isActive: boolean;
+  isArchived?: boolean;
 
   completed?: boolean;
   completedAt?: Date;

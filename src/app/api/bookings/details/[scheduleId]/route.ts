@@ -76,12 +76,12 @@ export async function GET(
       );
     }
 
-    // Verify schedule hasn't departed
+    // Verify schedule hasn't arrived (allow booking while in transit if stops ahead exist)
     const now = new Date();
-    if (new Date(schedule.departureDateTime) < now) {
+    if (new Date(schedule.arrivalDateTime) < now) {
       return NextResponse.json(
         {
-          error: 'Schedule has already departed',
+          error: 'Schedule has already reached its destination',
           departureTime: schedule.departureDateTime,
         },
         { status: 410 }
@@ -100,6 +100,8 @@ export async function GET(
         segmentPrices: schedule.segmentPrices || {},
         departureLocation: schedule.departureLocation,
         arrivalLocation: schedule.arrivalLocation,
+        currentStopId: schedule.currentStopId,
+        departedStops: Array.isArray(schedule.departedStops) ? schedule.departedStops : [],
       },
       bus: schedule.bus,
       route: schedule.route,

@@ -21,18 +21,36 @@ export function calculateTripStatus(schedule: any): TripStatus {
   const departure = new Date(schedule.departureDateTime);
   const arrival = new Date(schedule.arrivalDateTime);
 
-  // Manual tripStatus from database takes precedence if set to specific values
-  // We check for these specifically to allow manual conductor overrides
+  // Manual tripStatus from database takes precedence
   const manualStatus = schedule.tripStatus as string;
   if (['boarding', 'en_route', 'arrived'].includes(manualStatus)) {
+    // If it's 'arrived', we still check the 30-minute grace period for removal
+    if (manualStatus === 'arrived') {
+       // If conductor clicked arrived, we still give it 30 mins unless it's been way longer
+       // Actually, user said: "removed... wen the conductor clicks arravived"
+       // WAIT, let me re-read: "trips... should be removed... wen the conductor clicks arravived"
+       // Okay, so 'arrived' means REMOVE.
+       return 'completed';
+    }
     return manualStatus as TripStatus;
   }
 
-  // Automatic calculation based on time
-  if (now > arrival) return 'completed';
+  // Check if bus has passed the last stop
+  const stops = (schedule.route?.stops as any[]) || [];
+  if (stops.length > 0 && schedule.currentStopId) {
+    const lastStop = stops[stops.length - 1];
+    if (schedule.currentStopId === lastStop.id) {
+      return 'completed'; // Passed last stop -> Remove
+    }
+  }
+
+  // Automatic calculation based on time with 30-minute grace period
+  const gracePeriodMs = 30 * 60 * 1000;
+  if (now.getTime() > arrival.getTime() + gracePeriodMs) return 'completed';
+
   if (now >= departure && now <= arrival) return 'en_route';
   
-  // Boarding starts 2 hours before departure as requested by user
+  // Boarding starts 2 hours before departure
   const boardingStart = new Date(departure.getTime() - 2 * 60 * 60 * 1000);
   if (now >= boardingStart && now < departure) return 'boarding';
 

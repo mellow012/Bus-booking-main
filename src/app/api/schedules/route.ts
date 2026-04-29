@@ -78,9 +78,10 @@ export async function GET(request: NextRequest) {
       if (startDate) where.departureDateTime.gte = new Date(startDate);
       if (endDate) where.departureDateTime.lte = new Date(endDate);
     } else if (!date) {
-      // Default: only show upcoming
-      // Smart logic in map() will handle per-stop visibility
-      where.arrivalDateTime = { gt: new Date() };
+      // Default: show upcoming AND recently arrived (within 30 mins)
+      // This matches the removal logic in calculateTripStatus
+      const gracePeriod = new Date(Date.now() - 30 * 60 * 1000);
+      where.arrivalDateTime = { gt: gracePeriod };
     }
 
     // Optional: filter by specific date if provided (YYYY-MM-DD)

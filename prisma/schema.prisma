@@ -380,6 +380,7 @@ model GroupCharterRequest {
   departureDate   DateTime
   estimatedPax    Int
   status          String   @default("pending") // pending, quoted, approved, rejected, cancelled
+  charterType     String   @default("student") // 'student' or 'group'
   notes           String?
   budget          Int?
   quotes          GroupCharterQuote[]

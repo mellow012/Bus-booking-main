@@ -62,14 +62,23 @@ export default function OperatorDashboard() {
       if (!silent) setLoading(true);
       const { data: companyData } = await supabase.from('Company').select('*').eq('id', companyId).single();
 
-      // Auto-archive: mark schedules older than 24h as archived
-      const archiveCutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      // Auto-archive: mark schedules as archived based on arrival time
+      // 1. Clear trips 12h after arrival if no feedback (tripStatus not completed)
+      const feedbackCutoff = new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString();
       await supabase.from('Schedule')
         .update({ isArchived: true, status: 'completed' })
         .eq('companyId', companyId)
         .eq('isArchived', false)
-        .lt('departureDateTime', archiveCutoff)
-        .not('tripStatus', 'in', '("boarding","in_transit")');
+        .lt('arrivalDateTime', feedbackCutoff)
+        .not('tripStatus', 'eq', 'completed');
+
+      // 2. Safety net: General archive for EVERYTHING older than 24h
+      const generalCutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      await supabase.from('Schedule')
+        .update({ isArchived: true })
+        .eq('companyId', companyId)
+        .eq('isArchived', false)
+        .lt('arrivalDateTime', generalCutoff);
 
       const [schedulesRes, routesRes, busesRes] = await Promise.all([
         supabase.from('Schedule').select('*').eq('companyId', companyId),

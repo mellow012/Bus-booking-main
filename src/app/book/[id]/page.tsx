@@ -371,12 +371,36 @@ export default function BookBus() {
   // ── Stop / display price effects ───────────────────────────────────────────
 
   useEffect(() => {
-    if (!route) return;
-    const stops = buildNormalisedStops(route);
+    if (!route || !schedule) return;
+    let stops = buildNormalisedStops(route);
+
+    // SMART FILTER: Only show stops that haven't been passed
+    const departed = (schedule as any).departedStops || [];
+    const currentId = (schedule as any).currentStopId;
+
+    // Filter out any stop that is in the departed list
+    if (departed.length > 0) {
+      stops = stops.filter(s => !departed.includes(s.id));
+    }
+    
+    // If bus is AT a stop (currentStopId), we show that stop and everything after it
+    if (currentId) {
+      const idx = stops.findIndex(s => s.id === currentId);
+      if (idx !== -1) {
+        stops = stops.slice(idx);
+      }
+    }
+
     setNormalisedStops(stops);
-    setOriginStopId(stops[0].id);
-    setDestinationStopId(stops[stops.length - 1].id);
-  }, [route]);
+    if (stops.length > 0) {
+      setOriginStopId(stops[0].id);
+      if (stops.length > 1) {
+        setDestinationStopId(stops[stops.length - 1].id);
+      } else {
+        setDestinationStopId("");
+      }
+    }
+  }, [route, schedule]);
 
   useEffect(() => {
     if (!route || !normalisedStops.length || !originStopId || !destinationStopId) return;

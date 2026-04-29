@@ -105,8 +105,9 @@ export default function App({ results: initialResults, loading, searchCriteria }
     },
   ];
 
-  // Use mock data if actual results are empty for demonstration purposes
-  const results = initialResults.length > 0 ? initialResults : mockResults;
+  // Use mock data as suggestions if actual results are empty
+  const isSuggested = initialResults.length === 0;
+  const results = isSuggested ? mockResults : initialResults;
 
   // Simulate SearchCriteria if not provided (for standalone use)
   const criteria = searchCriteria || {
@@ -155,10 +156,15 @@ export default function App({ results: initialResults, loading, searchCriteria }
     <section aria-label="Search Results" className="max-w-4xl mx-auto my-8">
       <div className="bg-white rounded-xl shadow-xl p-5 mb-6 border border-gray-200">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between">
-          <h2 className="text-2xl font-bold text-gray-900 mb-2 sm:mb-0">
-            {results.length} Trips Available
-          </h2>
-          <div className="text-sm text-gray-600 font-medium bg-blue-50 py-1 px-3 rounded-full">
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900 mb-2 sm:mb-0">
+              {isSuggested ? "No exact matches found" : `${results.length} Trips Available`}
+            </h2>
+            {isSuggested && (
+              <p className="text-sm text-gray-500 mt-1 font-medium">Here are some suggested alternative routes:</p>
+            )}
+          </div>
+          <div className="text-sm text-gray-600 font-medium bg-blue-50 py-1 px-3 rounded-full mt-3 sm:mt-0">
             <span className="font-semibold">{criteria.from} → {criteria.to}</span> on {criteria.date}
           </div>
         </div>

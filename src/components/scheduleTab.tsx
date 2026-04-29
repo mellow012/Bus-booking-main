@@ -97,6 +97,7 @@ const DAYS = [
 const ITEMS_PER_PAGE      = 6;
 const WINDOW_DAYS         = 14;
 const ARCHIVE_AFTER_HOURS = 24;
+const NO_FEEDBACK_ARCHIVE_HOURS = 12;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -122,13 +123,18 @@ const isSameDay = (a: Date, b: Date) =>
 const hoursSince = (d: Date) => (Date.now() - d.getTime()) / 3_600_000;
 
 function getBucket(s: Schedule): Bucket | null {
-  if (s.status === 'archived') return null;
+  if (s.status === 'archived' || s.isArchived) return null;
 
   const dep        = toDate(s.departureDateTime);
+  const arr        = toDate(s.arrivalDateTime);
   const tripStatus = (s as any).tripStatus as string | undefined;
-  const hoursAgo   = hoursSince(dep);
+  const hoursPastArrival = hoursSince(arr);
 
-  if (hoursAgo > ARCHIVE_AFTER_HOURS) return null;
+  // Clear if 12h past arrival and no feedback (tripStatus !== 'completed')
+  if (tripStatus !== 'completed' && hoursPastArrival > NO_FEEDBACK_ARCHIVE_HOURS) return null;
+  
+  // General cutoff: 24h past arrival
+  if (hoursPastArrival > ARCHIVE_AFTER_HOURS) return null;
 
   if (tripStatus === 'boarding' || tripStatus === 'in_transit') return 'live';
 

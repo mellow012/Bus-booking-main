@@ -19,6 +19,7 @@ export default function GroupCharterPage() {
   const [submitted, setSubmitted] = useState(false);
 
   const [formData, setFormData] = useState({
+    charterType: 'student',
     organizerName: '',
     organizerPhone: '',
     schoolName: '',
@@ -96,14 +97,25 @@ export default function GroupCharterPage() {
         
         <div className="relative max-w-7xl mx-auto px-6 text-center text-white animate-in slide-in-from-bottom-8 duration-700">
           <div className="inline-flex items-center gap-2 bg-indigo-600/30 backdrop-blur-md px-4 py-2 rounded-full border border-white/20 mb-6">
-            <School className="w-4 h-4 text-indigo-300" />
-            <span className="text-xs font-bold uppercase tracking-widest">Exclusive for Students</span>
+            {formData.charterType === 'student' ? (
+              <><School className="w-4 h-4 text-indigo-300" />
+              <span className="text-xs font-bold uppercase tracking-widest">Exclusive for Students</span></>
+            ) : (
+              <><Users className="w-4 h-4 text-indigo-300" />
+              <span className="text-xs font-bold uppercase tracking-widest">Group Travel Made Easy</span></>
+            )}
           </div>
           <h1 className="text-5xl md:text-7xl font-extrabold tracking-tighter mb-6 leading-none">
-            Charter Your Own <br /> <span className="text-indigo-400">Campus Express</span>
+            {formData.charterType === 'student' ? (
+              <>Charter Your Own <br /> <span className="text-indigo-400">Campus Express</span></>
+            ) : (
+              <>Charter a Private <br /> <span className="text-indigo-400">Bus For Your Group</span></>
+            )}
           </h1>
           <p className="text-xl md:text-2xl text-gray-200 max-w-2xl mx-auto font-medium leading-relaxed">
-            Planning a university trip? Organize a private bus for your school, club, or friends in just a few clicks.
+            {formData.charterType === 'student' 
+              ? "Planning a university trip? Organize a private bus for your school, club, or friends in just a few clicks."
+              : "Planning a company retreat, wedding, or large event? Get instant quotes for your private bus charter."}
           </p>
         </div>
       </section>
@@ -112,13 +124,32 @@ export default function GroupCharterPage() {
         <div className="grid lg:grid-cols-3 gap-8">
           {/* Form Section */}
           <div className="lg:col-span-2 bg-white rounded-[3rem] p-10 shadow-2xl border border-gray-100 shadow-indigo-100/50">
-            <div className="flex items-center gap-4 mb-10">
-              <div className="w-14 h-14 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600">
-                <Users className="w-7 h-7" />
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 mb-10 justify-between">
+              <div className="flex items-center gap-4">
+                <div className="w-14 h-14 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600">
+                  <Users className="w-7 h-7" />
+                </div>
+                <div>
+                  <h2 className="text-3xl font-extrabold text-gray-900 tracking-tight">Charter Request</h2>
+                  <p className="text-gray-400 font-bold uppercase text-[10px] tracking-widest mt-1">Free quotes • Verified operators</p>
+                </div>
               </div>
-              <div>
-                <h2 className="text-3xl font-extrabold text-gray-900 tracking-tight">Charter Request</h2>
-                <p className="text-gray-400 font-bold uppercase text-[10px] tracking-widest mt-1">Free quotes • Verified operators</p>
+              
+              <div className="bg-gray-100 p-1 rounded-xl flex items-center text-sm font-bold self-stretch sm:self-auto">
+                <button 
+                  type="button"
+                  onClick={() => setFormData({...formData, charterType: 'student'})}
+                  className={`flex-1 sm:flex-none px-4 py-2 rounded-lg transition-all ${formData.charterType === 'student' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
+                >
+                  Student Trip
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => setFormData({...formData, charterType: 'group'})}
+                  className={`flex-1 sm:flex-none px-4 py-2 rounded-lg transition-all ${formData.charterType === 'group' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
+                >
+                  Group Travel
+                </button>
               </div>
             </div>
 
@@ -153,13 +184,19 @@ export default function GroupCharterPage() {
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-bold text-gray-700 ml-1">School / University Name</label>
+                <label className="text-sm font-bold text-gray-700 ml-1">
+                  {formData.charterType === 'student' ? 'School / University Name' : 'Group / Organization Name'}
+                </label>
                 <div className="relative">
-                  <School className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  {formData.charterType === 'student' ? (
+                    <School className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  ) : (
+                    <Users className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  )}
                   <input 
                     required
                     className="w-full pl-12 pr-4 h-14 bg-gray-50 border-transparent rounded-2xl focus:bg-white focus:border-indigo-500 focus:ring-0 transition-all text-sm font-semibold"
-                    placeholder="University of Malawi (UNIMA)"
+                    placeholder={formData.charterType === 'student' ? "University of Malawi (UNIMA)" : "e.g. Acme Corp, Wedding Party"}
                     value={formData.schoolName}
                     onChange={(e) => setFormData({...formData, schoolName: e.target.value})}
                   />

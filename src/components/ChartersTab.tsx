@@ -5,13 +5,14 @@ import { supabase } from '@/lib/supabase';
 import { 
   Users, MapPin, Calendar, Clock, Bus as BusIcon, 
   MessageSquare, Loader2, AlertCircle, CheckCircle2,
-  ChevronRight, DollarSign, ArrowRight, User
+  ChevronRight, DollarSign, ArrowRight, User, School
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { format } from 'date-fns';
 
 interface CharterRequest {
   id: string;
+  charterType: string;
   organizerName: string;
   organizerPhone: string;
   origin: string;
@@ -117,7 +118,18 @@ export default function ChartersTab({ companyId, setError, setSuccess }: Charter
                     <Users className="w-7 h-7" />
                   </div>
                   <div>
-                    <h3 className="font-bold text-gray-900 text-lg">{req.organizerName}</h3>
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-bold text-gray-900 text-lg">{req.organizerName}</h3>
+                      {req.charterType === 'student' ? (
+                        <span className="text-[10px] font-bold text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded-full uppercase tracking-widest flex items-center gap-1">
+                          <School className="w-3 h-3" /> Student
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full uppercase tracking-widest flex items-center gap-1">
+                          <Users className="w-3 h-3" /> Group
+                        </span>
+                      )}
+                    </div>
                     <div className="flex items-center gap-2 mt-1">
                        <span className="text-[10px] font-bold text-indigo-500 bg-indigo-50 px-2 py-0.5 rounded-full uppercase tracking-widest">
                           {req.estimatedPax} Pax

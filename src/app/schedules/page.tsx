@@ -68,7 +68,7 @@ function DashboardContent() {
   const [selectedCompany, setSelectedCompany] = useState("");
   const [selectedTimeSlot, setSelectedTimeSlot] = useState("");
   
-  const [popularBuses, setPopularBuses] = useState<any[]>([]);
+  const [popularRoutes, setPopularRoutes] = useState<any[]>([]);
 
   // Auth protection
   useEffect(() => {
@@ -180,6 +180,15 @@ function DashboardContent() {
         }));
 
       setSchedules(enhancedSchedules);
+      
+      // Update URL search parameters without full page reload
+      const newParams = new URLSearchParams();
+      if (searchFrom) newParams.set('from', searchFrom);
+      if (searchTo) newParams.set('to', searchTo);
+      if (searchDate) newParams.set('date', searchDate);
+      newParams.set('passengers', passengers.toString());
+      router.replace(`/schedules?${newParams.toString()}`, { scroll: false });
+
     } catch (err: any) {
       console.error("Search error:", err);
       setError("Unable to find schedules. Please try again.");
@@ -190,16 +199,21 @@ function DashboardContent() {
 
   useEffect(() => {
     if (schedules.length > 0) {
-      // Mock popular buses for now
-      const popular = schedules.slice(0, 4).map(s => ({
-        id: s.id,
-        name: s.companyName,
-        logo: s.companyLogo,
-        rating: 4.8,
-        price: s.price,
-        type: s.busType
-      }));
-      setPopularBuses(popular);
+      // Extract unique routes
+      const routesMap = new Map();
+      schedules.forEach(s => {
+        const key = `${s.origin}-${s.destination}`;
+        if (!routesMap.has(key)) {
+          routesMap.set(key, {
+            id: s.id,
+            from: s.origin,
+            to: s.destination,
+            price: s.price,
+            busType: s.busType
+          });
+        }
+      });
+      setPopularRoutes(Array.from(routesMap.values()).slice(0, 8));
     }
   }, [schedules]);
 
@@ -420,34 +434,52 @@ function DashboardContent() {
               </div>
             </div>
 
-            {/* Popular Buses Section */}
-            {popularBuses.length > 0 && (
+            {/* Popular Routes Section */}
+            {popularRoutes.length > 0 && (
               <div className="space-y-4">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between px-1">
                   <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                    <TrendingUp className="w-5 h-5 text-orange-500" /> Popular Buses
+                    <TrendingUp className="w-5 h-5 text-orange-500" /> Popular Routes
                   </h3>
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Swipe to explore</p>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                  {popularBuses.map((bus) => (
-                    <div key={bus.id} className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all">
-                      <div className="flex items-center gap-3 mb-3">
-                        <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold">
-                          {bus.logo ? <img src={bus.logo} alt={bus.name} className="w-full h-full rounded-full object-cover" /> : bus.name.charAt(0)}
+                <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-none px-1">
+                  {popularRoutes.map((route, i) => (
+                    <button 
+                      key={i} 
+                      onClick={() => {
+                        setSearchFrom(route.from);
+                        setSearchTo(route.to);
+                        // Trigger a slight delay to ensure UI updates before focus
+                        setTimeout(() => handleSearch(), 50);
+                      }}
+                      className="flex-shrink-0 w-64 bg-white p-5 rounded-[2rem] border border-gray-100 shadow-sm hover:shadow-xl hover:border-blue-200 transition-all text-left group"
+                    >
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="w-10 h-10 rounded-2xl bg-blue-50 flex items-center justify-center text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                          <Navigation className="w-5 h-5" />
                         </div>
-                        <div>
-                          <p className="text-sm font-bold text-gray-900">{bus.name}</p>
-                          <div className="flex items-center gap-1">
-                            <Star className="w-3 h-3 text-yellow-500 fill-yellow-500" />
-                            <span className="text-[10px] font-bold text-gray-600">{bus.rating}</span>
-                          </div>
+                        <div className="text-right">
+                          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-tight">Starting from</p>
+                          <p className="text-sm font-black text-blue-600">MWK {route.price.toLocaleString()}</p>
                         </div>
                       </div>
-                      <div className="flex justify-between items-end">
-                        <span className="text-[10px] font-bold bg-green-100 text-green-700 px-2 py-0.5 rounded-full">{bus.type}</span>
-                        <p className="text-sm font-bold text-blue-600">MWK {bus.price.toLocaleString()}</p>
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <div className="w-1.5 h-1.5 rounded-full bg-blue-400" />
+                          <p className="text-sm font-bold text-gray-900 truncate">{route.from}</p>
+                        </div>
+                        <div className="w-px h-3 bg-gray-200 ml-[2.5px]" />
+                        <div className="flex items-center gap-2">
+                          <div className="w-1.5 h-1.5 rounded-full bg-indigo-600" />
+                          <p className="text-sm font-bold text-gray-900 truncate">{route.to}</p>
+                        </div>
                       </div>
-                    </div>
+                      <div className="mt-4 pt-4 border-t border-gray-50 flex items-center justify-between">
+                        <span className="text-[10px] font-bold bg-gray-100 text-gray-500 px-2 py-1 rounded-lg uppercase tracking-widest">{route.busType}</span>
+                        <ArrowRight className="w-4 h-4 text-gray-300 group-hover:text-blue-600 group-hover:translate-x-1 transition-all" />
+                      </div>
+                    </button>
                   ))}
                 </div>
               </div>

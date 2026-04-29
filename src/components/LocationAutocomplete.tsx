@@ -131,7 +131,7 @@ export const LocationAutocomplete: React.FC<LocationAutocompleteProps> = ({
         onChange={e => { onChange(e.target.value); setOpen(true); setHighlight(-1); }}
         onFocus={() => setOpen(true)}
         onKeyDown={handleKey}
-        className="w-full pl-9 pr-8 h-11 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white transition-shadow"
+        className="w-full pl-9 pr-8 h-11 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white transition-shadow text-gray-900"
         aria-autocomplete="list"
         aria-expanded={open && suggestions.length > 0}
         role="combobox"

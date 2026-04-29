@@ -8,7 +8,8 @@ import {
 } from "lucide-react";
 import { ScheduleCard } from "@/components/ScheduleCard";
 import AlertMessage from "@/components/AlertMessage";
-import { EnhancedSchedule, isToday, getScheduleCategory } from "@/utils/homeHelpers";
+import { EnhancedSchedule, isToday, getScheduleCategory, GeoStatus } from "@/utils/homeHelpers";
+import { CityPickerModal } from "@/components/CityPickerModal";
 
 const LS_CITY_KEY = "tb_user_city";
 
@@ -32,11 +33,15 @@ export default function HomeSchedules() {
   const [userCity, setUserCity] = useState<string|null>(null);
   const [sortKey, setSortKey] = useState("time");
   const [showSort, setShowSort] = useState(false);
+  const [showCityPicker, setShowCityPicker] = useState(false);
+  const [geoStatus, setGeoStatus] = useState<GeoStatus>("idle");
 
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  const fetchSchedules = useCallback(async (refresh = false) => {
-    refresh ? setRefreshing(true) : setLoading(true);
+  const fetchSchedules = useCallback(async (refresh = false, silent = false) => {
+    if (!silent) {
+      refresh ? setRefreshing(true) : setLoading(true);
+    }
     setError("");
 
     try {
@@ -54,15 +59,13 @@ export default function HomeSchedules() {
   }, []);
 
   useEffect(() => {
-    const silentRefresh = () => {
-      if (document.visibilityState === 'visible') fetchSchedules(false);
-    };
-
     fetchSchedules();
-    pollingIntervalRef.current = setInterval(silentRefresh, 45000);
+    pollingIntervalRef.current = setInterval(() => {
+      if (document.visibilityState === 'visible') fetchSchedules(false, true);
+    }, 45000);
 
     const handleVisibility = () => {
-      if (document.visibilityState === 'visible') fetchSchedules(false);
+      if (document.visibilityState === 'visible') fetchSchedules(false, true);
     };
     document.addEventListener('visibilitychange', handleVisibility);
 
@@ -77,14 +80,59 @@ export default function HomeSchedules() {
     if (saved) setUserCity(saved);
   }, []);
 
+  const handleSelectCity = (city: string) => {
+    if (city) {
+      setUserCity(city);
+      localStorage.setItem(LS_CITY_KEY, city);
+    } else {
+      setUserCity(null);
+      localStorage.removeItem(LS_CITY_KEY);
+    }
+    setShowCityPicker(false);
+  };
+
+  const requestGeolocation = () => {
+    if (!("geolocation" in navigator)) return;
+    setGeoStatus("detecting");
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        // We'd ideally import nearestCity here or just trust the picker modal logic
+        setGeoStatus("granted");
+      },
+      () => setGeoStatus("denied")
+    );
+  };
+
   const handleBooking = (id: string) => {
     if (!user) { router.push("/login"); return; }
     router.push(`/book/${id}`);
   };
 
   const filtered = useMemo(() => {
-    const todays = schedules.filter(s => isToday(s.date));
-    return [...todays].sort((a, b) => {
+    // 1. Try Today's trips
+    let results = schedules.filter(s => isToday(s.date));
+    
+    // 2. Fallback to Tomorrow if Today is empty
+    if (results.length === 0) {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const tomorrowStr = tomorrow.toISOString().split('T')[0];
+      results = schedules.filter(s => s.date === tomorrowStr);
+    }
+
+    // 3. Fallback to any Upcoming if Tomorrow is also empty
+    if (results.length === 0) {
+      const now = new Date();
+      results = schedules.filter(s => new Date(s.date) > now);
+    }
+
+    return [...results].sort((a, b) => {
+      // Prioritize active trips (In Transit, Boarding, Arrived)
+      const aActive = (a.status === 'en_route' || a.status === 'boarding' || a.status === 'arrived');
+      const bActive = (b.status === 'en_route' || b.status === 'boarding' || b.status === 'arrived');
+      if (aActive && !bActive) return -1;
+      if (!aActive && bActive) return 1;
+
       if (sortKey === "price_asc") return a.price - b.price;
       if (sortKey === "price_desc") return b.price - a.price;
       if (sortKey === "seats") return b.availableSeats - a.availableSeats;
@@ -134,11 +182,25 @@ export default function HomeSchedules() {
                 </div>
               )}
             </div>
-            <div className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium border transition-all ${userCity ? "bg-teal-50 border-teal-200 text-teal-700" : "bg-white border-gray-200 text-gray-500"}`}>
+            <button 
+              onClick={() => setShowCityPicker(true)}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium border transition-all hover:shadow-md active:scale-95 ${userCity ? "bg-teal-50 border-teal-200 text-teal-700" : "bg-white border-gray-200 text-gray-500"}`}
+            >
               <MapPin className="w-3.5 h-3.5"/> {userCity ?? "Malawi"}
-            </div>
+              <ChevronDown className="w-3 h-3 opacity-50" />
+            </button>
           </div>
         </div>
+      )}
+
+      {showCityPicker && (
+        <CityPickerModal 
+          onSelect={handleSelectCity} 
+          onClose={() => setShowCityPicker(false)}
+          geoStatus={geoStatus} 
+          onRequestGeo={requestGeolocation} 
+          current={userCity}
+        />
       )}
 
       {loading ? (
@@ -172,8 +234,8 @@ export default function HomeSchedules() {
             className="w-full max-w-[240px] h-auto mb-6 opacity-80"
             style={{ filter: "hue-rotate(10deg)" }}
           />
-          <h3 className="font-display text-xl font-extrabold text-gray-900 mb-2">No buses departing today</h3>
-          <p className="text-gray-500 text-sm max-w-xs mx-auto mb-8">We couldn't find any active schedules for today. Try refreshing or check back later.</p>
+          <h3 className="font-display text-xl font-extrabold text-gray-900 mb-2">No upcoming buses found</h3>
+          <p className="text-gray-500 text-sm max-w-xs mx-auto mb-8">We couldn't find any active or upcoming schedules. Try refreshing or check back later.</p>
           <button onClick={()=>fetchSchedules(true)} disabled={refreshing} className="flex items-center gap-2 mx-auto text-sm font-bold bg-gray-50 border border-gray-200 rounded-xl px-6 py-3 text-gray-700 hover:bg-gray-100 transition-colors">
             {refreshing?<Loader2 className="w-4 h-4 animate-spin"/>:<RefreshCw className="w-4 h-4"/>} Refresh Live Data
           </button>

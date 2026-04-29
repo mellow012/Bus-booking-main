@@ -9,6 +9,8 @@ export async function POST(req: NextRequest) {
       organizerName, 
       organizerPhone, 
       schoolName, 
+      organizationName,
+      charterType,
       origin, 
       destination, 
       departureDate, 
@@ -26,12 +28,15 @@ export async function POST(req: NextRequest) {
       // For this demo/setup, we'll allow it if we can find a user by phone or similar
     }
 
+    const orgPrefix = schoolName || organizationName || (charterType === 'group' ? 'Group' : 'School');
+
     const charterRequest = await (prisma as any).groupCharterRequest.create({
       data: {
         userId: userId || 'system', // Fallback for demo
+        charterType: charterType || 'student',
         organizerName,
         organizerPhone,
-        origin: `${schoolName} - ${origin}`,
+        origin: `${orgPrefix} - ${origin}`,
         destination,
         departureDate: new Date(departureDate),
         estimatedPax: parseInt(estimatedPax),

@@ -85,5 +85,8 @@
   "main": "index.js",
   "keywords": [],
   "author": "",
-  "license": "ISC"
+  "license": "ISC",
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  }
 }
