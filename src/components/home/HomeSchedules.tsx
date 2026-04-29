@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import { ScheduleCard } from "@/components/ScheduleCard";
 import AlertMessage from "@/components/AlertMessage";
-import { EnhancedSchedule, isToday, getScheduleCategory, GeoStatus } from "@/utils/homeHelpers";
+import { EnhancedSchedule, isToday, getScheduleCategory, GeoStatus, cityMatch } from "@/utils/homeHelpers";
 import { CityPickerModal } from "@/components/CityPickerModal";
 
 const LS_CITY_KEY = "tb_user_city";
@@ -45,7 +45,8 @@ export default function HomeSchedules() {
     setError("");
 
     try {
-      const response = await fetch('/api/schedules?limit=30&sortBy=time');
+      const cityQuery = userCity ? `&from=${encodeURIComponent(userCity)}` : '';
+      const response = await fetch(`/api/schedules?limit=30&sortBy=time${cityQuery}`);
       if (!response.ok) throw new Error(`API error: ${response.status}`);
       const { data, success } = await response.json();
       if (success) setSchedules(data);
@@ -56,7 +57,7 @@ export default function HomeSchedules() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [userCity]);
 
   useEffect(() => {
     fetchSchedules();
@@ -109,21 +110,27 @@ export default function HomeSchedules() {
   };
 
   const filtered = useMemo(() => {
-    // 1. Try Today's trips
-    let results = schedules.filter(s => isToday(s.date));
+    // Apply city filter if selected
+    let pool = schedules;
+    if (userCity) {
+      pool = schedules.filter(s => cityMatch(s, userCity));
+    }
+
+    // 1. Try Today's trips from the pool
+    let results = pool.filter(s => isToday(s.date));
     
     // 2. Fallback to Tomorrow if Today is empty
     if (results.length === 0) {
       const tomorrow = new Date();
       tomorrow.setDate(tomorrow.getDate() + 1);
       const tomorrowStr = tomorrow.toISOString().split('T')[0];
-      results = schedules.filter(s => s.date === tomorrowStr);
+      results = pool.filter(s => s.date === tomorrowStr);
     }
 
     // 3. Fallback to any Upcoming if Tomorrow is also empty
     if (results.length === 0) {
       const now = new Date();
-      results = schedules.filter(s => new Date(s.date) > now);
+      results = pool.filter(s => new Date(s.date) > now);
     }
 
     return [...results].sort((a, b) => {
@@ -138,7 +145,7 @@ export default function HomeSchedules() {
       if (sortKey === "seats") return b.availableSeats - a.availableSeats;
       return new Date(`${a.date}T${a.departureTime}`).getTime() - new Date(`${b.date}T${b.departureTime}`).getTime();
     });
-  }, [schedules, sortKey]);
+  }, [schedules, sortKey, userCity]);
 
   const groups = useMemo(() => {
     return [
@@ -154,8 +161,10 @@ export default function HomeSchedules() {
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-8">
         <div>
           <p className="text-xs font-bold uppercase tracking-widest text-blue-600 mb-1">Live Availability</p>
-          <h2 className="font-display text-2xl sm:text-3xl font-extrabold text-gray-900">Featured Routes</h2>
-          <p className="text-gray-500 text-sm mt-1">Real-time seats across Malawi</p>
+          <h2 className="font-display text-2xl sm:text-3xl font-extrabold text-gray-900">
+            {userCity ? `Featured Routes in ${userCity}` : "Featured Routes"}
+          </h2>
+          <p className="text-gray-500 text-sm mt-1">{userCity ? `Showing buses for ${userCity}` : "Real-time seats across Malawi"}</p>
         </div>
         <button onClick={()=>router.push("/schedules")} className="group flex items-center gap-2 text-sm font-semibold text-blue-600 hover:text-blue-800 transition-colors">
           View all routes <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform"/>

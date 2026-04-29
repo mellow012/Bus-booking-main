@@ -252,7 +252,6 @@ function DashboardContent() {
       filtered = filtered.filter(s => s.companyName === selectedCompany);
     }
     if (selectedTimeSlot) {
-      const hour = parseInt(selectedTimeSlot.split(':')[0]);
       if (selectedTimeSlot === 'morning') {
         filtered = filtered.filter(s => {
           const h = parseInt(s.departureTime.split(':')[0]);
