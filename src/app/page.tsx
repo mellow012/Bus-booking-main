@@ -3,7 +3,6 @@ import { Hero } from "@/components/home/Hero";
 import { Stats } from "@/components/home/Stats";
 import HomeSearch from "@/components/home/HomeSearch";
 import HomeSchedules from "@/components/home/HomeSchedules";
-import GroupBookingSection from "@/components/home/GroupBookingSection";
 import HowItWorks from "@/components/HowItWorks";
 import Partners from "@/components/Partners";
 import PromoBanner from "@/components/PromoBanner";
@@ -55,9 +54,6 @@ export default async function HomePage() {
 
       {/* 5. Schedules/Trips */}
       <HomeSchedules />
-
-      {/* 6. Group Bookings */}
-      <GroupBookingSection />
 
 
       {/* Promotions Detail Section */}

@@ -46,7 +46,12 @@ export const ScheduleCard = React.memo(({ s, onBook, userCity }: {
           <div className="flex items-center">
             <div className="text-center min-w-0 flex-1">
               <p className="text-xs sm:text-sm font-bold text-gray-900 truncate">{s.origin}</p>
-              <p className="text-[10px] sm:text-[11px] text-gray-400 mt-0.5">{s.departureTime}</p>
+              {s.departureLocation && (
+                <p className="text-[9px] sm:text-[10px] text-gray-400 mt-0.5 flex items-center justify-center gap-0.5 truncate">
+                  <MapPin className="w-2.5 h-2.5 shrink-0" />{s.departureLocation}
+                </p>
+              )}
+              <p className="text-[10px] sm:text-[11px] text-blue-600 font-semibold mt-0.5">{s.departureTime}</p>
             </div>
             <div className="flex flex-col items-center gap-0.5 px-2 sm:px-3 shrink-0">
               <div className="flex items-center gap-0.5">
@@ -60,7 +65,12 @@ export const ScheduleCard = React.memo(({ s, onBook, userCity }: {
             </div>
             <div className="text-center min-w-0 flex-1">
               <p className="text-xs sm:text-sm font-bold text-gray-900 truncate">{s.destination}</p>
-              <p className="text-[10px] sm:text-[11px] text-gray-400 mt-0.5">{s.arrivalTime}</p>
+              {s.arrivalLocation && (
+                <p className="text-[9px] sm:text-[10px] text-gray-400 mt-0.5 flex items-center justify-center gap-0.5 truncate">
+                  <MapPin className="w-2.5 h-2.5 shrink-0" />{s.arrivalLocation}
+                </p>
+              )}
+              <p className="text-[10px] sm:text-[11px] text-blue-600 font-semibold mt-0.5">{s.arrivalTime}</p>
             </div>
           </div>
         </div>
@@ -79,18 +89,18 @@ export const ScheduleCard = React.memo(({ s, onBook, userCity }: {
           ))}
         </div>
 
-        {s.amenities?.length > 0 && (
-          <div className="flex flex-wrap gap-1 mb-3">
-            {s.amenities.slice(0, 3).map((a, i) => {
+        <div className="flex items-start justify-between gap-2 mb-3">
+          <div className="flex flex-wrap gap-1 flex-1">
+            {s.amenities?.slice(0, 3).map((a, i) => {
               const Icon = AMENITY_ICONS[a] || Shield; return (
                 <span key={i} className="flex items-center gap-0.5 sm:gap-1 text-[10px] sm:text-[11px] px-1.5 sm:px-2 py-0.5 sm:py-1 bg-blue-50 text-blue-700 rounded-full">
                   <Icon className="w-2.5 h-2.5 sm:w-3 sm:h-3" />{a}
                 </span>
               );
             })}
-            {s.amenities.length > 3 && <span className="text-[10px] sm:text-[11px] px-1.5 sm:px-2 py-0.5 sm:py-1 bg-gray-100 text-gray-500 rounded-full">+{s.amenities.length - 3}</span>}
+            {s.amenities?.length > 3 && <span className="text-[10px] sm:text-[11px] px-1.5 sm:px-2 py-0.5 sm:py-1 bg-gray-100 text-gray-500 rounded-full">+{s.amenities.length - 3}</span>}
           </div>
-        )}
+        </div>
 
         <div className="flex flex-wrap gap-1 mb-3 min-h-[18px]">
           {category && (

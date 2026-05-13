@@ -1,16 +1,12 @@
 'use client';
-// app/verify-email/page.tsx
-//
-// Two distinct states:
-//   1. No oobCode → "Check your email" holding screen
-//   2. oobCode present → apply + refresh session + redirect to /profile
 
 import { useEffect, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { CheckCircleIcon, Loader2,Mail } from 'lucide-react';
+import { CheckCircleIcon, Loader2, Mail } from 'lucide-react';
 import { ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 import { Button } from '@/components/ui/button';
 import { useEmailVerification } from '@/hooks/useEmailVerification';
+import { createClient } from '@/utils/supabase/client';
 
 export default function VerifyEmailPage() {
   const router       = useRouter();
@@ -19,8 +15,7 @@ export default function VerifyEmailPage() {
   const [status,  setStatus]  = useState<'waiting' | 'loading' | 'success' | 'error'>('loading');
   const [message, setMessage] = useState('');
 
-  const oobCode = searchParams.get('oobCode');
-  const mode    = searchParams.get('mode');
+  const mode = searchParams.get('mode');
 
   const { sendVerificationEmail } = useEmailVerification();
   const [resending,     setResending]     = useState(false);
@@ -42,92 +37,45 @@ export default function VerifyEmailPage() {
   };
 
   useEffect(() => {
-    // ── No oobCode: user just registered, waiting for them to click the link ──
-    if (!oobCode) {
+    // If they just registered, mode is null. They are waiting for the email.
+    if (mode !== 'verified') {
       setStatus('waiting');
       return;
     }
 
-    // ── Strict Mode guard: applyActionCode is one-time use ────────────────────
-    const guardKey = `oob_applied_${oobCode}`;
-    if (sessionStorage.getItem(guardKey)) return;
-
-    const verifyEmail = async () => {
-      if (mode && mode !== 'verifyEmail') {
-        setStatus('error');
-        setMessage('This link is not for email verification.');
-        return;
-      }
-
-      try {
-        // Mark before applying so Strict Mode second run is blocked even mid-async
-        sessionStorage.setItem(guardKey, '1');
-
-        // Call API to verify the email with the oobCode
-        const response = await fetch('/api/auth/verify-email', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ oobCode }),
-        });
-
-        if (!response.ok) {
-          const error = await response.json();
-          throw Object.assign(new Error(error.message || 'Verification failed'), { code: error.code });
-        }
-
-        const data = await response.json();
-
-        // Refresh session cookie with new token
-        try {
-          const res = await fetch('/api/auth/session', {
-            method:  'POST',
-          });
-          if (!res.ok) {
-            console.warn('[VerifyEmail] Session refresh returned', res.status);
-          }
-        } catch (sessionErr) {
-          console.warn('[VerifyEmail] Session refresh failed (non-fatal):', sessionErr);
-        }
-
-        try { localStorage.removeItem('fcm_registered_token'); } catch { /* ignore */ }
-
+    // If mode is verified, they clicked the link in their email.
+    // Supabase automatically extracts the access_token from the URL hash and logs them in.
+    const processVerification = async () => {
+      setStatus('loading');
+      
+      const supabase = createClient();
+      
+      // Wait briefly for Supabase to process the session from the URL hash
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (session) {
+        // User is logged in by the email link.
+        // We log them out so they are forced to log in, per the desired flow.
+        await supabase.auth.signOut();
         setStatus('success');
-
-        // Use hard navigation to strip the oobCode from the URL.
-        // This triggers the AuthContext's verified route guard logic,
-        // correctly routing Customers to /profile and Company Staff to their dashboards.
-        setTimeout(() => { window.location.href = '/verify-email'; }, 2000);
-
-      } catch (err: any) {
-        console.error('[VerifyEmail] Error:', err.code, err.message);
-        sessionStorage.removeItem(guardKey);
+        
+        // Redirect to login page with verified parameter
+        setTimeout(() => {
+          router.push('/login?verified=true');
+        }, 2000);
+      } else {
+        // No session found.
         setStatus('error');
-
-        switch (err.code) {
-          case 'expired-token':
-            setMessage('This verification link has expired (valid for 3 days). Please request a new one.');
-            break;
-          case 'invalid-token':
-            setMessage('This link has already been used or is invalid. If you just verified, try signing in. Otherwise, request a new verification email.');
-            break;
-          case 'user-disabled':
-            setMessage('Your account has been disabled. Please contact support.');
-            break;
-          case 'user-not-found':
-            setMessage('No account found for this link. Please register again.');
-            break;
-          default:
-            setMessage(err.message || 'Verification failed. Please request a new verification email.');
-        }
+        setMessage('Verification link is invalid or expired. Please try logging in or requesting a new link.');
       }
     };
 
-    verifyEmail();
-  }, [oobCode, mode, router]);
+    processVerification();
+  }, [mode, router]);
 
-  // ── "Check your email" holding screen (no oobCode) ───────────────────────
+  // ── "Check your email" holding screen ───────────────────────
   if (status === 'waiting') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center px-4 py-12">
@@ -209,21 +157,13 @@ export default function VerifyEmailPage() {
 
         <p className="text-gray-600 mb-8 leading-relaxed">
           {status === 'loading' && 'Verifying your email… Please wait.'}
-          {status === 'success' && "You're verified! Redirecting you to your dashboard…"}
+          {status === 'success' && "You're verified! Redirecting you to login…"}
           {status === 'error'   && message}
         </p>
 
         <div className="space-y-3">
           {status === 'success' && (
-            <>
-              <p className="text-sm text-gray-500">Redirecting automatically...</p>
-              <Button
-                onClick={() => { window.location.href = '/verify-email'; }}
-                className="w-full bg-green-600 hover:bg-green-700 text-white h-11"
-              >
-                Continue
-              </Button>
-            </>
+            <p className="text-sm text-gray-500">Redirecting automatically...</p>
           )}
           {status === 'error' && (
             <>
@@ -234,16 +174,14 @@ export default function VerifyEmailPage() {
                 Go to Login
               </Button>
               <Button
-                onClick={() => router.push('/login?resend=true')}
+                onClick={handleResend}
+                disabled={resending}
                 variant="outline"
                 className="w-full h-11"
               >
-                Request New Verification Email
+                {resending ? 'Sending...' : 'Request New Verification Email'}
               </Button>
             </>
-          )}
-          {status === 'loading' && (
-            <p className="text-sm text-gray-500">This should only take a few seconds…</p>
           )}
         </div>
 

@@ -5,12 +5,14 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   Search, MapPin, Calendar, Users, Navigation, Clock, CheckCircle, Bus as BusIcon,
-  Filter, AlertCircle, RefreshCw, Zap, TrendingUp, Loader2, ArrowRight, User, Star
+  Filter, AlertCircle, RefreshCw, Zap, TrendingUp, Loader2, ArrowRight, User, Star,
+  X
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LocationAutocomplete } from "@/components/LocationAutocomplete";
-import { MALAWI_CITIES } from "@/utils/homeHelpers";
+import { MALAWI_CITIES, getScheduleCategory } from "@/utils/homeHelpers";
 import { useNotifications } from "@/contexts/NotificationContext";
+import { useAppToast } from "@/contexts/ToastContext";
 
 interface EnhancedSchedule {
   id: string;
@@ -28,6 +30,8 @@ interface EnhancedSchedule {
   companyLogo?: string | null;
   companyId: string;
   routeId: string;
+  departureLocation?: string;
+  arrivalLocation?: string;
 }
 
 
@@ -49,46 +53,49 @@ function DashboardContent() {
   const searchParams = useSearchParams();
   const { user, userProfile } = useAuth();
   const { unreadCount } = useNotifications();
+  const toast = useAppToast();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  
+
   // Data state
   const [schedules, setSchedules] = useState<EnhancedSchedule[]>([]);
+  const [companies, setCompanies] = useState<{ id: string, name: string }[]>([]);
 
   // Search/Filter state
   const [searchFrom, setSearchFrom] = useState(searchParams.get('from') || "");
   const [searchTo, setSearchTo] = useState(searchParams.get('to') || "");
   const [searchDate, setSearchDate] = useState(searchParams.get('date') || "");
   const [passengers, setPassengers] = useState(parseInt(searchParams.get('passengers') || "1"));
-  
+
   const [activeFilter, setActiveFilter] = useState("all");
   const [sortBy, setSortBy] = useState<'price' | 'time' | 'company'>('price');
-  
+
   const [selectedCompany, setSelectedCompany] = useState("");
   const [selectedTimeSlot, setSelectedTimeSlot] = useState("");
-  
+  const [selectedTerminal, setSelectedTerminal] = useState(searchParams.get('terminal') || "");
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+
   const [popularRoutes, setPopularRoutes] = useState<any[]>([]);
 
-  // Auth protection
-  useEffect(() => {
-    if (!loading && !user) {
-      router.push('/login');
-    }
-  }, [user, loading, router]);
+  // Auth protection - only redirect if trying to access private parts
+  // Removed strict page-level redirect as /schedules is public
+
 
   // Fetch initial data
   useEffect(() => {
-    if (!user) {
-      setLoading(false);
-      return;
-    }
-
-    const fetchDashboardData = async () => {
+    const fetchInitialData = async () => {
       setLoading(true);
       setError("");
       try {
-        // 1. Fetch upcoming schedules (next 7 days)
+        // 1. Fetch companies for the filter
+        const companiesRes = await fetch('/api/companies');
+        if (companiesRes.ok) {
+          const { data } = await companiesRes.json();
+          setCompanies(data);
+        }
+
+        // 2. Fetch upcoming schedules (next 7 days)
         const startOfWeek = new Date();
         startOfWeek.setHours(0, 0, 0, 0);
         const endOfWeek = new Date(startOfWeek);
@@ -100,6 +107,10 @@ function DashboardContent() {
           endDate: endOfWeek.toISOString(),
           sortBy: 'departureDateTime',
         });
+
+        if (searchFrom) queryParams.append('from', searchFrom);
+        if (searchTo) queryParams.append('to', searchTo);
+        if (searchDate) queryParams.append('date', searchDate);
 
         const schedulesRes = await fetch(`/api/schedules?${queryParams}`);
         if (!schedulesRes.ok) throw new Error("Failed to load schedules");
@@ -114,11 +125,11 @@ function DashboardContent() {
             busType: schedule.busType || 'Standard',
             origin: schedule.origin || 'N/A',
             destination: schedule.destination || 'N/A',
-            departureTime: new Date(schedule.departureDateTime).toLocaleTimeString('en-US', { 
-              hour: '2-digit', minute: '2-digit', hour12: false 
+            departureTime: new Date(schedule.departureDateTime).toLocaleTimeString('en-US', {
+              hour: '2-digit', minute: '2-digit', hour12: false
             }),
-            arrivalTime: new Date(schedule.arrivalDateTime).toLocaleTimeString('en-US', { 
-              hour: '2-digit', minute: '2-digit', hour12: false 
+            arrivalTime: new Date(schedule.arrivalDateTime).toLocaleTimeString('en-US', {
+              hour: '2-digit', minute: '2-digit', hour12: false
             }),
             availableSeats: schedule.availableSeats,
             price: schedule.price,
@@ -126,7 +137,9 @@ function DashboardContent() {
             date: new Date(schedule.departureDateTime).toISOString().split('T')[0],
             companyLogo: schedule.companyLogo || null,
             companyId: schedule.companyId,
-            routeId: schedule.routeId
+            routeId: schedule.routeId,
+            departureLocation: schedule.departureLocation,
+            arrivalLocation: schedule.arrivalLocation
           }));
 
         setSchedules(enhancedSchedules);
@@ -139,9 +152,9 @@ function DashboardContent() {
       }
     };
 
-    fetchDashboardData();
-  }, [user]);
-  
+    fetchInitialData();
+  }, []);
+
   const handleSearch = useCallback(async () => {
     setLoading(true);
     setError("");
@@ -164,11 +177,11 @@ function DashboardContent() {
           busType: schedule.busType,
           origin: schedule.origin,
           destination: schedule.destination,
-          departureTime: new Date(schedule.departureDateTime).toLocaleTimeString('en-US', { 
-            hour: '2-digit', minute: '2-digit', hour12: false 
+          departureTime: new Date(schedule.departureDateTime).toLocaleTimeString('en-US', {
+            hour: '2-digit', minute: '2-digit', hour12: false
           }),
-          arrivalTime: new Date(schedule.arrivalDateTime).toLocaleTimeString('en-US', { 
-            hour: '2-digit', minute: '2-digit', hour12: false 
+          arrivalTime: new Date(schedule.arrivalDateTime).toLocaleTimeString('en-US', {
+            hour: '2-digit', minute: '2-digit', hour12: false
           }),
           availableSeats: schedule.availableSeats,
           price: schedule.price,
@@ -176,11 +189,13 @@ function DashboardContent() {
           date: new Date(schedule.departureDateTime).toISOString().split('T')[0],
           companyLogo: schedule.companyLogo || null,
           companyId: schedule.companyId,
-          routeId: schedule.routeId
+          routeId: schedule.routeId,
+          departureLocation: schedule.departureLocation,
+          arrivalLocation: schedule.arrivalLocation
         }));
 
       setSchedules(enhancedSchedules);
-      
+
       // Update URL search parameters without full page reload
       const newParams = new URLSearchParams();
       if (searchFrom) newParams.set('from', searchFrom);
@@ -217,7 +232,31 @@ function DashboardContent() {
     }
   }, [schedules]);
 
+  const terminals = useMemo(() => {
+    const termMap = new Map();
+    schedules.forEach(s => {
+      if (s.departureLocation) {
+        const key = s.departureLocation;
+        if (!termMap.has(key)) {
+          termMap.set(key, {
+            name: key,
+            count: 0,
+            city: s.origin
+          });
+        }
+        termMap.get(key).count++;
+      }
+    });
+    return Array.from(termMap.values()).sort((a, b) => b.count - a.count);
+  }, [schedules]);
+
   const handleBooking = (scheduleId: string, companyId: string, routeId: string) => {
+    if (!user) {
+      toast.warning('Login Required', 'Please sign in to book a bus ticket.');
+      router.push(`/login?redirect=/book/${scheduleId}`);
+      return;
+    }
+    toast.info('Loading Booking', 'Preparing your booking page...');
     router.push(`/book/${scheduleId}?companyId=${companyId}&routeId=${routeId}&passengers=${passengers}`);
   };
 
@@ -270,6 +309,16 @@ function DashboardContent() {
       }
     }
 
+    // Apply Terminal Filter
+    if (selectedTerminal) {
+      filtered = filtered.filter(s => s.departureLocation === selectedTerminal);
+    }
+
+    // Apply Selected Category Filter
+    if (selectedCategory) {
+      filtered = filtered.filter(s => getScheduleCategory(s as any) === selectedCategory);
+    }
+
     // Sort
     filtered.sort((a, b) => {
       switch (sortBy) {
@@ -283,7 +332,7 @@ function DashboardContent() {
     return filtered;
   }, [schedules, searchFrom, searchTo, searchDate, activeFilter, sortBy, selectedCompany, selectedTimeSlot]);
 
-  if (loading || !user) {
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="flex flex-col items-center">
@@ -296,7 +345,7 @@ function DashboardContent() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20 md:pb-0">
-      
+
       {/* ─── Hero / Quick Search Bar ────────────────────────────────────────── */}
       <div className="bg-gradient-to-br from-blue-900 via-indigo-900 to-slate-900 text-white pt-16 pb-20 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
@@ -307,29 +356,15 @@ function DashboardContent() {
               </h1>
               <p className="text-blue-200 mt-2 text-lg">Browse available bus schedules and book instantly.</p>
             </div>
-            <div className="flex items-center gap-3 bg-white/10 backdrop-blur-md p-3 rounded-2xl border border-white/20">
-              <div className="w-10 h-10 bg-indigo-500/20 rounded-xl flex items-center justify-center">
-                <Users className="w-5 h-5 text-indigo-300" />
-              </div>
-              <div>
-                <p className="text-xs font-bold text-white uppercase tracking-wider leading-none">Need a private bus?</p>
-                <button 
-                  onClick={() => router.push('/groups')}
-                  className="text-[11px] font-black text-blue-300 hover:text-white transition-colors uppercase mt-1 flex items-center gap-1"
-                >
-                  Request Charter <ArrowRight className="w-3 h-3" />
-                </button>
-              </div>
-            </div>
           </div>
 
           <div className="bg-white rounded-2xl shadow-2xl p-4 sm:p-6 w-full max-w-5xl mx-auto transform translate-y-12">
             <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-5 gap-4">
               <div className="col-span-1 md:col-span-2 lg:col-span-1">
                 <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">From</label>
-                <LocationAutocomplete 
-                  value={searchFrom} 
-                  onChange={setSearchFrom} 
+                <LocationAutocomplete
+                  value={searchFrom}
+                  onChange={setSearchFrom}
                   onSelect={setSearchFrom}
                   placeholder="Leaving from..."
                   icon={MapPin}
@@ -339,9 +374,9 @@ function DashboardContent() {
               </div>
               <div className="col-span-1 md:col-span-2 lg:col-span-1">
                 <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">To</label>
-                <LocationAutocomplete 
-                  value={searchTo} 
-                  onChange={setSearchTo} 
+                <LocationAutocomplete
+                  value={searchTo}
+                  onChange={setSearchTo}
                   onSelect={setSearchTo}
                   placeholder="Going to..."
                   icon={MapPin}
@@ -364,7 +399,7 @@ function DashboardContent() {
                 </div>
               </div>
               <div className="col-span-1 md:col-span-4 lg:col-span-1 flex items-end">
-                <button 
+                <button
                   onClick={handleSearch}
                   className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl font-bold flex items-center justify-center transition-colors shadow-lg shadow-blue-200"
                 >
@@ -377,230 +412,342 @@ function DashboardContent() {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-16 pt-4">
-          {/* ─── Main Feed: Filters & Schedules ───────────────────────────── */}
-          <div className="lg:col-span-4 space-y-6">
-            
-            {/* Advanced Filters */}
-            <div className="flex flex-wrap items-center gap-3 bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
-              <div className="flex items-center gap-2">
-                <Filter className="w-4 h-4 text-gray-400" />
-                <span className="text-sm font-bold text-gray-900">Filters:</span>
-              </div>
-              
-              <select 
-                value={selectedCompany} 
-                onChange={e => setSelectedCompany(e.target.value)}
-                className="text-sm bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">All Companies</option>
-                {Array.from(new Set(schedules.map(s => s.companyName))).map(c => (
-                  <option key={c} value={c}>{c}</option>
-                ))}
-              </select>
+        {/* ─── Main Feed: Filters & Schedules ───────────────────────────── */}
+        <div className="lg:col-span-4 space-y-6">
 
-              <select 
-                value={selectedTimeSlot} 
-                onChange={e => setSelectedTimeSlot(e.target.value)}
-                className="text-sm bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">Any Time</option>
-                <option value="morning">Morning (5 AM - 12 PM)</option>
-                <option value="afternoon">Afternoon (12 PM - 5 PM)</option>
-                <option value="evening">Evening (5 PM - 9 PM)</option>
-              </select>
+          {/* Advanced Filters */}
+          <div className="flex flex-wrap items-center gap-3 bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
+            <div className="flex items-center gap-2">
+              <Filter className="w-4 h-4 text-gray-400" />
+              <span className="text-sm font-bold text-gray-900">Filters:</span>
+            </div>
 
-              <div className="h-6 w-px bg-gray-200 mx-2 hidden sm:block" />
+            <select
+              value={selectedCompany}
+              onChange={e => setSelectedCompany(e.target.value)}
+              className="text-sm bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">All Companies</option>
+              {companies.map(c => (
+                <option key={c.id} value={c.name}>{c.name}</option>
+              ))}
+            </select>
 
-              <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
-                {[
-                  { id: 'all', label: 'All' },
-                  { id: 'today', label: 'Today' },
-                  { id: 'economy', label: 'Economy' },
-                  { id: 'luxury', label: 'Luxury/VIP' }
-                ].map(f => (
-                  <button
-                    key={f.id}
-                    onClick={() => setActiveFilter(f.id)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-colors ${
-                      activeFilter === f.id 
-                        ? 'bg-blue-600 text-white shadow-md' 
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            <select
+              value={selectedTimeSlot}
+              onChange={e => setSelectedTimeSlot(e.target.value)}
+              className="text-sm bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Any Time</option>
+              <option value="morning">Morning (5 AM - 12 PM)</option>
+              <option value="afternoon">Afternoon (12 PM - 5 PM)</option>
+              <option value="evening">Evening (5 PM - 9 PM)</option>
+            </select>
+
+            <select
+              value={selectedTerminal}
+              onChange={e => setSelectedTerminal(e.target.value)}
+              className="text-sm bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">All Terminals</option>
+              {terminals.map(t => (
+                <option key={t.name} value={t.name}>{t.name} ({t.city})</option>
+              ))}
+            </select>
+
+            <div className="h-6 w-px bg-gray-200 mx-2 hidden sm:block" />
+
+            <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
+              {[
+                { id: 'all', label: 'All' },
+                { id: 'today', label: 'Today' },
+                { id: 'economy', label: 'Economy' },
+                { id: 'luxury', label: 'Luxury/VIP' }
+              ].map(f => (
+                <button
+                  key={f.id}
+                  onClick={() => setActiveFilter(f.id)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-colors ${activeFilter === f.id
+                    ? 'bg-blue-600 text-white shadow-md'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                     }`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Popular Routes Section */}
+          {popularRoutes.length > 0 && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between px-1">
+                <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                  <TrendingUp className="w-5 h-5 text-orange-500" /> Popular Routes
+                </h3>
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Swipe to explore</p>
+              </div>
+              <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-none px-1">
+                {popularRoutes.map((route, i) => (
+                  <button
+                    key={i}
+                    onClick={() => {
+                      setSearchFrom(route.from);
+                      setSearchTo(route.to);
+                      // Trigger a slight delay to ensure UI updates before focus
+                      setTimeout(() => handleSearch(), 50);
+                    }}
+                    className="flex-shrink-0 w-64 bg-white p-5 rounded-[2rem] border border-gray-100 shadow-sm hover:shadow-xl hover:border-blue-200 transition-all text-left group"
                   >
-                    {f.label}
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="w-10 h-10 rounded-2xl bg-blue-50 flex items-center justify-center text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                        <Navigation className="w-5 h-5" />
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-tight">Starting from</p>
+                        <p className="text-sm font-black text-blue-600">MWK {route.price.toLocaleString()}</p>
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <div className="w-1.5 h-1.5 rounded-full bg-blue-400" />
+                        <p className="text-sm font-bold text-gray-900 truncate">{route.from}</p>
+                      </div>
+                      <div className="w-px h-3 bg-gray-200 ml-[2.5px]" />
+                      <div className="flex items-center gap-2">
+                        <div className="w-1.5 h-1.5 rounded-full bg-indigo-600" />
+                        <p className="text-sm font-bold text-gray-900 truncate">{route.to}</p>
+                      </div>
+                    </div>
+                    <div className="mt-4 pt-4 border-t border-gray-50 flex items-center justify-between">
+                      <span className="text-[10px] font-bold bg-gray-100 text-gray-500 px-2 py-1 rounded-lg uppercase tracking-widest">{route.busType}</span>
+                      <ArrowRight className="w-4 h-4 text-gray-300 group-hover:text-blue-600 group-hover:translate-x-1 transition-all" />
+                    </div>
                   </button>
                 ))}
               </div>
             </div>
+          )}
 
-            {/* Popular Routes Section */}
-            {popularRoutes.length > 0 && (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between px-1">
-                  <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                    <TrendingUp className="w-5 h-5 text-orange-500" /> Popular Routes
-                  </h3>
-                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Swipe to explore</p>
-                </div>
-                <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-none px-1">
-                  {popularRoutes.map((route, i) => (
-                    <button 
-                      key={i} 
-                      onClick={() => {
-                        setSearchFrom(route.from);
-                        setSearchTo(route.to);
-                        // Trigger a slight delay to ensure UI updates before focus
-                        setTimeout(() => handleSearch(), 50);
-                      }}
-                      className="flex-shrink-0 w-64 bg-white p-5 rounded-[2rem] border border-gray-100 shadow-sm hover:shadow-xl hover:border-blue-200 transition-all text-left group"
-                    >
-                      <div className="flex items-center justify-between mb-4">
-                        <div className="w-10 h-10 rounded-2xl bg-blue-50 flex items-center justify-center text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors">
-                          <Navigation className="w-5 h-5" />
-                        </div>
-                        <div className="text-right">
-                          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-tight">Starting from</p>
-                          <p className="text-sm font-black text-blue-600">MWK {route.price.toLocaleString()}</p>
-                        </div>
-                      </div>
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <div className="w-1.5 h-1.5 rounded-full bg-blue-400" />
-                          <p className="text-sm font-bold text-gray-900 truncate">{route.from}</p>
-                        </div>
-                        <div className="w-px h-3 bg-gray-200 ml-[2.5px]" />
-                        <div className="flex items-center gap-2">
-                          <div className="w-1.5 h-1.5 rounded-full bg-indigo-600" />
-                          <p className="text-sm font-bold text-gray-900 truncate">{route.to}</p>
-                        </div>
-                      </div>
-                      <div className="mt-4 pt-4 border-t border-gray-50 flex items-center justify-between">
-                        <span className="text-[10px] font-bold bg-gray-100 text-gray-500 px-2 py-1 rounded-lg uppercase tracking-widest">{route.busType}</span>
-                        <ArrowRight className="w-4 h-4 text-gray-300 group-hover:text-blue-600 group-hover:translate-x-1 transition-all" />
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
+          {/* Terminals Section Removed */}
 
-            {/* Sorting Header */}
-            <div className="flex justify-between items-center bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
+          {/* Category Quick Filter Tabs */}
+          <div className="flex flex-wrap items-center gap-3 bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
+            <span className="text-sm font-bold text-gray-900 mr-2">Time Slot:</span>
+            {['All', 'Boarding Now', 'Morning', 'Afternoon', 'Evening'].map((cat) => (
+              <button
+                key={cat}
+                onClick={() => setSelectedCategory(cat === 'All' ? null : cat)}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${(cat === 'All' && !selectedCategory) || selectedCategory === cat
+                    ? "bg-blue-600 text-white shadow-md shadow-blue-200"
+                    : "bg-gray-50 text-gray-500 hover:bg-gray-100"
+                  }`}
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
+
+          {/* Sorting Header */}
+          <div className="flex justify-between items-center bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
+            <div className="flex items-center gap-4">
               <span className="text-sm font-bold text-gray-900">{filteredSchedules.length} schedules found</span>
-              <div className="flex items-center gap-2 text-sm">
-                <span className="text-gray-500">Sort by:</span>
-                <select value={sortBy} onChange={e => setSortBy(e.target.value as any)} className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium">
-                  <option value="price">Cheapest</option>
-                  <option value="time">Earliest</option>
-                  <option value="company">Company</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Error state */}
-            {error && (
-              <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-xl flex items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <AlertCircle className="w-5 h-5" /> {error}
-                </div>
-                <button 
-                  onClick={handleSearch}
-                  className="flex items-center gap-1 text-sm font-bold bg-white px-3 py-1.5 rounded-lg border border-red-100 hover:bg-red-50 transition-colors"
+              {selectedTerminal && (
+                <button
+                  onClick={() => setSelectedTerminal("")}
+                  className="text-xs bg-blue-50 text-blue-600 px-3 py-1 rounded-full font-bold flex items-center gap-1 hover:bg-blue-100 transition-colors"
                 >
-                  <RefreshCw className="w-4 h-4" /> Retry
+                  Terminal: {selectedTerminal} <X className="w-3 h-3" />
                 </button>
-              </div>
-            )}
+              )}
+            </div>
+            <div className="flex items-center gap-2 text-sm">
+              <span className="text-gray-500">Sort by:</span>
+              <select value={sortBy} onChange={e => setSortBy(e.target.value as any)} className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium">
+                <option value="price">Cheapest</option>
+                <option value="time">Earliest</option>
+                <option value="company">Company</option>
+              </select>
+            </div>
+          </div>
 
-            {/* Schedules Grid */}
-            {filteredSchedules.length === 0 && !loading && !error ? (
-              <div className="bg-white rounded-3xl p-12 text-center border border-gray-100 shadow-sm">
-                <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <BusIcon className="w-10 h-10 text-gray-400" />
-                </div>
-                <h3 className="text-xl font-bold text-gray-900 mb-2">No buses found</h3>
-                <p className="text-gray-500">Try adjusting your filters or search criteria.</p>
-                <button onClick={() => { setSearchFrom(""); setSearchTo(""); setActiveFilter("all"); }} className="mt-6 text-blue-600 font-bold hover:underline">Clear all filters</button>
+          {/* Error state */}
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-xl flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <AlertCircle className="w-5 h-5" /> {error}
               </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {filteredSchedules.map((schedule) => (
-                  <div key={schedule.id} className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm hover:shadow-md hover:border-blue-200 transition-all flex flex-col group">
-                    <div className="flex justify-between items-start mb-4">
-                      <div className="flex items-center gap-3">
-                        {schedule.companyLogo ? (
-                          <img src={schedule.companyLogo} alt={schedule.companyName} className="w-10 h-10 rounded-full object-cover border border-gray-200" />
-                        ) : (
-                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold">{schedule.companyName.charAt(0)}</div>
-                        )}
-                        <div>
-                          <h4 className="font-bold text-gray-900 leading-tight">{schedule.companyName}</h4>
-                          <span className="text-xs text-gray-500 font-medium bg-gray-100 px-2 py-0.5 rounded-md">{schedule.busType}</span>
-                        </div>
+              <button
+                onClick={handleSearch}
+                className="flex items-center gap-1 text-sm font-bold bg-white px-3 py-1.5 rounded-lg border border-red-100 hover:bg-red-50 transition-colors"
+              >
+                <RefreshCw className="w-4 h-4" /> Retry
+              </button>
+            </div>
+          )}
+
+          {/* Schedules Grid */}
+          {filteredSchedules.length === 0 && !loading && !error ? (
+            <div className="bg-white rounded-3xl p-12 text-center border border-gray-100 shadow-sm">
+              <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                <BusIcon className="w-10 h-10 text-gray-400" />
+              </div>
+              <h3 className="text-xl font-bold text-gray-900 mb-2">No buses found</h3>
+              <p className="text-gray-500">Try adjusting your filters or search criteria.</p>
+              <button onClick={() => { setSearchFrom(""); setSearchTo(""); setActiveFilter("all"); }} className="mt-6 text-blue-600 font-bold hover:underline">Clear all filters</button>
+            </div>
+          ) : (
+            <div className="space-y-12">
+              {['Boarding Now', 'Morning', 'Afternoon', 'Evening'].map((cat) => {
+                const items = filteredSchedules.filter(s => getScheduleCategory(s as any) === cat);
+                // If we have a specific category selected, only show that section
+                if (selectedCategory && selectedCategory !== cat) return null;
+                if (items.length === 0) return null;
+
+                return (
+                  <div key={cat} className="space-y-6">
+                    <div className="flex items-center gap-3">
+                      <div className={`p-2 rounded-xl ${cat === 'Boarding Now' ? 'bg-orange-100 text-orange-600 animate-pulse' :
+                          cat === 'Morning' ? 'bg-blue-100 text-blue-600' :
+                            cat === 'Afternoon' ? 'bg-amber-100 text-amber-600' :
+                              'bg-indigo-100 text-indigo-600'
+                        }`}>
+                        {cat === 'Boarding Now' ? <Zap className="w-5 h-5" /> : <Clock className="w-5 h-5" />}
                       </div>
-                      <div className="text-right">
-                        <div className="text-lg font-bold text-blue-600">MWK {(schedule.price).toLocaleString()}</div>
+                      <div>
+                        <h3 className="text-xl font-black text-gray-900 tracking-tight">{cat}</h3>
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                          {items.length} {items.length === 1 ? 'Bus' : 'Buses'} Available
+                        </p>
                       </div>
+                      <div className="h-px bg-gray-100 flex-1 ml-4" />
                     </div>
 
-                    <div className="flex items-center justify-between mb-4 bg-gray-50 p-3 rounded-xl relative">
-                      <div className="text-center w-1/3">
-                        <div className="text-lg font-bold text-gray-900">{schedule.departureTime}</div>
-                        <div className="text-xs font-semibold text-gray-600 truncate">{schedule.origin}</div>
-                      </div>
-                      <div className="flex-1 flex flex-col items-center justify-center relative">
-                        <span className="text-[10px] text-gray-400 font-medium mb-1">{schedule.duration}h</span>
-                        <div className="w-full h-px bg-gray-300 relative">
-                          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-full p-1 border border-gray-200">
-                            <ArrowRight className="w-3 h-3 text-blue-600" />
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {items.map((schedule) => (
+                        <div key={schedule.id} className="bg-white rounded-[2.5rem] p-6 border border-gray-100 shadow-sm hover:shadow-xl hover:border-blue-200 transition-all flex flex-col group relative overflow-hidden">
+                          {/* Category Badge - Repositioned to bottom left */}
+                          {/* Status Badges */}
+                          <div className="absolute top-0 right-0 p-4 flex gap-2">
+                            <span className="text-[9px] font-black uppercase tracking-widest bg-blue-50 text-blue-600 px-2 py-1 rounded-lg border border-blue-100">
+                              {schedule.busType}
+                            </span>
+                          </div>
+
+                          {/* Company Header */}
+                          <div className="flex items-center gap-4 mb-6">
+                            {schedule.companyLogo ? (
+                              <img src={schedule.companyLogo} alt={schedule.companyName} className="w-12 h-12 rounded-2xl object-cover border border-gray-100 shadow-sm" />
+                            ) : (
+                              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center text-white font-black text-xl shadow-md">
+                                {schedule.companyName.charAt(0)}
+                              </div>
+                            )}
+                            <div>
+                              <h4 className="font-black text-gray-900 leading-tight group-hover:text-blue-600 transition-colors">{schedule.companyName}</h4>
+                              <div className="flex items-center gap-1.5 mt-1">
+                                <div className="flex text-yellow-400">
+                                  {[...Array(5)].map((_, i) => <Star key={i} className="w-2.5 h-2.5 fill-current" />)}
+                                </div>
+                                <span className="text-[10px] font-bold text-gray-400">4.8 (120 reviews)</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Route & Terminals */}
+                          <div className="bg-gray-50/50 rounded-[2rem] p-5 mb-6 relative">
+                            <div className="flex justify-between items-start relative z-10">
+                              <div className="flex-1 min-w-0">
+                                <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-1">Departure</p>
+                                <h5 className="text-lg font-black text-gray-900 truncate mb-1">{schedule.origin}</h5>
+                                <button
+                                  onClick={() => setSelectedTerminal(schedule.departureLocation || "")}
+                                  className="flex items-center gap-1 text-[11px] font-bold text-gray-500 truncate hover:text-blue-600 transition-colors"
+                                >
+                                  <MapPin className="w-3 h-3 text-indigo-400 shrink-0" />
+                                  <span className="truncate underline decoration-dotted">{schedule.departureLocation || 'Main Terminal'}</span>
+                                </button>
+                                <div className="mt-3 flex items-center gap-2">
+                                  <div className="px-2 py-1 bg-white rounded-lg border border-gray-100 shadow-sm">
+                                    <span className="text-sm font-black text-gray-900">{schedule.departureTime}</span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="flex flex-col items-center justify-center px-4 pt-8">
+                                <div className="w-px h-12 bg-gradient-to-b from-blue-200 via-indigo-200 to-transparent relative">
+                                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-6 h-6 bg-white rounded-full flex items-center justify-center border border-gray-100 shadow-sm">
+                                    <ArrowRight className="w-3 h-3 text-blue-600" />
+                                  </div>
+                                </div>
+                                <span className="text-[9px] font-black text-gray-400 uppercase tracking-tighter mt-2">{Math.floor(schedule.duration / 60)}h {schedule.duration % 60}m</span>
+                              </div>
+
+                              <div className="flex-1 min-w-0 text-right">
+                                <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-1">Arrival</p>
+                                <h5 className="text-lg font-black text-gray-900 truncate mb-1">{schedule.destination}</h5>
+                                <div className="flex items-center justify-end gap-1 text-[11px] font-bold text-gray-500 truncate">
+                                  <span className="truncate">{schedule.arrivalLocation || 'Main Terminal'}</span>
+                                  <MapPin className="w-3 h-3 text-blue-400 shrink-0" />
+                                </div>
+                                <div className="mt-3 flex items-center justify-end gap-2">
+                                  <div className="px-2 py-1 bg-white rounded-lg border border-gray-100 shadow-sm">
+                                    <span className="text-sm font-black text-gray-900">{schedule.arrivalTime}</span>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Details Bar */}
+                          <div className="grid grid-cols-2 gap-3 mb-6">
+                            <div className="flex items-center gap-2 px-3 py-2 bg-blue-50/50 rounded-xl border border-blue-100/50">
+                              <Calendar className="w-4 h-4 text-blue-600" />
+                              <div>
+                                <p className="text-[9px] font-black text-blue-400 uppercase leading-none mb-1">Travel Date</p>
+                                <p className="text-[11px] font-black text-gray-900 leading-none">
+                                  {new Date(schedule.date).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2 px-3 py-2 bg-indigo-50/50 rounded-xl border border-indigo-100/50">
+                              <Users className="w-4 h-4 text-indigo-600" />
+                              <div>
+                                <p className="text-[9px] font-black text-indigo-400 uppercase leading-none mb-1">Availability</p>
+                                <p className={`text-[11px] font-black leading-none ${schedule.availableSeats > 10 ? 'text-green-600' : 'text-orange-600'}`}>
+                                  {schedule.availableSeats} Seats Left
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Action Area */}
+                          <div className="mt-auto pt-4 border-t border-gray-50 flex items-center justify-between gap-4">
+                            <div>
+                              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none mb-1">Ticket Price</p>
+                              <p className="text-xl font-black text-blue-700">MWK {schedule.price.toLocaleString()}</p>
+                            </div>
+                            <Button
+                              onClick={() => handleBooking(schedule.id, schedule.companyId, schedule.routeId)}
+                              className="bg-blue-600 hover:bg-blue-700 text-white rounded-2xl px-6 py-6 shadow-lg shadow-blue-200 transition-all active:scale-95 font-black text-sm flex items-center gap-2 group/btn"
+                            >
+                              Book Now
+                              <ArrowRight className="w-4 h-4 group-hover/btn:translate-x-1 transition-transform" />
+                            </Button>
                           </div>
                         </div>
-                      </div>
-                      <div className="text-center w-1/3">
-                        <div className="text-lg font-bold text-gray-900">{schedule.arrivalTime}</div>
-                        <div className="text-xs font-semibold text-gray-600 truncate">{schedule.destination}</div>
-                      </div>
-                    </div>
-
-                    <div className="mt-auto flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className={`w-2 h-2 rounded-full ${schedule.availableSeats > 10 ? 'bg-green-500' : 'bg-orange-500'}`} />
-                        <span className="text-xs font-medium text-gray-600">{schedule.availableSeats} seats left</span>
-                      </div>
-                      <Button onClick={() => handleBooking(schedule.id, schedule.companyId, schedule.routeId)} className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-md transition-transform active:scale-95 group-hover:shadow-blue-200">
-                        Book
-                      </Button>
+                      ))}
                     </div>
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-
-
-      {/* ─── Mobile Bottom Navigation ─────────────────────────────────────── */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 flex justify-around items-center p-3 z-50 pb-safe">
-        <button onClick={() => router.push('/schedules')} className="flex flex-col items-center text-blue-600">
-          <Search className="w-6 h-6" />
-          <span className="text-[10px] font-bold mt-1">Search</span>
-        </button>
-        <button onClick={() => router.push('/bookings')} className="flex flex-col items-center text-gray-400 hover:text-gray-900">
-          <BusIcon className="w-6 h-6" />
-          <span className="text-[10px] font-medium mt-1">Bookings</span>
-        </button>
-        <button onClick={() => router.push('/notifications')} className="flex flex-col items-center text-gray-400 hover:text-gray-900 relative">
-          <AlertCircle className="w-6 h-6" />
-          {unreadCount > 0 && (
-            <span className="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full border border-white"></span>
+                );
+              })}
+            </div>
           )}
-          <span className="text-[10px] font-medium mt-1">Alerts</span>
-        </button>
-        <button onClick={() => router.push('/profile')} className="flex flex-col items-center text-gray-400 hover:text-gray-900">
-          <User className="w-6 h-6" />
-          <span className="text-[10px] font-medium mt-1">Profile</span>
-        </button>
+        </div>
       </div>
+
+
+
 
       <style jsx global>{`
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Inter:wght@400;500;600&display=swap');
@@ -612,3 +759,4 @@ function DashboardContent() {
     </div>
   );
 }
+

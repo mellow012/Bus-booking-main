@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Inter } from "next/font/google";
+import { Inter, Montserrat } from "next/font/google";
 import '@/app/globals.css';
 import { NextIntlClientProvider } from 'next-intl';
 import { getLocale, getMessages } from 'next-intl/server';
@@ -11,7 +11,8 @@ import { ToastContainer } from "@/components/ToastContainer";
 import { EmailVerificationBannerLayout } from "@/components/EmailVerificationBannerLayout";
 import { NotificationProviderWrapper } from "@/components/NotificationProviderWrapper";
 
-const inter = Inter({ subsets: ["latin"] });
+const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
+const montserrat = Montserrat({ subsets: ["latin"], variable: "--font-montserrat", weight: ["400", "500", "600", "700"] });
 
 export const viewport: Viewport = {
   themeColor: "#2563eb",
@@ -63,16 +64,16 @@ export const metadata: Metadata = {
   }
 };
 
+import { MobileBottomNav } from "@/components/MobileBottomNav";
+
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const locale   = await getLocale();
   const messages = await getMessages();
 
   return (
     <html lang={locale}>
-      <body className={inter.className}>
+      <body className={`${inter.variable} ${montserrat.variable} ${inter.className}`}>
         <NextIntlClientProvider messages={messages}>
-          {/* AuthProvider MUST be outermost — everything that calls useAuth()
-              must be a descendant, including NotificationProviderWrapper */}
           <AuthProvider>
             <NotificationProviderWrapper>
               <ToastProvider>
@@ -84,6 +85,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                   </main>
                   <Footer />
                 </div>
+                <MobileBottomNav />
                 <ToastContainer />
               </ToastProvider>
             </NotificationProviderWrapper>

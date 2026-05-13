@@ -4,11 +4,11 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import {
-  MapPin, Loader2, ChevronDown, Flame, Coffee, Sun, Moon, ArrowUpDown, RefreshCw, ArrowRight
+  MapPin, Loader2, ChevronDown, Flame, Coffee, Sun, Moon, ArrowUpDown, RefreshCw, ArrowRight, ChevronLeft
 } from "lucide-react";
 import { ScheduleCard } from "@/components/ScheduleCard";
 import AlertMessage from "@/components/AlertMessage";
-import { EnhancedSchedule, isToday, getScheduleCategory, GeoStatus, cityMatch } from "@/utils/homeHelpers";
+import { EnhancedSchedule, isToday, getScheduleCategory, GeoStatus, cityMatch, nearestCity } from "@/utils/homeHelpers";
 import { CityPickerModal } from "@/components/CityPickerModal";
 
 const LS_CITY_KEY = "tb_user_city";
@@ -19,6 +19,8 @@ const SORT_OPTIONS = [
   { value: "price_desc", label: "Highest Price" },
   { value: "seats", label: "Most Seats" },
 ];
+
+const PAGE_SIZE = 4;
 
 const CardSkeleton = () => <div className="h-48 bg-gray-100 rounded-2xl animate-pulse" />;
 
@@ -35,6 +37,7 @@ export default function HomeSchedules() {
   const [showSort, setShowSort] = useState(false);
   const [showCityPicker, setShowCityPicker] = useState(false);
   const [geoStatus, setGeoStatus] = useState<GeoStatus>("idle");
+  const [currentPage, setCurrentPage] = useState(1);
 
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -89,16 +92,21 @@ export default function HomeSchedules() {
       setUserCity(null);
       localStorage.removeItem(LS_CITY_KEY);
     }
+    setCurrentPage(1); // Reset page on city change
     setShowCityPicker(false);
   };
 
   const requestGeolocation = () => {
-    if (!("geolocation" in navigator)) return;
+    if (!("geolocation" in navigator)) { setGeoStatus("unavailable"); return; }
     setGeoStatus("detecting");
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        // We'd ideally import nearestCity here or just trust the picker modal logic
+        const city = nearestCity(pos.coords.latitude, pos.coords.longitude);
+        setUserCity(city);
+        localStorage.setItem(LS_CITY_KEY, city);
+        setCurrentPage(1);
         setGeoStatus("granted");
+        setShowCityPicker(false);
       },
       () => setGeoStatus("denied")
     );
@@ -147,14 +155,21 @@ export default function HomeSchedules() {
     });
   }, [schedules, sortKey, userCity]);
 
+  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
+  
+  const currentSchedules = useMemo(() => {
+    const start = (currentPage - 1) * PAGE_SIZE;
+    return filtered.slice(start, start + PAGE_SIZE);
+  }, [filtered, currentPage]);
+
   const groups = useMemo(() => {
     return [
-      { label: 'Boarding Now', icon: Flame, items: filtered.filter(s => getScheduleCategory(s) === 'Boarding Now') },
-      { label: 'Morning', icon: Coffee, items: filtered.filter(s => getScheduleCategory(s) === 'Morning') },
-      { label: 'Afternoon', icon: Sun, items: filtered.filter(s => getScheduleCategory(s) === 'Afternoon') },
-      { label: 'Evening', icon: Moon, items: filtered.filter(s => getScheduleCategory(s) === 'Evening') },
+      { label: 'Boarding Now', icon: Flame, items: currentSchedules.filter(s => getScheduleCategory(s) === 'Boarding Now') },
+      { label: 'Morning', icon: Coffee, items: currentSchedules.filter(s => getScheduleCategory(s) === 'Morning') },
+      { label: 'Afternoon', icon: Sun, items: currentSchedules.filter(s => getScheduleCategory(s) === 'Afternoon') },
+      { label: 'Evening', icon: Moon, items: currentSchedules.filter(s => getScheduleCategory(s) === 'Evening') },
     ].filter(g => g.items.length > 0);
-  }, [filtered]);
+  }, [currentSchedules]);
 
   return (
     <section id="schedules-section" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
@@ -225,9 +240,17 @@ export default function HomeSchedules() {
                 <h3 className="font-display text-lg font-extrabold text-gray-900">{group.label}</h3>
                 <span className="ml-auto text-[10px] font-bold text-gray-500 bg-gray-200 px-2.5 py-1 rounded-full">{group.items.length}</span>
               </div>
-              <div className="flex flex-row lg:flex-col gap-5 overflow-x-auto lg:overflow-x-visible pb-6 lg:pb-0 px-4 lg:px-0 -mx-4 lg:mx-0">
+              <div className={`flex flex-row overflow-x-auto pb-6 px-4 -mx-4 lg:mx-0 lg:px-0 lg:overflow-x-visible lg:pb-0 gap-5 ${
+                groups.length === 1 
+                  ? "lg:grid lg:grid-cols-2 xl:grid-cols-3 lg:flex-none" 
+                  : "lg:flex-col"
+              }`}>
                 {group.items.map(s => (
-                  <div key={s.id} className="min-w-[85vw] sm:min-w-[340px] lg:min-w-0 lg:w-full shrink-0">
+                  <div key={s.id} className={`shrink-0 ${
+                    groups.length === 1 
+                      ? "min-w-[85vw] sm:min-w-[340px] lg:min-w-0" 
+                      : "min-w-[85vw] sm:min-w-[340px] lg:min-w-0 lg:w-full"
+                  }`}>
                     <ScheduleCard s={s} userCity={userCity} onBook={()=>handleBooking(s.id)}/>
                   </div>
                 ))}
@@ -247,6 +270,48 @@ export default function HomeSchedules() {
           <p className="text-gray-500 text-sm max-w-xs mx-auto mb-8">We couldn't find any active or upcoming schedules. Try refreshing or check back later.</p>
           <button onClick={()=>fetchSchedules(true)} disabled={refreshing} className="flex items-center gap-2 mx-auto text-sm font-bold bg-gray-50 border border-gray-200 rounded-xl px-6 py-3 text-gray-700 hover:bg-gray-100 transition-colors">
             {refreshing?<Loader2 className="w-4 h-4 animate-spin"/>:<RefreshCw className="w-4 h-4"/>} Refresh Live Data
+          </button>
+        </div>
+      )}
+
+      {/* Pagination Controls */}
+      {!loading && totalPages > 1 && (
+        <div className="flex items-center justify-center gap-4 mt-8 pb-4">
+          <button 
+            disabled={currentPage === 1}
+            onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+            className="p-2 rounded-xl border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 hover:border-blue-300 disabled:opacity-40 disabled:hover:bg-white disabled:hover:border-gray-200 transition-all shadow-sm active:scale-95"
+            aria-label="Previous page"
+          >
+            <ChevronLeft className="w-5 h-5" />
+          </button>
+          
+          <div className="flex items-center gap-1.5">
+            {Array.from({ length: totalPages }).map((_, i) => {
+              const page = i + 1;
+              return (
+                <button
+                  key={page}
+                  onClick={() => setCurrentPage(page)}
+                  className={`w-10 h-10 rounded-xl text-sm font-bold transition-all ${
+                    currentPage === page 
+                      ? "bg-blue-600 text-white shadow-md shadow-blue-200 scale-105" 
+                      : "bg-white border border-gray-100 text-gray-400 hover:border-blue-200 hover:text-blue-500"
+                  }`}
+                >
+                  {page}
+                </button>
+              );
+            })}
+          </div>
+
+          <button 
+            disabled={currentPage === totalPages}
+            onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+            className="p-2 rounded-xl border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 hover:border-blue-300 disabled:opacity-40 disabled:hover:bg-white disabled:hover:border-gray-200 transition-all shadow-sm active:scale-95"
+            aria-label="Next page"
+          >
+            <ArrowRight className="w-5 h-5" />
           </button>
         </div>
       )}

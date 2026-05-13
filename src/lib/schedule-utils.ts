@@ -36,7 +36,7 @@ export function calculateTripStatus(schedule: any): TripStatus {
   }
 
   // Check if bus has passed the last stop
-  const stops = (schedule.route?.stops as any[]) || [];
+  const stops = Array.isArray(schedule.route?.stops) ? (schedule.route.stops as any[]) : [];
   if (stops.length > 0 && schedule.currentStopId) {
     const lastStop = stops[stops.length - 1];
     if (schedule.currentStopId === lastStop.id) {
@@ -75,7 +75,7 @@ export function isSegmentBookable(schedule: any, originStopId?: string): boolean
     // If no origin stop is specified (e.g. main origin), and trip has started, it's not bookable
     if (!originStopId) return false; 
     
-    const stops = (schedule.route?.stops as any[]) || [];
+    const stops = Array.isArray(schedule.route?.stops) ? (schedule.route.stops as any[]) : [];
     if (stops.length === 0) return false; // Can't determine segments without stops data
 
     // If currentStopId is not set, we assume it's at the beginning (still bookable if origin is ahead)

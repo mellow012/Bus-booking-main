@@ -2,12 +2,12 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import Image from 'next/image';
 import { useTranslations } from 'next-intl';
-import { EnvelopeIcon, LockClosedIcon, EyeIcon, EyeSlashIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
+import { EnvelopeIcon, LockClosedIcon, EyeIcon, EyeSlashIcon, ExclamationTriangleIcon, CheckCircleIcon } from '@heroicons/react/24/outline';
 
 // Types
 interface FormData {
@@ -143,7 +143,9 @@ const formatTime = (seconds: number): string => {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function Login() {
-  const router     = useRouter();
+  const router       = useRouter();
+  const searchParams = useSearchParams();
+  const isVerified   = searchParams.get('verified') === 'true';
   // FIX: use AuthContext.signIn so the __session cookie is created properly.
   // Previously the page called Firebase directly and skipped session creation,
   // which caused middleware to reject every subsequent request.
@@ -271,6 +273,16 @@ export default function Login() {
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
         <div className="bg-white py-10 px-6 shadow-xl rounded-2xl sm:px-12">
+
+          {isVerified && (
+            <div className="mb-6 bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-lg flex items-start">
+              <CheckCircleIcon className="w-5 h-5 mr-2 flex-shrink-0 mt-0.5 text-green-600" />
+              <div>
+                <p className="font-medium">Email Verified!</p>
+                <p className="text-sm mt-1">Your email has been verified successfully. You can now log in.</p>
+              </div>
+            </div>
+          )}
 
           {isLockedOut && (
             <div className="mb-6 bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3 rounded-lg flex items-start">

@@ -42,6 +42,7 @@ interface EnhancedSchedule {
   busType: string;
   amenities: string[];
   totalSeats: number;
+  departureLocation?: string;
 }
 
 type SortBy = 'time' | 'price_asc' | 'price_desc' | 'seats';
@@ -68,23 +69,29 @@ export async function GET(request: NextRequest) {
     const where: any = {
       status: 'active',
       availableSeats: { gt: 0 },
-      // By default, only show schedules that haven't arrived yet
-      // but if specific dates are provided, we follow those
       company: { status: 'active' }, 
+      // Filter by route cities in DB
+      route: {
+        isActive: true,
+      }
     };
+
+    if (from) {
+      where.route.origin = { contains: from, mode: 'insensitive' };
+    }
+    if (to) {
+      where.route.destination = { contains: to, mode: 'insensitive' };
+    }
 
     if (startDate || endDate) {
       where.departureDateTime = {};
       if (startDate) where.departureDateTime.gte = new Date(startDate);
       if (endDate) where.departureDateTime.lte = new Date(endDate);
     } else if (!date) {
-      // Default: show upcoming AND recently arrived (within 30 mins)
-      // This matches the removal logic in calculateTripStatus
       const gracePeriod = new Date(Date.now() - 30 * 60 * 1000);
       where.arrivalDateTime = { gt: gracePeriod };
     }
 
-    // Optional: filter by specific date if provided (YYYY-MM-DD)
     if (date) {
       const startOfDay = new Date(`${date}T00:00:00Z`);
       const endOfDay = new Date(`${date}T23:59:59Z`);
@@ -94,7 +101,6 @@ export async function GET(request: NextRequest) {
       };
     }
 
-    // Fetch schedules with joins (Prisma handles the SQL efficiently)
     const schedules = await prisma.schedule.findMany({
       where,
       include: {
@@ -109,7 +115,7 @@ export async function GET(request: NextRequest) {
           ? { price: 'asc' }
           : sortBy === 'price_desc'
           ? { price: 'desc' }
-          : { availableSeats: 'desc' }, // seats
+          : { availableSeats: 'desc' }, 
       skip: pageOffset,
       take: limit,
     });
@@ -126,9 +132,6 @@ export async function GET(request: NextRequest) {
 
         if (!route || !bus || !company) return null;
 
-        // Filter by city names if specified
-        if (from && !route.origin.toLowerCase().includes(from)) return null;
-        if (to && !route.destination.toLowerCase().includes(to)) return null;
 
         const dep = new Date(sch.departureDateTime);
         const arr = new Date(sch.arrivalDateTime);
@@ -137,14 +140,16 @@ export async function GET(request: NextRequest) {
 
         // Smart Segment Filtering: If we have an from city, check if it's still bookable
         let originStopId: string | undefined;
-        if (from && route.stops) {
+        if (from && Array.isArray(route.stops)) {
           const stops = route.stops as any[];
-          const match = stops.find(s => s.name.toLowerCase().includes(from));
+          const match = stops.find(s => s?.name?.toLowerCase().includes(from));
           if (match) originStopId = match.id;
         }
 
+        /*
         const bookable = isSegmentBookable(sch, originStopId);
         if (!bookable) return null;
+        */
 
         return {
           id: sch.id,
@@ -169,6 +174,8 @@ export async function GET(request: NextRequest) {
           busType: bus?.busType || 'Standard',
           amenities: (bus?.amenities as string[]) || [],
           totalSeats: bus?.capacity || 40,
+          departureLocation: sch.departureLocation || company.address || undefined,
+          arrivalLocation: sch.arrivalLocation || undefined,
         };
       })
       .filter(item => item !== null) as any[] as EnhancedSchedule[];

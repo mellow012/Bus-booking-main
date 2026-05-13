@@ -221,7 +221,7 @@ export default function Register() {
 
       setUserEmail(formData.email);
       setSuccess(true);
-      setTimeout(() => router.push('/'), 2000);
+      setTimeout(() => router.push('/verify-email'), 2000);
 
     } catch (error: any) {
       console.error('Registration error:', error);

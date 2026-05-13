@@ -271,6 +271,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       email: email.trim().toLowerCase(),
       password,
       options: {
+        emailRedirectTo: `${window.location.origin}/verify-email?mode=verified`,
         data: {
           first_name: profile.firstName.trim(),
           last_name:  profile.lastName.trim(),

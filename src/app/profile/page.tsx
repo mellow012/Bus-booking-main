@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
 import AlertMessage from '../../components/AlertMessage';
+import { useAppToast } from '@/contexts/ToastContext';
 import ProfilePageSkeleton from '@/components/ui/ProfilePageSkeleton';
 import ConfirmationModal from '@/components/ui/ConfirmationModal';
 import OperatorProfileTab from '@/components/OperatorProfileTab';
@@ -27,6 +28,7 @@ interface UserProfile {
   sex?: string;
   currentAddress?: string;
   role: UserRole;
+  setupCompleted: boolean;
   createdAt: Date;
   updatedAt?: Date;
   [key: string]: unknown;
@@ -123,6 +125,7 @@ const DEFAULT_SECURITY: SecuritySettings = {
 const ProfilePage: React.FC = () => {
   const router = useRouter();
   const { user, userProfile, updateUserProfile, signOut } = useAuth();
+  const toast = useAppToast();
 
   // Core state
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -352,9 +355,10 @@ const ProfilePage: React.FC = () => {
         currentAddress: formData.currentAddress || undefined,
       });
 
-      setProfile(prev => prev ? { ...prev, ...formData, profileCompleted: true, updatedAt: new Date() } : null);
+      setProfile(prev => prev ? { ...prev, ...formData, setupCompleted: true, updatedAt: new Date() } : null);
       setEditProfile(false);
       setSuccess('Profile updated successfully!');
+      toast.success('Profile Updated', 'Your details have been saved successfully.');
       setTimeout(() => setSuccess(''), 3000);
     } catch (err: unknown) {
       setError(`Failed to update profile: ${(err as any).message}`);
@@ -426,6 +430,7 @@ const ProfilePage: React.FC = () => {
 
       await fetchBookingData();
       setSuccess('Booking cancelled successfully.');
+      toast.success('Booking Cancelled', 'Your booking has been cancelled successfully.');
       setTimeout(() => setSuccess(''), 3000);
     } catch (err: unknown) {
       console.error('Error cancelling booking:', err);
@@ -449,6 +454,7 @@ const ProfilePage: React.FC = () => {
       if (error) throw error;
       setPwResetSent(true);
       setSuccess(`Password reset email sent to ${user.email}`);
+      toast.success('Email Sent', `Password reset link sent to ${user.email}`);
       setTimeout(() => setSuccess(''), 4000);
     } catch (err: unknown) {
       setError(`Failed to send reset email: ${(err as any).message}`);
@@ -582,6 +588,32 @@ const ProfilePage: React.FC = () => {
         )}
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12">
+          
+          {/* Welcome/Action Banner for New Users */}
+          {(!profile.setupCompleted || !profile.phone?.trim() || !profile.firstName?.trim() || !profile.lastName?.trim()) && !editProfile && (
+            <div className="mb-8 bg-gradient-to-r from-blue-600 to-indigo-700 rounded-[2rem] p-6 sm:p-8 text-white shadow-xl shadow-blue-200 relative overflow-hidden anim-fade-up">
+              <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 blur-3xl rounded-full -mr-20 -mt-20" />
+              <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
+                <div className="flex items-center gap-5">
+                  <div className="w-14 h-14 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center shrink-0 border border-white/30">
+                    <Zap className="w-7 h-7 text-yellow-300" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl sm:text-2xl font-bold">Welcome to TibhukeBus!</h2>
+                    <p className="text-blue-100 text-sm mt-1 max-w-md">
+                      Please update your profile details to ensure a smooth booking experience and receive trip updates.
+                    </p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setEditProfile(true)}
+                  className="px-8 py-3 bg-white text-blue-700 font-bold rounded-2xl hover:bg-blue-50 transition-all shadow-lg active:scale-95 whitespace-nowrap"
+                >
+                  Complete Setup
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Profile Header */}
           <div className="bg-white/80 backdrop-blur-md rounded-[32px] shadow-sm border border-white p-6 sm:p-8 mb-8">

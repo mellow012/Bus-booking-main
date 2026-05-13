@@ -169,7 +169,7 @@
     "accountCreated": "Account Created!",
     "errorTitle": "Registration Failed",
     "successTitle": "Registration Successful!",
-    "successRedirect": "Redirecting to your dashboard...",
+    "successRedirect": "Redirecting to email verification...",
     "errorEmailRequired": "Email address is required",
     "errorEmailInvalid": "Please enter a valid email address",
     "errorPasswordRequired": "Password is required",

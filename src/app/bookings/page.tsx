@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import Modal from '../../components/Modals';
 import AlertMessage from '../../components/AlertMessage';
+import { useAppToast } from '@/contexts/ToastContext';
 
 // ─── PaymentProvider type ─────────────────────────────────────────────────────
 type PaymentProvider = 'flutterwave' | 'paychangu' | 'cash' | 'local_bank';
@@ -638,6 +639,7 @@ const BookingsPage: React.FC = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, userProfile } = useAuth();
+  const toast = useAppToast();
 
   const [bookings, setBookings] = useState<BookingWithDetails[]>([]);
   const [filteredBookings, setFilteredBookings] = useState<BookingWithDetails[]>([]);
@@ -814,6 +816,10 @@ const BookingsPage: React.FC = () => {
       });
 
       setSuccess(isPaid ? 'Cancellation requested. An admin will review.' : 'Booking cancelled successfully.');
+      toast.success(
+        isPaid ? 'Cancellation Requested' : 'Booking Cancelled',
+        isPaid ? 'An admin will review your cancellation request.' : `Booking ${bookingId.slice(-8)} has been cancelled.`
+      );
       setTimeout(() => setSuccess(''), 5000);
       fetchBookings();
     } catch (err: unknown) {
@@ -832,6 +838,7 @@ const BookingsPage: React.FC = () => {
       const response = await fetch(`/api/bookings/${bookingId}`, { method: 'DELETE' });
       if (!response.ok) throw new Error('Failed to delete booking');
       setSuccess('Booking deleted.');
+      toast.info('Booking Removed', 'The cancelled booking has been deleted.');
       setTimeout(() => setSuccess(''), 5000);
       fetchBookings();
     }
@@ -865,6 +872,7 @@ const BookingsPage: React.FC = () => {
         pdf.addImage(qr, 'PNG', 140, 30, 50, 50); pdf.setFontSize(8); pdf.text('Scan to verify', 150, 85);
       }
       pdf.save(`ticket_${booking.bookingReference || booking.id.slice(-8)}.pdf`); setSuccess('Ticket downloaded!');
+      toast.success('Ticket Downloaded', 'Your bus ticket has been saved as a PDF.');
     } catch { setError('Failed to generate PDF.'); }
     finally { setActionLoading(null); }
   }, [formatDate, formatTime]);
@@ -921,6 +929,7 @@ const BookingsPage: React.FC = () => {
 
         setConfirmModalOpen(false);
         setSuccess('Booking confirmed — please pay the conductor when you board.');
+        toast.success('Booking Reserved', `Have MWK ${selectedBooking.totalAmount.toLocaleString()} ready when you board.`);
         setTimeout(() => setSuccess(''), 6000);
         fetchBookings();
         return;
@@ -961,6 +970,7 @@ const BookingsPage: React.FC = () => {
         setConfirmModalOpen(false);
         const providerName = selectedProvider === 'paychangu' ? 'PayChangu' : 'Flutterwave';
         setSuccess(`Redirecting to ${providerName}…`);
+        toast.loading('Redirecting', `Taking you to ${providerName} for secure payment…`);
         setTimeout(() => { window.location.href = result.checkoutUrl; }, 1200);
       } else {
         throw new Error(result.error || 'Invalid server response');
