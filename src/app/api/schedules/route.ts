@@ -146,10 +146,13 @@ export async function GET(request: NextRequest) {
           if (match) originStopId = match.id;
         }
 
-        /*
-        const bookable = isSegmentBookable(sch, originStopId);
-        if (!bookable) return null;
-        */
+        try {
+          const bookable = isSegmentBookable(sch, originStopId);
+          if (!bookable) return null;
+        } catch (err) {
+          console.error("Error checking bookable status for schedule", sch.id, err);
+          // Default to bookable if check fails to avoid hiding results due to logic errors
+        }
 
         return {
           id: sch.id,
@@ -174,8 +177,8 @@ export async function GET(request: NextRequest) {
           busType: bus?.busType || 'Standard',
           amenities: (bus?.amenities as string[]) || [],
           totalSeats: bus?.capacity || 40,
-          departureLocation: sch.departureLocation || company.address || undefined,
-          arrivalLocation: sch.arrivalLocation || undefined,
+          departureLocation: sch.departureLocation || company.address || `${route.origin} Main Terminal`,
+          arrivalLocation: sch.arrivalLocation || `${route.destination} Main Terminal`,
         };
       })
       .filter(item => item !== null) as any[] as EnhancedSchedule[];

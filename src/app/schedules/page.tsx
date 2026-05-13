@@ -5,8 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   Search, MapPin, Calendar, Users, Navigation, Clock, CheckCircle, Bus as BusIcon,
-  Filter, AlertCircle, RefreshCw, Zap, TrendingUp, Loader2, ArrowRight, User, Star,
-  X
+  Filter, AlertCircle, RefreshCw, Zap, TrendingUp, Loader2, ArrowRight, User, Star, X
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LocationAutocomplete } from "@/components/LocationAutocomplete";
@@ -539,8 +538,8 @@ function DashboardContent() {
                 key={cat}
                 onClick={() => setSelectedCategory(cat === 'All' ? null : cat)}
                 className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${(cat === 'All' && !selectedCategory) || selectedCategory === cat
-                    ? "bg-blue-600 text-white shadow-md shadow-blue-200"
-                    : "bg-gray-50 text-gray-500 hover:bg-gray-100"
+                  ? "bg-blue-600 text-white shadow-md shadow-blue-200"
+                  : "bg-gray-50 text-gray-500 hover:bg-gray-100"
                   }`}
               >
                 {cat}
@@ -608,9 +607,9 @@ function DashboardContent() {
                   <div key={cat} className="space-y-6">
                     <div className="flex items-center gap-3">
                       <div className={`p-2 rounded-xl ${cat === 'Boarding Now' ? 'bg-orange-100 text-orange-600 animate-pulse' :
-                          cat === 'Morning' ? 'bg-blue-100 text-blue-600' :
-                            cat === 'Afternoon' ? 'bg-amber-100 text-amber-600' :
-                              'bg-indigo-100 text-indigo-600'
+                        cat === 'Morning' ? 'bg-blue-100 text-blue-600' :
+                          cat === 'Afternoon' ? 'bg-amber-100 text-amber-600' :
+                            'bg-indigo-100 text-indigo-600'
                         }`}>
                         {cat === 'Boarding Now' ? <Zap className="w-5 h-5" /> : <Clock className="w-5 h-5" />}
                       </div>
