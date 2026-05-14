@@ -165,7 +165,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const isSetupPage = false; // logic would go here if needed
 
     if (!user && !isSetupPage && !isPublicRoute) {
-      router.push('/login');
+      const currentPath = typeof window !== 'undefined' ? pathname + window.location.search : pathname;
+      router.push(`/login?redirect=${encodeURIComponent(currentPath)}`);
       return;
     }
 
@@ -201,6 +202,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [user, userProfile, isInitialized, loading, router, pathname]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const redirectToDashboard = useCallback((profile: UserProfile) => {
+    // Check for redirect parameter in URL
+    if (typeof window !== 'undefined') {
+      const searchParams = new URLSearchParams(window.location.search);
+      const redirect = searchParams.get('redirect');
+      if (redirect && redirect.startsWith('/')) {
+        router.push(redirect);
+        return;
+      }
+    }
+
     switch (profile.role) {
       case 'superadmin':
         router.push('/admin');

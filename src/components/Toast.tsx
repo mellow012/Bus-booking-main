@@ -77,12 +77,12 @@ const Toast: React.FC<ToastProps> = ({
 
   return (
     <div
-      className={`${config.bg} rounded-2xl p-4 shadow-2xl ring-1 ${config.ring} backdrop-blur-md transition-all duration-300 ease-out ${
+      className={`${config.bg} w-full rounded-2xl p-4 shadow-2xl ring-1 ${config.ring} backdrop-blur-md transition-all duration-500 ease-out ${
         isVisible && !isExiting
           ? 'translate-y-0 opacity-100 scale-100'
           : isExiting
-          ? 'translate-y-2 opacity-0 scale-95'
-          : 'translate-y-4 opacity-0 scale-95'
+          ? '-translate-y-4 opacity-0 scale-95'
+          : '-translate-y-8 opacity-0 scale-95'
       }`}
       role="alert"
     >

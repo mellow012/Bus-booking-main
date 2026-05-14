@@ -618,7 +618,7 @@ const ProfilePage: React.FC = () => {
           {/* Profile Header */}
           <div className="bg-white/80 backdrop-blur-md rounded-[32px] shadow-sm border border-white p-6 sm:p-8 mb-8">
             <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
-              <div className="flex items-center space-x-6 w-full lg:w-auto">
+              <div className="flex flex-col sm:flex-row items-center sm:items-start lg:items-center gap-4 sm:gap-6 w-full lg:w-auto">
                 <div className="relative flex-shrink-0">
                   <div className="w-20 h-20 sm:w-24 sm:h-24 bg-gradient-to-tr from-blue-600 to-indigo-600 rounded-3xl flex items-center justify-center text-white font-bold text-3xl sm:text-4xl shadow-xl shadow-blue-200/50 rotate-3">
                     <span className="-rotate-3">{profile.firstName?.charAt(0) || 'U'}</span>
@@ -628,24 +628,24 @@ const ProfilePage: React.FC = () => {
                   </div>
                 </div>
                 <div className="min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 truncate">
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-2 mb-1">
+                    <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 truncate">
                       {profile.firstName} {profile.lastName}
                     </h1>
                     <span className="px-2 py-0.5 bg-blue-50 text-blue-600 text-[10px] font-bold uppercase tracking-wider rounded-lg border border-blue-100">Customer</span>
                   </div>
-                  <p className="text-gray-500 flex items-center text-sm mb-3">
+                  <p className="text-gray-500 flex items-center justify-center sm:justify-start text-sm mb-3">
                     <Mail className="w-3.5 h-3.5 mr-1.5" />
-                    {profile.email}
+                    <span className="truncate">{profile.email}</span>
                   </p>
-                  <div className="flex flex-wrap items-center gap-4 text-xs font-medium text-gray-400">
+                  <div className="flex flex-wrap items-center justify-center sm:justify-start gap-3 text-xs font-medium text-gray-400">
                     <span className="flex items-center bg-gray-50 px-2 py-1 rounded-lg">
                       <Calendar className="w-3.5 h-3.5 mr-1.5 text-gray-400" />
-                      Member since {toDate(profile.createdAt).getFullYear()}
+                      {toDate(profile.createdAt).getFullYear()}
                     </span>
                     <span className="flex items-center bg-blue-50/50 text-blue-600 px-2 py-1 rounded-lg">
                       <Award className="w-3.5 h-3.5 mr-1.5" />
-                      {calculateProfileCompletion()}% Profile Score
+                      {calculateProfileCompletion()}%
                     </span>
                   </div>
                 </div>
@@ -675,7 +675,7 @@ const ProfilePage: React.FC = () => {
           </div>
 
           {/* Stats Cards */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-8">
             <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100 hover:shadow-xl transition-all">
               <div className="flex items-center justify-between mb-4">
                 <div className="p-3 bg-blue-50 rounded-xl"><BusIcon className="w-6 h-6 text-blue-600" /></div>
@@ -731,7 +731,7 @@ const ProfilePage: React.FC = () => {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center space-x-2 px-6 py-2.5 rounded-2xl transition-all duration-300 font-bold text-sm whitespace-nowrap ${activeTab === tab.id
+                  className={`flex items-center space-x-2 px-4 sm:px-6 py-2.5 rounded-2xl transition-all duration-300 font-bold text-sm whitespace-nowrap ${activeTab === tab.id
                     ? 'bg-white text-indigo-600 shadow-sm'
                     : 'text-gray-500 hover:text-gray-900'
                     }`}

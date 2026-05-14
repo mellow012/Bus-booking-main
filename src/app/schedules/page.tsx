@@ -250,13 +250,16 @@ function DashboardContent() {
   }, [schedules]);
 
   const handleBooking = (scheduleId: string, companyId: string, routeId: string) => {
+    const bookingUrl = `/book/${scheduleId}?companyId=${companyId}&routeId=${routeId}&passengers=${passengers}`;
+    
     if (!user) {
       toast.warning('Login Required', 'Please sign in to book a bus ticket.');
-      router.push(`/login?redirect=/book/${scheduleId}`);
+      router.push(`/login?redirect=${encodeURIComponent(bookingUrl)}`);
       return;
     }
+    
     toast.info('Loading Booking', 'Preparing your booking page...');
-    router.push(`/book/${scheduleId}?companyId=${companyId}&routeId=${routeId}&passengers=${passengers}`);
+    router.push(bookingUrl);
   };
 
   const filteredSchedules = useMemo(() => {
