@@ -8,12 +8,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { isSegmentBookable } from '@/lib/schedule-utils';
+import { checkAndRollSchedules } from '@/lib/schedule-generator';
 
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 100;
 
 export async function GET(request: NextRequest) {
   try {
+    // Ensure future schedules are active and running all the time
+    await checkAndRollSchedules();
+
     const searchParams = request.nextUrl.searchParams;
 
     // Required parameters

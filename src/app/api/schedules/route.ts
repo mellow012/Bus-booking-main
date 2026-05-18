@@ -15,6 +15,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { isSegmentBookable } from '@/lib/schedule-utils';
+import { checkAndRollSchedules } from '@/lib/schedule-generator';
 
 export const dynamic = 'force-dynamic';
 
@@ -49,6 +50,9 @@ type SortBy = 'time' | 'price_asc' | 'price_desc' | 'seats';
 
 export async function GET(request: NextRequest) {
   try {
+    // Ensure future schedules are active and running all the time
+    await checkAndRollSchedules();
+
     const searchParams = request.nextUrl.searchParams;
     
     // Extract query parameters
@@ -85,18 +89,26 @@ export async function GET(request: NextRequest) {
 
     if (startDate || endDate) {
       where.departureDateTime = {};
-      if (startDate) where.departureDateTime.gte = new Date(startDate);
+      if (startDate) {
+        const start = new Date(startDate);
+        const gracePeriod = new Date(Date.now() - 15 * 60 * 1000);
+        where.departureDateTime.gte = start < gracePeriod ? gracePeriod : start;
+      }
       if (endDate) where.departureDateTime.lte = new Date(endDate);
     } else if (!date) {
-      const gracePeriod = new Date(Date.now() - 30 * 60 * 1000);
-      where.arrivalDateTime = { gt: gracePeriod };
+      // Only fetch schedules departing from 15 minutes ago onwards.
+      // This prevents departed/completed schedules from filling up the 'take: 30' query limit
+      // and causing all results to be filtered out in-memory.
+      const gracePeriod = new Date(Date.now() - 15 * 60 * 1000);
+      where.departureDateTime = { gte: gracePeriod };
     }
 
     if (date) {
+      const todayStr = new Date().toISOString().split('T')[0];
       const startOfDay = new Date(`${date}T00:00:00Z`);
       const endOfDay = new Date(`${date}T23:59:59Z`);
       where.departureDateTime = {
-        gte: startOfDay,
+        gte: date === todayStr ? new Date(Date.now() - 15 * 60 * 1000) : startOfDay,
         lte: endOfDay,
       };
     }
@@ -183,14 +195,24 @@ export async function GET(request: NextRequest) {
       })
       .filter(item => item !== null) as any[] as EnhancedSchedule[];
 
+    // Deduplicate identical schedules (same company, same route, same date, same time, same price)
+    const seen = new Set<string>();
+    const deduplicated: EnhancedSchedule[] = [];
+    for (const item of enhanced) {
+      const key = `${item.companyId}-${item.routeId}-${item.date}-${item.departureTime}-${item.price}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      deduplicated.push(item);
+    }
+
     return NextResponse.json({
       success: true,
-      data: enhanced,
+      data: deduplicated,
       pagination: {
         page,
         limit,
-        total,
-        pages: Math.ceil(total / limit),
+        total: deduplicated.length,
+        pages: Math.ceil(deduplicated.length / limit),
       },
     });
   } catch (error: any) {

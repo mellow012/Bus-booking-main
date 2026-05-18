@@ -5,33 +5,10 @@ import { useRouter } from "next/navigation";
 import { MapPin, Calendar, Users, Search, Navigation } from "lucide-react";
 import { LocationAutocomplete } from "@/components/LocationAutocomplete";
 import { CityPickerModal } from "@/components/CityPickerModal";
-import { GeoStatus, MALAWI_CITIES } from "@/utils/homeHelpers";
+import { GeoStatus, MALAWI_CITIES, nearestCity } from "@/utils/homeHelpers";
 
 const LS_CITY_KEY = "tb_user_city";
 const LS_GEO_ASKED_KEY = "tb_geo_asked";
-
-const CITY_COORDS: Record<string, { lat: number, lng: number }> = {
-  "Blantyre": { lat: -15.7861, lng: 35.0058 },
-  "Lilongwe": { lat: -13.9626, lng: 33.7741 },
-  "Mzuzu": { lat: -11.4656, lng: 34.0207 },
-  "Zomba": { lat: -15.3850, lng: 35.3181 },
-  "Kasungu": { lat: -13.0333, lng: 33.4833 },
-  "Mangochi": { lat: -14.4782, lng: 35.2645 },
-  "Salima": { lat: -13.7804, lng: 34.4587 },
-  "Karonga": { lat: -9.9333, lng: 33.9333 },
-  "Nkhata Bay": { lat: -11.6066, lng: 34.2907 },
-  "Dedza": { lat: -14.3778, lng: 34.3333 },
-};
-
-const nearestCity = (lat: number, lng: number) => {
-  let closest = "Blantyre";
-  let minDiff = Infinity;
-  for (const [city, coords] of Object.entries(CITY_COORDS)) {
-    const diff = Math.pow(coords.lat - lat, 2) + Math.pow(coords.lng - lng, 2);
-    if (diff < minDiff) { minDiff = diff; closest = city; }
-  }
-  return closest;
-};
 
 export default function HomeSearch() {
   const router = useRouter();
@@ -40,32 +17,69 @@ export default function HomeSearch() {
   const [geoStatus, setGeoStatus] = useState<GeoStatus>("idle");
   const [showCityPicker, setShowCityPicker] = useState(false);
 
+  // Sync with general city preference changes from other components
+  useEffect(() => {
+    const handleCityChange = (e: Event) => {
+      const customEvent = e as CustomEvent<string | null>;
+      const city = customEvent.detail;
+      setUserCity(city);
+      if (city) {
+        setSearch(p => ({ ...p, from: city }));
+      }
+    };
+    window.addEventListener("tb-user-city-changed", handleCityChange);
+    return () => {
+      window.removeEventListener("tb-user-city-changed", handleCityChange);
+    };
+  }, []);
+
   useEffect(() => {
     const saved = localStorage.getItem(LS_CITY_KEY);
-    if (saved) { setUserCity(saved); return; }
+    if (saved) {
+      setUserCity(saved);
+      setSearch(p => ({ ...p, from: saved }));
+      return;
+    }
     const asked = localStorage.getItem(LS_GEO_ASKED_KEY);
-    if (!asked && "geolocation" in navigator) requestGeolocation();
-    else setShowCityPicker(true);
+    if (!asked && "geolocation" in navigator) {
+      requestGeolocation();
+    }
+    // We removed the 'else setShowCityPicker(true)' to prevent the annoying auto-popup loop!
   }, []);
 
   const requestGeolocation = useCallback(() => {
-    if (!("geolocation" in navigator)) { setShowCityPicker(true); return; }
-    setGeoStatus("detecting"); localStorage.setItem(LS_GEO_ASKED_KEY,"1");
+    if (!("geolocation" in navigator)) { return; }
+    setGeoStatus("detecting"); 
+    localStorage.setItem(LS_GEO_ASKED_KEY, "1");
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         const city = nearestCity(pos.coords.latitude, pos.coords.longitude);
-        setUserCity(city); localStorage.setItem(LS_CITY_KEY, city);
-        setGeoStatus("granted"); setShowCityPicker(false);
+        setUserCity(city); 
+        localStorage.setItem(LS_CITY_KEY, city);
+        setSearch(p => ({ ...p, from: city }));
+        setGeoStatus("granted"); 
+        setShowCityPicker(false);
+        window.dispatchEvent(new CustomEvent("tb-user-city-changed", { detail: city }));
       },
-      () => { setGeoStatus("denied"); setShowCityPicker(true); },
+      () => { 
+        setGeoStatus("denied"); 
+        setShowCityPicker(true); 
+      },
       { timeout: 8000 }
     );
   }, []);
 
   const handleSelectCity = useCallback((city: string) => {
-    if (city) { setUserCity(city); localStorage.setItem(LS_CITY_KEY, city); }
-    else { setUserCity(null); localStorage.removeItem(LS_CITY_KEY); }
+    if (city) { 
+      setUserCity(city); 
+      localStorage.setItem(LS_CITY_KEY, city); 
+      setSearch(p => ({ ...p, from: city }));
+    } else { 
+      setUserCity(null); 
+      localStorage.removeItem(LS_CITY_KEY); 
+    }
     setShowCityPicker(false);
+    window.dispatchEvent(new CustomEvent("tb-user-city-changed", { detail: city }));
   }, []);
 
   const handleSearch = () => {
@@ -94,7 +108,17 @@ export default function HomeSearch() {
         <div className="bg-white/95 glass rounded-[2rem] shadow-premium p-5 sm:p-8 anim-fade-up border-white/40">
           <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
             <div className="col-span-1">
-              <label htmlFor="departure-input" className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5 ml-1">From</label>
+              <div className="flex items-center justify-between mb-1.5 ml-1 mr-1">
+                <label htmlFor="departure-input" className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider">From</label>
+                <button
+                  type="button"
+                  onClick={() => setShowCityPicker(true)}
+                  className="flex items-center gap-1 text-[10px] font-bold text-blue-600 hover:text-blue-700 transition-colors uppercase tracking-wider"
+                >
+                  <Navigation className="w-2.5 h-2.5 rotate-45 shrink-0" />
+                  <span>{userCity || "Set City"}</span>
+                </button>
+              </div>
               <LocationAutocomplete 
                 value={search.from} 
                 onChange={v => setSearch(p => ({ ...p, from: v }))} 

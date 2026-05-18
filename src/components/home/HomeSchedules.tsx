@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import {
-  MapPin, Loader2, ChevronDown, Flame, Coffee, Sun, Moon, ArrowUpDown, RefreshCw, ArrowRight, ChevronLeft
+  MapPin, Loader2, ChevronDown, Flame, Coffee, Sun, Moon, ArrowUpDown, RefreshCw, ArrowRight, ChevronLeft, ChevronRight
 } from "lucide-react";
 import { ScheduleCard } from "@/components/ScheduleCard";
 import AlertMessage from "@/components/AlertMessage";
@@ -38,6 +38,13 @@ export default function HomeSchedules() {
   const [showCityPicker, setShowCityPicker] = useState(false);
   const [geoStatus, setGeoStatus] = useState<GeoStatus>("idle");
   const [currentPage, setCurrentPage] = useState(1);
+  const [isReady, setIsReady] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+
+  // Reset page on category changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedCategory]);
 
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -62,7 +69,22 @@ export default function HomeSchedules() {
     }
   }, [userCity]);
 
+  // Sync with general city preference changes from other components
   useEffect(() => {
+    const handleCityChange = (e: Event) => {
+      const customEvent = e as CustomEvent<string | null>;
+      const city = customEvent.detail;
+      setUserCity(city);
+      setCurrentPage(1);
+    };
+    window.addEventListener("tb-user-city-changed", handleCityChange);
+    return () => {
+      window.removeEventListener("tb-user-city-changed", handleCityChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isReady) return;
     fetchSchedules();
     pollingIntervalRef.current = setInterval(() => {
       if (document.visibilityState === 'visible') fetchSchedules(false, true);
@@ -77,11 +99,12 @@ export default function HomeSchedules() {
       if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
       document.removeEventListener('visibilitychange', handleVisibility);
     };
-  }, [fetchSchedules]);
+  }, [isReady, fetchSchedules]);
 
   useEffect(() => {
     const saved = localStorage.getItem(LS_CITY_KEY);
     if (saved) setUserCity(saved);
+    setIsReady(true);
   }, []);
 
   const handleSelectCity = (city: string) => {
@@ -94,6 +117,7 @@ export default function HomeSchedules() {
     }
     setCurrentPage(1); // Reset page on city change
     setShowCityPicker(false);
+    window.dispatchEvent(new CustomEvent("tb-user-city-changed", { detail: city }));
   };
 
   const requestGeolocation = () => {
@@ -107,6 +131,7 @@ export default function HomeSchedules() {
         setCurrentPage(1);
         setGeoStatus("granted");
         setShowCityPicker(false);
+        window.dispatchEvent(new CustomEvent("tb-user-city-changed", { detail: city }));
       },
       () => setGeoStatus("denied")
     );
@@ -141,6 +166,11 @@ export default function HomeSchedules() {
       results = pool.filter(s => new Date(s.date) > now);
     }
 
+    // Apply time category filter if selected
+    if (selectedCategory) {
+      results = results.filter(s => getScheduleCategory(s) === selectedCategory);
+    }
+
     return [...results].sort((a, b) => {
       // Prioritize active trips (In Transit, Boarding, Arrived)
       const aActive = (a.status === 'en_route' || a.status === 'boarding' || a.status === 'arrived');
@@ -153,23 +183,60 @@ export default function HomeSchedules() {
       if (sortKey === "seats") return b.availableSeats - a.availableSeats;
       return new Date(`${a.date}T${a.departureTime}`).getTime() - new Date(`${b.date}T${b.departureTime}`).getTime();
     });
-  }, [schedules, sortKey, userCity]);
+  }, [schedules, sortKey, userCity, selectedCategory]);
+
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const isScrollingRef = useRef(false);
 
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
-  
-  const currentSchedules = useMemo(() => {
-    const start = (currentPage - 1) * PAGE_SIZE;
-    return filtered.slice(start, start + PAGE_SIZE);
-  }, [filtered, currentPage]);
 
-  const groups = useMemo(() => {
-    return [
-      { label: 'Boarding Now', icon: Flame, items: currentSchedules.filter(s => getScheduleCategory(s) === 'Boarding Now') },
-      { label: 'Morning', icon: Coffee, items: currentSchedules.filter(s => getScheduleCategory(s) === 'Morning') },
-      { label: 'Afternoon', icon: Sun, items: currentSchedules.filter(s => getScheduleCategory(s) === 'Afternoon') },
-      { label: 'Evening', icon: Moon, items: currentSchedules.filter(s => getScheduleCategory(s) === 'Evening') },
-    ].filter(g => g.items.length > 0);
-  }, [currentSchedules]);
+  const handleScrollEvent = useCallback(() => {
+    if (isScrollingRef.current) return;
+    if (scrollContainerRef.current) {
+      const container = scrollContainerRef.current;
+      const scrollPos = container.scrollLeft;
+      const cardWidth = container.scrollWidth / filtered.length;
+      if (cardWidth > 0) {
+        const activeCardIndex = Math.round(scrollPos / cardWidth);
+        const computedPage = Math.floor(activeCardIndex / PAGE_SIZE) + 1;
+        const boundedPage = Math.max(1, Math.min(totalPages, computedPage));
+        if (boundedPage !== currentPage) {
+          setCurrentPage(boundedPage);
+        }
+      }
+    }
+  }, [filtered.length, totalPages, currentPage]);
+
+  const handlePageChange = (page: number) => {
+    isScrollingRef.current = true;
+    setCurrentPage(page);
+    if (scrollContainerRef.current) {
+      const container = scrollContainerRef.current;
+      const cardWidth = container.scrollWidth / filtered.length;
+      const targetScroll = (page - 1) * PAGE_SIZE * cardWidth;
+      container.scrollTo({
+        left: targetScroll,
+        behavior: 'smooth'
+      });
+      setTimeout(() => {
+        isScrollingRef.current = false;
+      }, 500);
+    } else {
+      isScrollingRef.current = false;
+    }
+  };
+
+  const handleScroll = (direction: 'left' | 'right') => {
+    if (scrollContainerRef.current) {
+      const container = scrollContainerRef.current;
+      const scrollAmount = container.clientWidth * 0.75;
+      const targetScroll = container.scrollLeft + (direction === 'left' ? -scrollAmount : scrollAmount);
+      container.scrollTo({
+        left: targetScroll,
+        behavior: 'smooth'
+      });
+    }
+  };
 
   return (
     <section id="schedules-section" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
@@ -189,30 +256,54 @@ export default function HomeSchedules() {
       {error && <AlertMessage type="error" message={error} onClose={() => setError('')} />}
 
       {!loading && (
-        <div className="flex flex-col gap-3 mb-5">
-          <div className="flex items-center justify-between gap-2">
-            <div className="relative">
-              <button onClick={() => setShowSort(s => !s)} className="flex items-center gap-2 px-3.5 py-2 text-sm text-gray-600 bg-white border border-gray-200 rounded-xl hover:border-blue-300 transition-all shadow-sm">
-                <ArrowUpDown className="w-4 h-4"/>
-                <span>{SORT_OPTIONS.find(o => o.value === sortKey)?.label}</span>
+        <div className="flex flex-col gap-4 mb-8">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            {/* Sorting and Location Controls */}
+            <div className="flex items-center gap-3">
+              <div className="relative">
+                <button onClick={() => setShowSort(s => !s)} className="flex items-center gap-2 px-3.5 py-2 text-sm text-gray-600 bg-white border border-gray-200 rounded-xl hover:border-blue-300 transition-all shadow-sm">
+                  <ArrowUpDown className="w-4 h-4"/>
+                  <span>{SORT_OPTIONS.find(o => o.value === sortKey)?.label}</span>
+                </button>
+                {showSort && (
+                  <div className="absolute left-0 top-full mt-1.5 bg-white border border-gray-200 rounded-xl shadow-xl z-30 py-1.5 min-w-[180px]">
+                    {SORT_OPTIONS.map(o => (
+                      <button key={o.value} onClick={() => { setSortKey(o.value); setShowSort(false); }} className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${sortKey === o.value ? "bg-blue-50 text-blue-700 font-semibold" : "text-gray-700 hover:bg-gray-50"}`}>
+                        {o.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <button 
+                onClick={() => setShowCityPicker(true)}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium border transition-all hover:shadow-md active:scale-95 ${userCity ? "bg-teal-50 border-teal-200 text-teal-700" : "bg-white border-gray-200 text-gray-500"}`}
+              >
+                <MapPin className="w-3.5 h-3.5"/> {userCity ?? "Malawi"}
+                <ChevronDown className="w-3 h-3 opacity-50" />
               </button>
-              {showSort && (
-                <div className="absolute left-0 top-full mt-1.5 bg-white border border-gray-200 rounded-xl shadow-xl z-30 py-1.5 min-w-[180px]">
-                  {SORT_OPTIONS.map(o => (
-                    <button key={o.value} onClick={() => { setSortKey(o.value); setShowSort(false); }} className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${sortKey === o.value ? "bg-blue-50 text-blue-700 font-semibold" : "text-gray-700 hover:bg-gray-50"}`}>
-                      {o.label}
-                    </button>
-                  ))}
-                </div>
-              )}
             </div>
-            <button 
-              onClick={() => setShowCityPicker(true)}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium border transition-all hover:shadow-md active:scale-95 ${userCity ? "bg-teal-50 border-teal-200 text-teal-700" : "bg-white border-gray-200 text-gray-500"}`}
-            >
-              <MapPin className="w-3.5 h-3.5"/> {userCity ?? "Malawi"}
-              <ChevronDown className="w-3 h-3 opacity-50" />
-            </button>
+
+            {/* Time Slot Quick Filter Tabs */}
+            <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5">
+              <span className="text-xs font-bold text-gray-400 uppercase tracking-widest mr-1">Time:</span>
+              {['All', 'Morning', 'Afternoon', 'Evening'].map((cat) => {
+                const isSelected = (cat === 'All' && !selectedCategory) || selectedCategory === cat;
+                return (
+                  <button
+                    key={cat}
+                    onClick={() => setSelectedCategory(cat === 'All' ? null : cat)}
+                    className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all active:scale-95 whitespace-nowrap ${
+                      isSelected
+                        ? "bg-blue-600 text-white shadow-md shadow-blue-200"
+                        : "bg-white text-gray-500 border border-gray-200 hover:bg-gray-50"
+                    }`}
+                  >
+                    {cat}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
       )}
@@ -228,35 +319,47 @@ export default function HomeSchedules() {
       )}
 
       {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 mb-8">
-          {Array(6).fill(0).map((_,i)=><CardSkeleton key={i}/>)}
-        </div>
-      ) : groups.length > 0 ? (
-        <div className="flex flex-col lg:flex-row gap-10 lg:gap-6 xl:gap-8 mb-10 overflow-x-auto pb-4 items-start">
-          {groups.map(group => (
-            <div key={group.label} className="w-full lg:flex-1 lg:min-w-[320px]">
-              <div className="flex items-center gap-2 mb-4 sticky top-0 bg-gray-50/95 backdrop-blur-sm z-10 py-2">
-                <group.icon className={`w-5 h-5 ${group.label === 'Boarding Now' ? 'text-orange-500 animate-pulse' : 'text-blue-500'}`} />
-                <h3 className="font-display text-lg font-extrabold text-gray-900">{group.label}</h3>
-                <span className="ml-auto text-[10px] font-bold text-gray-500 bg-gray-200 px-2.5 py-1 rounded-full">{group.items.length}</span>
-              </div>
-              <div className={`flex flex-row overflow-x-auto pb-6 px-4 -mx-4 lg:mx-0 lg:px-0 lg:overflow-x-visible lg:pb-0 gap-5 ${
-                groups.length === 1 
-                  ? "lg:grid lg:grid-cols-2 xl:grid-cols-3 lg:flex-none" 
-                  : "lg:flex-col"
-              }`}>
-                {group.items.map(s => (
-                  <div key={s.id} className={`shrink-0 ${
-                    groups.length === 1 
-                      ? "min-w-[85vw] sm:min-w-[340px] lg:min-w-0" 
-                      : "min-w-[85vw] sm:min-w-[340px] lg:min-w-0 lg:w-full"
-                  }`}>
-                    <ScheduleCard s={s} userCity={userCity} onBook={()=>handleBooking(s.id)}/>
-                  </div>
-                ))}
-              </div>
-            </div>
+        <div className="flex gap-5 overflow-x-auto pb-6 px-4 -mx-4 sm:mx-0 sm:px-0">
+          {Array(3).fill(0).map((_, i) => (
+            <div key={i} className="shrink-0 w-[85vw] sm:w-[350px] md:w-[380px] h-48 bg-gray-100 rounded-2xl animate-pulse" />
           ))}
+        </div>
+      ) : filtered.length > 0 ? (
+        <div className="relative group/swiper mb-10">
+          {/* Left Arrow Button */}
+          <button 
+            onClick={() => handleScroll('left')}
+            className="absolute left-4 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-white/90 shadow-xl border border-gray-100 flex items-center justify-center text-gray-700 hover:bg-white hover:text-blue-600 hover:scale-105 active:scale-95 transition-all z-20 opacity-0 group-hover/swiper:opacity-100 hidden md:flex"
+            aria-label="Scroll left"
+          >
+            <ChevronLeft className="w-6 h-6" />
+          </button>
+
+          {/* Right Arrow Button */}
+          <button 
+            onClick={() => handleScroll('right')}
+            className="absolute right-4 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-white/90 shadow-xl border border-gray-100 flex items-center justify-center text-gray-700 hover:bg-white hover:text-blue-600 hover:scale-105 active:scale-95 transition-all z-20 opacity-0 group-hover/swiper:opacity-100 hidden md:flex"
+            aria-label="Scroll right"
+          >
+            <ChevronRight className="w-6 h-6" />
+          </button>
+
+          {/* Swipe Track Container */}
+          <div 
+            ref={scrollContainerRef}
+            onScroll={handleScrollEvent}
+            className="flex flex-row overflow-x-auto gap-5 pb-6 px-4 -mx-4 sm:mx-0 sm:px-0 snap-x snap-mandatory scroll-smooth no-scrollbar scrollbar-thin scrollbar-thumb-gray-200"
+            style={{ WebkitOverflowScrolling: 'touch' }}
+          >
+            {filtered.map((s) => (
+              <div 
+                key={s.id} 
+                className="snap-start shrink-0 w-[85vw] sm:w-[350px] md:w-[380px]"
+              >
+                <ScheduleCard s={s} userCity={userCity} onBook={() => handleBooking(s.id)}/>
+              </div>
+            ))}
+          </div>
         </div>
       ) : (
         <div className="bg-white rounded-3xl border border-gray-100 p-10 sm:p-16 text-center mb-8 shadow-sm flex flex-col items-center">
@@ -268,8 +371,8 @@ export default function HomeSchedules() {
           />
           <h3 className="font-display text-xl font-extrabold text-gray-900 mb-2">No upcoming buses found</h3>
           <p className="text-gray-500 text-sm max-w-xs mx-auto mb-8">We couldn't find any active or upcoming schedules. Try refreshing or check back later.</p>
-          <button onClick={()=>fetchSchedules(true)} disabled={refreshing} className="flex items-center gap-2 mx-auto text-sm font-bold bg-gray-50 border border-gray-200 rounded-xl px-6 py-3 text-gray-700 hover:bg-gray-100 transition-colors">
-            {refreshing?<Loader2 className="w-4 h-4 animate-spin"/>:<RefreshCw className="w-4 h-4"/>} Refresh Live Data
+          <button onClick={() => fetchSchedules(true)} disabled={refreshing} className="flex items-center gap-2 mx-auto text-sm font-bold bg-gray-50 border border-gray-200 rounded-xl px-6 py-3 text-gray-700 hover:bg-gray-100 transition-colors">
+            {refreshing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />} Refresh Live Data
           </button>
         </div>
       )}
@@ -279,7 +382,7 @@ export default function HomeSchedules() {
         <div className="flex items-center justify-center gap-4 mt-8 pb-4">
           <button 
             disabled={currentPage === 1}
-            onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+            onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
             className="p-2 rounded-xl border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 hover:border-blue-300 disabled:opacity-40 disabled:hover:bg-white disabled:hover:border-gray-200 transition-all shadow-sm active:scale-95"
             aria-label="Previous page"
           >
@@ -292,7 +395,7 @@ export default function HomeSchedules() {
               return (
                 <button
                   key={page}
-                  onClick={() => setCurrentPage(page)}
+                  onClick={() => handlePageChange(page)}
                   className={`w-10 h-10 rounded-xl text-sm font-bold transition-all ${
                     currentPage === page 
                       ? "bg-blue-600 text-white shadow-md shadow-blue-200 scale-105" 
@@ -307,7 +410,7 @@ export default function HomeSchedules() {
 
           <button 
             disabled={currentPage === totalPages}
-            onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+            onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
             className="p-2 rounded-xl border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 hover:border-blue-300 disabled:opacity-40 disabled:hover:bg-white disabled:hover:border-gray-200 transition-all shadow-sm active:scale-95"
             aria-label="Next page"
           >

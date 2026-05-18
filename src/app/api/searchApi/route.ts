@@ -1,9 +1,13 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { SearchResult } from "@/types";
+import { checkAndRollSchedules } from "@/lib/schedule-generator";
 
 export async function POST(request: Request) {
   try {
+    // Ensure future schedules are active and running all the time
+    await checkAndRollSchedules();
+
     const { origin, destination, date, passengers = 1 } = await request.json();
 
     if (!origin || !destination) {

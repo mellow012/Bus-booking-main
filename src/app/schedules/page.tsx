@@ -1,11 +1,11 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useMemo, Suspense } from "react";
+import React, { useState, useEffect, useCallback, useMemo, Suspense, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   Search, MapPin, Calendar, Users, Navigation, Clock, CheckCircle, Bus as BusIcon,
-  Filter, AlertCircle, RefreshCw, Zap, TrendingUp, Loader2, ArrowRight, User, Star, X
+  Filter, AlertCircle, RefreshCw, Zap, TrendingUp, Loader2, ArrowRight, User, Star, X, ChevronLeft, ChevronRight
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LocationAutocomplete } from "@/components/LocationAutocomplete";
@@ -55,6 +55,7 @@ function DashboardContent() {
   const toast = useAppToast();
 
   const [loading, setLoading] = useState(true);
+  const [searching, setSearching] = useState(false);
   const [error, setError] = useState("");
 
   // Data state
@@ -75,7 +76,35 @@ function DashboardContent() {
   const [selectedTerminal, setSelectedTerminal] = useState(searchParams.get('terminal') || "");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 9;
+
   const [popularRoutes, setPopularRoutes] = useState<any[]>([]);
+  const [userCity, setUserCity] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("tb_user_city");
+      if (saved) {
+        setUserCity(saved);
+      }
+      
+      const handleCityChange = (e: Event) => {
+        const customEvent = e as CustomEvent<string | null>;
+        setUserCity(customEvent.detail);
+      };
+      window.addEventListener("tb-user-city-changed", handleCityChange);
+      return () => {
+        window.removeEventListener("tb-user-city-changed", handleCityChange);
+      };
+    }
+  }, []);
+
+  // Reset page when any filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchFrom, searchTo, searchDate, activeFilter, sortBy, selectedCompany, selectedTimeSlot, selectedTerminal, selectedCategory]);
 
   // Auth protection - only redirect if trying to access private parts
   // Removed strict page-level redirect as /schedules is public
@@ -105,6 +134,7 @@ function DashboardContent() {
           startDate: startOfWeek.toISOString(),
           endDate: endOfWeek.toISOString(),
           sortBy: 'departureDateTime',
+          limit: '150',
         });
 
         if (searchFrom) queryParams.append('from', searchFrom);
@@ -155,7 +185,7 @@ function DashboardContent() {
   }, []);
 
   const handleSearch = useCallback(async () => {
-    setLoading(true);
+    setSearching(true);
     setError("");
     try {
       const queryParams = new URLSearchParams();
@@ -163,6 +193,7 @@ function DashboardContent() {
       if (searchTo) queryParams.append('to', searchTo);
       if (searchDate) queryParams.append('date', searchDate);
       queryParams.append('sortBy', 'departureDateTime');
+      queryParams.append('limit', '150');
 
       const schedulesRes = await fetch(`/api/schedules?${queryParams}`);
       if (!schedulesRes.ok) throw new Error("Failed to load schedules");
@@ -207,7 +238,7 @@ function DashboardContent() {
       console.error("Search error:", err);
       setError("Unable to find schedules. Please try again.");
     } finally {
-      setLoading(false);
+      setSearching(false);
     }
   }, [searchFrom, searchTo, searchDate]);
 
@@ -230,6 +261,20 @@ function DashboardContent() {
       setPopularRoutes(Array.from(routesMap.values()).slice(0, 8));
     }
   }, [schedules]);
+
+  const popularRoutesScrollRef = useRef<HTMLDivElement>(null);
+
+  const handlePopularRoutesScroll = (direction: 'left' | 'right') => {
+    if (popularRoutesScrollRef.current) {
+      const container = popularRoutesScrollRef.current;
+      const scrollAmount = container.clientWidth * 0.75;
+      const targetScroll = container.scrollLeft + (direction === 'left' ? -scrollAmount : scrollAmount);
+      container.scrollTo({
+        left: targetScroll,
+        behavior: 'smooth'
+      });
+    }
+  };
 
   const terminals = useMemo(() => {
     const termMap = new Map();
@@ -274,6 +319,15 @@ function DashboardContent() {
     }
     if (searchDate) {
       filtered = filtered.filter(s => s.date === searchDate);
+    }
+
+    // Limit to today and tomorrow by default if no active search input
+    if (!searchFrom && !searchTo && !searchDate) {
+      const todayStr = new Date().toISOString().split('T')[0];
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const tomorrowStr = tomorrow.toISOString().split('T')[0];
+      filtered = filtered.filter(s => s.date === todayStr || s.date === tomorrowStr);
     }
 
     // Apply Quick Filters
@@ -332,7 +386,25 @@ function DashboardContent() {
     });
 
     return filtered;
-  }, [schedules, searchFrom, searchTo, searchDate, activeFilter, sortBy, selectedCompany, selectedTimeSlot]);
+  }, [schedules, searchFrom, searchTo, searchDate, activeFilter, sortBy, selectedCompany, selectedTimeSlot, selectedTerminal, selectedCategory]);
+
+  const paginatedSchedules = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    return filteredSchedules.slice(startIndex, startIndex + itemsPerPage);
+  }, [filteredSchedules, currentPage]);
+
+  const recommendedSchedules = useMemo(() => {
+    if (!userCity || searchFrom) return [];
+    return paginatedSchedules.filter(s => s.origin.toLowerCase() === userCity.toLowerCase());
+  }, [paginatedSchedules, userCity, searchFrom]);
+
+  const regularSchedules = useMemo(() => {
+    if (recommendedSchedules.length === 0) return paginatedSchedules;
+    const recommendedIds = new Set(recommendedSchedules.map(s => s.id));
+    return paginatedSchedules.filter(s => !recommendedIds.has(s.id));
+  }, [paginatedSchedules, recommendedSchedules]);
+
+  const totalPages = Math.ceil(filteredSchedules.length / itemsPerPage);
 
   if (loading) {
     return (
@@ -489,44 +561,68 @@ function DashboardContent() {
                 </h3>
                 <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Swipe to explore</p>
               </div>
-              <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-none px-1">
-                {popularRoutes.map((route, i) => (
-                  <button
-                    key={i}
-                    onClick={() => {
-                      setSearchFrom(route.from);
-                      setSearchTo(route.to);
-                      // Trigger a slight delay to ensure UI updates before focus
-                      setTimeout(() => handleSearch(), 50);
-                    }}
-                    className="flex-shrink-0 w-64 bg-white p-5 rounded-[2rem] border border-gray-100 shadow-sm hover:shadow-xl hover:border-blue-200 transition-all text-left group"
-                  >
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="w-10 h-10 rounded-2xl bg-blue-50 flex items-center justify-center text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors">
-                        <Navigation className="w-5 h-5" />
+              <div className="relative group/swiper">
+                {/* Left Arrow Button */}
+                <button 
+                  onClick={() => handlePopularRoutesScroll('left')}
+                  className="absolute -left-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/90 shadow-xl border border-gray-100 flex items-center justify-center text-gray-700 hover:bg-white hover:text-blue-600 hover:scale-105 active:scale-95 transition-all z-20 opacity-0 group-hover/swiper:opacity-100 hidden md:flex"
+                  aria-label="Scroll left"
+                >
+                  <ChevronLeft className="w-5 h-5" />
+                </button>
+
+                {/* Right Arrow Button */}
+                <button 
+                  onClick={() => handlePopularRoutesScroll('right')}
+                  className="absolute -right-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/90 shadow-xl border border-gray-100 flex items-center justify-center text-gray-700 hover:bg-white hover:text-blue-600 hover:scale-105 active:scale-95 transition-all z-20 opacity-0 group-hover/swiper:opacity-100 hidden md:flex"
+                  aria-label="Scroll right"
+                >
+                  <ChevronRight className="w-5 h-5" />
+                </button>
+
+                <div 
+                  ref={popularRoutesScrollRef}
+                  className="flex gap-4 overflow-x-auto pb-4 scrollbar-none px-1 snap-x snap-mandatory scroll-smooth"
+                  style={{ WebkitOverflowScrolling: 'touch' }}
+                >
+                  {popularRoutes.map((route, i) => (
+                    <button
+                      key={i}
+                      onClick={() => {
+                        setSearchFrom(route.from);
+                        setSearchTo(route.to);
+                        // Trigger a slight delay to ensure UI updates before focus
+                        setTimeout(() => handleSearch(), 50);
+                      }}
+                      className="snap-start flex-shrink-0 w-64 bg-white p-5 rounded-[2rem] border border-gray-100 shadow-sm hover:shadow-xl hover:border-blue-200 transition-all text-left group"
+                    >
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="w-10 h-10 rounded-2xl bg-blue-50 flex items-center justify-center text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                          <Navigation className="w-5 h-5" />
+                        </div>
+                        <div className="text-right">
+                          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-tight">Starting from</p>
+                          <p className="text-sm font-black text-blue-600">MWK {route.price.toLocaleString()}</p>
+                        </div>
                       </div>
-                      <div className="text-right">
-                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-tight">Starting from</p>
-                        <p className="text-sm font-black text-blue-600">MWK {route.price.toLocaleString()}</p>
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <div className="w-1.5 h-1.5 rounded-full bg-blue-400" />
+                          <p className="text-sm font-bold text-gray-900 truncate">{route.from}</p>
+                        </div>
+                        <div className="w-px h-3 bg-gray-200 ml-[2.5px]" />
+                        <div className="flex items-center gap-2">
+                          <div className="w-1.5 h-1.5 rounded-full bg-indigo-600" />
+                          <p className="text-sm font-bold text-gray-900 truncate">{route.to}</p>
+                        </div>
                       </div>
-                    </div>
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <div className="w-1.5 h-1.5 rounded-full bg-blue-400" />
-                        <p className="text-sm font-bold text-gray-900 truncate">{route.from}</p>
+                      <div className="mt-4 pt-4 border-t border-gray-50 flex items-center justify-between">
+                        <span className="text-[10px] font-bold bg-gray-100 text-gray-500 px-2 py-1 rounded-lg uppercase tracking-widest">{route.busType}</span>
+                        <ArrowRight className="w-4 h-4 text-gray-300 group-hover:text-blue-600 group-hover:translate-x-1 transition-all" />
                       </div>
-                      <div className="w-px h-3 bg-gray-200 ml-[2.5px]" />
-                      <div className="flex items-center gap-2">
-                        <div className="w-1.5 h-1.5 rounded-full bg-indigo-600" />
-                        <p className="text-sm font-bold text-gray-900 truncate">{route.to}</p>
-                      </div>
-                    </div>
-                    <div className="mt-4 pt-4 border-t border-gray-50 flex items-center justify-between">
-                      <span className="text-[10px] font-bold bg-gray-100 text-gray-500 px-2 py-1 rounded-lg uppercase tracking-widest">{route.busType}</span>
-                      <ArrowRight className="w-4 h-4 text-gray-300 group-hover:text-blue-600 group-hover:translate-x-1 transition-all" />
-                    </div>
-                  </button>
-                ))}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           )}
@@ -589,7 +685,23 @@ function DashboardContent() {
           )}
 
           {/* Schedules Grid */}
-          {filteredSchedules.length === 0 && !loading && !error ? (
+          {searching ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {Array(6).fill(0).map((_, i) => (
+                <div key={i} className="bg-white rounded-[2.5rem] p-6 border border-gray-100 shadow-sm h-[340px] animate-pulse flex flex-col justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-2xl bg-gray-100" />
+                    <div className="flex-1 space-y-2">
+                      <div className="h-4 bg-gray-100 rounded w-1/2" />
+                      <div className="h-3 bg-gray-100 rounded w-1/3" />
+                    </div>
+                  </div>
+                  <div className="bg-gray-50 rounded-[2rem] p-5 h-28" />
+                  <div className="h-10 bg-gray-100 rounded-xl" />
+                </div>
+              ))}
+            </div>
+          ) : filteredSchedules.length === 0 && !loading && !error ? (
             <div className="bg-white rounded-3xl p-12 text-center border border-gray-100 shadow-sm">
               <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4">
                 <BusIcon className="w-10 h-10 text-gray-400" />
@@ -600,8 +712,143 @@ function DashboardContent() {
             </div>
           ) : (
             <div className="space-y-12">
+              {/* Recommended Schedules Horizontal List */}
+              {recommendedSchedules.length > 0 && !loading && !searching && (
+                <div className="space-y-6">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-xl bg-teal-100 text-teal-600">
+                      <MapPin className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-black text-gray-900 tracking-tight">Recommended for You</h3>
+                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                        Departing from {userCity}
+                      </p>
+                    </div>
+                    <div className="h-px bg-gray-100 flex-1 ml-4" />
+                  </div>
+
+                  <div className="flex gap-6 overflow-x-auto pb-6 px-1 snap-x snap-mandatory scroll-smooth scrollbar-none" style={{ WebkitOverflowScrolling: 'touch' }}>
+                    {recommendedSchedules.map((schedule) => (
+                      <div key={`rec-${schedule.id}`} className="snap-start shrink-0 w-[85vw] sm:w-[350px] md:w-[400px]">
+                        <div className="bg-white rounded-[2.5rem] p-6 border border-gray-100 shadow-sm hover:shadow-xl hover:border-blue-200 transition-all flex flex-col h-full group relative overflow-hidden">
+                          {/* Status Badges */}
+                          <div className="absolute top-0 right-0 p-4 flex gap-2">
+                            <span className="text-[9px] font-black uppercase tracking-widest bg-blue-50 text-blue-600 px-2 py-1 rounded-lg border border-blue-100">
+                              {schedule.busType}
+                            </span>
+                          </div>
+
+                          {/* Company Header */}
+                          <div className="flex items-center gap-4 mb-6">
+                            {schedule.companyLogo ? (
+                              <img src={schedule.companyLogo} alt={schedule.companyName} className="w-12 h-12 rounded-2xl object-cover border border-gray-100 shadow-sm" />
+                            ) : (
+                              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center text-white font-black text-xl shadow-md">
+                                {schedule.companyName.charAt(0)}
+                              </div>
+                            )}
+                            <div>
+                              <h4 className="font-black text-gray-900 leading-tight group-hover:text-blue-600 transition-colors">{schedule.companyName}</h4>
+                              <div className="flex items-center gap-1.5 mt-1">
+                                <div className="flex text-yellow-400">
+                                  {[...Array(5)].map((_, i) => <Star key={i} className="w-2.5 h-2.5 fill-current" />)}
+                                </div>
+                                <span className="text-[10px] font-bold text-gray-400">4.8 (120 reviews)</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Route & Terminals */}
+                          <div className="bg-gray-50/50 rounded-[2rem] p-5 mb-6 relative">
+                            <div className="flex justify-between items-start relative z-10">
+                              <div className="flex-1 min-w-0">
+                                <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-1">Departure</p>
+                                <h5 className="text-lg font-black text-gray-900 truncate mb-1">{schedule.origin}</h5>
+                                <button
+                                  onClick={() => setSelectedTerminal(schedule.departureLocation || "")}
+                                  className="flex items-center gap-1 text-[11px] font-bold text-gray-500 truncate hover:text-blue-600 transition-colors"
+                                >
+                                  <MapPin className="w-3 h-3 text-indigo-400 shrink-0" />
+                                  <span className="truncate underline decoration-dotted">{schedule.departureLocation || 'Main Terminal'}</span>
+                                </button>
+                                <div className="mt-3 flex items-center gap-2">
+                                  <div className="px-2 py-1 bg-white rounded-lg border border-gray-100 shadow-sm">
+                                    <span className="text-sm font-black text-gray-900">{schedule.departureTime}</span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="flex flex-col items-center justify-center px-4 pt-8">
+                                <div className="w-px h-12 bg-gradient-to-b from-blue-200 via-indigo-200 to-transparent relative">
+                                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-6 h-6 bg-white rounded-full flex items-center justify-center border border-gray-100 shadow-sm">
+                                    <ArrowRight className="w-3 h-3 text-blue-600" />
+                                  </div>
+                                </div>
+                                <span className="text-[9px] font-black text-gray-400 uppercase tracking-tighter mt-2">{Math.floor(schedule.duration / 60)}h {schedule.duration % 60}m</span>
+                              </div>
+
+                              <div className="flex-1 min-w-0 text-right">
+                                <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-1">Arrival</p>
+                                <h5 className="text-lg font-black text-gray-900 truncate mb-1">{schedule.destination}</h5>
+                                <div className="flex items-center justify-end gap-1 text-[11px] font-bold text-gray-500 truncate">
+                                  <span className="truncate">{schedule.arrivalLocation || 'Main Terminal'}</span>
+                                  <MapPin className="w-3 h-3 text-blue-400 shrink-0" />
+                                </div>
+                                <div className="mt-3 flex items-center justify-end gap-2">
+                                  <div className="px-2 py-1 bg-white rounded-lg border border-gray-100 shadow-sm">
+                                    <span className="text-sm font-black text-gray-900">{schedule.arrivalTime}</span>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Details Bar */}
+                          <div className="grid grid-cols-2 gap-3 mb-6">
+                            <div className="flex items-center gap-2 px-3 py-2 bg-blue-50/50 rounded-xl border border-blue-100/50">
+                              <Calendar className="w-4 h-4 text-blue-600" />
+                              <div>
+                                <p className="text-[9px] font-black text-blue-400 uppercase leading-none mb-1">Travel Date</p>
+                                <p className="text-[11px] font-black text-gray-900 leading-none">
+                                  {new Date(schedule.date).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2 px-3 py-2 bg-indigo-50/50 rounded-xl border border-indigo-100/50">
+                              <Users className="w-4 h-4 text-indigo-600" />
+                              <div>
+                                <p className="text-[9px] font-black text-indigo-400 uppercase leading-none mb-1">Availability</p>
+                                <p className={`text-[11px] font-black leading-none ${schedule.availableSeats > 10 ? 'text-green-600' : 'text-orange-600'}`}>
+                                  {schedule.availableSeats} Seats Left
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Action Area */}
+                          <div className="mt-auto pt-4 border-t border-gray-50 flex items-center justify-between gap-4">
+                            <div>
+                              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none mb-1">Ticket Price</p>
+                              <p className="text-xl font-black text-blue-700">MWK {schedule.price.toLocaleString()}</p>
+                            </div>
+                            <Button
+                              onClick={() => handleBooking(schedule.id, schedule.companyId, schedule.routeId)}
+                              className="bg-blue-600 hover:bg-blue-700 text-white rounded-2xl px-6 py-6 shadow-lg shadow-blue-200 transition-all active:scale-95 font-black text-sm flex items-center gap-2 group/btn"
+                            >
+                              Book Now
+                              <ArrowRight className="w-4 h-4 group-hover/btn:translate-x-1 transition-transform" />
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {['Boarding Now', 'Morning', 'Afternoon', 'Evening'].map((cat) => {
-                const items = filteredSchedules.filter(s => getScheduleCategory(s as any) === cat);
+                const items = regularSchedules.filter(s => getScheduleCategory(s as any) === cat);
                 // If we have a specific category selected, only show that section
                 if (selectedCategory && selectedCategory !== cat) return null;
                 if (items.length === 0) return null;
@@ -743,6 +990,64 @@ function DashboardContent() {
                   </div>
                 );
               })}
+
+              {/* Premium Pagination Control */}
+              {totalPages > 1 && (
+                <div className="flex flex-col sm:flex-row items-center justify-between pt-8 border-t border-gray-100 gap-4 mt-8">
+                  <p className="text-sm font-bold text-gray-500 font-display">
+                    Showing <span className="text-gray-900 font-extrabold">{(currentPage - 1) * itemsPerPage + 1}</span> to <span className="text-gray-900 font-extrabold">{Math.min(currentPage * itemsPerPage, filteredSchedules.length)}</span> of <span className="text-gray-900 font-extrabold">{filteredSchedules.length}</span> schedules
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                      disabled={currentPage === 1}
+                      className={`px-4 py-2.5 rounded-xl font-extrabold text-xs transition-all flex items-center gap-1.5 active:scale-95 ${
+                        currentPage === 1
+                          ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                          : "bg-white text-gray-700 hover:bg-gray-50 border border-gray-200 shadow-sm"
+                      }`}
+                    >
+                      ← Prev
+                    </button>
+                    
+                    {Array.from({ length: totalPages }).map((_, index) => {
+                      const pageNum = index + 1;
+                      const shouldShow = pageNum === 1 || pageNum === totalPages || Math.abs(pageNum - currentPage) <= 1;
+                      if (!shouldShow) {
+                        if (pageNum === 2 || pageNum === totalPages - 1) {
+                          return <span key={pageNum} className="text-gray-400 font-bold px-1.5 select-none">...</span>;
+                        }
+                        return null;
+                      }
+                      return (
+                        <button
+                          key={pageNum}
+                          onClick={() => setCurrentPage(pageNum)}
+                          className={`w-9 h-9 rounded-xl font-black text-xs transition-all active:scale-95 flex items-center justify-center ${
+                            currentPage === pageNum
+                              ? "bg-blue-600 text-white shadow-lg shadow-blue-200"
+                              : "bg-white text-gray-600 hover:bg-gray-50 border border-gray-200 shadow-sm"
+                          }`}
+                        >
+                          {pageNum}
+                        </button>
+                      );
+                    })}
+
+                    <button
+                      onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                      disabled={currentPage === totalPages}
+                      className={`px-4 py-2.5 rounded-xl font-extrabold text-xs transition-all flex items-center gap-1.5 active:scale-95 ${
+                        currentPage === totalPages
+                          ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                          : "bg-white text-gray-700 hover:bg-gray-50 border border-gray-200 shadow-sm"
+                      }`}
+                    >
+                      Next →
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
