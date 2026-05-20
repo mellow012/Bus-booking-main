@@ -1,6 +1,8 @@
 import { prisma } from './prisma';
 
 let isRolling = false;
+let lastCheckTime = 0;
+const CHECK_COOLDOWN = 5 * 60 * 1000; // 5 minutes
 
 /**
  * Checks if there are enough active future schedules in the database.
@@ -13,8 +15,14 @@ export async function checkAndRollSchedules(force = false) {
     return { success: true, rolled: false, message: 'Rolling already in progress' };
   }
 
+  const nowTime = Date.now();
+  if (nowTime - lastCheckTime < CHECK_COOLDOWN && !force) {
+    return { success: true, rolled: false, message: 'Check skipped (within cooldown)' };
+  }
+
   try {
     const now = new Date();
+    lastCheckTime = nowTime;
 
     // Check if there are active schedules from now onwards
     const activeFutureCount = await prisma.schedule.count({

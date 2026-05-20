@@ -149,22 +149,8 @@ export default function HomeSchedules() {
       pool = schedules.filter(s => cityMatch(s, userCity));
     }
 
-    // 1. Try Today's trips from the pool
-    let results = pool.filter(s => isToday(s.date));
-    
-    // 2. Fallback to Tomorrow if Today is empty
-    if (results.length === 0) {
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      const tomorrowStr = tomorrow.toISOString().split('T')[0];
-      results = pool.filter(s => s.date === tomorrowStr);
-    }
-
-    // 3. Fallback to any Upcoming if Tomorrow is also empty
-    if (results.length === 0) {
-      const now = new Date();
-      results = pool.filter(s => new Date(s.date) > now);
-    }
+    // Show all schedules without restricting to just today or tomorrow
+    let results = pool;
 
     // Apply time category filter if selected
     if (selectedCategory) {

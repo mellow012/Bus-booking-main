@@ -146,7 +146,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     return () => subscription.unsubscribe();
-  }, [refreshUserProfile]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); 
 
   // ─── Route guard ──────────────────────────────────────────────────────────
 

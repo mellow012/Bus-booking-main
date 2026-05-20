@@ -50,8 +50,10 @@ type SortBy = 'time' | 'price_asc' | 'price_desc' | 'seats';
 
 export async function GET(request: NextRequest) {
   try {
-    // Ensure future schedules are active and running all the time
-    await checkAndRollSchedules();
+    // Ensure future schedules are active and running all the time (asynchronously)
+    checkAndRollSchedules().catch((err) => {
+      console.error('[schedule-generator] Async roll error:', err);
+    });
 
     const searchParams = request.nextUrl.searchParams;
     

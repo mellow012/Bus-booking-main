@@ -1,7 +1,7 @@
 // src/app/api/auth/profile/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth-utils';
-import * as dbActions from '@/lib/actions/db.actions';
+import * as dbActions from '@/lib/actions/user.actions';
 
 /**
  * GET /api/auth/profile

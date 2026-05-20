@@ -118,6 +118,7 @@ export async function GET(req: NextRequest) {
         nationalId: userProfile.nationalId,
         sex: userProfile.sex,
         currentAddress: userProfile.currentAddress,
+        setupCompleted: userProfile.setupCompleted,
       },
     });
   } catch (error) {

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { getAdminDashboardStats } from '@/lib/actions/db.actions';
+import { getAdminDashboardStats } from '@/lib/actions/company.actions';
 import { getCurrentUser } from '@/lib/auth-utils';
 
 export async function GET(req: NextRequest) {

@@ -72,7 +72,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 
   return (
     <html lang={locale}>
-      <body className={`${inter.variable} ${montserrat.variable} ${inter.className}`}>
+      <body className={`${inter.variable} ${montserrat.variable} ${inter.className} overflow-x-hidden`}>
         <NextIntlClientProvider messages={messages}>
           <AuthProvider>
             <NotificationProviderWrapper>

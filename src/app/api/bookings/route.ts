@@ -53,6 +53,7 @@ export async function GET(req: NextRequest) {
                   origin: true,
                   destination: true,
                   distance: true,
+                  stops: true,
                 },
               },
               bus: {
@@ -79,34 +80,8 @@ export async function GET(req: NextRequest) {
       prisma.booking.count({ where }),
     ]);
 
-    // Transform response to flat structure
-    const transformedBookings = bookings.map(booking => ({
-      id: booking.id,
-      bookingReference: booking.bookingReference,
-      userId: booking.userId,
-      scheduleId: booking.scheduleId,
-      numberOfSeats: Array.isArray(booking.passengerDetails) ? booking.passengerDetails.length : 0,
-      totalAmount: booking.totalAmount,
-      bookingStatus: booking.bookingStatus,
-      paymentStatus: booking.paymentStatus,
-      createdAt: booking.createdAt,
-      updatedAt: booking.updatedAt,
-      // Schedule details
-      scheduleDate: booking.schedule.departureDateTime,
-      departureTime: booking.schedule.departureDateTime,
-      arrivalTime: booking.schedule.arrivalDateTime,
-      origin: booking.schedule.route.origin,
-      destination: booking.schedule.route.destination,
-      distance: booking.schedule.route.distance,
-      busType: booking.schedule.bus.busType,
-      licensePlate: booking.schedule.bus.licensePlate,
-      companyName: booking.schedule.company.name,
-      companyLogo: booking.schedule.company.logo,
-      availableSeats: booking.schedule.availableSeats,
-    }));
-
     return NextResponse.json({
-      data: transformedBookings,
+      data: bookings,
       total,
       page,
       limit,

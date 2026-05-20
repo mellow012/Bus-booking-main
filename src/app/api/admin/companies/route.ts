@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAdminCompanies } from '@/lib/actions/db.actions';
+import { getAdminCompanies } from '@/lib/actions/company.actions';
 import { getCurrentUser } from '@/lib/auth-utils';
 
 export async function GET(req: NextRequest) {

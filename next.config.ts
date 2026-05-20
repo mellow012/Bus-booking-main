@@ -6,7 +6,7 @@ const withNextIntl = createNextIntlPlugin('./src/i18n/request.ts');
 
 const withPWA = withPWAInit({
   dest: 'public',
-  disable: true,
+  disable: process.env.NODE_ENV === 'development',
   register: true,
   skipWaiting: true,
 });
@@ -32,4 +32,4 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default withNextIntl(withPWA(nextConfig));
+export default withNextIntl(nextConfig);

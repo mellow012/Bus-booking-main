@@ -553,7 +553,7 @@ function DashboardContent() {
           </div>
 
           {/* Popular Routes Section */}
-          {popularRoutes.length > 0 && (
+          {popularRoutes.length > 0 && !searchFrom && !searchTo && (
             <div className="space-y-4">
               <div className="flex items-center justify-between px-1">
                 <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
@@ -629,22 +629,7 @@ function DashboardContent() {
 
           {/* Terminals Section Removed */}
 
-          {/* Category Quick Filter Tabs */}
-          <div className="flex flex-wrap items-center gap-3 bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
-            <span className="text-sm font-bold text-gray-900 mr-2">Time Slot:</span>
-            {['All', 'Boarding Now', 'Morning', 'Afternoon', 'Evening'].map((cat) => (
-              <button
-                key={cat}
-                onClick={() => setSelectedCategory(cat === 'All' ? null : cat)}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${(cat === 'All' && !selectedCategory) || selectedCategory === cat
-                  ? "bg-blue-600 text-white shadow-md shadow-blue-200"
-                  : "bg-gray-50 text-gray-500 hover:bg-gray-100"
-                  }`}
-              >
-                {cat}
-              </button>
-            ))}
-          </div>
+
 
           {/* Sorting Header */}
           <div className="flex justify-between items-center bg-white p-4 rounded-2xl shadow-sm border border-gray-100">

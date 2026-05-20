@@ -122,6 +122,14 @@ const DEFAULT_SECURITY: SecuritySettings = {
   loginSessions: [],
 };
 
+const tabs = [
+  { id: 'overview', label: 'Overview', icon: User },
+  { id: 'bookings', label: 'Bookings', icon: HistoryIcon },
+  { id: 'payments', label: 'Payments', icon: CreditCard },
+  { id: 'settings', label: 'Settings', icon: Settings },
+  { id: 'security', label: 'Security', icon: Shield },
+];
+
 const ProfilePage: React.FC = () => {
   const router = useRouter();
   const { user, userProfile, updateUserProfile, signOut } = useAuth();
@@ -179,23 +187,27 @@ const ProfilePage: React.FC = () => {
 
   // ─── Booking data ─────────────────────────────────────────────────────────
 
-  const fetchBookingData = useCallback(async () => {
+  const fetchBookingData = useCallback(async (preFetchedData?: any) => {
     if (!user) return;
 
     setStatsLoading(true);
     try {
-      const response = await fetch('/api/profile', {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
+      let data = preFetchedData;
+      if (!data) {
+        const response = await fetch('/api/profile', {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
 
-      if (!response.ok) {
-        throw new Error('Failed to fetch profile data');
+        if (!response.ok) {
+          throw new Error('Failed to fetch profile data');
+        }
+
+        const result = await response.json();
+        data = result.data;
       }
-
-      const { data } = await response.json();
 
       // Populate booking stats
       setBookingStats({
@@ -314,7 +326,7 @@ const ProfilePage: React.FC = () => {
           currentAddress: userData.currentAddress || '',
           email: userData.email || user.email || '',
         });
-        await Promise.all([fetchBookingData(), loadUserPreferences()]);
+        await Promise.all([fetchBookingData(userData), loadUserPreferences()]);
       } catch (err: unknown) {
         console.error('Profile fetch error:', err);
         setError('Failed to load profile. Please try again or contact support.');
@@ -519,13 +531,10 @@ const ProfilePage: React.FC = () => {
     return Math.round((completed / fields.length) * 100);
   };
 
-  const tabs = [
-    { id: 'overview', label: 'Overview', icon: Activity },
-    { id: 'bookings', label: 'My Bookings', icon: BusIcon },
-    { id: 'payments', label: 'Payments', icon: CreditCard },
-    { id: 'settings', label: 'Settings', icon: Settings },
-    { id: 'security', label: 'Security', icon: Shield },
-  ];
+  // activeView drives which sub-screen is shown
+  const [activeView, setActiveView] = useState<'menu'|'bookings'|'payments'|'insights'|'settings'|'security'>('menu');
+
+  const profileCompletion = calculateProfileCompletion();
 
   // ─── Render ───────────────────────────────────────────────────────────────
 
@@ -725,7 +734,7 @@ const ProfilePage: React.FC = () => {
           </div>
 
           {/* Tab Navigation */}
-          <div className="bg-gray-200/50 p-1.5 rounded-[24px] mb-8 w-fit mx-auto md:mx-0">
+          <div className="bg-gray-200/50 p-1.5 rounded-[24px] mb-8 w-fit mx-auto md:mx-0 max-w-full">
             <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
               {tabs.map((tab) => (
                 <button

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAdminBookings } from '@/lib/actions/db.actions';
+import { getAdminBookings } from '@/lib/actions/company.actions';
 import { getCurrentUser } from '@/lib/auth-utils';
 
 export const dynamic = 'force-dynamic';

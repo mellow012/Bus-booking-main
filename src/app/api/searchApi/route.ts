@@ -5,8 +5,10 @@ import { checkAndRollSchedules } from "@/lib/schedule-generator";
 
 export async function POST(request: Request) {
   try {
-    // Ensure future schedules are active and running all the time
-    await checkAndRollSchedules();
+    // Ensure future schedules are active and running all the time (asynchronously)
+    checkAndRollSchedules().catch((err) => {
+      console.error('[schedule-generator] Async roll error:', err);
+    });
 
     const { origin, destination, date, passengers = 1 } = await request.json();
 
