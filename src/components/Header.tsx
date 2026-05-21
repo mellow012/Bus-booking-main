@@ -15,7 +15,7 @@ import LanguageSwitcher from './LanguageSwitcher';
 
 const UserAvatar = ({ user, userProfile }: { user: any; userProfile: any }) => {
   if (userProfile?.avatar) {
-    return <img src={userProfile.avatar} alt="Profile" className="w-8 h-8 rounded-full object-cover border-2 border-blue-200" />;
+    return <Image src={userProfile.avatar} alt="Profile" width={32} height={32} className="w-8 h-8 rounded-full object-cover border-2 border-blue-200" />;
   }
   const initial = userProfile?.firstName?.[0] || user?.email?.[0] || 'U';
   return (

@@ -18,8 +18,8 @@ export const ScheduleCard = React.memo(({ s, onBook, userCity }: {
         <div className="flex items-start justify-between gap-2 sm:gap-3 mb-3 sm:mb-4">
           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             {s.companyLogo ? (
-              <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl overflow-hidden border border-gray-100 shrink-0">
-                <img src={s.companyLogo} alt={s.companyName} className="w-full h-full object-cover" loading="lazy" />
+              <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl overflow-hidden border border-gray-100 shrink-0 relative">
+                <Image src={s.companyLogo} alt={s.companyName} fill className="object-cover" />
               </div>
             ) : (
               <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-sm sm:text-base shrink-0">
@@ -47,18 +47,19 @@ export const ScheduleCard = React.memo(({ s, onBook, userCity }: {
             <div className="text-center min-w-0 flex-1">
               <p className="text-xs sm:text-sm font-bold text-gray-900 truncate">{s.origin}</p>
               {s.departureLocation && (
-                <p className="text-[9px] sm:text-[10px] text-gray-400 mt-0.5 flex items-center justify-center gap-0.5 truncate">
-                  <MapPin className="w-2.5 h-2.5 shrink-0" />{s.departureLocation}
+                <p className="text-[9px] sm:text-[10px] text-gray-400 mt-0.5 flex items-center justify-center gap-0.5 w-full">
+                  <MapPin className="w-2.5 h-2.5 shrink-0" />
+                  <span className="truncate">{s.departureLocation}</span>
                 </p>
               )}
               <p className="text-[10px] sm:text-[11px] text-blue-600 font-semibold mt-0.5">{s.departureTime}</p>
             </div>
-            <div className="flex flex-col items-center gap-0.5 px-2 sm:px-3 shrink-0">
+            <div className="flex flex-col items-center gap-0.5 px-1 sm:px-3 shrink-0">
               <div className="flex items-center gap-0.5">
                 <div className="w-1.5 h-1.5 rounded-full bg-blue-300" />
-                <div className="w-5 sm:w-7 h-px bg-blue-200" />
+                <div className="w-3 sm:w-7 h-px bg-blue-200" />
                 <ArrowRight className="w-2.5 sm:w-3 h-2.5 sm:h-3 text-blue-500" />
-                <div className="w-5 sm:w-7 h-px bg-blue-200" />
+                <div className="w-3 sm:w-7 h-px bg-blue-200" />
                 <div className="w-1.5 h-1.5 rounded-full bg-blue-300" />
               </div>
               <span className="text-[9px] sm:text-[10px] text-gray-400">{formatDuration(s.duration)}</span>
@@ -66,8 +67,9 @@ export const ScheduleCard = React.memo(({ s, onBook, userCity }: {
             <div className="text-center min-w-0 flex-1">
               <p className="text-xs sm:text-sm font-bold text-gray-900 truncate">{s.destination}</p>
               {s.arrivalLocation && (
-                <p className="text-[9px] sm:text-[10px] text-gray-400 mt-0.5 flex items-center justify-center gap-0.5 truncate">
-                  <MapPin className="w-2.5 h-2.5 shrink-0" />{s.arrivalLocation}
+                <p className="text-[9px] sm:text-[10px] text-gray-400 mt-0.5 flex items-center justify-center gap-0.5 w-full">
+                  <MapPin className="w-2.5 h-2.5 shrink-0" />
+                  <span className="truncate">{s.arrivalLocation}</span>
                 </p>
               )}
               <p className="text-[10px] sm:text-[11px] text-blue-600 font-semibold mt-0.5">{s.arrivalTime}</p>

@@ -53,6 +53,7 @@ import AlertMessage from '@/components/AlertMessage';
 import { Company, UserProfile, Booking, Schedule, Route, Bus, OperatorProfile, ConductorProfile, Promotion } from '@/types/index';
 import TabButton from '@/components/tabButton';
 import DashboardBottomNav from "@/components/DashboardBottomNav";
+import Image from "next/image";
 
 // ─── Kinetic Theme Components ───────────────────────────────────────────────
 
@@ -958,7 +959,7 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
                 className={`w-full text-left px-4 py-3 border-b border-gray-100 transition-colors flex items-center gap-3 group
                   ${isSelected ? 'bg-indigo-50 border-l-2 border-l-indigo-500' : 'hover:bg-white'}`}>
                 {company.logo
-                  ? <img src={company.logo} alt={company.name} className="w-8 h-8 rounded-lg object-cover shrink-0" />
+                  ? <Image src={company.logo} alt={company.name} width={32} height={32} className="w-8 h-8 rounded-lg object-cover shrink-0" />
                   : <div className="w-8 h-8 rounded-lg bg-indigo-100 flex items-center justify-center shrink-0">
                     <Building2 className="w-4 h-4 text-indigo-500" />
                   </div>}
@@ -999,7 +1000,7 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
             <div className="flex flex-col md:flex-row md:items-start justify-between gap-6 pb-6 border-b border-gray-100">
               <div className="flex items-center gap-5">
                 {selected.logo
-                  ? <img src={selected.logo} alt={selected.name} className="w-16 h-16 rounded-2xl object-cover border-2 border-white shadow-md" />
+                  ? <Image src={selected.logo} alt={selected.name} width={64} height={64} className="w-16 h-16 rounded-2xl object-cover border-2 border-white shadow-md" />
                   : <div className="w-16 h-16 rounded-2xl bg-indigo-900 flex items-center justify-center shadow-lg shadow-indigo-100">
                     <Building2 className="w-8 h-8 text-white" />
                   </div>}
@@ -1790,7 +1791,7 @@ export default function SuperAdminDashboard() {
                                 <td className="px-6 py-4">
                                   <div className="flex items-center gap-4">
                                     {company.logo
-                                      ? <img src={company.logo} alt={company.name} className="h-11 w-11 rounded-xl object-cover border-2 border-white shadow-sm" />
+                                      ? <Image src={company.logo} alt={company.name} width={44} height={44} className="h-11 w-11 rounded-xl object-cover border-2 border-white shadow-sm" />
                                       : <div className="h-11 w-11 bg-indigo-50 rounded-xl flex items-center justify-center border border-indigo-100">
                                         <Building2 className="w-5 h-5 text-indigo-600" />
                                       </div>}
@@ -2059,7 +2060,7 @@ export default function SuperAdminDashboard() {
                                 <td className="px-6 py-5">
                                   <div className="flex items-center gap-2">
                                     {scheduleCompany?.logo
-                                      ? <img src={scheduleCompany.logo} className="w-6 h-6 rounded border object-cover" />
+                                      ? <Image src={scheduleCompany.logo} alt="Company Logo" width={24} height={24} className="w-6 h-6 rounded border object-cover" />
                                       : <Building2 className="w-6 h-6 p-1 bg-gray-50 border rounded text-gray-300" />}
                                     <p className="text-xs font-black text-gray-700 uppercase tracking-tight">{scheduleCompany?.name || 'SYSTEM CORE'}</p>
                                   </div>

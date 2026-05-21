@@ -12,6 +12,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { unstable_cache } from 'next/cache';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { isSegmentBookable } from '@/lib/schedule-utils';
@@ -115,27 +116,38 @@ export async function GET(request: NextRequest) {
       };
     }
 
-    const schedules = await prisma.schedule.findMany({
-      where,
-      include: {
-        route: true,
-        bus: { include: { company: true } },
-        company: true,
-      },
-      orderBy:
-        sortBy === 'time' || (sortBy as string) === 'departureDateTime'
-          ? { departureDateTime: 'asc' }
-          : sortBy === 'price_asc'
-          ? { price: 'asc' }
-          : sortBy === 'price_desc'
-          ? { price: 'desc' }
-          : { availableSeats: 'desc' }, 
-      skip: pageOffset,
-      take: limit,
-    });
+    const orderByQuery =
+      sortBy === 'time' || (sortBy as string) === 'departureDateTime'
+        ? { departureDateTime: 'asc' }
+        : sortBy === 'price_asc'
+        ? { price: 'asc' }
+        : sortBy === 'price_desc'
+        ? { price: 'desc' }
+        : { availableSeats: 'desc' };
 
-    // Get total count for pagination
-    const total = await prisma.schedule.count({ where });
+    const cacheKey = JSON.stringify({ where, orderByQuery, pageOffset, limit });
+
+    const getCachedSchedules = unstable_cache(
+      async () => {
+        const schedules = await prisma.schedule.findMany({
+          where,
+          include: {
+            route: true,
+            bus: { include: { company: true } },
+            company: true,
+          },
+          orderBy: orderByQuery as any,
+          skip: pageOffset,
+          take: limit,
+        });
+        const total = await prisma.schedule.count({ where });
+        return { schedules, total };
+      },
+      ['schedules-query', cacheKey],
+      { revalidate: 30 }
+    );
+
+    const { schedules, total } = await getCachedSchedules();
 
     // Transform to enhanced format matching frontend expectations
     const enhanced = schedules

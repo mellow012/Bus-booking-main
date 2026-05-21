@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Inter, Montserrat } from "next/font/google";
+import { Inter, Montserrat, Plus_Jakarta_Sans, DM_Sans } from "next/font/google";
 import '@/app/globals.css';
 import { NextIntlClientProvider } from 'next-intl';
 import { getLocale, getMessages } from 'next-intl/server';
@@ -13,6 +13,8 @@ import { NotificationProviderWrapper } from "@/components/NotificationProviderWr
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 const montserrat = Montserrat({ subsets: ["latin"], variable: "--font-montserrat", weight: ["400", "500", "600", "700"] });
+const plusJakartaSans = Plus_Jakarta_Sans({ subsets: ["latin"], variable: "--font-jakarta", weight: ["400", "500", "600", "700", "800"] });
+const dmSans = DM_Sans({ subsets: ["latin"], variable: "--font-dm-sans", weight: ["400", "500", "600", "700"] });
 
 export const viewport: Viewport = {
   themeColor: "#2563eb",
@@ -72,7 +74,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 
   return (
     <html lang={locale}>
-      <body className={`${inter.variable} ${montserrat.variable} ${inter.className} overflow-x-hidden`}>
+      <body className={`${inter.variable} ${montserrat.variable} ${plusJakartaSans.variable} ${dmSans.variable} ${inter.className} overflow-x-hidden`}>
         <NextIntlClientProvider messages={messages}>
           <AuthProvider>
             <NotificationProviderWrapper>

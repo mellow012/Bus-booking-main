@@ -10,6 +10,7 @@ import { ScheduleCard } from "@/components/ScheduleCard";
 import AlertMessage from "@/components/AlertMessage";
 import { EnhancedSchedule, isToday, getScheduleCategory, GeoStatus, cityMatch, nearestCity } from "@/utils/homeHelpers";
 import { CityPickerModal } from "@/components/CityPickerModal";
+import Image from "next/image";
 
 const LS_CITY_KEY = "tb_user_city";
 
@@ -349,9 +350,10 @@ export default function HomeSchedules() {
         </div>
       ) : (
         <div className="bg-white rounded-3xl border border-gray-100 p-10 sm:p-16 text-center mb-8 shadow-sm flex flex-col items-center">
-          <img 
+          <Image 
             src="/Bus stop-rafiki.svg" 
             alt="No schedules" 
+            width={300} height={300}
             className="w-full max-w-[240px] h-auto mb-6 opacity-80"
             style={{ filter: "hue-rotate(10deg)" }}
           />

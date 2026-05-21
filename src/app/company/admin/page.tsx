@@ -28,6 +28,7 @@ import NotificationsManagementTab from '@/components/NotificationsManagementTab'
 import TeamMessagingTab from '@/components/TeamMessagingTab';
 import ChartersTab from '@/components/ChartersTab';
 import DashboardBottomNav from '@/components/DashboardBottomNav';
+import Image from 'next/image';
 
 // ── Extracted sub-components & hooks ─────────────────────────────────────────
 import DashboardSidebar from './_components/DashboardSidebar';
@@ -377,7 +378,7 @@ export default function AdminDashboard() {
                     <p className="text-[10px] font-medium text-gray-400 capitalize">{userProfile?.role?.replace('_', ' ') || 'Admin'}</p>
                   </div>
                   <div className="w-9 h-9 rounded-full bg-indigo-900 border-2 border-indigo-200 shadow-sm overflow-hidden flex items-center justify-center text-white text-sm font-bold">
-                    {company?.logo ? <img src={company.logo} className="w-full h-full object-cover" alt="" /> : (userProfile?.firstName?.[0] || 'A').toUpperCase()}
+                    {company?.logo ? <Image src={company.logo} alt="Company logo" width={36} height={36} className="w-full h-full object-cover" /> : (userProfile?.firstName?.[0] || 'A').toUpperCase()}
                   </div>
                 </button>
               </div>

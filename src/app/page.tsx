@@ -23,9 +23,6 @@ export default async function HomePage() {
     <div className="min-h-screen bg-gray-50 overflow-x-hidden">
       <style dangerouslySetInnerHTML={{
         __html: `
-        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=DM+Sans:wght@400;500;600&display=swap');
-        body { font-family: 'DM Sans', sans-serif; }
-        .font-display { font-family: 'Plus Jakarta Sans', sans-serif; }
         @keyframes fadeUp  { from{opacity:0;transform:translateY(24px)} to{opacity:1;transform:translateY(0)} }
         @keyframes scaleIn { from{opacity:0;transform:scale(.95)}       to{opacity:1;transform:scale(1)} }
         .anim-fade-up  { animation: fadeUp  .7s ease-out both }

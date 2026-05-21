@@ -72,6 +72,8 @@ model Company {
   charterQuotes        GroupCharterQuote[]
   staff                User[]             @relation("CompanyStaff")
   conversations        Conversation[]
+
+  @@index([status])
 }
 
 model Bus {
@@ -118,6 +120,10 @@ model Route {
   company             Company            @relation(fields: [companyId], references: [id])
   schedules           Schedule[]
   scheduleTemplates   ScheduleTemplate[]
+
+  @@index([origin])
+  @@index([destination])
+  @@index([isActive])
 }
 
 model Schedule {
@@ -167,6 +173,7 @@ model Schedule {
   @@index([routeId])
   @@index([departureDateTime])
   @@index([status])
+  @@index([availableSeats])
 }
 
 model Booking {

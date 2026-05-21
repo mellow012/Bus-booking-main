@@ -64,9 +64,10 @@ export function Hero() {
           {/* Right: illustration */}
           <div className="relative flex justify-center anim-fade-up delay-200">
             <div className="relative w-full max-w-[280px] sm:max-w-sm lg:max-w-md">
-              <img src="/Bus driver-rafiki.svg" alt="Bus illustration"
+              <Image src="/Bus driver-rafiki.svg" alt="Bus illustration"
+                width={500} height={500}
                 className="w-full h-auto drop-shadow-2xl"
-                style={{ filter: "hue-rotate(15deg) saturate(1.1) brightness(1.05)" }} loading="lazy"/>
+                style={{ filter: "hue-rotate(15deg) saturate(1.1) brightness(1.05)" }} />
               {/* Floating badges */}
               <div className="absolute top-2 -right-2 sm:top-4 sm:-right-4 bg-white rounded-2xl shadow-xl px-3 sm:px-4 py-2 sm:py-3 flex items-center gap-2 sm:gap-2.5 anim-scale-in delay-300">
                 <div className="w-7 h-7 sm:w-8 sm:h-8 bg-emerald-100 rounded-xl flex items-center justify-center shrink-0">

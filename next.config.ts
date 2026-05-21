@@ -15,6 +15,18 @@ const nextConfig: NextConfig = {
   // Strict build mode enabled for production readiness, but we allow ESLint warnings to pass.
   eslint: { ignoreDuringBuilds: true },
   typescript: { ignoreBuildErrors: false },
+  images: {
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: '**',
+      },
+      {
+        protocol: 'http',
+        hostname: '**',
+      },
+    ],
+  },
   async headers() {
     return [
       {
