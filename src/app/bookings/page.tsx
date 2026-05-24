@@ -519,11 +519,11 @@ const BookingCard = memo<{
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="md:col-span-2">
-            <div className="grid grid-cols-2 gap-3 text-sm text-gray-600">
-              <div className="flex items-center gap-2"><BusIcon className="w-4 h-4 text-gray-400" /><span className="truncate">{booking.bus?.busType || 'N/A'} · {booking.bus?.licensePlate || 'N/A'}</span></div>
-              <div className="flex items-center gap-2"><Users className="w-4 h-4 text-gray-400" /><span>{booking.passengerDetails?.length || 0} passenger{(booking.passengerDetails?.length || 0) > 1 ? 's' : ''}</span></div>
-              <div className="flex items-center gap-2"><Armchair className="w-4 h-4 text-gray-400" /><span className="truncate">Seats: {booking.seatNumbers.join(', ')}</span></div>
-              <div className="flex items-center gap-2"><Clock className="w-4 h-4 text-gray-400" /><span className="truncate">Booked: {formatDate(booking.createdAt)}</span></div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm text-gray-600">
+              <div className="flex items-center gap-2"><BusIcon className="w-4 h-4 text-gray-400 shrink-0" /><span className="truncate">{booking.bus?.busType || 'N/A'} · {booking.bus?.licensePlate || 'N/A'}</span></div>
+              <div className="flex items-center gap-2"><Users className="w-4 h-4 text-gray-400 shrink-0" /><span>{booking.passengerDetails?.length || 0} passenger{(booking.passengerDetails?.length || 0) > 1 ? 's' : ''}</span></div>
+              <div className="flex items-center gap-2"><Armchair className="w-4 h-4 text-gray-400 shrink-0" /><span className="truncate">Seats: {booking.seatNumbers.join(', ')}</span></div>
+              <div className="flex items-center gap-2"><Clock className="w-4 h-4 text-gray-400 shrink-0" /><span className="truncate">Booked: {formatDate(booking.createdAt)}</span></div>
             </div>
           </div>
 
@@ -1108,13 +1108,13 @@ const BookingsPage: React.FC = () => {
 
   return (
     <ErrorBoundary>
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="min-h-screen overflow-x-hidden bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
 
           {notifications.length > 0 && (
-            <div className="fixed top-4 right-4 z-50 space-y-2">
+            <div className="fixed top-4 right-4 left-4 sm:left-auto z-50 space-y-2">
               {notifications.map((n, i) => (
-                <div key={i} className="bg-emerald-500 text-white p-4 rounded-lg shadow-lg max-w-sm flex items-start gap-3">
+                <div key={i} className="bg-emerald-500 text-white p-4 rounded-lg shadow-lg w-full sm:w-auto sm:max-w-sm flex items-start gap-3">
                   <Bell className="w-5 h-5 mt-0.5 shrink-0" />
                   <div><p className="font-medium text-sm">Booking Update</p><p className="text-xs opacity-90 mt-1">{n}</p></div>
                   <button onClick={() => setNotifications((p) => p.filter((_, j) => j !== i))} className="ml-auto text-white/80 hover:text-white"><XCircle className="w-4 h-4" /></button>
@@ -1133,20 +1133,20 @@ const BookingsPage: React.FC = () => {
                 <h1 className="text-2xl font-bold text-gray-900 mb-0.5">My Bookings</h1>
                 <p className="text-sm text-gray-500">Manage and track your bus ticket bookings</p>
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap sm:flex-nowrap gap-2 w-full sm:w-auto">
                 <button onClick={() => fetchBookings()} disabled={loading}
-                  className="flex items-center gap-2 px-4 py-2 text-gray-600 bg-gray-100 rounded-xl hover:bg-gray-200 disabled:opacity-50 text-sm font-medium">
+                  className="flex-1 sm:flex-none flex justify-center items-center gap-2 px-4 py-2 text-gray-600 bg-gray-100 rounded-xl hover:bg-gray-200 disabled:opacity-50 text-sm font-medium">
                   <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />Refresh
                 </button>
                 <button onClick={() => router.push('/schedules')}
-                  className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all shadow-md text-sm font-semibold">
-                  <Search className="w-4 h-4" />Book New Ticket
+                  className="flex-1 sm:flex-none flex justify-center items-center gap-2 px-5 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all shadow-md text-sm font-semibold whitespace-nowrap">
+                  <Search className="w-4 h-4" />Book Ticket
                 </button>
               </div>
             </div>
 
             {/* ── Tabs ── */}
-            <div className="flex gap-1 p-1 bg-gray-100 rounded-xl overflow-x-auto">
+            <div className="flex gap-1 p-1 bg-gray-100 rounded-xl overflow-x-auto w-full">
               {([
                 { key: 'pending',   label: 'Pending',    Icon: Clock,        count: bookingStats.pending,   activeClass: 'bg-white text-amber-700 shadow-sm' },
                 { key: 'confirmed', label: 'Confirmed',  Icon: CheckCircle,  count: bookingStats.confirmed, activeClass: 'bg-white text-emerald-700 shadow-sm' },
