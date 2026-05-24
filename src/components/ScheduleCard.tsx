@@ -1,4 +1,5 @@
 import React from "react";
+import Image from "next/image";
 import { Star, ArrowRight, Calendar, Users, Clock, MapPin, Bus as BusIcon, Flame, CheckCircle, Shield, Navigation } from "lucide-react";
 import { EnhancedSchedule, fillingFast, seatColor, cityMatch, formatDuration, isToday, AMENITY_ICONS, getScheduleCategory } from "@/utils/homeHelpers";
 

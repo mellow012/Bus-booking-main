@@ -8,7 +8,7 @@ import { Booking, Schedule, Bus, Route, Company, UserProfile, NotificationType }
 import {
   Bus as BusIcon, MapPin, Clock, Download, XCircle, CheckCircle, Loader2,
   Search, CreditCard, Armchair, Bell, AlertTriangle, Calendar, Users,
-  Filter, RefreshCw, Zap, Shield, Smartphone, ArrowRight, Trash2,
+  RefreshCw, Zap, Shield, Smartphone, ArrowRight, Trash2,
   ChevronRight, Building2, Wallet,
 } from 'lucide-react';
 import Modal from '../../components/Modals';
@@ -648,7 +648,7 @@ const BookingsPage: React.FC = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [filters, setFilters] = useState<SearchFilters>({});
-  const [activeFilter, setActiveFilter] = useState('all');
+  const [activeFilter, setActiveFilter] = useState('confirmed');
   const [showFilters, setShowFilters] = useState(false);
   const [notifications, setNotifications] = useState<string[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
@@ -725,7 +725,8 @@ const BookingsPage: React.FC = () => {
     setLoading(true);
     setError('');
     try {
-      const response = await fetch(`/api/bookings?page=1&limit=50&status=${activeFilter === 'all' ? '' : activeFilter}`);
+      // Always fetch ALL bookings — tab switching filters client-side (no re-fetch)
+      const response = await fetch('/api/bookings?page=1&limit=100');
       if (!response.ok) throw new Error('Failed to fetch bookings');
 
       const { data: apiBookings } = await response.json();
@@ -777,7 +778,8 @@ const BookingsPage: React.FC = () => {
 
       const valid = details.filter((b) => !isBookingExpired(b));
       setBookings(valid);
-      applyFiltersLogic(valid, activeFilter, filters);
+      // Use the current activeFilter ref via setActiveFilter's callback pattern
+      setActiveFilter(current => { applyFiltersLogic(valid, current, {}); return current; });
     } catch (err) {
       if (retryCount < 2) {
         setTimeout(() => fetchBookings(retryCount + 1), 1000 * 2 ** retryCount);
@@ -787,7 +789,7 @@ const BookingsPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [user?.id, activeFilter, filters, isBookingExpired, applyFiltersLogic]);
+  }, [user?.id, isBookingExpired, applyFiltersLogic]);
 
   const handleCancelBooking = useCallback(async (bookingId: string, scheduleId: string, seatNumbers: string[]) => {
     const b = bookings.find((x) => x.id === bookingId);
@@ -1084,7 +1086,8 @@ const BookingsPage: React.FC = () => {
     return () => { cleanupFunctions.current.forEach((fn) => fn()); };
   }, [user, router, searchParams, fetchBookings, verifyPaymentStatus]);
 
-  useEffect(() => { applyFiltersLogic(bookings, activeFilter, filters); }, [activeFilter, filters, bookings, applyFiltersLogic]);
+  // NOTE: Tab switching is now purely client-side via handleStatusFilter.
+  // No useEffect needed here — avoids redundant re-renders.
 
   if (loading) return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
@@ -1123,69 +1126,47 @@ const BookingsPage: React.FC = () => {
           {success && <div className="mb-6"><AlertMessage type="success" message={success} onClose={() => setSuccess('')} /></div>}
           {error && <div className="mb-6"><AlertMessage type="error" message={error} onClose={() => setError('')} /></div>}
 
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-6">
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          {/* ── Header ── */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 mb-6">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-5">
               <div>
-                <h1 className="text-2xl font-bold text-gray-900 mb-1">My Bookings</h1>
-                <p className="text-gray-600">Manage and track your bus ticket bookings</p>
+                <h1 className="text-2xl font-bold text-gray-900 mb-0.5">My Bookings</h1>
+                <p className="text-sm text-gray-500">Manage and track your bus ticket bookings</p>
               </div>
-              <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
-                <button onClick={() => fetchBookings()} disabled={loading} className="flex items-center gap-2 px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50 w-full sm:w-auto">
+              <div className="flex gap-2">
+                <button onClick={() => fetchBookings()} disabled={loading}
+                  className="flex items-center gap-2 px-4 py-2 text-gray-600 bg-gray-100 rounded-xl hover:bg-gray-200 disabled:opacity-50 text-sm font-medium">
                   <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />Refresh
                 </button>
-                <button onClick={() => router.push('/schedules')} className="flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all hover:scale-105 shadow-lg w-full sm:w-auto justify-center">
+                <button onClick={() => router.push('/schedules')}
+                  className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all shadow-md text-sm font-semibold">
                   <Search className="w-4 h-4" />Book New Ticket
                 </button>
               </div>
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mt-6">
-              {statCards.map(({ label, value, key, Icon }) => (
-                <button key={key} onClick={() => handleStatusFilter(key)}
-                  className={`p-4 rounded-xl transition-all hover:scale-105 border-2 ${activeFilter === key ? 'border-blue-200 bg-blue-50 shadow-md' : 'border-transparent bg-white hover:border-gray-200 shadow-sm'}`}>
-                  <div className="flex items-center justify-center mb-2"><Icon className="w-5 h-5 text-gray-600" /></div>
-                  <p className="text-2xl font-bold text-gray-900 text-center">{value}</p>
-                  <p className="text-sm text-gray-600 text-center mt-1">{label}</p>
+            {/* ── Tabs ── */}
+            <div className="flex gap-1 p-1 bg-gray-100 rounded-xl">
+              {([
+                { key: 'confirmed', label: 'Confirmed',  Icon: CheckCircle, count: bookingStats.confirmed, activeClass: 'bg-white text-emerald-700 shadow-sm' },
+                { key: 'upcoming',  label: 'Upcoming',   Icon: Calendar,    count: bookingStats.upcoming,  activeClass: 'bg-white text-blue-700 shadow-sm' },
+                { key: 'cancelled', label: 'Cancelled',  Icon: XCircle,     count: bookingStats.cancelled, activeClass: 'bg-white text-red-600 shadow-sm' },
+              ] as const).map(({ key, label, Icon, count, activeClass }) => (
+                <button
+                  key={key}
+                  onClick={() => handleStatusFilter(key)}
+                  className={`flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 ${
+                    activeFilter === key ? activeClass : 'text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  <Icon className="w-4 h-4" />
+                  <span className="hidden sm:inline">{label}</span>
+                  <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${
+                    activeFilter === key ? 'bg-gray-100' : 'bg-gray-200 text-gray-500'
+                  }`}>{count}</span>
                 </button>
               ))}
             </div>
-
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mt-6 pt-4 border-t border-gray-100 gap-3">
-              <button onClick={() => setShowFilters(!showFilters)} className="flex items-center gap-2 px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 w-full sm:w-auto">
-                <Filter className="w-4 h-4" />{showFilters ? 'Hide Filters' : 'Show Filters'}
-              </button>
-              <p className="text-sm text-gray-600">Showing {filteredBookings.length} of {bookings.length} bookings</p>
-            </div>
-
-            {showFilters && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mt-4 p-4 bg-gray-50 rounded-lg">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Bus Type</label>
-                  <select name="busType" value={(filters.busType as string) || ''} onChange={handleFilterChange} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-                    <option value="">All Types</option><option value="AC">AC</option><option value="Non-AC">Non-AC</option><option value="Sleeper">Sleeper</option><option value="Semi-Sleeper">Semi-Sleeper</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Company</label>
-                  <select name="company" value={(filters.company as string) || ''} onChange={handleFilterChange} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-                    <option value="">All Companies</option>
-                    {[...new Set(bookings.map((b) => b.company.name))].map((n) => <option key={n} value={n}>{n}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Price Range (MWK)</label>
-                  <div className="flex gap-2">
-                    <input type="number" name="priceRangeMin" placeholder="Min" value={(filters.priceRange as any)?.min || ''} onChange={handleFilterChange} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" />
-                    <input type="number" name="priceRangeMax" placeholder="Max" value={(filters.priceRange as any)?.max || ''} onChange={handleFilterChange} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" />
-                  </div>
-                </div>
-                <div className="sm:col-span-2 md:col-span-3">
-                  <button onClick={() => { setFilters({}); setActiveFilter('all'); }} className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200">
-                    <XCircle className="w-4 h-4" />Clear Filters
-                  </button>
-                </div>
-              </div>
-            )}
           </div>
 
           {filteredBookings.length === 0 ? (

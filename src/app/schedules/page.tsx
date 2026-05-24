@@ -112,7 +112,7 @@ export default async function SchedulesPage({
         arrivalLocation: sch.arrivalLocation || `${route.destination} Main Terminal`,
       };
     })
-    .filter(item => item !== null && new Date(`${item.date}T${item.arrivalTime}`) >= new Date());
+    .filter((item): item is NonNullable<typeof item> => item !== null && new Date(`${item.date}T${item.arrivalTime}`) >= new Date());
 
   const seen = new Set<string>();
   const deduplicatedSchedules: typeof enhancedSchedules = [];
