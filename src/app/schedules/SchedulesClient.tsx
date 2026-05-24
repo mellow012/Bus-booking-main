@@ -13,6 +13,7 @@ import { MALAWI_CITIES, getScheduleCategory } from "@/utils/homeHelpers";
 import { useNotifications } from "@/contexts/NotificationContext";
 import { useAppToast } from "@/contexts/ToastContext";
 import Image from "next/image";
+import { ScheduleCard } from "@/components/ScheduleCard";
 
 interface EnhancedSchedule {
   id: string;
@@ -639,116 +640,11 @@ export default function SchedulesClient({
                   <div className="flex gap-6 overflow-x-auto pb-6 px-1 snap-x snap-mandatory scroll-smooth scrollbar-none" style={{ WebkitOverflowScrolling: 'touch' }}>
                     {recommendedSchedules.map((schedule) => (
                       <div key={`rec-${schedule.id}`} className="snap-start shrink-0 w-[85vw] sm:w-[350px] md:w-[400px]">
-                        <div className="bg-white rounded-[2.5rem] p-6 border border-gray-100 shadow-sm hover:shadow-xl hover:border-blue-200 transition-all flex flex-col h-full group relative overflow-hidden">
-                          {/* Status Badges */}
-                          <div className="absolute top-0 right-0 p-4 flex gap-2">
-                            <span className="text-[9px] font-black uppercase tracking-widest bg-blue-50 text-blue-600 px-2 py-1 rounded-lg border border-blue-100">
-                              {schedule.busType}
-                            </span>
-                          </div>
-
-                          {/* Company Header */}
-                          <div className="flex items-center gap-4 mb-6">
-                            {schedule.companyLogo ? (
-                              <Image src={schedule.companyLogo} alt={schedule.companyName} width={48} height={48} className="w-12 h-12 rounded-2xl object-cover border border-gray-100 shadow-sm" />
-                            ) : (
-                              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center text-white font-black text-xl shadow-md">
-                                {schedule.companyName.charAt(0)}
-                              </div>
-                            )}
-                            <div>
-                              <h4 className="font-black text-gray-900 leading-tight group-hover:text-blue-600 transition-colors">{schedule.companyName}</h4>
-                              <div className="flex items-center gap-1.5 mt-1">
-                                <div className="flex text-yellow-400">
-                                  {[...Array(5)].map((_, i) => <Star key={i} className="w-2.5 h-2.5 fill-current" />)}
-                                </div>
-                                <span className="text-[10px] font-bold text-gray-400">4.8 (120 reviews)</span>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Route & Terminals */}
-                          <div className="bg-gray-50/50 rounded-[2rem] p-5 mb-6 relative">
-                            <div className="flex justify-between items-start relative z-10">
-                              <div className="flex-1 min-w-0">
-                                <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-1">Departure</p>
-                                <h5 className="text-lg font-black text-gray-900 truncate mb-1">{schedule.origin}</h5>
-                                <button
-                                  onClick={() => setSelectedTerminal(schedule.departureLocation || "")}
-                                  className="flex items-center gap-1 text-[11px] font-bold text-gray-500 truncate hover:text-blue-600 transition-colors"
-                                >
-                                  <MapPin className="w-3 h-3 text-indigo-400 shrink-0" />
-                                  <span className="truncate underline decoration-dotted">{schedule.departureLocation || 'Main Terminal'}</span>
-                                </button>
-                                <div className="mt-3 flex items-center gap-2">
-                                  <div className="px-2 py-1 bg-white rounded-lg border border-gray-100 shadow-sm">
-                                    <span className="text-sm font-black text-gray-900">{schedule.departureTime}</span>
-                                  </div>
-                                </div>
-                              </div>
-
-                              <div className="flex flex-col items-center justify-center px-4 pt-8">
-                                <div className="w-px h-12 bg-gradient-to-b from-blue-200 via-indigo-200 to-transparent relative">
-                                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-6 h-6 bg-white rounded-full flex items-center justify-center border border-gray-100 shadow-sm">
-                                    <ArrowRight className="w-3 h-3 text-blue-600" />
-                                  </div>
-                                </div>
-                                <span className="text-[9px] font-black text-gray-400 uppercase tracking-tighter mt-2">{Math.floor(schedule.duration / 60)}h {schedule.duration % 60}m</span>
-                              </div>
-
-                              <div className="flex-1 min-w-0 text-right">
-                                <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-1">Arrival</p>
-                                <h5 className="text-lg font-black text-gray-900 truncate mb-1">{schedule.destination}</h5>
-                                <div className="flex items-center justify-end gap-1 text-[11px] font-bold text-gray-500 truncate">
-                                  <span className="truncate">{schedule.arrivalLocation || 'Main Terminal'}</span>
-                                  <MapPin className="w-3 h-3 text-blue-400 shrink-0" />
-                                </div>
-                                <div className="mt-3 flex items-center justify-end gap-2">
-                                  <div className="px-2 py-1 bg-white rounded-lg border border-gray-100 shadow-sm">
-                                    <span className="text-sm font-black text-gray-900">{schedule.arrivalTime}</span>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Details Bar */}
-                          <div className="grid grid-cols-2 gap-3 mb-6">
-                            <div className="flex items-center gap-2 px-3 py-2 bg-blue-50/50 rounded-xl border border-blue-100/50">
-                              <Calendar className="w-4 h-4 text-blue-600" />
-                              <div>
-                                <p className="text-[9px] font-black text-blue-400 uppercase leading-none mb-1">Travel Date</p>
-                                <p className="text-[11px] font-black text-gray-900 leading-none">
-                                  {new Date(schedule.date).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}
-                                </p>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-2 px-3 py-2 bg-indigo-50/50 rounded-xl border border-indigo-100/50">
-                              <Users className="w-4 h-4 text-indigo-600" />
-                              <div>
-                                <p className="text-[9px] font-black text-indigo-400 uppercase leading-none mb-1">Availability</p>
-                                <p className={`text-[11px] font-black leading-none ${schedule.availableSeats > 10 ? 'text-green-600' : 'text-orange-600'}`}>
-                                  {schedule.availableSeats} Seats Left
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Action Area */}
-                          <div className="mt-auto pt-4 border-t border-gray-50 flex items-center justify-between gap-4">
-                            <div>
-                              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none mb-1">Ticket Price</p>
-                              <p className="text-xl font-black text-blue-700">MWK {schedule.price.toLocaleString()}</p>
-                            </div>
-                            <Button
-                              onClick={() => handleBooking(schedule.id, schedule.companyId, schedule.routeId)}
-                              className="bg-blue-600 hover:bg-blue-700 text-white rounded-2xl px-6 py-6 shadow-lg shadow-blue-200 transition-all active:scale-95 font-black text-sm flex items-center gap-2 group/btn"
-                            >
-                              Book Now
-                              <ArrowRight className="w-4 h-4 group-hover/btn:translate-x-1 transition-transform" />
-                            </Button>
-                          </div>
-                        </div>
+                        <ScheduleCard 
+                          s={schedule as any} 
+                          userCity={userCity} 
+                          onBook={() => handleBooking(schedule.id, schedule.companyId, schedule.routeId)} 
+                        />
                       </div>
                     ))}
                   </div>
@@ -782,116 +678,12 @@ export default function SchedulesClient({
 
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                       {items.map((schedule) => (
-                        <div key={schedule.id} className="bg-white rounded-[2.5rem] p-6 border border-gray-100 shadow-sm hover:shadow-xl hover:border-blue-200 transition-all flex flex-col group relative overflow-hidden">
-                          {/* Category Badge - Repositioned to bottom left */}
-                          {/* Status Badges */}
-                          <div className="absolute top-0 right-0 p-4 flex gap-2">
-                            <span className="text-[9px] font-black uppercase tracking-widest bg-blue-50 text-blue-600 px-2 py-1 rounded-lg border border-blue-100">
-                              {schedule.busType}
-                            </span>
-                          </div>
-
-                          {/* Company Header */}
-                          <div className="flex items-center gap-4 mb-6">
-                            {schedule.companyLogo ? (
-                              <Image src={schedule.companyLogo} alt={schedule.companyName} width={48} height={48} className="w-12 h-12 rounded-2xl object-cover border border-gray-100 shadow-sm" />
-                            ) : (
-                              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center text-white font-black text-xl shadow-md">
-                                {schedule.companyName.charAt(0)}
-                              </div>
-                            )}
-                            <div>
-                              <h4 className="font-black text-gray-900 leading-tight group-hover:text-blue-600 transition-colors">{schedule.companyName}</h4>
-                              <div className="flex items-center gap-1.5 mt-1">
-                                <div className="flex text-yellow-400">
-                                  {[...Array(5)].map((_, i) => <Star key={i} className="w-2.5 h-2.5 fill-current" />)}
-                                </div>
-                                <span className="text-[10px] font-bold text-gray-400">4.8 (120 reviews)</span>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Route & Terminals */}
-                          <div className="bg-gray-50/50 rounded-[2rem] p-5 mb-6 relative">
-                            <div className="flex justify-between items-start relative z-10">
-                              <div className="flex-1 min-w-0">
-                                <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-1">Departure</p>
-                                <h5 className="text-lg font-black text-gray-900 truncate mb-1">{schedule.origin}</h5>
-                                <button
-                                  onClick={() => setSelectedTerminal(schedule.departureLocation || "")}
-                                  className="flex items-center gap-1 text-[11px] font-bold text-gray-500 truncate hover:text-blue-600 transition-colors"
-                                >
-                                  <MapPin className="w-3 h-3 text-indigo-400 shrink-0" />
-                                  <span className="truncate underline decoration-dotted">{schedule.departureLocation || 'Main Terminal'}</span>
-                                </button>
-                                <div className="mt-3 flex items-center gap-2">
-                                  <div className="px-2 py-1 bg-white rounded-lg border border-gray-100 shadow-sm">
-                                    <span className="text-sm font-black text-gray-900">{schedule.departureTime}</span>
-                                  </div>
-                                </div>
-                              </div>
-
-                              <div className="flex flex-col items-center justify-center px-4 pt-8">
-                                <div className="w-px h-12 bg-gradient-to-b from-blue-200 via-indigo-200 to-transparent relative">
-                                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-6 h-6 bg-white rounded-full flex items-center justify-center border border-gray-100 shadow-sm">
-                                    <ArrowRight className="w-3 h-3 text-blue-600" />
-                                  </div>
-                                </div>
-                                <span className="text-[9px] font-black text-gray-400 uppercase tracking-tighter mt-2">{Math.floor(schedule.duration / 60)}h {schedule.duration % 60}m</span>
-                              </div>
-
-                              <div className="flex-1 min-w-0 text-right">
-                                <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-1">Arrival</p>
-                                <h5 className="text-lg font-black text-gray-900 truncate mb-1">{schedule.destination}</h5>
-                                <div className="flex items-center justify-end gap-1 text-[11px] font-bold text-gray-500 truncate">
-                                  <span className="truncate">{schedule.arrivalLocation || 'Main Terminal'}</span>
-                                  <MapPin className="w-3 h-3 text-blue-400 shrink-0" />
-                                </div>
-                                <div className="mt-3 flex items-center justify-end gap-2">
-                                  <div className="px-2 py-1 bg-white rounded-lg border border-gray-100 shadow-sm">
-                                    <span className="text-sm font-black text-gray-900">{schedule.arrivalTime}</span>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Details Bar */}
-                          <div className="grid grid-cols-2 gap-3 mb-6">
-                            <div className="flex items-center gap-2 px-3 py-2 bg-blue-50/50 rounded-xl border border-blue-100/50">
-                              <Calendar className="w-4 h-4 text-blue-600" />
-                              <div>
-                                <p className="text-[9px] font-black text-blue-400 uppercase leading-none mb-1">Travel Date</p>
-                                <p className="text-[11px] font-black text-gray-900 leading-none">
-                                  {new Date(schedule.date).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}
-                                </p>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-2 px-3 py-2 bg-indigo-50/50 rounded-xl border border-indigo-100/50">
-                              <Users className="w-4 h-4 text-indigo-600" />
-                              <div>
-                                <p className="text-[9px] font-black text-indigo-400 uppercase leading-none mb-1">Availability</p>
-                                <p className={`text-[11px] font-black leading-none ${schedule.availableSeats > 10 ? 'text-green-600' : 'text-orange-600'}`}>
-                                  {schedule.availableSeats} Seats Left
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Action Area */}
-                          <div className="mt-auto pt-4 border-t border-gray-50 flex items-center justify-between gap-4">
-                            <div>
-                              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none mb-1">Ticket Price</p>
-                              <p className="text-xl font-black text-blue-700">MWK {schedule.price.toLocaleString()}</p>
-                            </div>
-                            <Button
-                              onClick={() => handleBooking(schedule.id, schedule.companyId, schedule.routeId)}
-                              className="bg-blue-600 hover:bg-blue-700 text-white rounded-2xl px-6 py-6 shadow-lg shadow-blue-200 transition-all active:scale-95 font-black text-sm flex items-center gap-2 group/btn"
-                            >
-                              Book Now
-                              <ArrowRight className="w-4 h-4 group-hover/btn:translate-x-1 transition-transform" />
-                            </Button>
-                          </div>
+                        <div key={schedule.id} className="snap-start shrink-0">
+                          <ScheduleCard 
+                            s={schedule as any} 
+                            userCity={userCity} 
+                            onBook={() => handleBooking(schedule.id, schedule.companyId, schedule.routeId)} 
+                          />
                         </div>
                       ))}
                     </div>

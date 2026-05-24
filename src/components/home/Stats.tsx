@@ -13,12 +13,12 @@ async function getStats() {
     return {
       totalRoutes: routes || 20,
       totalCompanies: companies || 5,
-      totalBookings: (bookings || 100) + 50, // Adding some weight for visual impact
-      avgRating: 4.8,
+      totalBookings: 0,
+      avgRating: 0.0,
     };
   } catch (error) {
     console.error("Failed to fetch home stats:", error);
-    return { totalRoutes: 20, totalCompanies: 5, totalBookings: 150, avgRating: 4.8 };
+    return { totalRoutes: 20, totalCompanies: 5, totalBookings: 0, avgRating: 0.0 };
   }
 }
 
@@ -28,7 +28,7 @@ export async function Stats() {
   const items = [
     { icon: Navigation, label: "Active Routes",     value: stats.totalRoutes,         gradient: "from-blue-500 to-cyan-500" },
     { icon: BusIcon,    label: "Partner Companies", value: stats.totalCompanies,      gradient: "from-violet-500 to-indigo-500" },
-    { icon: Users,      label: "Happy Travellers",  value: `${stats.totalBookings}+`, gradient: "from-emerald-500 to-teal-500" },
+    { icon: Users,      label: "Happy Travellers",  value: `${stats.totalBookings}`, gradient: "from-emerald-500 to-teal-500" },
     { icon: Award,      label: "Customer Rating",   value: stats.avgRating.toFixed(1), gradient: "from-amber-500 to-orange-500" },
   ];
 

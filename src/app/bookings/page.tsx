@@ -1161,8 +1161,7 @@ const BookingsPage: React.FC = () => {
                     activeFilter === key ? activeClass : 'text-gray-500 hover:text-gray-700'
                   }`}
                 >
-                  <Icon className="w-4 h-4 shrink-0" />
-                  <span className="hidden sm:inline">{label}</span>
+                  <span>{label}</span>
                   {count > 0 && (
                     <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${
                       activeFilter === key ? 'bg-gray-100' : 'bg-gray-200 text-gray-500'
