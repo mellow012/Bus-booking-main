@@ -648,7 +648,7 @@ const BookingsPage: React.FC = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [filters, setFilters] = useState<SearchFilters>({});
-  const [activeFilter, setActiveFilter] = useState('confirmed');
+  const [activeFilter, setActiveFilter] = useState('pending');
   const [showFilters, setShowFilters] = useState(false);
   const [notifications, setNotifications] = useState<string[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
@@ -1146,24 +1146,28 @@ const BookingsPage: React.FC = () => {
             </div>
 
             {/* ── Tabs ── */}
-            <div className="flex gap-1 p-1 bg-gray-100 rounded-xl">
+            <div className="flex gap-1 p-1 bg-gray-100 rounded-xl overflow-x-auto">
               {([
-                { key: 'confirmed', label: 'Confirmed',  Icon: CheckCircle, count: bookingStats.confirmed, activeClass: 'bg-white text-emerald-700 shadow-sm' },
-                { key: 'upcoming',  label: 'Upcoming',   Icon: Calendar,    count: bookingStats.upcoming,  activeClass: 'bg-white text-blue-700 shadow-sm' },
-                { key: 'cancelled', label: 'Cancelled',  Icon: XCircle,     count: bookingStats.cancelled, activeClass: 'bg-white text-red-600 shadow-sm' },
+                { key: 'pending',   label: 'Pending',    Icon: Clock,        count: bookingStats.pending,   activeClass: 'bg-white text-amber-700 shadow-sm' },
+                { key: 'confirmed', label: 'Confirmed',  Icon: CheckCircle,  count: bookingStats.confirmed, activeClass: 'bg-white text-emerald-700 shadow-sm' },
+                { key: 'upcoming',  label: 'Upcoming',   Icon: Calendar,     count: bookingStats.upcoming,  activeClass: 'bg-white text-blue-700 shadow-sm' },
+                { key: 'cancelled', label: 'Cancelled',  Icon: XCircle,      count: bookingStats.cancelled, activeClass: 'bg-white text-red-600 shadow-sm' },
+                { key: 'all',       label: 'All',        Icon: BusIcon,      count: bookingStats.all,       activeClass: 'bg-white text-gray-800 shadow-sm' },
               ] as const).map(({ key, label, Icon, count, activeClass }) => (
                 <button
                   key={key}
                   onClick={() => handleStatusFilter(key)}
-                  className={`flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 ${
+                  className={`flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 whitespace-nowrap ${
                     activeFilter === key ? activeClass : 'text-gray-500 hover:text-gray-700'
                   }`}
                 >
-                  <Icon className="w-4 h-4" />
+                  <Icon className="w-4 h-4 shrink-0" />
                   <span className="hidden sm:inline">{label}</span>
-                  <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${
-                    activeFilter === key ? 'bg-gray-100' : 'bg-gray-200 text-gray-500'
-                  }`}>{count}</span>
+                  {count > 0 && (
+                    <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${
+                      activeFilter === key ? 'bg-gray-100' : 'bg-gray-200 text-gray-500'
+                    }`}>{count}</span>
+                  )}
                 </button>
               ))}
             </div>
