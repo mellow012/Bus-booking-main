@@ -241,7 +241,7 @@ const Header: React.FC = () => {
             )}
 
             <button 
-              className="md:hidden p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all duration-300 active:scale-90" 
+              className="lg:hidden p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all duration-300 active:scale-90" 
               onClick={() => setIsMenuOpen(!isMenuOpen)}
               aria-label={isMenuOpen ? "Close menu" : "Open menu"}
             >
@@ -255,7 +255,7 @@ const Header: React.FC = () => {
       {isMenuOpen && (
         <>
           <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 lg:hidden" onClick={() => setIsMenuOpen(false)} />
-          <div className="md:hidden fixed inset-x-4 top-20 bg-white/95 glass rounded-3xl shadow-2xl z-50 max-h-[calc(100vh-120px)] overflow-y-auto animate-in fade-in zoom-in-95 duration-300">
+          <div className="lg:hidden fixed inset-x-4 top-20 bg-white/95 glass rounded-3xl shadow-2xl z-50 max-h-[calc(100vh-120px)] overflow-y-auto animate-in fade-in zoom-in-95 duration-300">
             <div className="p-6 space-y-6">
               <nav className="space-y-1">
                 {navigationItems.map(item => {
