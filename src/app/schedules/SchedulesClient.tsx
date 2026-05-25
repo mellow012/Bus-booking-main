@@ -27,6 +27,7 @@ interface EnhancedSchedule {
   availableSeats: number;
   price: number;
   duration: number;
+  distance?: number;
   date: string;
   companyLogo?: string | null;
   companyId: string;
@@ -140,6 +141,7 @@ export default function SchedulesClient({
           availableSeats: schedule.availableSeats,
           price: schedule.price,
           duration: schedule.duration || 0,
+            distance: schedule.distance ?? schedule.route?.distance ?? 0,
           date: new Date(schedule.departureDateTime).toISOString().split('T')[0],
           companyLogo: schedule.companyLogo || null,
           companyId: schedule.companyId,
@@ -450,7 +452,7 @@ export default function SchedulesClient({
               <select
                 value={selectedTerminal}
                 onChange={e => setSelectedTerminal(e.target.value)}
-                className="w-full text-sm bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500 truncate"
+                className="w-full sm:w-auto justify-self-center text-sm bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500 truncate"
               >
                 <option value="">All Terminals</option>
                 {terminals.map(t => (

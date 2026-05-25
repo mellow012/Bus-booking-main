@@ -104,6 +104,7 @@ export default async function SchedulesPage({
         availableSeats: sch.availableSeats,
         price: sch.price,
         duration: durationMin,
+        distance: route.distance || 0,
         date: dep.toISOString().split('T')[0],
         companyLogo: company.logo || null,
         companyId: sch.companyId,
