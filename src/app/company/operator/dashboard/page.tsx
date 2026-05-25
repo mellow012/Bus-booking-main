@@ -8,9 +8,14 @@ import { Company, Schedule, Route, Bus, Booking } from '@/types';
 import * as dbActions from '@/lib/actions/db.actions';
 
 import {
-  Loader2, LogOut, Navigation, MapPin, Calendar, LayoutDashboard, Menu, User, AlertTriangle, X, Users, Bus as BusIcon, TrendingUp, Clock, PlusCircle, Edit3, Settings, FileText, DollarSign, Activity, CheckCircle, XCircle
+  LogOut, Navigation, MapPin, Calendar, LayoutDashboard, Menu, User, AlertTriangle, X, Users, Bus as BusIcon, TrendingUp, Clock, PlusCircle, Edit3, Settings, FileText, DollarSign, Activity, CheckCircle, XCircle
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { SkeletonTabs, SkeletonCard } from '@/components/ui/skeleton';
+import { EmptyStateNoData, EmptyStateError } from '@/components/ui/empty-state';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { useErrorHandler } from '@/hooks/useErrorHandler';
+import { cn } from '@/lib/utils';
 
 import SchedulesTab from '@/components/scheduleTab';
 import RoutesTab from '@/components/routesTab';
@@ -37,10 +42,10 @@ export default function OperatorDashboard() {
   const { user, userProfile, loading: authLoading, signOut } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { error, handleError, clearError } = useErrorHandler();
 
   const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [loading, setLoading] = useState(true);
-  const [globalError, setGlobalError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
 
   const [dashboardData, setDashboardData] = useState<{ 
@@ -157,7 +162,7 @@ export default function OperatorDashboard() {
       });
     } catch (error: any) {
       console.error("Fetch error:", error);
-      if (!silent) setGlobalError("Operational sync interrupted.");
+      if (!silent) handleError(error, { action: 'fetch_dashboard_data', retryable: true });
     } finally {
       if (!silent) setLoading(false);
     }
@@ -175,14 +180,14 @@ export default function OperatorDashboard() {
 
       if (!result.success) throw new Error(result.error);
 
-      setGlobalError(''); // Clear error on success
+      clearError();
       await fetchInitialData(true);
       return result.data!.id;
     } catch (err: any) {
-      setGlobalError(err.message || `Failed to add ${table}`);
+      handleError(err, { action: `add_${table.toLowerCase()}`, retryable: true });
       return null;
     }
-  }, [companyId, fetchInitialData]);
+  }, [companyId, fetchInitialData, clearError, handleError]);
 
   const updateData = useCallback(<T extends keyof typeof dashboardData>(key: T, value: any) => {
     setDashboardData(prev => ({
@@ -271,7 +276,19 @@ export default function OperatorDashboard() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   if (loading || authLoading) {
-    return <div className="min-h-screen bg-gray-50 flex items-center justify-center"><Loader2 className="w-10 h-10 text-indigo-600 animate-spin" /></div>;
+    return (
+      <div className="min-h-screen bg-[#f8fafc] flex flex-col">
+        {/* Header Skeleton */}
+        <div className="h-20 border-b border-gray-100 bg-white" />
+        {/* Content Skeleton */}
+        <main className="flex-1 p-8 overflow-y-auto">
+          <SkeletonTabs />
+          <div className="mt-8">
+            <SkeletonCard rows={5} />
+          </div>
+        </main>
+      </div>
+    );
   }
 
   return (
@@ -349,11 +366,33 @@ export default function OperatorDashboard() {
         </header>
 
         <main className="flex-1 p-8 overflow-y-auto">
-          {globalError && (
-            <div className="bg-red-50 text-red-700 px-4 py-3 rounded-xl flex items-center justify-between mb-6 border border-red-100">
-              <span className="font-bold text-sm">{globalError}</span>
-              <button onClick={() => setGlobalError('')}><X className="w-4 h-4" /></button>
+          {error && (
+            <div 
+              role="alert"
+              aria-live="polite"
+              className="bg-red-50 text-red-700 px-4 py-3 rounded-xl flex items-center justify-between mb-6 border border-red-100"
+            >
+              <span className="font-bold text-sm">{error.message || 'An error occurred. Please try again.'}</span>
+              <button 
+                onClick={() => clearError()}
+                aria-label="Dismiss error message"
+                className="focus:outline-2 focus:outline-indigo-600 rounded p-1"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
+          )}
+
+          {error && error.retryable && (
+            <button
+              onClick={() => {
+                clearError();
+                fetchInitialData();
+              }}
+              className="mb-6 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors focus:outline-2 focus:outline-indigo-600"
+            >
+              Try Again
+            </button>
           )}
 
           {successMessage && (
