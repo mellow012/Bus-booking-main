@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback, useMemo, memo, ChangeEvent, Fo
 import { useRouter, useSearchParams } from 'next/navigation';
 import { sendNotification, useNotifications } from '../../contexts/NotificationContext';
 import { useAuth } from '@/contexts/AuthContext';
+import BackButton from '@/components/BackButton';
 import { Booking, Schedule, Bus, Route, Company, UserProfile, NotificationType } from '@/types';
 import {
   Bus as BusIcon, MapPin, Clock, Download, XCircle, CheckCircle, Loader2,
@@ -1153,14 +1154,12 @@ const BookingsPage: React.FC = () => {
           {success && <div className="mb-6"><AlertMessage type="success" message={success} onClose={() => setSuccess('')} /></div>}
           {error && <div className="mb-6"><AlertMessage type="error" message={error} onClose={() => setError('')} /></div>}
 
-          <div className="mb-4">
-            <button
+          <div className="mb-4 hidden md:block">
+            <BackButton
               onClick={handlePageBack}
-              className="inline-flex items-center justify-center w-10 h-10 rounded-full border border-slate-200 bg-white text-slate-700 shadow-sm hover:border-slate-300 hover:text-slate-900 transition-colors"
-              aria-label="Go back"
-            >
-              <ArrowLeft className="w-4 h-4" />
-            </button>
+              iconOnly
+              className="border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:text-slate-900"
+            />
           </div>
 
           {/* ── Header ── */}

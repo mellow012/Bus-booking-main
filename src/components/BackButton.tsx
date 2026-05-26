@@ -5,16 +5,15 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-interface BackButtonProps {
+interface BackButtonProps extends Omit<React.ComponentProps<"button">, "onClick"> {
   label?: string;
   href?: string;
   onClick?: () => void;
   iconOnly?: boolean;
-  className?: string;
   hideOnMobile?: boolean; // hide when the mobile bottom nav is visible
 }
 
-export default function BackButton({ label = "Back", href, onClick, iconOnly = false, className, hideOnMobile = true }: BackButtonProps) {
+export default function BackButton({ label = "Back", href, onClick, iconOnly = false, className, hideOnMobile = true, ...props }: BackButtonProps) {
   const router = useRouter();
 
   const handleClick = useCallback(() => {
@@ -44,6 +43,7 @@ export default function BackButton({ label = "Back", href, onClick, iconOnly = f
       aria-label={label}
       onClick={handleClick}
       className={`border-slate-300 text-slate-700 hover:border-slate-400 hover:text-slate-900 shadow-sm bg-white/95 ${hideOnMobile ? 'hidden md:inline-flex' : ''} ${iconOnly ? "rounded-full p-2" : ""} ${className ?? ""}`}
+      {...props}
     >
       <ArrowLeft className="w-4 h-4" />
       {!iconOnly && <span>{label}</span>}

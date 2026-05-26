@@ -441,7 +441,7 @@ export default function SchedulesClient({
         <div className="lg:col-span-4 space-y-6">
 
           {/* Advanced Filters */}
-          <div className="flex flex-wrap items-center gap-3 bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
+          <div className="flex flex-wrap items-center gap-3 bg-white p-4 rounded-2xl shadow-sm border border-gray-100 min-w-0">
             <div className="flex items-center gap-2">
               <Filter className="w-4 h-4 text-gray-400" />
               <span className="text-sm font-bold text-gray-900">Filters:</span>
@@ -450,7 +450,7 @@ export default function SchedulesClient({
             <select
               value={selectedCompany}
               onChange={e => setSelectedCompany(e.target.value)}
-              className="text-sm bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full max-w-[220px] sm:w-auto min-w-0 text-sm bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="">All Companies</option>
               {companies.map(c => (
@@ -461,7 +461,7 @@ export default function SchedulesClient({
             <select
               value={selectedTimeSlot}
               onChange={e => setSelectedTimeSlot(e.target.value)}
-              className="text-sm bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full max-w-[220px] sm:w-auto min-w-0 text-sm bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="">Any Time</option>
               <option value="morning">Morning (5 AM - 12 PM)</option>
@@ -472,7 +472,7 @@ export default function SchedulesClient({
             <select
               value={selectedTerminal}
               onChange={e => setSelectedTerminal(e.target.value)}
-              className="text-sm bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full max-w-[220px] sm:w-auto min-w-0 text-sm bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="">All Terminals</option>
               {terminals.map(t => (

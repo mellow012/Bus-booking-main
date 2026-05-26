@@ -6,6 +6,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Schedule, Bus, Route, Company } from "@/types";
 import SeatSelection from "@/components/SeatSelection";
 import AlertMessage from '@/components/AlertMessage';
+import BackButton from '@/components/BackButton';
 import { Button } from "@/components/ui/button";
 import Modal from "@/components/Modals";
 import { Label } from "@/components/ui/Label";
@@ -186,9 +187,11 @@ const InlinePassengerForm: React.FC<InlinePassengerFormProps> = ({
       </div>
     )}
     <div className="flex flex-col-reverse sm:flex-row gap-3 pt-2">
-      <Button variant="outline" onClick={onBack} disabled={loading} className="flex items-center gap-2 sm:flex-1">
-        <ArrowLeft className="w-4 h-4" /> Back to Seats
-      </Button>
+      <BackButton
+        type="button"
+        onClick={onBack}
+        className="flex items-center gap-2 sm:flex-1"
+      />
       <Button onClick={onSubmit} disabled={loading} className="bg-blue-600 hover:bg-blue-700 text-white sm:flex-1">
         {loading
           ? <span className="flex items-center gap-2"><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Saving…</span>
@@ -844,9 +847,11 @@ setDisplayPrice(calcSegmentPrice(
                   <CardTitle className="flex items-center gap-2">
                     <Users className="w-5 h-5" /> Passenger Details
                   </CardTitle>
-                  <Button variant="outline" onClick={goBackToSeats} className="flex items-center gap-2 w-full sm:w-auto">
-                    <ArrowLeft className="w-4 h-4" /> Back to Seats
-                  </Button>
+                  <BackButton
+                    onClick={goBackToSeats}
+                    label="Back to Seats"
+                    className="flex items-center gap-2 w-full sm:w-auto"
+                  />
                 </div>
               </CardHeader>
               <CardContent>
