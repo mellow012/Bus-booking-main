@@ -805,16 +805,6 @@ setDisplayPrice(calcSegmentPrice(
           </CardContent>
         </Card>
 
-        {/* ── Alerts ── */}
-        {error && (
-          <AlertMessage
-            type="error"
-            message={error}
-            onClose={() => setError('')}
-            scrollIntoView={true}
-            className="mb-6"
-          />
-        )}
         {success && (
           <Card className="mb-6 border-green-200 bg-green-50"><CardContent className="p-4">
             <div className="flex items-center gap-3">
@@ -823,20 +813,40 @@ setDisplayPrice(calcSegmentPrice(
             </div>
           </CardContent></Card>
         )}
+        {currentStep !== "seats" && error && (
+          <AlertMessage
+            type="error"
+            message={error}
+            onClose={() => setError('')}
+            scrollIntoView={true}
+            className="mb-6"
+          />
+        )}
 
         {/* ── Step content ── */}
         <div ref={bookingStepRef} className="space-y-6">
 
           {/* Step 1 — Seat selection */}
           {currentStep === "seats" && (
-            <SeatSelection
-              bus={bus} schedule={schedule} passengers={passengers}
-              onSeatSelection={handleSeatSelection}
-              selectedSeats={selectedSeats}
-              originStopId={originStopId}
-              destinationStopId={destinationStopId}
-              route={route}
-            />
+            <>
+              <SeatSelection
+                bus={bus} schedule={schedule} passengers={passengers}
+                onSeatSelection={handleSeatSelection}
+                selectedSeats={selectedSeats}
+                originStopId={originStopId}
+                destinationStopId={destinationStopId}
+                route={route}
+              />
+              {error && (
+                <AlertMessage
+                  type="error"
+                  message={error}
+                  onClose={() => setError('')}
+                  scrollIntoView={true}
+                  className="mt-4"
+                />
+              )}
+            </>
           )}
 
           {/* Step 2 — Passenger details */}

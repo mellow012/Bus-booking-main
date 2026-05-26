@@ -324,13 +324,6 @@ export default function Register() {
           <h1 className="mt-6 text-center text-4xl font-extrabold text-gray-900 tracking-tight">
             {t('title')}
           </h1>
-          <p className="mt-2 text-center text-sm text-gray-600">
-            {t('alreadyHaveAccount')}{' '}
-            <Link href="/login"
-              className="font-medium text-blue-600 hover:text-blue-500 focus:outline-none focus:underline transition-colors duration-200">
-              {t('signIn')}
-            </Link>
-          </p>
         </div>
 
         <div className={`mt-8 sm:mx-auto sm:w-full sm:max-w-md ${isSubmitting ? 'hidden' : ''}`}>

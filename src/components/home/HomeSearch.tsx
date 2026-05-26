@@ -143,15 +143,37 @@ export default function HomeSearch() {
             </div>
             <div className="col-span-1">
               <label htmlFor="date-input" className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5 ml-1">Date</label>
-              <div className="relative">
-                <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"/>
-                <input 
-                  type="date" 
-                  id="date-input"
-                  value={search.date} 
-                  onChange={e => setSearch(p => ({ ...p, date: e.target.value }))} 
-                  className="w-full pl-9 pr-3 h-11 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500"
-                />
+              <div className="space-y-2">
+                <div className="relative">
+                  <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"/>
+                  <input 
+                    type="date" 
+                    id="date-input"
+                    value={search.date} 
+                    onChange={e => setSearch(p => ({ ...p, date: e.target.value }))} 
+                    className="w-full pl-9 pr-3 h-11 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div className="flex gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setSearch(p => ({ ...p, date: new Date().toISOString().split('T')[0] }))}
+                    className="flex-1 text-xs font-bold bg-gray-100 text-gray-700 hover:bg-blue-100 hover:text-blue-700 py-2 rounded-lg transition-colors"
+                  >
+                    Today
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const tomorrow = new Date();
+                      tomorrow.setDate(tomorrow.getDate() + 1);
+                      setSearch(p => ({ ...p, date: tomorrow.toISOString().split('T')[0] }));
+                    }}
+                    className="flex-1 text-xs font-bold bg-gray-100 text-gray-700 hover:bg-blue-100 hover:text-blue-700 py-2 rounded-lg transition-colors"
+                  >
+                    Tomorrow
+                  </button>
+                </div>
               </div>
             </div>
             <div className="col-span-1">

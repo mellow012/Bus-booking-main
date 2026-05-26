@@ -72,6 +72,7 @@ export default function SchedulesClient({
   const [selectedTimeSlot, setSelectedTimeSlot] = useState("");
   const [selectedTerminal, setSelectedTerminal] = useState(searchParams.get('terminal') || "");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [showFilters, setShowFilters] = useState(false);
 
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
@@ -81,6 +82,7 @@ export default function SchedulesClient({
   const [userCity, setUserCity] = useState<string | null>(null);
   const todayDate = new Date().toISOString().split('T')[0];
   const isFutureDateSearch = Boolean(searchDate && searchDate > todayDate);
+  const hasActiveSearch = Boolean(searchFrom || searchTo || searchDate);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -380,7 +382,7 @@ export default function SchedulesClient({
             </div>
           </div>
 
-          <div className="bg-white rounded-2xl shadow-2xl p-4 sm:p-6 w-full max-w-5xl mx-auto transform translate-y-12">
+          <div className="bg-white rounded-2xl shadow-2xl p-4 sm:p-6 w-full max-w-5xl mx-auto mt-12">
             <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-5 gap-4">
               <div className="col-span-1 md:col-span-2 lg:col-span-1">
                 <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">From</label>
@@ -408,9 +410,29 @@ export default function SchedulesClient({
               </div>
               <div className="col-span-1 lg:col-span-1">
                 <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">Date</label>
-                <div className="relative">
-                  <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  <input type="date" value={searchDate} onChange={e => setSearchDate(e.target.value)} min={new Date().toISOString().split('T')[0]} className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-gray-900" placeholder="Any date" />
+                <div className="space-y-2">
+                  <div className="relative">
+                    <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                    <input type="date" value={searchDate} onChange={e => setSearchDate(e.target.value)} min={new Date().toISOString().split('T')[0]} className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-gray-900" placeholder="Any date" />
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setSearchDate(new Date().toISOString().split('T')[0])}
+                      className="flex-1 text-xs font-bold bg-gray-100 text-gray-700 hover:bg-blue-100 hover:text-blue-700 py-2 rounded-lg transition-colors"
+                    >
+                      Today
+                    </button>
+                    <button
+                      onClick={() => {
+                        const tomorrow = new Date();
+                        tomorrow.setDate(tomorrow.getDate() + 1);
+                        setSearchDate(tomorrow.toISOString().split('T')[0]);
+                      }}
+                      className="flex-1 text-xs font-bold bg-gray-100 text-gray-700 hover:bg-blue-100 hover:text-blue-700 py-2 rounded-lg transition-colors"
+                    >
+                      Tomorrow
+                    </button>
+                  </div>
                 </div>
               </div>
               <div className="col-span-1 lg:col-span-1">
@@ -423,15 +445,12 @@ export default function SchedulesClient({
               <div className="col-span-1 md:col-span-4 lg:col-span-1 flex items-end">
                 <button
                   onClick={handleSearch}
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl font-bold flex items-center justify-center transition-colors shadow-lg shadow-blue-200"
+                  className="w-full bg-blue-600 hover:bg-blue-700 active:scale-[0.98] active:shadow-inner active:bg-blue-800 text-white py-3 rounded-xl font-bold flex items-center justify-center transition duration-150 shadow-lg shadow-blue-200"
                 >
                   <Search className="w-5 h-5 mr-2" /> Search
                 </button>
               </div>
             </div>
-          </div>
-          <div className="max-w-5xl mx-auto mt-6">
-            <p className="text-blue-200 text-center text-lg">Browse available bus schedules and book instantly.</p>
           </div>
         </div>
       </div>
@@ -441,67 +460,82 @@ export default function SchedulesClient({
         <div className="lg:col-span-4 space-y-6">
 
           {/* Advanced Filters */}
-          <div className="flex flex-wrap items-center gap-3 bg-white p-4 rounded-2xl shadow-sm border border-gray-100 min-w-0">
-            <div className="flex items-center gap-2">
-              <Filter className="w-4 h-4 text-gray-400" />
-              <span className="text-sm font-bold text-gray-900">Filters:</span>
+          {hasActiveSearch && (
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <span className="text-sm font-semibold text-gray-700">Showing {filteredSchedules.length} results</span>
+              <button
+                onClick={() => setShowFilters(prev => !prev)}
+                className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-700 shadow-sm hover:bg-gray-50 transition"
+              >
+                <Filter className="w-4 h-4" />
+                {showFilters ? 'Hide filters' : 'Show filters'}
+              </button>
             </div>
+          )}
 
-            <select
-              value={selectedCompany}
-              onChange={e => setSelectedCompany(e.target.value)}
-              className="w-full max-w-[220px] sm:w-auto min-w-0 text-sm bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">All Companies</option>
-              {companies.map(c => (
-                <option key={c.id} value={c.name}>{c.name}</option>
-              ))}
-            </select>
+          {(!hasActiveSearch || showFilters) && (
+            <div className="flex flex-wrap items-center gap-3 bg-white p-4 rounded-2xl shadow-sm border border-gray-100 min-w-0">
+              <div className="flex items-center gap-2">
+                <Filter className="w-4 h-4 text-gray-400" />
+                <span className="text-sm font-bold text-gray-900">Filters:</span>
+              </div>
 
-            <select
-              value={selectedTimeSlot}
-              onChange={e => setSelectedTimeSlot(e.target.value)}
-              className="w-full max-w-[220px] sm:w-auto min-w-0 text-sm bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">Any Time</option>
-              <option value="morning">Morning (5 AM - 12 PM)</option>
-              <option value="afternoon">Afternoon (12 PM - 5 PM)</option>
-              <option value="evening">Evening (5 PM - 9 PM)</option>
-            </select>
+              <select
+                value={selectedCompany}
+                onChange={e => setSelectedCompany(e.target.value)}
+                className="w-full max-w-[220px] sm:w-auto min-w-0 text-sm bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">All Companies</option>
+                {companies.map(c => (
+                  <option key={c.id} value={c.name}>{c.name}</option>
+                ))}
+              </select>
 
-            <select
-              value={selectedTerminal}
-              onChange={e => setSelectedTerminal(e.target.value)}
-              className="w-full max-w-[220px] sm:w-auto min-w-0 text-sm bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">All Terminals</option>
-              {terminals.map(t => (
-                <option key={t.name} value={t.name}>{t.name} ({t.city})</option>
-              ))}
-            </select>
+              <select
+                value={selectedTimeSlot}
+                onChange={e => setSelectedTimeSlot(e.target.value)}
+                className="w-full max-w-[220px] sm:w-auto min-w-0 text-sm bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">Any Time</option>
+                <option value="morning">Morning (5 AM - 12 PM)</option>
+                <option value="afternoon">Afternoon (12 PM - 5 PM)</option>
+                <option value="evening">Evening (5 PM - 9 PM)</option>
+              </select>
 
-            <div className="h-6 w-px bg-gray-200 mx-2 hidden sm:block" />
+              <select
+                value={selectedTerminal}
+                onChange={e => setSelectedTerminal(e.target.value)}
+                className="w-full max-w-[220px] sm:w-auto min-w-0 text-sm bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">All Terminals</option>
+                {terminals.map(t => (
+                  <option key={t.name} value={t.name}>{t.name} ({t.city})</option>
+                ))}
+              </select>
 
-            <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
-              {[
-                { id: 'all', label: 'All' },
-                { id: 'today', label: 'Today' },
-                { id: 'economy', label: 'Economy' },
-                { id: 'luxury', label: 'Luxury/VIP' }
-              ].map(f => (
-                <button
-                  key={f.id}
-                  onClick={() => setActiveFilter(f.id)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-colors ${activeFilter === f.id
-                    ? 'bg-blue-600 text-white shadow-md'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                    }`}
-                >
-                  {f.label}
-                </button>
-              ))}
+              <div className="h-6 w-px bg-gray-200 mx-2 hidden sm:block" />
+
+              <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
+                {[
+                  { id: 'all', label: 'All' },
+                  { id: 'today', label: 'Today' },
+                  { id: 'economy', label: 'Economy' },
+                  { id: 'luxury', label: 'Luxury/VIP' }
+                ].map(f => (
+                  <button
+                    key={f.id}
+                    onClick={() => setActiveFilter(f.id)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-colors ${activeFilter === f.id
+                      ? 'bg-blue-600 text-white shadow-md'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      }`}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Popular Routes Section */}
           {popularRoutes.length > 0 && !searchFrom && !searchTo && (
