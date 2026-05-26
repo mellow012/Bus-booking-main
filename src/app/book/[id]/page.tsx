@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useSearchParams, useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { Schedule, Bus, Route, Company } from "@/types";
 import SeatSelection from "@/components/SeatSelection";
+import AlertMessage from '@/components/AlertMessage';
 import { Button } from "@/components/ui/button";
 import Modal from "@/components/Modals";
 import { Label } from "@/components/ui/Label";
@@ -115,9 +116,9 @@ interface InlinePassengerFormProps {
 const InlinePassengerForm: React.FC<InlinePassengerFormProps> = ({
   passengers, formState, onChange, onAgeBlur, onSubmit, onBack, loading, error,
 }) => (
-  <div className="space-y-5">
+  <div className="space-y-5 min-w-0">
     {formState.map((p, i) => (
-      <div key={i} className="p-4 border border-gray-200 rounded-xl bg-white space-y-4">
+      <div key={i} className="p-4 border border-gray-200 rounded-xl bg-white space-y-4 min-w-0">
         <div className="flex items-center gap-2 mb-1">
           <span className="w-7 h-7 rounded-full bg-blue-600 text-white text-xs font-bold flex items-center justify-center shrink-0">
             {i + 1}
@@ -133,7 +134,7 @@ const InlinePassengerForm: React.FC<InlinePassengerFormProps> = ({
           <Input
             id={`name-${i}`} value={p.name}
             onChange={e => onChange(i, "name", e.target.value)}
-            placeholder="e.g. Chisomo Banda" className="h-10" required
+            placeholder="e.g. Chisomo Banda" className="h-10 min-w-0" required
           />
         </div>
         <div className="grid grid-cols-2 gap-4">
@@ -146,7 +147,7 @@ const InlinePassengerForm: React.FC<InlinePassengerFormProps> = ({
               value={p.ageInput}
               onChange={e => onChange(i, "ageInput", e.target.value.replace(/\D/g, ""))}
               onBlur={() => onAgeBlur(i)}
-              placeholder="e.g. 28" className="h-10" required
+              placeholder="e.g. 28" className="h-10 min-w-0" required
             />
           </div>
           <div>
@@ -156,7 +157,7 @@ const InlinePassengerForm: React.FC<InlinePassengerFormProps> = ({
             <select
               id={`gender-${i}`} value={p.gender}
               onChange={e => onChange(i, "gender", e.target.value)}
-              className="w-full h-10 px-3 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 bg-white"
+              className="w-full h-10 px-3 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 bg-white min-w-0"
               required
             >
               <option value="male">Male</option>
@@ -218,6 +219,7 @@ export default function BookBus() {
   const [passengerForms,   setPassengerForms]   = useState<PassengerFormState[]>([]);
   const [currentStep,      setCurrentStep]      = useState<"seats" | "passengers" | "confirm">("seats");
   const [reservationId,    setReservationId]    = useState<string | null>(null);
+  const bookingStepRef = useRef<HTMLDivElement | null>(null);
 
   // PAY-2: Server-confirmed booking values — never trust client-calculated price
   const [confirmedBookingId,     setConfirmedBookingId]     = useState<string | null>(null);
@@ -531,6 +533,11 @@ setDisplayPrice(calcSegmentPrice(
     proceedToConfirm();
   }, [passengerForms, passengers, proceedToConfirm]);
 
+  useEffect(() => {
+    if (!bookingStepRef.current) return;
+    bookingStepRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [currentStep]);
+
   // ── confirmBooking — PAY-2 fix ─────────────────────────────────────────────
   // Previously this wrote totalAmount: calculatedPrice * passengers directly
   // to Firestore from the client. A buyer could manipulate calculatedPrice
@@ -746,15 +753,15 @@ setDisplayPrice(calcSegmentPrice(
                 </div>
               </div>
               {originStopId && destinationStopId && displayPrice > 0 && (
-                <div className="mt-4 p-3 bg-blue-50 border border-blue-100 rounded-lg flex items-center justify-between gap-2 text-sm text-blue-800">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-green-500" />
-                    <span className="font-medium">{stopName(originStopId)}</span>
+                <div className="mt-4 p-3 bg-blue-50 border border-blue-100 rounded-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-sm text-blue-800">
+                  <div className="flex items-center gap-2 flex-wrap min-w-0">
+                    <span className="w-2 h-2 rounded-full bg-green-500 flex-shrink-0" />
+                    <span className="font-medium min-w-0 break-words">{stopName(originStopId)}</span>
                     <ArrowRight className="w-3.5 h-3.5" />
-                    <span className="w-2 h-2 rounded-full bg-red-500" />
-                    <span className="font-medium">{stopName(destinationStopId)}</span>
+                    <span className="w-2 h-2 rounded-full bg-red-500 flex-shrink-0" />
+                    <span className="font-medium min-w-0 break-words">{stopName(destinationStopId)}</span>
                   </div>
-                  <span className="font-bold text-blue-700 shrink-0">
+                  <span className="font-bold text-blue-700 shrink-0 mt-2 sm:mt-0">
                     ~MWK {displayPrice.toLocaleString()} / person
                   </span>
                 </div>
@@ -797,12 +804,13 @@ setDisplayPrice(calcSegmentPrice(
 
         {/* ── Alerts ── */}
         {error && (
-          <Card className="mb-6 border-red-200 bg-red-50"><CardContent className="p-4">
-            <div className="flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
-              <p className="text-red-700 whitespace-pre-wrap font-medium text-sm">{error}</p>
-            </div>
-          </CardContent></Card>
+          <AlertMessage
+            type="error"
+            message={error}
+            onClose={() => setError('')}
+            scrollIntoView={true}
+            className="mb-6"
+          />
         )}
         {success && (
           <Card className="mb-6 border-green-200 bg-green-50"><CardContent className="p-4">
@@ -814,7 +822,7 @@ setDisplayPrice(calcSegmentPrice(
         )}
 
         {/* ── Step content ── */}
-        <div className="space-y-6">
+        <div ref={bookingStepRef} className="space-y-6">
 
           {/* Step 1 — Seat selection */}
           {currentStep === "seats" && (

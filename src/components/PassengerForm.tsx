@@ -219,6 +219,7 @@ export default function PassengerForm({
           <form onSubmit={handleSubmit} className="space-y-6">
             {details.map((passenger, index) => (
               <div key={index} className="space-y-4 p-4 border rounded-xl bg-gray-50">
+                <div key={index} className="space-y-4 p-4 border rounded-xl bg-gray-50 min-w-0">
                 <div className="flex items-center justify-between">
                   <h3 className="font-semibold text-gray-800 flex items-center gap-2">
                     <span className="w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-bold flex items-center justify-center">
@@ -242,7 +243,7 @@ export default function PassengerForm({
                       value={passenger.name}
                       onChange={e => handleChange(index, 'name', e.target.value)}
                       placeholder="e.g. Chisomo Banda"
-                      className={getError(index, 'name') ? 'border-red-500 focus:ring-red-500' : ''}
+                      className={(getError(index, 'name') ? 'border-red-500 focus:ring-red-500' : '') + ' min-w-0'}
                       required
                       disabled={loading}
                     />
@@ -341,7 +342,7 @@ export default function PassengerForm({
             <Button variant="outline" onClick={() => setIsConfirmModalOpen(false)}>Cancel</Button>
             <Button className="bg-blue-600 hover:bg-blue-700 text-white" onClick={handleConfirmSubmit}>
               Yes, Continue
-            </Button>
+                      onChange={e => handleChange(index, 'ageInput', e.target.value.replace(/\D/g, ''))}
           </div>
         </div>
       </Modal>

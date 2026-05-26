@@ -8,7 +8,7 @@ import { Booking, Schedule, Bus, Route, Company, UserProfile, NotificationType }
 import {
   Bus as BusIcon, MapPin, Clock, Download, XCircle, CheckCircle, Loader2,
   Search, CreditCard, Armchair, Bell, AlertTriangle, Calendar, Users,
-  RefreshCw, Zap, Shield, Smartphone, ArrowRight, Trash2,
+  RefreshCw, Zap, Shield, Smartphone, ArrowRight, ArrowLeft, Trash2,
   ChevronRight, Building2, Wallet,
 } from 'lucide-react';
 import Modal from '../../components/Modals';
@@ -648,9 +648,9 @@ const BookingsPage: React.FC = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [filters, setFilters] = useState<SearchFilters>({});
-  const [activeFilter, setActiveFilter] = useState('pending');
+  const [activeFilter, setActiveFilter] = useState('all');
   const [showFilters, setShowFilters] = useState(false);
-  const [notifications, setNotifications] = useState<string[]>([]);
+  const [toastNotifications, setToastNotifications] = useState<string[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const bookingsPerPage = 5;
 
@@ -1023,6 +1023,33 @@ const BookingsPage: React.FC = () => {
     finally { setActionLoading(null); }
   }, [fetchBookings, user]);
 
+  const handlePageBack = useCallback(() => {
+    const canGoBack = typeof window !== 'undefined' && window.history.state && typeof window.history.state.idx === 'number' && window.history.state.idx > 0;
+    if (canGoBack) {
+      router.back();
+    } else {
+      router.push('/schedules');
+    }
+  }, [router]);
+
+  const { notifications: ctxNotifications } = useNotifications();
+  const lastNotificationIdsRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!ctxNotifications) return;
+
+    const relevantTypes = new Set([
+      'booking', 'payment', 'trip_update', 'cancellation', 'cancellation_requested',
+    ]);
+
+    const newNotifications = ctxNotifications.filter((n) => !lastNotificationIdsRef.current.has(n.id));
+    lastNotificationIdsRef.current = new Set(ctxNotifications.map((n) => n.id));
+
+    if (newNotifications.length === 0) return;
+    const relevant = newNotifications.some((n) => relevantTypes.has(n.type as string));
+    if (relevant) fetchBookings();
+  }, [ctxNotifications, fetchBookings]);
+
   const bookingStats = useMemo(() => {
     const now = new Date();
     return {
@@ -1109,15 +1136,15 @@ const BookingsPage: React.FC = () => {
   return (
     <ErrorBoundary>
       <div className="min-h-screen overflow-x-hidden bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-32 pb-8 w-full">
 
-          {notifications.length > 0 && (
+          {toastNotifications.length > 0 && (
             <div className="fixed top-4 right-4 left-4 sm:left-auto z-50 space-y-2">
-              {notifications.map((n, i) => (
+              {toastNotifications.map((n, i) => (
                 <div key={i} className="bg-emerald-500 text-white p-4 rounded-lg shadow-lg w-full sm:w-auto sm:max-w-sm flex items-start gap-3">
                   <Bell className="w-5 h-5 mt-0.5 shrink-0" />
                   <div><p className="font-medium text-sm">Booking Update</p><p className="text-xs opacity-90 mt-1">{n}</p></div>
-                  <button onClick={() => setNotifications((p) => p.filter((_, j) => j !== i))} className="ml-auto text-white/80 hover:text-white"><XCircle className="w-4 h-4" /></button>
+                  <button onClick={() => setToastNotifications((p) => p.filter((_, j) => j !== i))} className="ml-auto text-white/80 hover:text-white"><XCircle className="w-4 h-4" /></button>
                 </div>
               ))}
             </div>
@@ -1126,12 +1153,24 @@ const BookingsPage: React.FC = () => {
           {success && <div className="mb-6"><AlertMessage type="success" message={success} onClose={() => setSuccess('')} /></div>}
           {error && <div className="mb-6"><AlertMessage type="error" message={error} onClose={() => setError('')} /></div>}
 
+          <div className="mb-4">
+            <button
+              onClick={handlePageBack}
+              className="inline-flex items-center justify-center w-10 h-10 rounded-full border border-slate-200 bg-white text-slate-700 shadow-sm hover:border-slate-300 hover:text-slate-900 transition-colors"
+              aria-label="Go back"
+            >
+              <ArrowLeft className="w-4 h-4" />
+            </button>
+          </div>
+
           {/* ── Header ── */}
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 mb-6">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-5">
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900 mb-0.5">My Bookings</h1>
-                <p className="text-sm text-gray-500">Manage and track your bus ticket bookings</p>
+              <div className="flex flex-col sm:flex-row sm:items-center sm:gap-3">
+                <div>
+                  <h1 className="text-2xl font-bold text-gray-900 mb-0.5">My Bookings</h1>
+                  <p className="text-sm text-gray-500">Manage and track your bus ticket bookings</p>
+                </div>
               </div>
               <div className="flex flex-wrap sm:flex-nowrap gap-2 w-full sm:w-auto">
                 <button onClick={() => fetchBookings()} disabled={loading}
@@ -1148,11 +1187,11 @@ const BookingsPage: React.FC = () => {
             {/* ── Tabs ── */}
             <div className="flex gap-1 p-1 bg-gray-100 rounded-xl overflow-x-auto w-full">
               {([
+                { key: 'all',       label: 'All',        Icon: BusIcon,      count: bookingStats.all,       activeClass: 'bg-white text-gray-800 shadow-sm' },
                 { key: 'pending',   label: 'Pending',    Icon: Clock,        count: bookingStats.pending,   activeClass: 'bg-white text-amber-700 shadow-sm' },
                 { key: 'confirmed', label: 'Confirmed',  Icon: CheckCircle,  count: bookingStats.confirmed, activeClass: 'bg-white text-emerald-700 shadow-sm' },
                 { key: 'upcoming',  label: 'Upcoming',   Icon: Calendar,     count: bookingStats.upcoming,  activeClass: 'bg-white text-blue-700 shadow-sm' },
                 { key: 'cancelled', label: 'Cancelled',  Icon: XCircle,      count: bookingStats.cancelled, activeClass: 'bg-white text-red-600 shadow-sm' },
-                { key: 'all',       label: 'All',        Icon: BusIcon,      count: bookingStats.all,       activeClass: 'bg-white text-gray-800 shadow-sm' },
               ] as const).map(({ key, label, Icon, count, activeClass }) => (
                 <button
                   key={key}

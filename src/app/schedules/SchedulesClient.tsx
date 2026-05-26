@@ -8,6 +8,7 @@ import {
   Filter, AlertCircle, RefreshCw, Zap, TrendingUp, Loader2, ArrowRight, User, Star, X, ChevronLeft, ChevronRight
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import BackButton from "@/components/BackButton";
 import { LocationAutocomplete } from "@/components/LocationAutocomplete";
 import { MALAWI_CITIES, getScheduleCategory } from "@/utils/homeHelpers";
 import { useNotifications } from "@/contexts/NotificationContext";
@@ -27,7 +28,6 @@ interface EnhancedSchedule {
   availableSeats: number;
   price: number;
   duration: number;
-  distance?: number;
   date: string;
   companyLogo?: string | null;
   companyId: string;
@@ -79,6 +79,8 @@ export default function SchedulesClient({
 
   const [popularRoutes, setPopularRoutes] = useState<any[]>([]);
   const [userCity, setUserCity] = useState<string | null>(null);
+  const todayDate = new Date().toISOString().split('T')[0];
+  const isFutureDateSearch = Boolean(searchDate && searchDate > todayDate);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -141,7 +143,6 @@ export default function SchedulesClient({
           availableSeats: schedule.availableSeats,
           price: schedule.price,
           duration: schedule.duration || 0,
-            distance: schedule.distance ?? schedule.route?.distance ?? 0,
           date: new Date(schedule.departureDateTime).toISOString().split('T')[0],
           companyLogo: schedule.companyLogo || null,
           companyId: schedule.companyId,
@@ -220,6 +221,15 @@ export default function SchedulesClient({
     return Array.from(termMap.values()).sort((a, b) => b.count - a.count);
   }, [schedules]);
 
+  const handleGoBack = () => {
+    const canGoBack = typeof window !== 'undefined' && window.history.state && typeof window.history.state.idx === 'number' && window.history.state.idx > 0;
+    if (canGoBack) {
+      router.back();
+    } else {
+      router.push('/');
+    }
+  };
+
   const handleBooking = (scheduleId: string, companyId: string, routeId: string) => {
     const bookingUrl = `/book/${scheduleId}?companyId=${companyId}&routeId=${routeId}&passengers=${passengers}`;
     
@@ -247,16 +257,13 @@ export default function SchedulesClient({
       filtered = filtered.filter(s => s.date === searchDate);
     }
 
-    // Limit to next 7 days by default if no active search input
+    // Limit to today and tomorrow by default if no active search input
     if (!searchFrom && !searchTo && !searchDate) {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const nextWeek = new Date(today);
-      nextWeek.setDate(today.getDate() + 7);
-      filtered = filtered.filter(s => {
-        const scheduleDate = new Date(s.date + 'T00:00:00');
-        return scheduleDate >= today && scheduleDate <= nextWeek;
-      });
+      const todayStr = new Date().toISOString().split('T')[0];
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const tomorrowStr = tomorrow.toISOString().split('T')[0];
+      filtered = filtered.filter(s => s.date === todayStr || s.date === tomorrowStr);
     }
 
     // Apply Quick Filters
@@ -357,7 +364,19 @@ export default function SchedulesClient({
               <h1 className="text-3xl sm:text-4xl font-extrabold font-display tracking-tight">
                 Find Your Next Journey
               </h1>
-              <p className="text-blue-200 mt-2 text-lg">Browse available bus schedules and book instantly.</p>
+            </div>
+          </div>
+          <div className="mt-4 flex items-start">
+            <BackButton onClick={handleGoBack} iconOnly className="border-white/25 text-white hover:bg-white/15" />
+          </div>
+
+          <div className="max-w-7xl mx-auto mt-4">
+            <div className="text-sm text-blue-100 text-center">
+              {!searchDate ? (
+                <span>Select a date and route to discover available departures.</span>
+              ) : (
+                <span>Showing schedules for <strong>{new Date(searchDate).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}</strong>.</span>
+              )}
             </div>
           </div>
 
@@ -411,58 +430,59 @@ export default function SchedulesClient({
               </div>
             </div>
           </div>
+          <div className="max-w-5xl mx-auto mt-6">
+            <p className="text-blue-200 text-center text-lg">Browse available bus schedules and book instantly.</p>
+          </div>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-16 pt-4">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-32 pb-8">
         {/* ─── Main Feed: Filters & Schedules ───────────────────────────── */}
         <div className="lg:col-span-4 space-y-6">
 
           {/* Advanced Filters */}
-          <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 space-y-4">
-            <div className="flex items-center gap-2 mb-2">
+          <div className="flex flex-wrap items-center gap-3 bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
+            <div className="flex items-center gap-2">
               <Filter className="w-4 h-4 text-gray-400" />
               <span className="text-sm font-bold text-gray-900">Filters:</span>
             </div>
 
-            {/* Primary Filters Row */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-              <select
-                value={selectedCompany}
-                onChange={e => setSelectedCompany(e.target.value)}
-                className="w-full text-sm bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">All Companies</option>
-                {companies.map(c => (
-                  <option key={c.id} value={c.name}>{c.name}</option>
-                ))}
-              </select>
+            <select
+              value={selectedCompany}
+              onChange={e => setSelectedCompany(e.target.value)}
+              className="text-sm bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">All Companies</option>
+              {companies.map(c => (
+                <option key={c.id} value={c.name}>{c.name}</option>
+              ))}
+            </select>
 
-              <select
-                value={selectedTimeSlot}
-                onChange={e => setSelectedTimeSlot(e.target.value)}
-                className="w-full text-sm bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">Any Time</option>
-                <option value="morning">Morning (5 AM - 12 PM)</option>
-                <option value="afternoon">Afternoon (12 PM - 5 PM)</option>
-                <option value="evening">Evening (5 PM - 9 PM)</option>
-              </select>
+            <select
+              value={selectedTimeSlot}
+              onChange={e => setSelectedTimeSlot(e.target.value)}
+              className="text-sm bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Any Time</option>
+              <option value="morning">Morning (5 AM - 12 PM)</option>
+              <option value="afternoon">Afternoon (12 PM - 5 PM)</option>
+              <option value="evening">Evening (5 PM - 9 PM)</option>
+            </select>
 
-              <select
-                value={selectedTerminal}
-                onChange={e => setSelectedTerminal(e.target.value)}
-                className="w-full sm:w-auto justify-self-center text-sm bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500 truncate"
-              >
-                <option value="">All Terminals</option>
-                {terminals.map(t => (
-                  <option key={t.name} value={t.name}>{t.name} ({t.city})</option>
-                ))}
-              </select>
-            </div>
+            <select
+              value={selectedTerminal}
+              onChange={e => setSelectedTerminal(e.target.value)}
+              className="text-sm bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">All Terminals</option>
+              {terminals.map(t => (
+                <option key={t.name} value={t.name}>{t.name} ({t.city})</option>
+              ))}
+            </select>
 
-            {/* Quick Filter Buttons */}
-            <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pt-2">
+            <div className="h-6 w-px bg-gray-200 mx-2 hidden sm:block" />
+
+            <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
               {[
                 { id: 'all', label: 'All' },
                 { id: 'today', label: 'Today' },
@@ -472,7 +492,7 @@ export default function SchedulesClient({
                 <button
                   key={f.id}
                   onClick={() => setActiveFilter(f.id)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-colors flex-shrink-0 ${activeFilter === f.id
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-colors ${activeFilter === f.id
                     ? 'bg-blue-600 text-white shadow-md'
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                     }`}
@@ -563,15 +583,15 @@ export default function SchedulesClient({
 
 
           {/* Sorting Header */}
-          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
-            <div className="flex flex-wrap items-center gap-3">
+          <div className="flex justify-between items-center bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
+            <div className="flex items-center gap-4">
               <span className="text-sm font-bold text-gray-900">{filteredSchedules.length} schedules found</span>
               {selectedTerminal && (
                 <button
                   onClick={() => setSelectedTerminal("")}
-                  className="text-xs bg-blue-50 text-blue-600 px-3 py-1 rounded-full font-bold flex items-center gap-1 hover:bg-blue-100 transition-colors whitespace-nowrap overflow-hidden text-ellipsis"
+                  className="text-xs bg-blue-50 text-blue-600 px-3 py-1 rounded-full font-bold flex items-center gap-1 hover:bg-blue-100 transition-colors"
                 >
-                  Terminal: {selectedTerminal} <X className="w-3 h-3 flex-shrink-0" />
+                  Terminal: {selectedTerminal} <X className="w-3 h-3" />
                 </button>
               )}
             </div>
@@ -623,8 +643,12 @@ export default function SchedulesClient({
                 <BusIcon className="w-10 h-10 text-gray-400" />
               </div>
               <h3 className="text-xl font-bold text-gray-900 mb-2">No buses found</h3>
-              <p className="text-gray-500">Try adjusting your filters or search criteria.</p>
-              <button onClick={() => { setSearchFrom(""); setSearchTo(""); setActiveFilter("all"); }} className="mt-6 text-blue-600 font-bold hover:underline">Clear all filters</button>
+              <p className="text-gray-500">
+                {isFutureDateSearch
+                  ? `No schedules are available for ${new Date(searchDate).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}.`
+                  : 'Try adjusting your filters or search criteria.'}
+              </p>
+              <button onClick={() => { setSearchFrom(""); setSearchTo(""); setSearchDate(""); setActiveFilter("all"); }} className="mt-6 text-blue-600 font-bold hover:underline">Clear all filters</button>
             </div>
           ) : (
             <div className="space-y-12">

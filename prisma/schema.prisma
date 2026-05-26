@@ -41,6 +41,36 @@ model User {
   sentMessages     ChatMessage[]
 }
 
+model Operator {
+  id                    String      @id @default(uuid())
+  uid                   String      @unique
+  companyId             String
+  companyName           String
+  email                 String      @unique
+  name                  String
+  role                  String      @default("operator")
+  status                String      @default("active")
+  region                String?
+  
+  invitationSent        Boolean     @default(false)
+  invitationSentAt      DateTime?
+  signupCompletedAt     DateTime?
+  
+  createdBy             String?
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
+  
+  company               Company     @relation(fields: [companyId], references: [id])
+  routes                Route[]     @relation("OperatorRoutes")
+  schedules             Schedule[]  @relation("OperatorSchedules")
+  buses                 Bus[]       @relation("OperatorBuses")
+
+  @@index([companyId])
+  @@index([status])
+  @@index([role])
+  @@index([uid])
+}
+
 model Company {
   id                   String             @id @default(uuid())
   name                 String
@@ -72,6 +102,7 @@ model Company {
   charterQuotes        GroupCharterQuote[]
   staff                User[]             @relation("CompanyStaff")
   conversations        Conversation[]
+  operators            Operator[]
 
   @@index([status])
 }
@@ -95,6 +126,7 @@ model Bus {
   nextMaintenanceDate DateTime?
   conductorIds        String[]           @default([])
   company             Company            @relation(fields: [companyId], references: [id])
+  conductors          Operator[]         @relation("OperatorBuses")
   schedules           Schedule[]
   scheduleTemplates   ScheduleTemplate[]
 }
@@ -118,6 +150,7 @@ model Route {
   updatedAt           DateTime           @updatedAt
   groupRequests       GroupRequest[]
   company             Company            @relation(fields: [companyId], references: [id])
+  operators           Operator[]         @relation("OperatorRoutes")
   schedules           Schedule[]
   scheduleTemplates   ScheduleTemplate[]
 
@@ -131,6 +164,7 @@ model Schedule {
   companyId         String
   busId             String
   routeId           String
+  operatorId        String?
   departureDateTime DateTime
   arrivalDateTime   DateTime
   departureLocation String?
@@ -165,12 +199,14 @@ model Schedule {
   bus               Bus               @relation(fields: [busId], references: [id])
   company           Company           @relation(fields: [companyId], references: [id])
   route             Route             @relation(fields: [routeId], references: [id])
+  operator          Operator?         @relation("OperatorSchedules", fields: [operatorId], references: [id])
   reservations      SeatReservation[]
   activities        ActivityLog[]
 
   @@index([companyId])
   @@index([busId])
   @@index([routeId])
+  @@index([operatorId])
   @@index([departureDateTime])
   @@index([status])
   @@index([availableSeats])

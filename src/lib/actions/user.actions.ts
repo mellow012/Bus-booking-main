@@ -28,47 +28,68 @@ export async function syncUser(id: string, data: Partial<User>) {
   try {
     // Sanitizing data: remove fields that should not be updated directly
     const { id: _, createdAt, updatedAt, ...updatableData } = data;
+    const email = updatableData.email?.trim() || undefined;
 
     // 1. Find existing record by any unique identifier
-    // We check id, uid, and email to handle migration discrepancies
-    const existing = await prisma.user.findFirst({
-      where: {
-        OR: [
-          { id },
-          { uid: id },
-          { email: updatableData.email || undefined }
-        ].filter(Boolean) as any
-      }
+    const searchConditions: any[] = [{ id }, { uid: id }];
+    if (email) searchConditions.push({ email });
+
+    let existing = await prisma.user.findFirst({
+      where: { OR: searchConditions }
     });
 
-    let user;
-    if (existing) {
-      // 2. Update existing record using its official primary key
-      user = await prisma.user.update({
-        where: { id: existing.id },
-        data: {
-          ...(updatableData as any),
-          updatedAt: new Date(),
-        }
-      });
-    } else {
-      // 3. Create new record if none found
-      user = await prisma.user.create({
-        data: {
-          id,
-          uid: id, // Keep uid in sync for legacy compatibility
-          ...(updatableData as any),
-          firstName: updatableData.firstName || '',
-          lastName: updatableData.lastName || '',
-          email: updatableData.email || '',
-          role: updatableData.role || 'customer',
-        },
-      });
+    if (!existing && email) {
+      existing = await prisma.user.findUnique({ where: { email } });
     }
+
+    const updateData: any = {
+      ...(updatableData as any),
+      updatedAt: new Date(),
+    };
+
+    if (existing) {
+      if (existing.uid !== id) {
+        updateData.uid = id;
+      }
+      const user = await prisma.user.update({
+        where: { id: existing.id },
+        data: updateData,
+      });
+      return { success: true, data: user as User };
+    }
+
+    const user = await prisma.user.create({
+      data: {
+        id,
+        uid: id, // Keep uid in sync for legacy compatibility
+        ...(updatableData as any),
+        firstName: updatableData.firstName || '',
+        lastName: updatableData.lastName || '',
+        email: email || '',
+        role: updatableData.role || 'customer',
+      },
+    });
 
     return { success: true, data: user as User };
   } catch (error: unknown) {
+    const err = error as any;
     console.error('Error syncing user:', error);
+
+    if (err?.code === 'P2002' && err?.meta?.target?.includes('email') && data.email) {
+      const existingByEmail = await prisma.user.findUnique({ where: { email: data.email } });
+      if (existingByEmail) {
+        const user = await prisma.user.update({
+          where: { id: existingByEmail.id },
+          data: {
+            ...(data as any),
+            uid: id,
+            updatedAt: new Date(),
+          },
+        });
+        return { success: true, data: user as User };
+      }
+    }
+
     return { success: false, error: (error as Error).message };
   }
 }

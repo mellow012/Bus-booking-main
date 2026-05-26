@@ -86,7 +86,7 @@ export const ScheduleCard = React.memo(({ s, onBook, userCity }: {
           {[
             { icon: Calendar, label: new Date(s.date).toLocaleDateString("en-GB", { day: "numeric", month: "short" }), cls: "text-blue-500" },
             { icon: Users, label: `${s.availableSeats} seats`, cls: seatCls, labelCls: seatCls },
-            { icon: MapPin, label: `${Number(s.distance ?? 0).toLocaleString()} km`, cls: "text-blue-500" },
+            { icon: MapPin, label: `${s.distance || 0} km`, cls: "text-blue-500" },
             { icon: BusIcon, label: s.busNumber, cls: "text-blue-500" },
           ].map(({ icon: Icon, label, cls, labelCls }, i) => (
             <div key={i} className="flex items-center gap-1 sm:gap-1.5 bg-gray-50 rounded-lg px-2 sm:px-2.5 py-1 sm:py-1.5">

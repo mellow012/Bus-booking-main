@@ -1,5 +1,5 @@
 // components/AlertMessage.tsx
-import { FC, useEffect, useState } from 'react';
+import { FC, useEffect, useRef, useState } from 'react';
 import { AlertCircle, CheckCircle, X, AlertTriangle, Info } from 'lucide-react';
 
 interface AlertMessageProps {
@@ -9,6 +9,7 @@ interface AlertMessageProps {
   autoClose?: boolean;
   duration?: number; // in milliseconds
   className?: string;
+  scrollIntoView?: boolean;
 }
 
 const AlertMessage: FC<AlertMessageProps> = ({ 
@@ -17,10 +18,18 @@ const AlertMessage: FC<AlertMessageProps> = ({
   onClose,
   autoClose = true,
   duration = 5000,
-  className = ''
+  className = '',
+  scrollIntoView = false,
 }) => {
   const [isVisible, setIsVisible] = useState(true);
   const [progress, setProgress] = useState(100);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (scrollIntoView && containerRef.current) {
+      containerRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [scrollIntoView, message]);
 
   useEffect(() => {
     if (autoClose) {
@@ -109,6 +118,7 @@ const AlertMessage: FC<AlertMessageProps> = ({
 
   return (
     <div 
+      ref={containerRef}
       role="alert"
       className={`mb-6 rounded-2xl border p-4 shadow-premium transition-all duration-500 transform ${
         isVisible ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 -translate-y-2 scale-95'

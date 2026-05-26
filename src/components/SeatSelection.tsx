@@ -145,7 +145,7 @@ const SeatSelection: React.FC<SeatSelectionProps> = ({
 
   const getSeatClassName = useCallback((status: string) => {
     const base =
-      'w-10 h-10 rounded-xl text-xs font-semibold transition-all duration-200 border-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2';
+      'w-8 h-8 sm:w-10 sm:h-10 rounded-xl text-xs sm:text-xs font-semibold transition-all duration-200 border-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2';
     switch (status) {
       case 'booked':
         return `${base} bg-gray-200 text-gray-500 border-gray-300 cursor-not-allowed opacity-75`;
@@ -216,6 +216,7 @@ const SeatSelection: React.FC<SeatSelectionProps> = ({
           message={error} 
           onClose={() => setError('')} 
           autoClose={true} 
+          scrollIntoView={true}
           className="mb-4"
         />
       )}
@@ -252,12 +253,12 @@ const SeatSelection: React.FC<SeatSelectionProps> = ({
       </div>
 
       {/* Seat Grid */}
-      <div className="max-w-lg mx-auto mb-6">
+      <div className="max-w-full mx-auto mb-6 overflow-x-auto">
         <div className="space-y-3">
           {seatLayout.map((row: (string | null)[], rowIndex: number) => {
             const { aislePosition } = layoutConfig;
             return (
-              <div key={rowIndex} className="flex items-center justify-center gap-2">
+              <div key={rowIndex} className="inline-flex items-center justify-center gap-2 min-w-max">
                 {/* Row number */}
                 <div className="w-8 text-xs text-gray-400 text-center font-medium">
                   {rowIndex + 1}

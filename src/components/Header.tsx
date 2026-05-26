@@ -146,12 +146,12 @@ const Header: React.FC = () => {
           {/* Logo */}
           <Link href="/" className="flex items-center space-x-2.5 group">
             <div className="relative shrink-0">
-              <div className="w-14 h-14 sm:w-20 sm:h-20 flex items-center justify-center transition-all duration-300 group-hover:scale-105">
+              <div className="w-10 h-10 sm:w-14 sm:h-14 md:w-16 md:h-16 lg:w-20 lg:h-20 xl:w-24 xl:h-24 flex items-center justify-center transition-all duration-300 group-hover:scale-105">
                 <Image
                   src="/tibhukebus_logo_transparent.png"
                   alt="TibhukeBus Logo"
-                  width={120}
-                  height={120}
+                  width={192}
+                  height={192}
                   className="object-contain w-auto h-full"
                   priority
                 />

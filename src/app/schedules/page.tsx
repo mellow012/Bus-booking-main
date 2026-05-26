@@ -104,7 +104,6 @@ export default async function SchedulesPage({
         availableSeats: sch.availableSeats,
         price: sch.price,
         duration: durationMin,
-        distance: route.distance || 0,
         date: dep.toISOString().split('T')[0],
         companyLogo: company.logo || null,
         companyId: sch.companyId,
@@ -113,16 +112,7 @@ export default async function SchedulesPage({
         arrivalLocation: sch.arrivalLocation || `${route.destination} Main Terminal`,
       };
     })
-    .filter((item): item is NonNullable<typeof item> => {
-      if (item === null) return false;
-      // Validate that arrival time is in the future (use departure time for safety)
-      try {
-        const depDateTime = new Date(`${item.date}T${item.departureTime}:00`);
-        return !isNaN(depDateTime.getTime()) && depDateTime >= new Date(Date.now() - 15 * 60 * 1000);
-      } catch {
-        return false;
-      }
-    });
+    .filter((item): item is NonNullable<typeof item> => item !== null && new Date(`${item.date}T${item.arrivalTime}`) >= new Date());
 
   const seen = new Set<string>();
   const deduplicatedSchedules: typeof enhancedSchedules = [];

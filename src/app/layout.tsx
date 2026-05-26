@@ -81,7 +81,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               <ToastProvider>
                 <div className="min-h-screen flex flex-col">
                   <Header />
-                  <main className="flex-grow py-12">
+                  <main className="flex-grow pt-28 pb-12 page-content">
                     <EmailVerificationBannerLayout />
                     {children}
                   </main>

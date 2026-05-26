@@ -206,6 +206,10 @@
   @apply my-12 sm:my-16 lg:my-20;
 }
 
+.page-content {
+  scroll-padding-top: 7rem;
+}
+
 @media (max-width: 640px) {
   .conductor-action-btn {
     min-height: 56px;
