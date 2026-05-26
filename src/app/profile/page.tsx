@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
 import AlertMessage from '../../components/AlertMessage';
+import BackButton from '@/components/BackButton';
 import { useAppToast } from '@/contexts/ToastContext';
 import ProfilePageSkeleton from '@/components/ui/ProfilePageSkeleton';
 import ConfirmationModal from '@/components/ui/ConfirmationModal';
@@ -559,12 +560,11 @@ const ProfilePage: React.FC = () => {
               <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Staff Profile</h1>
               <p className="text-gray-500 mt-1 uppercase text-xs font-bold tracking-widest">{profile.role} Management Console</p>
             </div>
-            <button
-              onClick={() => router.back()}
-              className="text-gray-500 hover:text-gray-900 font-bold text-sm flex items-center gap-2"
-            >
-              <ChevronRight className="w-4 h-4 rotate-180" /> Back to Dashboard
-            </button>
+            <BackButton
+              label="Back to Dashboard"
+              className="text-gray-500 hover:text-gray-900 font-bold text-sm"
+              hideOnMobile={false}
+            />
           </div>
           <OperatorProfileTab
             userProfile={userProfile}
@@ -597,6 +597,9 @@ const ProfilePage: React.FC = () => {
         )}
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12">
+          <div className="mb-6 hidden md:block">
+            <BackButton className="text-gray-600 hover:text-gray-900" />
+          </div>
           
           {/* Welcome/Action Banner for New Users */}
           {(!profile.setupCompleted || !profile.phone?.trim() || !profile.firstName?.trim() || !profile.lastName?.trim()) && !editProfile && (

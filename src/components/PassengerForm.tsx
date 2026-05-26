@@ -196,12 +196,12 @@ export default function PassengerForm({
             Please provide accurate information for all passengers.
           </p>
           {originName && alightName && (
-            <p className="text-sm text-blue-600 mt-2 flex items-center gap-1.5">
+            <p className="text-sm text-blue-600 mt-2 flex flex-wrap items-center gap-1.5 min-w-0">
               <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
-              {originName}
+              <span className="truncate min-w-0 max-w-full">{originName}</span>
               <span className="text-gray-400">→</span>
               <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" />
-              {alightName}
+              <span className="truncate min-w-0 max-w-full">{alightName}</span>
             </p>
           )}
         </CardHeader>
@@ -218,8 +218,7 @@ export default function PassengerForm({
 
           <form onSubmit={handleSubmit} className="space-y-6">
             {details.map((passenger, index) => (
-              <div key={index} className="space-y-4 p-4 border rounded-xl bg-gray-50">
-                <div key={index} className="space-y-4 p-4 border rounded-xl bg-gray-50 min-w-0">
+              <div key={index} className="space-y-4 p-4 border rounded-xl bg-gray-50 min-w-0">
                 <div className="flex items-center justify-between">
                   <h3 className="font-semibold text-gray-800 flex items-center gap-2">
                     <span className="w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-bold flex items-center justify-center">
@@ -235,7 +234,7 @@ export default function PassengerForm({
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
                   {/* Full Name */}
-                  <div className="space-y-1.5">
+                  <div className="space-y-1.5 min-w-0">
                     <Label htmlFor={`name-${index}`}>Full Name <span className="text-red-500">*</span></Label>
                     <Input
                       id={`name-${index}`}
@@ -243,7 +242,7 @@ export default function PassengerForm({
                       value={passenger.name}
                       onChange={e => handleChange(index, 'name', e.target.value)}
                       placeholder="e.g. Chisomo Banda"
-                      className={(getError(index, 'name') ? 'border-red-500 focus:ring-red-500' : '') + ' min-w-0'}
+                      className={(getError(index, 'name') ? 'border-red-500 focus:ring-red-500 ' : '') + 'w-full min-w-0'}
                       required
                       disabled={loading}
                     />
@@ -253,18 +252,18 @@ export default function PassengerForm({
                   </div>
 
                   {/* Age — type="text" with inputMode="numeric" */}
-                  <div className="space-y-1.5">
+                  <div className="space-y-1.5 min-w-0">
                     <Label htmlFor={`age-${index}`}>Age <span className="text-red-500">*</span></Label>
                     <Input
                       id={`age-${index}`}
-                      type="text"           // ← NOT "number"
-                      inputMode="numeric"   // ← numeric keyboard on mobile
+                      type="text"
+                      inputMode="numeric"
                       pattern="[0-9]*"
                       value={passenger.ageInput}
                       onChange={e => handleChange(index, 'ageInput', e.target.value)}
                       onBlur={() => handleAgeBlur(index)}
                       placeholder="e.g. 28"
-                      className={getError(index, 'ageInput') ? 'border-red-500 focus:ring-red-500' : ''}
+                      className={(getError(index, 'ageInput') ? 'border-red-500 focus:ring-red-500 ' : '') + 'w-full min-w-0'}
                       required
                       disabled={loading}
                     />
@@ -274,14 +273,14 @@ export default function PassengerForm({
                   </div>
 
                   {/* Gender */}
-                  <div className="space-y-1.5">
+                  <div className="space-y-1.5 min-w-0">
                     <Label htmlFor={`gender-${index}`}>Gender <span className="text-red-500">*</span></Label>
                     <Select
                       value={passenger.gender}
                       onValueChange={value => handleChange(index, 'gender', value)}
                       disabled={loading}
                     >
-                      <SelectTrigger className={getError(index, 'gender') ? 'border-red-500' : ''}>
+                      <SelectTrigger className={(getError(index, 'gender') ? 'border-red-500 ' : '') + 'w-full min-w-0'}>
                         <SelectValue placeholder="Select gender" />
                       </SelectTrigger>
                       <SelectContent>
@@ -342,7 +341,7 @@ export default function PassengerForm({
             <Button variant="outline" onClick={() => setIsConfirmModalOpen(false)}>Cancel</Button>
             <Button className="bg-blue-600 hover:bg-blue-700 text-white" onClick={handleConfirmSubmit}>
               Yes, Continue
-                      onChange={e => handleChange(index, 'ageInput', e.target.value.replace(/\D/g, ''))}
+            </Button>
           </div>
         </div>
       </Modal>
