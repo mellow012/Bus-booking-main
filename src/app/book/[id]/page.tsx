@@ -222,7 +222,6 @@ export default function BookBus() {
   const [passengerForms,   setPassengerForms]   = useState<PassengerFormState[]>([]);
   const [currentStep,      setCurrentStep]      = useState<"seats" | "passengers" | "confirm">("seats");
   const [reservationId,    setReservationId]    = useState<string | null>(null);
-  const bookingStepRef = useRef<HTMLDivElement | null>(null);
 
   // PAY-2: Server-confirmed booking values — never trust client-calculated price
   const [confirmedBookingId,     setConfirmedBookingId]     = useState<string | null>(null);
@@ -537,8 +536,9 @@ setDisplayPrice(calcSegmentPrice(
   }, [passengerForms, passengers, proceedToConfirm]);
 
   useEffect(() => {
-    if (!bookingStepRef.current) return;
-    bookingStepRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+    // UX Fix: Whenever the booking step changes, reset scroll to top
+    // This ensures the user is focused on the new content and not lost at the bottom of the page.
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }, [currentStep]);
 
   // ── confirmBooking — PAY-2 fix ─────────────────────────────────────────────
@@ -644,7 +644,12 @@ setDisplayPrice(calcSegmentPrice(
     if (error)   { const t = setTimeout(() => setError(""),   5000); return () => clearTimeout(t); }
   }, [error]);
   useEffect(() => {
-    if (success) { const t = setTimeout(() => setSuccess(""), 5000); return () => clearTimeout(t); }
+    if (success) { 
+      // Scroll to top to ensure the success message is in the user's direct line of sight
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      const t = setTimeout(() => setSuccess(""), 5000); 
+      return () => clearTimeout(t); 
+    }
   }, [success]);
 
   // ── Render: loading ────────────────────────────────────────────────────────
@@ -824,7 +829,7 @@ setDisplayPrice(calcSegmentPrice(
         )}
 
         {/* ── Step content ── */}
-        <div ref={bookingStepRef} className="space-y-6">
+        <div className="space-y-6">
 
           {/* Step 1 — Seat selection */}
           {currentStep === "seats" && (

@@ -16,12 +16,12 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { ExclamationTriangleIcon } from '@heroicons/react/24/outline';
+import { ExclamationTriangleIcon, XMarkIcon } from '@heroicons/react/24/outline';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { EmailVerificationPrompt } from '@/components/EmailVerificationPrompt';
 
-const ProfileCompletionBanner: React.FC = () => (
+const ProfileCompletionBanner: React.FC<{ onDismiss: () => void }> = ({ onDismiss }) => (
   <div className="fixed top-0 left-0 right-0 z-50 bg-gradient-to-r from-yellow-50 via-amber-50 to-orange-50 border-b border-amber-200 shadow-sm">
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5">
       <div className="flex items-center justify-between gap-4 flex-wrap">
@@ -42,6 +42,13 @@ const ProfileCompletionBanner: React.FC = () => (
               Complete profile
             </Button>
           </Link>
+          <button
+            onClick={onDismiss}
+            className="text-amber-500 hover:text-amber-700 p-1 rounded-full hover:bg-amber-100 transition-colors ml-2"
+            aria-label="Dismiss banner"
+          >
+            <XMarkIcon className="w-5 h-5" />
+          </button>
         </div>
       </div>
     </div>
@@ -50,6 +57,17 @@ const ProfileCompletionBanner: React.FC = () => (
 
 export const EmailVerificationBannerLayout: React.FC = () => {
   const { user, userProfile, loading } = useAuth();
+  const [profileDismissed, setProfileDismissed] = React.useState(false);
+
+  // Initialize dismissal state from localStorage
+  React.useEffect(() => {
+    if (user?.id) {
+      const isDismissed = localStorage.getItem(`profile_banner_dismissed_${user.id}`);
+      if (isDismissed === 'true') {
+        setProfileDismissed(true);
+      }
+    }
+  }, [user?.id]);
 
   React.useEffect(() => {
     if (!loading && user) {
@@ -68,8 +86,15 @@ export const EmailVerificationBannerLayout: React.FC = () => {
     return <EmailVerificationPrompt email={user.email} showBanner={true} />;
   }
 
-  if (user.emailVerified && (!userProfile || (userProfile.role === 'customer' && !userProfile.setupCompleted))) {
-    return <ProfileCompletionBanner />;
+  if (!profileDismissed && user.emailVerified && (!userProfile || (userProfile.role === 'customer' && !userProfile.setupCompleted))) {
+    const handleDismiss = () => {
+      if (user?.id) {
+        localStorage.setItem(`profile_banner_dismissed_${user.id}`, 'true');
+      }
+      setProfileDismissed(true);
+    };
+
+    return <ProfileCompletionBanner onDismiss={handleDismiss} />;
   }
 
   return null;
