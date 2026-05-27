@@ -207,7 +207,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           emailVerified &&
           userProfile.role === 'customer' &&
           !userProfile.setupCompleted &&
-          pathname !== '/profile'
+          pathname !== '/profile' &&
+          !isPublicRoute
         ) {
           router.push('/profile');
           return;
