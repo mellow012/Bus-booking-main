@@ -7,45 +7,44 @@
 // It is now exposed as verifyEmailTransporter() which should be called only
 // from your GET /api/health endpoint, not at module load time.
 
-import nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 
 type TeamRole = 'operator' | 'conductor';
 
-// ─── Transporter ──────────────────────────────────────────────────────────────
-// Created lazily on first use so a missing EMAIL_USER / EMAIL_PASS does not
-// crash the module at import time.
+let _resend: Resend | null = null;
 
-let _transporter: nodemailer.Transporter | null = null;
-
-function getTransporter(): nodemailer.Transporter {
-  if (_transporter) return _transporter;
-
-  const user = process.env.EMAIL_USER?.trim();
-  const pass = process.env.EMAIL_PASS?.trim()?.replace(/["']/g, '')?.replace(/\s+/g, '');
-
-  if (!user || !pass) {
-    throw new Error('EMAIL_USER and EMAIL_PASS environment variables must be set.');
+function getResendApiKey(): string {
+  const apiKey = process.env.RESEND_API_KEY?.trim() ?? process.env.resend_apikey?.trim();
+  if (!apiKey) {
+    throw new Error('RESEND_API_KEY or resend_apikey environment variable must be set.');
   }
-
-  _transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-      user: user,
-      pass: pass, // 16-char App Password required when 2FA is on
-    },
-    pool: true,
-    maxConnections: 1,
-    rateDelta: 1000,
-    connectionTimeout: 15_000, // Increased to 15s
-    greetingTimeout: 15_000,   // Increased to 15s
-    socketTimeout: 15_000,     // Increased to 15s
-  });
-
-  return _transporter;
+  return apiKey;
 }
 
-// Keep named export for any existing imports
-export { getTransporter as transporter };
+function getFromAddress(): string {
+  return (
+    process.env.RESEND_FROM?.trim() ||
+    process.env.EMAIL_FROM?.trim() ||
+    process.env.EMAIL_USER?.trim() ||
+    'no-reply@tibhukebus.com'
+  );
+}
+
+function getResendClient(): Resend {
+  if (_resend) return _resend;
+  _resend = new Resend(getResendApiKey());
+  return _resend;
+}
+
+async function sendResendEmail(options: { to: string; subject: string; html: string }) {
+  const response = await getResendClient().emails.send({
+    from: getFromAddress(),
+    to: options.to,
+    subject: options.subject,
+    html: options.html,
+  });
+  return response;
+}
 
 // ─── Health check helper ──────────────────────────────────────────────────────
 // Call this ONLY from GET /api/health — never at module load time.
@@ -57,18 +56,63 @@ export { getTransporter as transporter };
 
 export async function verifyEmailTransporter(): Promise<boolean> {
   try {
-    const transporter = getTransporter();
-    await transporter.verify();
-    console.log('[email-service] SMTP verification successful');
+    getResendClient();
+    console.log('[email-service] Resend API key verification successful');
     return true;
   } catch (err: any) {
-    console.error('[email-service] SMTP verification failed!');
+    console.error('[email-service] Resend verification failed!');
     console.error('[email-service] ERROR:', err.message);
-    if (err.code === 'EAUTH') {
-      console.error('[email-service] AUTH FAILURE: Check EMAIL_USER and EMAIL_PASS. Gmail requires an App Password.');
-    }
     return false;
   }
+}
+
+export async function sendVerificationEmail(email: string, verificationLink: string): Promise<void> {
+  const mailOptions = {
+    to: email,
+    subject: 'Verify Your TibhukeBus Email Address',
+    html: buildVerificationEmailHtml(verificationLink),
+  };
+
+  try {
+    const info = await sendResendEmail(mailOptions);
+    console.log('[email-service] Verification email sent:', info.data?.id);
+  } catch (error: any) {
+    console.error('[email-service] Failed to send verification email to', email, ':', error.message);
+    throw new Error('Email sending failed');
+  }
+}
+
+function buildVerificationEmailHtml(verificationLink: string): string {
+  return `
+    <!DOCTYPE html>
+    <html lang="en">
+      <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Verify Your Email</title>
+      </head>
+      <body style="margin:0;padding:0;background-color:#f3f4f6;font-family:Arial,sans-serif;">
+        <div style="max-width:600px;margin:40px auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 10px rgba(0,0,0,0.08);">
+          <div style="background:#2563eb;padding:32px;text-align:center;color:#ffffff;">
+            <h1 style="margin:0;font-size:24px;">Verify Your Email</h1>
+            <p style="margin:8px 0 0;font-size:16px;">Complete your TibhukeBus registration</p>
+          </div>
+          <div style="padding:32px;color:#111827;">
+            <p style="font-size:16px;line-height:1.6;">Please verify your email address by clicking the button below.</p>
+            <div style="text-align:center;margin:32px 0;">
+              <a href="${verificationLink}" style="background:#2563eb;color:#ffffff;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:600;display:inline-block;">Verify Email</a>
+            </div>
+            <p style="font-size:14px;line-height:1.7;color:#6b7280;">If the button does not work, copy and paste this link into your browser:</p>
+            <p style="font-size:14px;word-break:break-all;color:#2563eb;"><a href="${verificationLink}" style="color:#2563eb;text-decoration:none;">${verificationLink}</a></p>
+            <p style="font-size:14px;color:#6b7280;margin-top:24px;">If you did not request this verification, you can safely ignore this email.</p>
+          </div>
+          <div style="background:#f8fafc;padding:20px;text-align:center;color:#6b7280;font-size:13px;">
+            TibhukeBus • Safe travels across Malawi
+          </div>
+        </div>
+      </body>
+    </html>
+  `;
 }
 
 // ─── sendGenericPasswordResetEmail ───────────────────────────────────────────
@@ -123,8 +167,8 @@ export async function sendGenericPasswordResetEmail(
   };
 
   try {
-    const info = await getTransporter().sendMail(mailOptions);
-    console.log('[email-service] Generic password reset sent:', info.response);
+    const info = await sendResendEmail(mailOptions);
+    console.log('[email-service] Generic password reset sent:', info.data?.id);
   } catch (error: any) {
     console.error('[email-service] Failed to send generic password reset to', email, ':', error.message);
     throw new Error('Email sending failed');
@@ -161,8 +205,8 @@ export async function sendPasswordResetEmail(
   };
 
   try {
-    const info = await getTransporter().sendMail(mailOptions);
-    console.log('[email-service] Password reset sent:', info.response);
+    const info = await sendResendEmail(mailOptions);
+    console.log('[email-service] Password reset sent:', info.data?.id);
   } catch (error: any) {
     console.error('[email-service] Failed to send password reset to', email, ':', error.message);
     throw new Error('Email sending failed');
@@ -231,8 +275,8 @@ export async function sendOperatorInviteEmail(
   };
 
   try {
-    const info = await getTransporter().sendMail(mailOptions);
-    console.log(`[email-service] ${roleLabel} invite sent:`, info.response);
+    const info = await sendResendEmail(mailOptions);
+    console.log(`[email-service] ${roleLabel} invite sent:`, info.data?.id);
   } catch (error: any) {
     console.error(`[email-service] Failed to send ${roleLabel} invite to`, email, ':', error.message);
     throw new Error('Failed to send invitation email');

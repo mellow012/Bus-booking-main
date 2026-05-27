@@ -52,6 +52,9 @@ export async function PATCH(req: NextRequest) {
     // Special case for email - usually handled by Auth, but keep in sync if provided
     if (body.email) {
       sanitizedData.email = body.email;
+    } else if (user.email) {
+      // Always include email for proper user matching in syncUser
+      sanitizedData.email = user.email;
     }
 
     const { success, data, error } = await dbActions.syncUser(user.id, sanitizedData);

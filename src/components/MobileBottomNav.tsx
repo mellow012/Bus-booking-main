@@ -3,15 +3,19 @@
 import React from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { Search, User, Home, Bus } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 
 export const MobileBottomNav = () => {
   const router = useRouter();
   const pathname = usePathname();
+  const { userProfile } = useAuth();
 
   const navItems = [
     { label: 'Home', icon: Home, path: '/' },
     { label: 'Search', icon: Search, path: '/schedules' },
-    { label: 'Bookings', icon: Bus, path: '/bookings' },
+    ...(userProfile?.setupCompleted
+      ? [{ label: 'Bookings', icon: Bus, path: '/bookings' }]
+      : []),
     { label: 'Profile', icon: User, path: '/profile' },
   ];
 

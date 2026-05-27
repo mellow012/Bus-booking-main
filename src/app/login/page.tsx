@@ -29,7 +29,6 @@ interface ValidationResult {
 
 // Constants
 const MAX_ATTEMPTS      = 5;
-const LOCKOUT_DURATION  = 15 * 60 * 1000;
 const MIN_PASSWORD_LENGTH = 8;
 
 // ─── Hooks ────────────────────────────────────────────────────────────────────
@@ -78,66 +77,22 @@ const useFormValidation = (formData: FormData, t: (key: string, opts?: any) => s
 
 const useLoginAttempts = () => {
   const [attemptCount, setAttemptCount] = useState(0);
-  const [lockoutTime,  setLockoutTime]  = useState<number | null>(null);
   const [isLockedOut,  setIsLockedOut]  = useState(false);
-
-  useEffect(() => {
-    const stored = localStorage.getItem('loginAttempts');
-    if (stored) {
-      const { count, lockout } = JSON.parse(stored);
-      setAttemptCount(count || 0);
-      if (lockout && Date.now() < lockout) {
-        setLockoutTime(lockout);
-        setIsLockedOut(true);
-      }
-    }
-  }, []);
-
-  useEffect(() => {
-    let timer: NodeJS.Timeout;
-    if (lockoutTime && isLockedOut) {
-      timer = setInterval(() => {
-        if (Date.now() >= lockoutTime) {
-          setIsLockedOut(false);
-          setAttemptCount(0);
-          setLockoutTime(null);
-          localStorage.removeItem('loginAttempts');
-        }
-      }, 1000);
-    }
-    return () => clearInterval(timer);
-  }, [lockoutTime, isLockedOut]);
 
   const incrementAttempts = () => {
     const newCount = attemptCount + 1;
     setAttemptCount(newCount);
     if (newCount >= MAX_ATTEMPTS) {
-      const lockout = Date.now() + LOCKOUT_DURATION;
-      setLockoutTime(lockout);
       setIsLockedOut(true);
-      localStorage.setItem('loginAttempts', JSON.stringify({ count: newCount, lockout }));
-    } else {
-      localStorage.setItem('loginAttempts', JSON.stringify({ count: newCount }));
     }
   };
 
   const resetAttempts = () => {
     setAttemptCount(0);
-    setLockoutTime(null);
     setIsLockedOut(false);
-    localStorage.removeItem('loginAttempts');
   };
 
-  const getRemainingTime = () =>
-    lockoutTime ? Math.max(0, Math.ceil((lockoutTime - Date.now()) / 1000)) : 0;
-
-  return { attemptCount, isLockedOut, remainingTime: getRemainingTime(), incrementAttempts, resetAttempts };
-};
-
-const formatTime = (seconds: number): string => {
-  const minutes         = Math.floor(seconds / 60);
-  const remainingSeconds = seconds % 60;
-  return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+  return { attemptCount, isLockedOut, incrementAttempts, resetAttempts };
 };
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -158,7 +113,7 @@ export default function Login() {
   const [generalError, setGeneralError] = useState('');
 
   const { errors, touched, validateForm, handleBlur, clearErrors } = useFormValidation(formData, t);
-  const { attemptCount, isLockedOut, remainingTime, incrementAttempts, resetAttempts } = useLoginAttempts();
+  const { attemptCount, isLockedOut, incrementAttempts, resetAttempts } = useLoginAttempts();
 
   const getErrorMessage = (error: any): string => {
     // Supabase error messages are usually in the message string
@@ -193,7 +148,7 @@ export default function Login() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isLockedOut) {
-      setGeneralError(t('lockedBody', { time: formatTime(remainingTime) }));
+      setGeneralError(t('lockedBody'));
       return;
     }
 
@@ -283,7 +238,7 @@ export default function Login() {
               <ExclamationTriangleIcon className="w-5 h-5 mr-2 flex-shrink-0 mt-0.5" />
               <div>
                 <p className="font-medium">{t('lockedTitle')}</p>
-                <p className="text-sm mt-1">{t('lockedBody', { time: formatTime(remainingTime) })}</p>
+                <p className="text-sm mt-1">{t('lockedBody')}</p>
               </div>
             </div>
           )}

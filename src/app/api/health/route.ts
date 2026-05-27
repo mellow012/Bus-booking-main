@@ -25,7 +25,7 @@ export async function GET() {
     checks.database = 'error';
   }
 
-  // ── SMTP transporter ───────────────────────────────────────────────────────
+  // ── Email delivery check ──────────────────────────────────────────────────
   // verifyEmailTransporter() is now only called here, not at module load time.
   try {
     const emailOk = await verifyEmailTransporter();

@@ -114,7 +114,7 @@ export interface UserProfileBase extends BaseEntity {
   isActive?: boolean;
   emailVerified?: boolean;
   passwordSet?: boolean;
-  setupCompleted?: boolean;
+  setupCompleted: boolean;
 
   sex?: string;
   nationalId?: string;

@@ -36,36 +36,9 @@ interface FormErrors {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const MIN_PASSWORD_LENGTH = 8;
+const MIN_PASSWORD_LENGTH = 6;
 const MAX_PASSWORD_LENGTH = 128;
 const NAME_REGEX = /^[a-zA-Z\s'-]+$/;
-
-// ─── Password strength (raw — labels come from translations) ─────────────────
-
-const checkPasswordStrengthRaw = (
-  password: string
-): { score: number; suggestions: ('upper' | 'number' | 'special')[] } => {
-  let score = 0;
-  const suggestions: ('upper' | 'number' | 'special')[] = [];
-  if (password.length >= MIN_PASSWORD_LENGTH) score++;
-  if (password.length >= 12) score++;
-  if (/[a-z]/.test(password) && /[A-Z]/.test(password)) {
-    score++;
-  } else {
-    suggestions.push('upper');
-  }
-  if (/\d/.test(password)) {
-    score++;
-  } else {
-    suggestions.push('number');
-  }
-  if (/[!@#$%^&*(),.?":{}|<>]/.test(password)) {
-    score++;
-  } else {
-    suggestions.push('special');
-  }
-  return { score, suggestions };
-};
 
 // ─── Validation hook ──────────────────────────────────────────────────────────
 
@@ -83,7 +56,6 @@ const useFormValidation = (formData: FormData, t: (key: string, opts?: any) => s
         if (!value || typeof value !== 'string') return t('errorPasswordRequired');
         if (value.length < MIN_PASSWORD_LENGTH) return t('errorPasswordMin', { min: MIN_PASSWORD_LENGTH });
         if (value.length > MAX_PASSWORD_LENGTH) return t('errorPasswordMax', { max: MAX_PASSWORD_LENGTH });
-        if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(value)) return t('errorPasswordStrength');
         return '';
       case 'confirmPassword':
         if (!value || typeof value !== 'string') return t('errorConfirmRequired');
@@ -147,26 +119,9 @@ export default function Register() {
   const [generalError,       setGeneralError]       = useState('');
   const [success,            setSuccess]            = useState(false);
   const [userEmail,          setUserEmail]          = useState('');
-  const [strengthData,       setStrengthData]       = useState<{
-    score: number; suggestions: ('upper' | 'number' | 'special')[];
-  } | null>(null);
 
   const { errors, touched, validateForm, handleBlur, clearFieldError } =
     useFormValidation(formData, t);
-
-  const strengthLabels = [
-    'strengthVeryWeak','strengthWeak','strengthFair',
-    'strengthGood','strengthStrong','strengthVeryStrong',
-  ] as const;
-  const strengthColors = [
-    'bg-red-500','bg-orange-500','bg-yellow-500',
-    'bg-blue-500','bg-green-500','bg-green-600',
-  ];
-
-  useEffect(() => {
-    if (formData.password) setStrengthData(checkPasswordStrengthRaw(formData.password));
-    else setStrengthData(null);
-  }, [formData.password]);
 
   // FIX VER-1: getErrorMessage now handles Firebase error codes directly on the
   // error object. AuthContext.signUp re-throws with error.code preserved when
@@ -250,44 +205,6 @@ export default function Register() {
     return hasError
       ? `${base} border-red-300 text-red-900 placeholder-red-300 focus:ring-red-500 focus:border-red-500`
       : `${base} border-gray-300 focus:ring-blue-500 focus:border-blue-500`;
-  };
-
-  const renderPasswordStrength = () => {
-    if (!strengthData || !formData.password) return null;
-    const { score, suggestions } = strengthData;
-    const labelKey   = strengthLabels[score] ?? strengthLabels[0];
-    const color      = strengthColors[score] ?? strengthColors[0];
-    const scoreColor = score >= 4 ? 'text-green-600' : score >= 3 ? 'text-blue-600'
-                     : score >= 2 ? 'text-yellow-600' : 'text-red-600';
-    return (
-      <div className="mt-2">
-        <div className="flex items-center justify-between mb-1">
-          <span className="text-xs font-medium text-gray-700">{t('passwordStrengthLabel')}</span>
-          <span className={`text-xs font-medium ${scoreColor}`}>{t(labelKey)}</span>
-        </div>
-        <div className="flex space-x-1">
-          {[...Array(5)].map((_, i) => (
-            <div key={i}
-              className={`h-1.5 flex-1 rounded-full transition-colors duration-300 ${i < score ? color : 'bg-gray-200'}`}
-            />
-          ))}
-        </div>
-        {suggestions.length > 0 && (
-          <ul className="mt-2 space-y-1">
-            {suggestions.map((s, i) => {
-              const label = s === 'upper'  ? t('suggestionUpperLower')
-                          : s === 'number' ? t('suggestionNumber')
-                          :                  t('suggestionSpecial');
-              return (
-                <li key={i} className="text-xs text-gray-600 flex items-start">
-                  <span className="mr-1">•</span>{label}
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </div>
-    );
   };
 
   const renderPasswordMatch = () => {
@@ -451,7 +368,6 @@ export default function Register() {
                   </button>
                 </div>
                 {renderError('password')}
-                {renderPasswordStrength()}
               </div>
 
               {/* Confirm password */}

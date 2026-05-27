@@ -36,27 +36,30 @@ export const useEmailVerification = () => {
     if (!user || !user.email) throw new Error('User email not found');
 
     try {
-      // Supabase handles resending verification emails via auth.resend
-      const { error } = await supabase.auth.resend({
-        type: 'signup',
-        email: user.email,
-        options: {
-          emailRedirectTo: `${window.location.origin}/verify-email`,
+      const response = await fetch('/api/auth/send-verification-email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
         },
       });
 
-      if (error) throw error;
+      const payload = await response.json();
+
+      if (!response.ok) {
+        throw new Error(payload.message || payload.error || 'Failed to send verification email');
+      }
 
       return {
         success: true,
-        message: 'Verification email sent successfully',
-        alreadyVerified: !!user.email_confirmed_at,
+        message: payload.message || 'Verification email sent successfully',
+        alreadyVerified: payload.alreadyVerified,
+        verificationLink: payload.verificationLink,
       };
     } catch (error: any) {
       console.error('[useEmailVerification] sendVerificationEmail error:', error);
-      throw error;
+      throw new Error(error.message || 'Failed to send verification email');
     }
-  }, [user, supabase.auth]);
+  }, [user]);
 
   // ─── Check verification status ─────────────────────────────────────────────
 

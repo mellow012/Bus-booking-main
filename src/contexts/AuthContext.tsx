@@ -66,39 +66,42 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!targetUid) return;
 
     try {
-      const response = await fetch('/api/auth/profile');
+      // Add timeout to prevent indefinite waiting
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout
+
+      const response = await fetch('/api/auth/profile', { signal: controller.signal });
+      clearTimeout(timeoutId);
 
       if (response.ok) {
         const { data } = await response.json();
         if (data) {
           setUserProfile(data as UserProfile);
 
-          // ── Auto-activate team members on first sign-in ──
+          // ── Auto-activate team members on first sign-in (non-blocking) ──
           const isTeamRole = ['operator', 'conductor'].includes(data.role);
           const needsActivation = isTeamRole && data.invitationSent && (!data.isActive || !data.setupCompleted);
 
           if (needsActivation) {
-            try {
-              const activateRes = await fetch('/api/auth/profile', {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  isActive: true,
-                  setupCompleted: true,
-                  passwordSet: true,
-                }),
-              });
-              if (activateRes.ok) {
-                const { data: updatedData } = await activateRes.json();
+            // Fire and forget - don't wait for activation
+            fetch('/api/auth/profile', {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                isActive: true,
+                setupCompleted: true,
+                passwordSet: true,
+              }),
+            }).then(async (res) => {
+              if (res.ok) {
+                const { data: updatedData } = await res.json();
                 if (updatedData) setUserProfile(updatedData as UserProfile);
               }
-            } catch (activateErr) {
-              console.error('[AuthContext] Auto-activate failed:', activateErr);
-            }
+            }).catch((err) => console.error('[AuthContext] Auto-activate failed:', err));
           }
         } else {
-          // Initialize profile if not exists
-          const initRes = await fetch('/api/auth/profile', {
+          // Initialize profile if not exists (non-blocking)
+          fetch('/api/auth/profile', {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -111,15 +114,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               emailVerified: user?.email_confirmed_at ? true : false,
               setupCompleted: false,
             }),
-          });
-          if (initRes.ok) {
-            const { data: newData } = await initRes.json();
-            setUserProfile(newData as UserProfile);
-          }
+          }).then(async (res) => {
+            if (res.ok) {
+              const { data: newData } = await res.json();
+              if (newData) setUserProfile(newData as UserProfile);
+            }
+          }).catch((err) => console.error('[AuthContext] Profile init failed:', err));
         }
       }
     } catch (error: any) {
-      console.error('[AuthContext] refreshUserProfile failed:', error);
+      // Only log if it's not a timeout/abort
+      if (error.name !== 'AbortError') {
+        console.error('[AuthContext] refreshUserProfile failed:', error);
+      }
     }
   }, [user?.id, user?.email, user?.email_confirmed_at]);
 
@@ -135,24 +142,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           getIdToken: async () => session.access_token,
         };
         setUser(augmentedUser);
-        await refreshUserProfile(session.user.id);
+        // Set loading to false immediately to allow redirects, then fetch profile in background
+        setLoading(false);
+        setIsInitialized(true);
+        // Refresh profile without blocking - fire and forget
+        refreshUserProfile(session.user.id);
       } else {
         setUser(null);
         setUserProfile(null);
+        setLoading(false);
+        setIsInitialized(true);
       }
-
-      setLoading(false);
-      setIsInitialized(true);
     });
 
     return () => subscription.unsubscribe();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); 
+  }, []);
 
   // ─── Route guard ──────────────────────────────────────────────────────────
 
   useEffect(() => {
-    if (!isInitialized || loading) return;
+    // Only run after auth is initialized
+    if (!isInitialized) return;
 
     const publicRoutes = [
       '/login', '/register', '/', '/about', '/contact',
@@ -171,36 +182,44 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return;
     }
 
-    if (user && userProfile) {
+    // If user exists, begin immediate redirects while profile loads in background
+    if (user) {
       const emailVerified = !!user.email_confirmed_at;
-      const isSuperAdmin  = userProfile.role === 'superadmin';
+      const isSuperAdmin  = userProfile?.role === 'superadmin';
 
       if (!emailVerified && !isPublicRoute && !isSuperAdmin) {
         router.push('/verify-email');
         return;
       }
 
-      if (emailVerified && pathname === '/verify-email') {
-        redirectToDashboard(userProfile);
-        return;
-      }
+      // Only check these routes if we have the profile (it may still be loading)
+      if (userProfile) {
+        if (emailVerified && pathname === '/verify-email') {
+          if (userProfile.role === 'customer' && !userProfile.setupCompleted) {
+            router.push('/profile');
+          } else {
+            redirectToDashboard(userProfile);
+          }
+          return;
+        }
 
-      if (
-        emailVerified &&
-        userProfile.role === 'customer' &&
-        !userProfile.setupCompleted &&
-        pathname !== '/profile'
-      ) {
-        router.push('/profile');
-        return;
-      }
+        if (
+          emailVerified &&
+          userProfile.role === 'customer' &&
+          !userProfile.setupCompleted &&
+          pathname !== '/profile'
+        ) {
+          router.push('/profile');
+          return;
+        }
 
-      if (['/login', '/register'].includes(pathname)) {
-        redirectToDashboard(userProfile);
-        return;
+        if (['/login', '/register'].includes(pathname)) {
+          redirectToDashboard(userProfile);
+          return;
+        }
       }
     }
-  }, [user, userProfile, isInitialized, loading, router, pathname]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user, userProfile, isInitialized, router, pathname]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const redirectToDashboard = useCallback((profile: UserProfile) => {
     // Check for redirect parameter in URL
@@ -239,6 +258,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
         break;
       case 'customer':
+        if (!profile.setupCompleted) {
+          router.push('/profile');
+        } else {
+          router.push('/');
+        }
+        break;
       default:
         router.push('/');
     }

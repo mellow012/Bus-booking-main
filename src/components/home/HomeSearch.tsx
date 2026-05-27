@@ -6,6 +6,7 @@ import { MapPin, Calendar, Users, Search, Navigation } from "lucide-react";
 import { LocationAutocomplete } from "@/components/LocationAutocomplete";
 import { CityPickerModal } from "@/components/CityPickerModal";
 import { GeoStatus, MALAWI_CITIES, nearestCity } from "@/utils/homeHelpers";
+import { storePendingSearch } from "@/lib/searchStorage";
 
 const LS_CITY_KEY = "tb_user_city";
 const LS_GEO_ASKED_KEY = "tb_geo_asked";
@@ -83,6 +84,14 @@ export default function HomeSearch() {
   }, []);
 
   const handleSearch = () => {
+    // Store search criteria for potential redirect after login/profile completion
+    storePendingSearch({
+      from: search.from,
+      to: search.to,
+      date: search.date,
+      passengers: search.passengers,
+    });
+
     const p = new URLSearchParams({ 
       from: search.from, 
       to: search.to, 

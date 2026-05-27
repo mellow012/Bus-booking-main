@@ -30,15 +30,24 @@ export async function syncUser(id: string, data: Partial<User>) {
     const { id: _, createdAt, updatedAt, ...updatableData } = data;
     const email = updatableData.email?.trim() || undefined;
 
-    // 1. Find existing record by any unique identifier
-    const searchConditions: any[] = [{ id }, { uid: id }];
-    if (email) searchConditions.push({ email });
+    // 1. Search for existing record by id, uid, or email
+    let existing = null;
 
-    let existing = await prisma.user.findFirst({
-      where: { OR: searchConditions }
-    });
+    // First try by id (most specific)
+    if (id) {
+      existing = await prisma.user.findFirst({
+        where: { OR: [{ id }, { uid: id }] }
+      });
+    }
 
+    // Then by email if not found (and email is provided)
     if (!existing && email) {
+      existing = await prisma.user.findUnique({ where: { email } });
+    }
+
+    // If still not found but we have an id, try searching all users with that id pattern
+    // This handles cases where the id might be stored differently
+    if (!existing && id && email) {
       existing = await prisma.user.findUnique({ where: { email } });
     }
 
@@ -48,8 +57,13 @@ export async function syncUser(id: string, data: Partial<User>) {
     };
 
     if (existing) {
+      // Update existing record
       if (existing.uid !== id) {
         updateData.uid = id;
+      }
+      // Ensure id is set if it's not already
+      if (existing.id !== id) {
+        // Don't change the primary id, but sync the uid
       }
       const user = await prisma.user.update({
         where: { id: existing.id },
@@ -58,16 +72,20 @@ export async function syncUser(id: string, data: Partial<User>) {
       return { success: true, data: user as User };
     }
 
+    // 2. Create new record (only if not found by any means)
+    // Make sure we have required fields
+    const createData: any = {
+      id,
+      uid: id,
+      ...(updatableData as any),
+      firstName: updatableData.firstName || '',
+      lastName: updatableData.lastName || '',
+      email: email || '',
+      role: updatableData.role || 'customer',
+    };
+
     const user = await prisma.user.create({
-      data: {
-        id,
-        uid: id, // Keep uid in sync for legacy compatibility
-        ...(updatableData as any),
-        firstName: updatableData.firstName || '',
-        lastName: updatableData.lastName || '',
-        email: email || '',
-        role: updatableData.role || 'customer',
-      },
+      data: createData,
     });
 
     return { success: true, data: user as User };
@@ -75,18 +93,32 @@ export async function syncUser(id: string, data: Partial<User>) {
     const err = error as any;
     console.error('Error syncing user:', error);
 
-    if (err?.code === 'P2002' && err?.meta?.target?.includes('email') && data.email) {
-      const existingByEmail = await prisma.user.findUnique({ where: { email: data.email } });
-      if (existingByEmail) {
-        const user = await prisma.user.update({
-          where: { id: existingByEmail.id },
-          data: {
-            ...(data as any),
-            uid: id,
-            updatedAt: new Date(),
-          },
-        });
-        return { success: true, data: user as User };
+    // Handle unique constraint on email (fallback if somehow record slipped through)
+    if (err?.code === 'P2002' && err?.meta?.target?.includes('email')) {
+      try {
+        // Extract email from error or from the original data
+        let emailToFind = data.email?.trim() || undefined;
+        if (!emailToFind && err?.meta?.target?.includes('email')) {
+          // Try to get email from the failed create/update data
+          return { success: false, error: 'Email already exists. Please use a different email or contact support.' };
+        }
+
+        if (emailToFind) {
+          const existingByEmail = await prisma.user.findUnique({ where: { email: emailToFind } });
+          if (existingByEmail) {
+            const user = await prisma.user.update({
+              where: { id: existingByEmail.id },
+              data: {
+                ...(data as any),
+                uid: id,
+                updatedAt: new Date(),
+              },
+            });
+            return { success: true, data: user as User };
+          }
+        }
+      } catch (fallbackErr) {
+        console.error('Error in P2002 fallback handler:', fallbackErr);
       }
     }
 

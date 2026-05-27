@@ -8,7 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/utils/supabase/admin';
 import { createClient } from '@/utils/supabase/server';
 import { authRateLimiter, getClientIp } from '@/lib/rateLimiter';
-import { transporter } from '@/lib/email-service';
+import { sendVerificationEmail } from '@/lib/email-service';
 
 export async function POST(request: NextRequest) {
   try {
@@ -72,12 +72,7 @@ export async function POST(request: NextRequest) {
 
     // ── Send email ────────────────────────────────────────────────────────────
     try {
-      await transporter().sendMail({
-        from:    process.env.EMAIL_FROM || process.env.EMAIL_USER,
-        to:      user.email!,
-        subject: 'Verify Your TibhukeBus Email Address',
-        html: buildVerificationEmailHtml(verificationLink),
-      });
+      await sendVerificationEmail(user.email!, verificationLink);
     } catch (mailError: any) {
       console.error('[send-verification-email] Email delivery failed:', mailError.message);
       return NextResponse.json(

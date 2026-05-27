@@ -16,8 +16,13 @@ export async function GET(req: NextRequest) {
     }
 
     // Fetch user and their bookings
-    const userProfile = await prisma.user.findUnique({
-      where: { id: user.id },
+    const userProfile = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { id: user.id },
+          { uid: user.id }
+        ]
+      },
       include: {
         bookings: {
           select: {
@@ -144,8 +149,21 @@ export async function PUT(req: NextRequest) {
     const body = await req.json();
     const { firstName, lastName, phone, nationalId, sex, currentAddress } = body;
 
+    const existing = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { id: user.id },
+          { uid: user.id }
+        ]
+      }
+    });
+
+    if (!existing) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
     const updated = await prisma.user.update({
-      where: { id: user.id },
+      where: { id: existing.id },
       data: {
         ...(firstName && { firstName }),
         ...(lastName && { lastName }),

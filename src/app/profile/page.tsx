@@ -3,6 +3,7 @@
 import React, { useState, useEffect, FormEvent, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import { getPendingSearch, buildSearchRedirectUrl, clearPendingSearch } from '@/lib/searchStorage';
 
 import {
   Loader2, AlertCircle, User, Mail, Phone, Shield,
@@ -293,21 +294,23 @@ const ProfilePage: React.FC = () => {
       return;
     }
 
-    if (!userProfile) return;
-
-    // We allow all roles to access profile, but non-customers see a simplified staff profile
-    const isStaff = isCompanyRole(userProfile.role);
-
     const fetchData = async () => {
       setLoading(true);
       setError('');
       try {
+        // Add timeout to prevent indefinite waiting
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+
         const response = await fetch('/api/profile', {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
           },
+          signal: controller.signal,
         });
+        
+        clearTimeout(timeoutId);
 
         if (!response.ok) {
           setError('User profile not found. Please complete your profile.');
@@ -329,15 +332,19 @@ const ProfilePage: React.FC = () => {
         });
         await Promise.all([fetchBookingData(userData), loadUserPreferences()]);
       } catch (err: unknown) {
-        console.error('Profile fetch error:', err);
-        setError('Failed to load profile. Please try again or contact support.');
+        if (err instanceof Error && err.name === 'AbortError') {
+          setError('Profile load timed out. Please refresh and try again.');
+        } else {
+          console.error('Profile fetch error:', err);
+          setError('Failed to load profile. Please try again or contact support.');
+        }
       } finally {
         setLoading(false);
       }
     };
 
     fetchData();
-  }, [user, userProfile, router, fetchBookingData, loadUserPreferences]);
+  }, [user, router, fetchBookingData, loadUserPreferences]);
 
   // ─── Handlers ─────────────────────────────────────────────────────────────
 
@@ -372,7 +379,18 @@ const ProfilePage: React.FC = () => {
       setEditProfile(false);
       setSuccess('Profile updated successfully!');
       toast.success('Profile Updated', 'Your details have been saved successfully.');
-      setTimeout(() => setSuccess(''), 3000);
+      
+      // Check for pending search and redirect with it, otherwise just redirect to schedules
+      const pendingSearch = getPendingSearch();
+      if (pendingSearch) {
+        const redirectUrl = buildSearchRedirectUrl(pendingSearch);
+        clearPendingSearch();
+        // Redirect immediately to search results
+        router.push(redirectUrl);
+      } else {
+        // Redirect immediately to schedules
+        router.push('/schedules');
+      }
     } catch (err: unknown) {
       setError(`Failed to update profile: ${(err as any).message}`);
     } finally {

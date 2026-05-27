@@ -56,15 +56,13 @@ export default function VerifyEmailPage() {
       const { data: { session } } = await supabase.auth.getSession();
       
       if (session) {
-        // User is logged in by the email link.
-        // We log them out so they are forced to log in, per the desired flow.
-        await supabase.auth.signOut();
+        // User is logged in by the email link and email has been verified.
         setStatus('success');
-        
-        // Redirect to login page with verified parameter
+        setMessage('Email confirmed! Redirecting you to the app...');
+
         setTimeout(() => {
-          router.push('/login?verified=true');
-        }, 2000);
+          router.push('/');
+        }, 1200);
       } else {
         // No session found.
         setStatus('error');
