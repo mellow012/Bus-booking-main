@@ -81,6 +81,11 @@ export default function SchedulesClient({
   const [popularRoutes, setPopularRoutes] = useState<any[]>([]);
   const [userCity, setUserCity] = useState<string | null>(null);
   const todayDate = new Date().toISOString().split('T')[0];
+  const tomorrowDateStr = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    return d.toISOString().split('T')[0];
+  }, []);
   const isFutureDateSearch = Boolean(searchDate && searchDate > todayDate);
   const hasActiveSearch = Boolean(searchFrom || searchTo || searchDate);
 
@@ -417,18 +422,22 @@ export default function SchedulesClient({
                   </div>
                   <div className="flex gap-2">
                     <button
-                      onClick={() => setSearchDate(new Date().toISOString().split('T')[0])}
-                      className="flex-1 text-xs font-bold bg-gray-100 text-gray-700 hover:bg-blue-100 hover:text-blue-700 py-2 rounded-lg transition-colors"
+                      onClick={() => setSearchDate(todayDate)}
+                      className={`flex-1 text-[10px] font-black uppercase tracking-widest py-2.5 rounded-xl border transition-all duration-200 ${
+                        searchDate === todayDate
+                          ? "bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-100"
+                          : "bg-gray-50 text-gray-500 border-gray-100 hover:border-blue-200 hover:text-blue-600 hover:bg-white"
+                      }`}
                     >
                       Today
                     </button>
                     <button
-                      onClick={() => {
-                        const tomorrow = new Date();
-                        tomorrow.setDate(tomorrow.getDate() + 1);
-                        setSearchDate(tomorrow.toISOString().split('T')[0]);
-                      }}
-                      className="flex-1 text-xs font-bold bg-gray-100 text-gray-700 hover:bg-blue-100 hover:text-blue-700 py-2 rounded-lg transition-colors"
+                      onClick={() => setSearchDate(tomorrowDateStr)}
+                      className={`flex-1 text-[10px] font-black uppercase tracking-widest py-2.5 rounded-xl border transition-all duration-200 ${
+                        searchDate === tomorrowDateStr
+                          ? "bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-100"
+                          : "bg-gray-50 text-gray-500 border-gray-100 hover:border-blue-200 hover:text-blue-600 hover:bg-white"
+                      }`}
                     >
                       Tomorrow
                     </button>
@@ -829,4 +838,3 @@ export default function SchedulesClient({
     </div>
   );
 }
-

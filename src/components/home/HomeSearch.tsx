@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { MapPin, Calendar, Users, Search, Navigation } from "lucide-react";
 import { LocationAutocomplete } from "@/components/LocationAutocomplete";
@@ -17,6 +17,13 @@ export default function HomeSearch() {
   const [userCity, setUserCity] = useState<string|null>(null);
   const [geoStatus, setGeoStatus] = useState<GeoStatus>("idle");
   const [showCityPicker, setShowCityPicker] = useState(false);
+
+  const todayStr = new Date().toISOString().split('T')[0];
+  const tomorrowStr = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    return d.toISOString().split('T')[0];
+  }, []);
 
   // Sync with general city preference changes from other components
   useEffect(() => {
@@ -166,19 +173,23 @@ export default function HomeSearch() {
                 <div className="flex gap-1.5">
                   <button
                     type="button"
-                    onClick={() => setSearch(p => ({ ...p, date: new Date().toISOString().split('T')[0] }))}
-                    className="flex-1 text-xs font-bold bg-gray-100 text-gray-700 hover:bg-blue-100 hover:text-blue-700 py-2 rounded-lg transition-colors"
+                    onClick={() => setSearch(p => ({ ...p, date: todayStr }))}
+                    className={`flex-1 text-[10px] font-black uppercase tracking-widest py-2.5 rounded-xl border transition-all duration-200 ${
+                      search.date === todayStr
+                        ? "bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-100"
+                        : "bg-gray-50 text-gray-500 border-gray-100 hover:border-blue-200 hover:text-blue-600 hover:bg-white"
+                    }`}
                   >
                     Today
                   </button>
                   <button
                     type="button"
-                    onClick={() => {
-                      const tomorrow = new Date();
-                      tomorrow.setDate(tomorrow.getDate() + 1);
-                      setSearch(p => ({ ...p, date: tomorrow.toISOString().split('T')[0] }));
-                    }}
-                    className="flex-1 text-xs font-bold bg-gray-100 text-gray-700 hover:bg-blue-100 hover:text-blue-700 py-2 rounded-lg transition-colors"
+                    onClick={() => setSearch(p => ({ ...p, date: tomorrowStr }))}
+                    className={`flex-1 text-[10px] font-black uppercase tracking-widest py-2.5 rounded-xl border transition-all duration-200 ${
+                      search.date === tomorrowStr
+                        ? "bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-100"
+                        : "bg-gray-50 text-gray-500 border-gray-100 hover:border-blue-200 hover:text-blue-600 hover:bg-white"
+                    }`}
                   >
                     Tomorrow
                   </button>

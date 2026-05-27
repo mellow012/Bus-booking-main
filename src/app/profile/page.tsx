@@ -319,6 +319,10 @@ const ProfilePage: React.FC = () => {
 
         const { data: userData } = await response.json();
 
+        if (userData && !userData.setupCompleted) {
+          setEditProfile(true);
+        }
+
         const createdAtDate = userData.createdAt ? new Date(userData.createdAt) : new Date();
         setProfile({ ...userData, createdAt: createdAtDate } as any);
         setFormData({
@@ -681,31 +685,34 @@ const ProfilePage: React.FC = () => {
                 </div>
               </div>
 
-              <div className="flex w-full sm:w-auto items-center gap-3">
-                <button
-                  onClick={() => setEditProfile(!editProfile)}
-                  className={`flex-1 sm:flex-none px-6 py-3 rounded-2xl font-bold transition-all duration-300 flex items-center justify-center space-x-2 ${editProfile
-                    ? 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                    : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-lg shadow-indigo-200'
-                    }`}
-                >
-                  {editProfile ? <XCircle className="w-4 h-4" /> : <Edit className="w-4 h-4" />}
-                  <span>{editProfile ? 'Close Editor' : 'Edit Profile'}</span>
-                </button>
+              {profile.setupCompleted && (
+                <div className="flex w-full sm:w-auto items-center gap-3">
+                  <button
+                    onClick={() => setEditProfile(!editProfile)}
+                    className={`flex-1 sm:flex-none px-6 py-3 rounded-2xl font-bold transition-all duration-300 flex items-center justify-center space-x-2 ${editProfile
+                      ? 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-lg shadow-indigo-200'
+                      }`}
+                  >
+                    {editProfile ? <XCircle className="w-4 h-4" /> : <Edit className="w-4 h-4" />}
+                    <span>{editProfile ? 'Close Editor' : 'Edit Profile'}</span>
+                  </button>
 
-                <button
-                  onClick={() => fetchBookingData()}
-                  className="w-12 h-12 rounded-2xl bg-white border border-gray-100 text-gray-400 hover:text-indigo-600 hover:border-indigo-100 hover:shadow-md transition-all flex items-center justify-center shrink-0"
-                  disabled={statsLoading}
-                >
-                  <RefreshCw className={`w-5 h-5 ${statsLoading ? 'animate-spin' : ''}`} />
-                </button>
-              </div>
+                  <button
+                    onClick={() => fetchBookingData()}
+                    className="w-12 h-12 rounded-2xl bg-white border border-gray-100 text-gray-400 hover:text-indigo-600 hover:border-indigo-100 hover:shadow-md transition-all flex items-center justify-center shrink-0"
+                    disabled={statsLoading}
+                  >
+                    <RefreshCw className={`w-5 h-5 ${statsLoading ? 'animate-spin' : ''}`} />
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
           {/* Stats Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-8">
+          {profile.setupCompleted && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-8">
             <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100 hover:shadow-xl transition-all">
               <div className="flex items-center justify-between mb-4">
                 <div className="p-3 bg-blue-50 rounded-xl"><BusIcon className="w-6 h-6 text-blue-600" /></div>
@@ -752,10 +759,12 @@ const ProfilePage: React.FC = () => {
                 </div>
               </div>
             </div>
-          </div>
+            </div>
+          )}
 
           {/* Tab Navigation */}
-          <div className="bg-gray-200/50 p-1.5 rounded-[24px] mb-8 w-fit mx-auto md:mx-0 max-w-full">
+          {profile.setupCompleted && (
+            <div className="bg-gray-200/50 p-1.5 rounded-[24px] mb-8 w-fit mx-auto md:mx-0 max-w-full">
             <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
               {tabs.map((tab) => (
                 <button
@@ -771,11 +780,12 @@ const ProfilePage: React.FC = () => {
                 </button>
               ))}
             </div>
-          </div>
+            </div>
+          )}
 
           {/* Main Content */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div className="lg:col-span-2">
+            <div className={profile.setupCompleted ? "lg:col-span-2" : "lg:col-span-3"}>
               <div className="bg-white rounded-[32px] shadow-sm border border-gray-100 p-6 sm:p-10">
 
                 {/* Overview Tab */}
@@ -1341,7 +1351,8 @@ const ProfilePage: React.FC = () => {
             </div>
 
             {/* Sidebar */}
-            <div className="space-y-8">
+            {profile.setupCompleted && (
+              <div className="space-y-8">
               <div className="bg-white/80 backdrop-blur-sm rounded-[32px] shadow-sm border border-white p-6 sm:p-8">
                 <div className="flex items-center justify-between mb-8">
                   <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest">Insights</h3>
@@ -1403,6 +1414,7 @@ const ProfilePage: React.FC = () => {
                 </button>
               </div>
             </div>
+            )}
           </div>
 
           {/* Cancellation Confirmation Modal */}
@@ -1450,4 +1462,3 @@ const ProfilePage: React.FC = () => {
 };
 
 export default ProfilePage;
-
