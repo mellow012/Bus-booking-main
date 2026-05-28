@@ -93,12 +93,19 @@ export function useConductorDashboard() {
   useEffect(() => {
     if (authLoading) return;
     if (user && userProfile?.role === 'conductor') {
-      const silentRefresh = () => {
-        if (document.visibilityState === 'visible') fetchInitialData(true);
-      };
-      
       fetchInitialData(false);
-      const intervalId = setInterval(silentRefresh, 30000);
+
+      if (!companyId) return;
+      const channel = supabase
+        .channel(`conductor-schedules-${companyId}`)
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'Schedule', filter: `companyId=eq.${companyId}` },
+          () => {
+            if (document.visibilityState === 'visible') fetchInitialData(true);
+          }
+        )
+        .subscribe();
 
       const handleVisibility = () => {
         if (document.visibilityState === 'visible') fetchInitialData(true);
@@ -106,11 +113,11 @@ export function useConductorDashboard() {
       document.addEventListener('visibilitychange', handleVisibility);
 
       return () => {
-        clearInterval(intervalId);
+        supabase.removeChannel(channel);
         document.removeEventListener('visibilitychange', handleVisibility);
       };
     }
-  }, [user, userProfile, authLoading, fetchInitialData]);
+  }, [user, userProfile, authLoading, companyId, fetchInitialData]);
 
   useEffect(() => {
     if (!selectedTrip || selectedTrip.tripStatus !== 'in_transit') return;

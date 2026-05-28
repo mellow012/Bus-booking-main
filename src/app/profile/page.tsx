@@ -178,6 +178,10 @@ const ProfilePage: React.FC = () => {
   const [bookingToCancel, setBookingToCancel] = useState<string | null>(null);
   const [bookingFilter, setBookingFilter] = useState('all');
 
+  const [inlineNewPassword, setInlineNewPassword] = useState('');
+  const [inlineConfirmPassword, setInlineConfirmPassword] = useState('');
+  const [inlinePasswordLoading, setInlinePasswordLoading] = useState(false);
+
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -185,8 +189,6 @@ const ProfilePage: React.FC = () => {
     sex: '',
     currentAddress: '',
     email: user?.email || '',
-    password: '',
-    confirmPassword: '',
   });
 
   // ─── Booking data ─────────────────────────────────────────────────────────
@@ -338,8 +340,6 @@ const ProfilePage: React.FC = () => {
           sex: userData.sex || '',
           currentAddress: userData.currentAddress || '',
           email: userData.email || user.email || '',
-          password: '',
-          confirmPassword: '',
         });
         await Promise.all([fetchBookingData(userData), loadUserPreferences()]);
       } catch (err: unknown) {
@@ -371,30 +371,11 @@ const ProfilePage: React.FC = () => {
       errors.push('Phone must be in +265 format (e.g., +265999123456)');
     }
 
-    // Optional password change
-    const pw = formData.password || '';
-    const cpw = formData.confirmPassword || '';
-    if ((pw && !cpw) || (!pw && cpw)) {
-      errors.push('To change password provide both Password and Confirm password');
-    }
-    if (pw && cpw) {
-      if (pw.length < 6) errors.push('Password must be at least 6 characters');
-      if (pw !== cpw) errors.push('Passwords do not match');
-    }
-
     if (errors.length > 0) { setError(errors.join('. ')); return; }
 
     setActionLoading(true);
     setError('');
     try {
-      // If changing password, update via Supabase auth first
-      if (pw && cpw) {
-        const supabase = createClient();
-        const { error: pwErr } = await supabase.auth.updateUser({ password: pw });
-        if (pwErr) throw pwErr;
-        try { await refreshUserProfile(); } catch (e) { /* ignore refresh errors */ }
-      }
-
       await updateUserProfile({
         firstName: formData.firstName,
         lastName: formData.lastName,
@@ -405,7 +386,7 @@ const ProfilePage: React.FC = () => {
 
       setProfile(prev => prev ? { ...prev, ...formData, setupCompleted: true, updatedAt: new Date() } : null);
       setEditProfile(false);
-      setSuccess(pw && cpw ? 'Profile and password updated successfully!' : 'Profile updated successfully!');
+      setSuccess('Profile updated successfully!');
       toast.success('Profile Updated', 'Your details have been saved successfully.');
       
       // Check for pending search and redirect with it, otherwise just redirect to schedules
@@ -423,6 +404,35 @@ const ProfilePage: React.FC = () => {
       setError(`Failed to update profile: ${(err as any).message}`);
     } finally {
       setActionLoading(false);
+    }
+  };
+
+  const handleInlinePasswordUpdate = async (e: FormEvent) => {
+    e.preventDefault();
+    if (inlineNewPassword.length < 6) {
+      setError('Password must be at least 6 characters');
+      return;
+    }
+    if (inlineNewPassword !== inlineConfirmPassword) {
+      setError('Passwords do not match');
+      return;
+    }
+
+    setInlinePasswordLoading(true);
+    setError('');
+    setSuccess('');
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.auth.updateUser({ password: inlineNewPassword });
+      if (error) throw error;
+      setSuccess('Password changed successfully!');
+      setInlineNewPassword('');
+      setInlineConfirmPassword('');
+      toast.success('Password Updated', 'Your security password has been changed successfully.');
+    } catch (err: any) {
+      setError(`Failed to update password: ${err.message}`);
+    } finally {
+      setInlinePasswordLoading(false);
     }
   };
 
@@ -869,14 +879,24 @@ const ProfilePage: React.FC = () => {
                             <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider">Contact & Address</h3>
                           </div>
                           <div className="space-y-6">
-                            <div>
-                              <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Phone Number</label>
-                              <div className="relative group">
-                                <input type="tel" value={formData.phone}
-                                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                                  className="w-full px-5 py-3.5 bg-gray-50 border border-transparent rounded-2xl focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all outline-none"
-                                  placeholder="+265..." required />
-                                <Phone className="w-4 h-4 text-gray-300 absolute right-4 top-4 group-focus-within:text-indigo-400 transition-colors" />
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-6">
+                              <div>
+                                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Email Address</label>
+                                <div className="relative group">
+                                  <input type="email" value={formData.email} disabled
+                                    className="w-full px-5 py-3.5 bg-gray-100 border border-transparent rounded-2xl text-gray-400 cursor-not-allowed outline-none" />
+                                  <Mail className="w-4 h-4 text-gray-300 absolute right-4 top-4" />
+                                </div>
+                              </div>
+                              <div>
+                                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Phone Number</label>
+                                <div className="relative group">
+                                  <input type="tel" value={formData.phone}
+                                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                                    className="w-full px-5 py-3.5 bg-gray-50 border border-transparent rounded-2xl focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all outline-none"
+                                    placeholder="+265..." required />
+                                  <Phone className="w-4 h-4 text-gray-300 absolute right-4 top-4 group-focus-within:text-indigo-400 transition-colors" />
+                                </div>
                               </div>
                             </div>
                             <div>
@@ -886,32 +906,6 @@ const ProfilePage: React.FC = () => {
                                   onChange={(e) => setFormData({ ...formData, currentAddress: e.target.value })}
                                   className="w-full px-5 py-3.5 bg-gray-50 border border-transparent rounded-2xl focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all outline-none" />
                                 <MapPin className="w-4 h-4 text-gray-300 absolute right-4 top-4 group-focus-within:text-indigo-400 transition-colors" />
-                              </div>
-                            </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-6">
-                              <div>
-                                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Password</label>
-                                <div className="relative group">
-                                  <input type={showPassword ? 'text' : 'password'} value={formData.password}
-                                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                                    className="w-full px-5 py-3.5 bg-gray-50 border border-transparent rounded-2xl focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all outline-none"
-                                    placeholder="Enter new password (optional)" />
-                                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-3 text-gray-400">
-                                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                                  </button>
-                                </div>
-                              </div>
-                              <div>
-                                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Confirm Password</label>
-                                <div className="relative group">
-                                  <input type={showConfirmPassword ? 'text' : 'password'} value={formData.confirmPassword}
-                                    onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
-                                    className="w-full px-5 py-3.5 bg-gray-50 border border-transparent rounded-2xl focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all outline-none"
-                                    placeholder="Confirm new password" />
-                                  <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute right-3 top-3 text-gray-400">
-                                    {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                                  </button>
-                                </div>
                               </div>
                             </div>
                           </div>
@@ -1342,23 +1336,56 @@ const ProfilePage: React.FC = () => {
                       </div>
 
                       <div className="p-7 bg-white border border-gray-100 rounded-[32px] hover:shadow-xl hover:shadow-indigo-500/5 transition-all group">
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
-                          <div className="flex items-center gap-4">
-                            <div className="p-4 bg-indigo-50 text-indigo-600 rounded-2xl group-hover:rotate-6 transition-transform">
-                              <Key className="w-6 h-6" />
-                            </div>
-                            <div>
-                              <p className="text-lg font-black text-gray-900 tracking-tight">Login Password</p>
-                              <p className="text-xs text-gray-400 font-bold uppercase tracking-wider mt-0.5">
-                                {pwResetSent ? 'Reset code sent to your email' : 'Update your password regularly'}
-                              </p>
+                        <div className="flex items-center gap-4 mb-6">
+                          <div className="p-4 bg-indigo-50 text-indigo-600 rounded-2xl group-hover:rotate-6 transition-transform">
+                            <Key className="w-6 h-6" />
+                          </div>
+                          <div>
+                            <p className="text-lg font-black text-gray-900 tracking-tight">Login Password</p>
+                            <p className="text-xs text-gray-400 font-bold uppercase tracking-wider mt-0.5">
+                              Update your password directly below
+                            </p>
+                          </div>
+                        </div>
+
+                        <form onSubmit={handleInlinePasswordUpdate} className="space-y-4 max-w-md">
+                          <div>
+                            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">New Password</label>
+                            <div className="relative group">
+                              <input type={showPassword ? 'text' : 'password'} value={inlineNewPassword}
+                                onChange={(e) => setInlineNewPassword(e.target.value)}
+                                className="w-full px-5 py-3.5 bg-gray-50 border border-transparent rounded-2xl focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all outline-none text-sm"
+                                placeholder="Min 6 characters" required />
+                              <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-4 text-gray-400">
+                                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                              </button>
                             </div>
                           </div>
-                          <button onClick={handlePasswordReset} disabled={pwResetSent}
-                            className="px-8 py-3.5 bg-gray-900 text-white rounded-[20px] text-xs font-black uppercase tracking-[0.2em] hover:bg-black transition-all disabled:opacity-50 shadow-xl shadow-black/10">
-                            {pwResetSent ? 'Check Inbox' : 'Reset Link'}
-                          </button>
-                        </div>
+
+                          <div>
+                            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Confirm New Password</label>
+                            <div className="relative group">
+                              <input type={showConfirmPassword ? 'text' : 'password'} value={inlineConfirmPassword}
+                                onChange={(e) => setInlineConfirmPassword(e.target.value)}
+                                className="w-full px-5 py-3.5 bg-gray-50 border border-transparent rounded-2xl focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all outline-none text-sm"
+                                placeholder="Re-enter new password" required />
+                              <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute right-4 top-4 text-gray-400">
+                                {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="flex flex-col sm:flex-row items-center gap-4 pt-2">
+                            <button type="submit" disabled={inlinePasswordLoading}
+                              className="w-full sm:w-auto px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl text-xs font-bold uppercase tracking-wider transition-all disabled:opacity-50 shadow-md">
+                              {inlinePasswordLoading ? 'Updating...' : 'Update Password'}
+                            </button>
+                            <button type="button" onClick={handlePasswordReset} disabled={pwResetSent || inlinePasswordLoading}
+                              className="w-full sm:w-auto px-6 py-3 bg-white text-gray-600 border border-gray-200 rounded-2xl text-xs font-bold uppercase tracking-wider hover:bg-gray-50 transition-all disabled:opacity-50">
+                              {pwResetSent ? 'Check Email Inbox' : 'Send Password Reset Link'}
+                            </button>
+                          </div>
+                        </form>
                       </div>
 
                       <div className="p-7 bg-gray-50/50 border border-gray-100 rounded-[32px] opacity-70 cursor-not-allowed">

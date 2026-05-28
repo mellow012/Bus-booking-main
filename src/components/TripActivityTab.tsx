@@ -19,6 +19,7 @@ import {
 import { Schedule, Route, ActivityLog } from "@/types";
 import * as dbActions from "@/lib/actions/db.actions";
 import { format } from "date-fns";
+import { createClient } from "@/utils/supabase/client";
 
 interface TripActivityTabProps {
   companyId: string;
@@ -46,12 +47,21 @@ export default function TripActivityTab({ companyId, schedules, routes, showAler
   };
 
   useEffect(() => {
-    const silentRefresh = () => {
-      if (document.visibilityState === 'visible') fetchLogs();
-    };
+    if (!companyId) return;
 
     fetchLogs();
-    const interval = setInterval(silentRefresh, 15000); // Polling for updates
+
+    const supabase = createClient();
+    const channel = supabase
+      .channel(`trip-activity-logs-${companyId}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'ActivityLog', filter: `companyId=eq.${companyId}` },
+        () => {
+          if (document.visibilityState === 'visible') fetchLogs();
+        }
+      )
+      .subscribe();
 
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') fetchLogs();
@@ -59,7 +69,7 @@ export default function TripActivityTab({ companyId, schedules, routes, showAler
     document.addEventListener('visibilitychange', handleVisibility);
 
     return () => {
-      clearInterval(interval);
+      supabase.removeChannel(channel);
       document.removeEventListener('visibilitychange', handleVisibility);
     };
   }, [companyId]);

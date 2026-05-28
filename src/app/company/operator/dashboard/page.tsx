@@ -197,7 +197,7 @@ export default function OperatorDashboard() {
     fetchInitialData();
   }, [user, userProfile, authLoading, router, fetchInitialData]);
 
-  // Real-time Subscriptions + visibility-aware polling
+  // Real-time Subscriptions
   useEffect(() => {
     if (!companyId) return;
 
@@ -214,8 +214,6 @@ export default function OperatorDashboard() {
       }).subscribe(),
     ];
 
-    const pollInterval = setInterval(silentRefresh, 30000);
-
     // When tab becomes visible again, do one clean refresh instead of queueing many
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') fetchInitialData(true);
@@ -224,7 +222,6 @@ export default function OperatorDashboard() {
 
     return () => {
       channels.forEach(c => supabase.removeChannel(c));
-      clearInterval(pollInterval);
       document.removeEventListener('visibilitychange', handleVisibility);
     };
   }, [companyId, fetchInitialData]);

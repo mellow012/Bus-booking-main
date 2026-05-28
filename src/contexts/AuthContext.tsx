@@ -107,20 +107,47 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               }
             }).catch((err) => console.error('[AuthContext] Auto-activate failed:', err));
           }
+
+          // Check if we should update missing name or phone from user metadata (non-blocking)
+          const needsMetadataSync = (!data.firstName || !data.phone) && 
+                                    (user?.user_metadata?.first_name || user?.user_metadata?.phone);
+          if (needsMetadataSync) {
+            fetch('/api/auth/profile', {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                firstName: data.firstName || user?.user_metadata?.first_name || '',
+                lastName: data.lastName || user?.user_metadata?.last_name || '',
+                phone: data.phone || user?.user_metadata?.phone || '',
+                setupCompleted: !!((data.firstName || user?.user_metadata?.first_name) && 
+                                  (data.phone || user?.user_metadata?.phone)),
+              }),
+            }).then(async (res) => {
+              if (res.ok) {
+                const { data: updatedData } = await res.json();
+                if (updatedData) setUserProfile(updatedData as UserProfile);
+              }
+            }).catch((err) => console.error('[AuthContext] Metadata sync failed:', err));
+          }
         } else {
           // Initialize profile if not exists (non-blocking)
+          const metaFirstName = user?.user_metadata?.first_name || '';
+          const metaLastName = user?.user_metadata?.last_name || '';
+          const metaPhone = user?.user_metadata?.phone || '';
+          const isMetaSetupComplete = !!(metaFirstName && metaPhone);
+
           fetch('/api/auth/profile', {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               email: user?.email || '',
-              firstName: '',
-              lastName: '',
-              phone: '',
+              firstName: metaFirstName,
+              lastName: metaLastName,
+              phone: metaPhone,
               role: 'customer',
               isActive: true,
               emailVerified: user?.email_confirmed_at ? true : false,
-              setupCompleted: false,
+              setupCompleted: isMetaSetupComplete,
             }),
           }).then(async (res) => {
             if (res.ok) {
@@ -304,6 +331,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         data: {
           first_name: firstName,
           last_name:  lastName,
+          phone:      formatPhoneToE164(profile.phone),
         }
       }
     });
@@ -313,7 +341,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     if (data.user) {
-      // Sync with Prisma
+      // Sync with Prisma (may return 401 if unauthenticated, which will fall back to sync on login)
       await fetch('/api/auth/profile', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -325,9 +353,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           role:           'customer',
           isActive:       true,
           emailVerified:  false,
-          setupCompleted: false,
+          setupCompleted: true,
         }),
-      });
+      }).catch(err => console.warn('[AuthContext] Unauthenticated sync skipped during registration:', err));
     }
   };
 

@@ -2,6 +2,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Bell, Trash2, Check, CheckCheck, Loader2, AlertCircle } from 'lucide-react';
+import { createClient } from '@/utils/supabase/client';
 import { Notification } from '@/types';
 
 interface NotificationResponse {
@@ -62,15 +63,22 @@ export default function NotificationsPage() {
     }
   }, [user?.id]);
 
-  // Initial load and polling
   useEffect(() => {
-    const silentRefresh = () => {
-      if (document.visibilityState === 'visible') fetchNotifications(1, true);
-    };
+    if (!user?.id) return;
 
     fetchNotifications(1);
-    // Poll for new notifications every 10 seconds
-    const interval = setInterval(silentRefresh, 10000);
+
+    const supabase = createClient();
+    const channel = supabase
+      .channel(`user-notifications-page-${user.id}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'Notification', filter: `userId=eq.${user.id}` },
+        () => {
+          if (document.visibilityState === 'visible') fetchNotifications(1, true);
+        }
+      )
+      .subscribe();
 
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') fetchNotifications(1, true);
@@ -78,10 +86,10 @@ export default function NotificationsPage() {
     document.addEventListener('visibilitychange', handleVisibility);
 
     return () => {
-      clearInterval(interval);
+      supabase.removeChannel(channel);
       document.removeEventListener('visibilitychange', handleVisibility);
     };
-  }, [fetchNotifications]);
+  }, [user?.id, fetchNotifications]);
 
   // Mark single notification as read
   const handleMarkRead = useCallback(async (notificationId: string) => {

@@ -11,6 +11,7 @@ import AlertMessage from "@/components/AlertMessage";
 import { EnhancedSchedule, isToday, getScheduleCategory, GeoStatus, cityMatch, nearestCity } from "@/utils/homeHelpers";
 import { CityPickerModal } from "@/components/CityPickerModal";
 import Image from "next/image";
+import { createClient } from "@/utils/supabase/client";
 
 const LS_CITY_KEY = "tb_user_city";
 
@@ -47,7 +48,6 @@ export default function HomeSchedules() {
     setCurrentPage(1);
   }, [selectedCategory]);
 
-  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const fetchSchedules = useCallback(async (refresh = false, silent = false) => {
     if (!silent) {
@@ -87,9 +87,18 @@ export default function HomeSchedules() {
   useEffect(() => {
     if (!isReady) return;
     fetchSchedules();
-    pollingIntervalRef.current = setInterval(() => {
-      if (document.visibilityState === 'visible') fetchSchedules(false, true);
-    }, 45000);
+
+    const supabase = createClient();
+    const channel = supabase
+      .channel("home-schedules")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "Schedule" },
+        () => {
+          if (document.visibilityState === "visible") fetchSchedules(false, true);
+        }
+      )
+      .subscribe();
 
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') fetchSchedules(false, true);
@@ -97,7 +106,7 @@ export default function HomeSchedules() {
     document.addEventListener('visibilitychange', handleVisibility);
 
     return () => {
-      if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
+      supabase.removeChannel(channel);
       document.removeEventListener('visibilitychange', handleVisibility);
     };
   }, [isReady, fetchSchedules]);
