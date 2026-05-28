@@ -183,8 +183,7 @@ const ProfilePage: React.FC = () => {
   const [inlinePasswordLoading, setInlinePasswordLoading] = useState(false);
 
   const [formData, setFormData] = useState({
-    firstName: '',
-    lastName: '',
+    fullName: '',
     phone: '',
     sex: '',
     currentAddress: '',
@@ -334,8 +333,7 @@ const ProfilePage: React.FC = () => {
         const createdAtDate = userData.createdAt ? new Date(userData.createdAt) : new Date();
         setProfile({ ...userData, createdAt: createdAtDate } as any);
         setFormData({
-          firstName: userData.firstName || '',
-          lastName: userData.lastName || '',
+          fullName: [userData.firstName, userData.lastName].filter(Boolean).join(' ').trim() || '',
           phone: userData.phone || '',
           sex: userData.sex || '',
           currentAddress: userData.currentAddress || '',
@@ -364,8 +362,8 @@ const ProfilePage: React.FC = () => {
     if (!user || !profile) return;
 
     const errors: string[] = [];
-    if (!formData.firstName.trim() || !formData.lastName.trim()) {
-      errors.push('First name and last name are required');
+    if (!formData.fullName.trim()) {
+      errors.push('Full name is required');
     }
     if (!formData.phone.match(/^\+265\d{9}$/)) {
       errors.push('Phone must be in +265 format (e.g., +265999123456)');
@@ -373,18 +371,20 @@ const ProfilePage: React.FC = () => {
 
     if (errors.length > 0) { setError(errors.join('. ')); return; }
 
+    const { firstName, lastName } = splitFullName(formData.fullName);
+
     setActionLoading(true);
     setError('');
     try {
       await updateUserProfile({
-        firstName: formData.firstName,
-        lastName: formData.lastName,
+        firstName,
+        lastName,
         phone: formData.phone,
         sex: formData.sex || undefined,
         currentAddress: formData.currentAddress || undefined,
       });
 
-      setProfile(prev => prev ? { ...prev, ...formData, setupCompleted: true, updatedAt: new Date() } : null);
+      setProfile(prev => prev ? { ...prev, firstName, lastName, ...formData, setupCompleted: true, updatedAt: new Date() } : null);
       setEditProfile(false);
       setSuccess('Profile updated successfully!');
       toast.success('Profile Updated', 'Your details have been saved successfully.');
@@ -840,20 +840,11 @@ const ProfilePage: React.FC = () => {
                             <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider">Personal Details</h3>
                           </div>
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-6">
-                            <div>
-                              <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">First Name</label>
+                            <div className="md:col-span-2">
+                              <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Full Name</label>
                               <div className="relative group">
-                                <input type="text" value={formData.firstName}
-                                  onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
-                                  className="w-full px-5 py-3.5 bg-gray-50 border border-transparent rounded-2xl focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all outline-none" required />
-                                <User className="w-4 h-4 text-gray-300 absolute right-4 top-4 group-focus-within:text-indigo-400 transition-colors" />
-                              </div>
-                            </div>
-                            <div>
-                              <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Last Name</label>
-                              <div className="relative group">
-                                <input type="text" value={formData.lastName}
-                                  onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
+                                <input type="text" value={formData.fullName}
+                                  onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
                                   className="w-full px-5 py-3.5 bg-gray-50 border border-transparent rounded-2xl focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all outline-none" required />
                                 <User className="w-4 h-4 text-gray-300 absolute right-4 top-4 group-focus-within:text-indigo-400 transition-colors" />
                               </div>
@@ -1530,3 +1521,13 @@ const ProfilePage: React.FC = () => {
 };
 
 export default ProfilePage;
+
+function splitFullName(fullName: string): { firstName: any; lastName: any; } {
+  const name = (fullName || '').trim();
+  if (!name) return { firstName: '', lastName: '' };
+  const parts = name.split(/\s+/);
+  if (parts.length === 1) return { firstName: parts[0], lastName: '' };
+  const firstName = parts.shift() as string;
+  const lastName = parts.join(' ');
+  return { firstName, lastName };
+}

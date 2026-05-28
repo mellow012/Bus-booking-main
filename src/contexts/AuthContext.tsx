@@ -119,8 +119,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 firstName: data.firstName || user?.user_metadata?.first_name || '',
                 lastName: data.lastName || user?.user_metadata?.last_name || '',
                 phone: data.phone || user?.user_metadata?.phone || '',
-                setupCompleted: !!((data.firstName || user?.user_metadata?.first_name) && 
-                                  (data.phone || user?.user_metadata?.phone)),
               }),
             }).then(async (res) => {
               if (res.ok) {
@@ -147,7 +145,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               role: 'customer',
               isActive: true,
               emailVerified: user?.email_confirmed_at ? true : false,
-              setupCompleted: isMetaSetupComplete,
+              setupCompleted: false,
             }),
           }).then(async (res) => {
             if (res.ok) {
@@ -353,7 +351,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           role:           'customer',
           isActive:       true,
           emailVerified:  false,
-          setupCompleted: true,
+          setupCompleted: false,
         }),
       }).catch(err => console.warn('[AuthContext] Unauthenticated sync skipped during registration:', err));
     }
