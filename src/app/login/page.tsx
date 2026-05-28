@@ -29,7 +29,7 @@ interface ValidationResult {
 
 // Constants
 const MAX_ATTEMPTS      = 5;
-const MIN_PASSWORD_LENGTH = 8;
+const MIN_PASSWORD_LENGTH = 6;
 
 // ─── Hooks ────────────────────────────────────────────────────────────────────
 

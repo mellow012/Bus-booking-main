@@ -113,6 +113,10 @@ const Header: React.FC = () => {
   const isOperator     = normalizedRole === 'operator';
   const isConductor    = ['conductor','driver','crew','bus driver','bus conductor'].some(r => normalizedRole.includes(r));
   const isCustomer     = user && userProfile && !isSuperAdmin && !isCompanyAdmin && !isOperator && !isConductor;
+  const needsProfileAttention = Boolean(
+    isCustomer &&
+    (!userProfile?.setupCompleted || !userProfile?.firstName?.trim() || !userProfile?.lastName?.trim() || !userProfile?.phone?.trim())
+  );
 
   const adminRoute = isSuperAdmin ? '/admin' : isCompanyAdmin ? '/company/admin' : isOperator ? '/company/operator/dashboard' : null;
   const adminLabel = isOperator ? t('operatorPanel') : t('adminPanel');
@@ -183,7 +187,12 @@ const Header: React.FC = () => {
               <div className="relative hidden md:block" ref={userMenuRef}>
                 <button onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
                   className="flex items-center space-x-3 p-2 rounded-xl hover:bg-gray-100 transition-all duration-200 group">
-                  <UserAvatar user={user} userProfile={userProfile} />
+                  <div className="relative">
+                    <UserAvatar user={user} userProfile={userProfile} />
+                    {needsProfileAttention && (
+                      <span className="absolute top-0 right-0 w-2.5 h-2.5 bg-emerald-500 rounded-full border border-white" />
+                    )}
+                  </div>
                   <div className="hidden md:block text-left">
                     <div className="text-sm font-semibold text-gray-900 group-hover:text-blue-600">{displayName}</div>
                     <div className="text-xs text-gray-500 capitalize">{userProfile?.role || t('member')}</div>
@@ -210,7 +219,9 @@ const Header: React.FC = () => {
                       )}
                       {isCustomer && (
                         <Link href="/profile" onClick={() => setIsUserMenuOpen(false)} className="flex items-center space-x-3 px-4 py-2 text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors duration-200">
-                          <User className="w-4 h-4" /><span>{t('profile')}</span>
+                          <User className="w-4 h-4" />
+                          <span>{t('profile')}</span>
+                          {needsProfileAttention && <span className="ml-2 w-2.5 h-2.5 bg-emerald-500 rounded-full" />}
                         </Link>
                       )}
                       {isConductor ? (
@@ -298,7 +309,9 @@ const Header: React.FC = () => {
                         )}
                         {isCustomer && (
                           <Link href="/profile" onClick={() => setIsMenuOpen(false)} className="flex items-center space-x-3 p-4 text-gray-700 hover:bg-gray-50 rounded-2xl font-bold">
-                            <User className="w-5 h-5 text-gray-400" /><span>{t('profile')}</span>
+                            <User className="w-5 h-5 text-gray-400" />
+                            <span>{t('profile')}</span>
+                            {needsProfileAttention && <span className="ml-2 w-2.5 h-2.5 bg-emerald-500 rounded-full" />}
                           </Link>
                         )}
                       </>

@@ -25,8 +25,8 @@ export function validatePasswordStrength(password: string): {
   const suggestions: string[] = [];
   let score = 0;
 
-  if (password.length < 8) {
-    issues.push('Password must be at least 8 characters');
+  if (password.length < 6) {
+    issues.push('Password must be at least 6 characters');
   } else {
     score++;
   }

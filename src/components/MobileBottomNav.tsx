@@ -10,13 +10,19 @@ export const MobileBottomNav = () => {
   const pathname = usePathname();
   const { userProfile } = useAuth();
 
+  const needsProfileAttention = Boolean(
+    userProfile &&
+    userProfile.role === 'customer' &&
+    (!userProfile.setupCompleted || !userProfile.firstName?.trim() || !userProfile.lastName?.trim() || !userProfile.phone?.trim())
+  );
+
   const navItems = [
     { label: 'Home', icon: Home, path: '/' },
     { label: 'Search', icon: Search, path: '/schedules' },
-    ...(userProfile?.setupCompleted
+    ...(userProfile?.role === 'customer'
       ? [{ label: 'Bookings', icon: Bus, path: '/bookings' }]
       : []),
-    { label: 'Profile', icon: User, path: '/profile' },
+    { label: 'Profile', icon: User, path: '/profile', attention: needsProfileAttention },
   ];
 
   // Don't show on admin/company pages
@@ -38,7 +44,7 @@ export const MobileBottomNav = () => {
           <button
             key={item.path}
             onClick={() => router.push(item.path)}
-            className={`flex flex-col items-center transition-all duration-300 ${
+            className={`relative flex flex-col items-center transition-all duration-300 ${
               isActive ? 'text-blue-600 scale-110' : 'text-gray-400 hover:text-gray-600'
             }`}
           >
@@ -46,6 +52,9 @@ export const MobileBottomNav = () => {
             <span className={`text-[10px] mt-1 font-bold tracking-tight ${isActive ? 'opacity-100' : 'opacity-80'}`}>
               {item.label}
             </span>
+            {item.attention && (
+              <span className="absolute top-0 right-1 w-2.5 h-2.5 bg-emerald-500 rounded-full border border-white" />
+            )}
             {isActive && (
               <span className="absolute -bottom-1 w-1 h-1 bg-blue-600 rounded-full" />
             )}

@@ -28,7 +28,7 @@ interface PasswordStrength {
 }
 
 // Constants
-const MIN_PASSWORD_LENGTH = 8;
+const MIN_PASSWORD_LENGTH = 6;
 const MAX_PASSWORD_LENGTH = 128;
 
 // Password strength checker

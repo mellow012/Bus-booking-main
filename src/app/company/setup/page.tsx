@@ -123,7 +123,7 @@ function CompanySetupContent() {
 
   const validatePassword = (pwd: string): string | null => {
     if (!pwd) return 'Password is required';
-    if (pwd.length < 8) return 'Password must be at least 8 characters';
+    if (pwd.length < 6) return 'Password must be at least 6 characters';
     if (!/(?=.*[a-z])/.test(pwd)) return 'Must include a lowercase letter';
     if (!/(?=.*[A-Z])/.test(pwd)) return 'Must include an uppercase letter';
     if (!/(?=.*\d)/.test(pwd)) return 'Must include a number';

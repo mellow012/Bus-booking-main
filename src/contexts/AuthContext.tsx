@@ -18,6 +18,14 @@ const formatPhoneToE164 = (phone?: string): string => {
 };
 
 const COMPANY_ROLES: CompanyRole[] = ['company_admin', 'operator', 'conductor'];
+
+const splitFullName = (fullName: string) => {
+  const parts = fullName.trim().split(/\s+/).filter(Boolean);
+  const firstName = parts[0] || '';
+  const lastName = parts.slice(1).join(' ') || firstName;
+  return { firstName, lastName };
+};
+
 const _isCompanyRole = (role?: UserRole): role is CompanyRole =>
   COMPANY_ROLES.includes(role as CompanyRole);
 
@@ -29,7 +37,7 @@ interface AuthContextType {
   signUp: (
     email: string,
     password: string,
-    profile: { firstName: string; lastName: string; phone?: string }
+    profile: { fullName: string; phone?: string }
   ) => Promise<void>;
   updateUserProfile: (profile: UpdateProfilePayload) => Promise<void>;
   signOut: () => Promise<void>;
@@ -195,22 +203,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Only check these routes if we have the profile (it may still be loading)
       if (userProfile) {
         if (emailVerified && pathname === '/verify-email') {
-          if (userProfile.role === 'customer' && !userProfile.setupCompleted) {
-            router.push('/profile');
-          } else {
-            redirectToDashboard(userProfile);
-          }
-          return;
-        }
-
-        if (
-          emailVerified &&
-          userProfile.role === 'customer' &&
-          !userProfile.setupCompleted &&
-          pathname !== '/profile' &&
-          !isPublicRoute
-        ) {
-          router.push('/profile');
+          redirectToDashboard(userProfile);
           return;
         }
 
@@ -259,11 +252,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
         break;
       case 'customer':
-        if (!profile.setupCompleted) {
-          router.push('/profile');
-        } else {
-          router.push('/');
-        }
+        router.push('/');
         break;
       default:
         router.push('/');
@@ -296,14 +285,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signUp = async (
     email: string,
     password: string,
-    profile: { firstName: string; lastName: string; phone?: string }
+    profile: { fullName: string; phone?: string }
   ): Promise<void> => {
     if (!email?.trim() || !password?.trim()) {
       throw new Error('Email and password are required');
     }
-    if (!profile.firstName?.trim() || !profile.lastName?.trim()) {
-      throw new Error('First name and last name are required');
+    if (!profile.fullName?.trim()) {
+      throw new Error('Full name is required');
     }
+
+    const { firstName, lastName } = splitFullName(profile.fullName);
 
     const { data, error } = await supabase.auth.signUp({
       email: email.trim().toLowerCase(),
@@ -311,8 +302,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       options: {
         emailRedirectTo: `${window.location.origin}/verify-email?mode=verified`,
         data: {
-          first_name: profile.firstName.trim(),
-          last_name:  profile.lastName.trim(),
+          first_name: firstName,
+          last_name:  lastName,
         }
       }
     });
@@ -328,8 +319,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           email:          data.user.email,
-          firstName:      profile.firstName.trim(),
-          lastName:       profile.lastName.trim(),
+          firstName,
+          lastName,
           phone:          formatPhoneToE164(profile.phone),
           role:           'customer',
           isActive:       true,

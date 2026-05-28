@@ -12,6 +12,7 @@ import {
   EnvelopeIcon, LockClosedIcon, UserIcon, EyeIcon,
   EyeSlashIcon, ExclamationTriangleIcon, CheckCircleIcon, XCircleIcon
 } from '@heroicons/react/24/outline';
+import { Phone } from 'lucide-react';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -19,8 +20,8 @@ interface FormData {
   email: string;
   password: string;
   confirmPassword: string;
-  firstName: string;
-  lastName: string;
+  fullName: string;
+  phone: string;
   agreeToTerms: boolean;
 }
 
@@ -28,8 +29,8 @@ interface FormErrors {
   email?: string;
   password?: string;
   confirmPassword?: string;
-  firstName?: string;
-  lastName?: string;
+  fullName?: string;
+  phone?: string;
   agreeToTerms?: string;
   general?: string;
 }
@@ -61,15 +62,15 @@ const useFormValidation = (formData: FormData, t: (key: string, opts?: any) => s
         if (!value || typeof value !== 'string') return t('errorConfirmRequired');
         if (value !== formData.password) return t('errorConfirmMatch');
         return '';
-      case 'firstName':
-        if (!value || typeof value !== 'string' || !value.trim()) return t('errorFirstNameRequired');
-        if (value.trim().length < 2) return t('errorFirstNameMin');
-        if (!NAME_REGEX.test(value)) return t('errorFirstNameChars');
+      case 'fullName':
+        if (!value || typeof value !== 'string' || !value.trim()) return 'Full name is required';
+        if (value.trim().length < 2) return 'Full name must be at least 2 characters';
+        if (!NAME_REGEX.test(value)) return 'Full name contains invalid characters';
         return '';
-      case 'lastName':
-        if (!value || typeof value !== 'string' || !value.trim()) return t('errorLastNameRequired');
-        if (value.trim().length < 2) return t('errorLastNameMin');
-        if (!NAME_REGEX.test(value)) return t('errorLastNameChars');
+      case 'phone':
+        if (!value || typeof value !== 'string' || !value.trim()) return 'Phone number is required';
+        const normalizedPhone = value.trim().replace(/[\s()-]/g, '');
+        if (!/^((\+265|265|0)?\d{8,9})$/.test(normalizedPhone)) return 'Enter a valid phone number';
         return '';
       case 'agreeToTerms':
         if (!value) return t('errorTermsRequired');
@@ -111,7 +112,7 @@ export default function Register() {
 
   const [formData, setFormData] = useState<FormData>({
     email: '', password: '', confirmPassword: '',
-    firstName: '', lastName: '', agreeToTerms: false,
+    fullName: '', phone: '', agreeToTerms: false,
   });
   const [isSubmitting,       setIsSubmitting]       = useState(false);
   const [showPassword,       setShowPassword]       = useState(false);
@@ -167,7 +168,7 @@ export default function Register() {
       await signUp(
         formData.email,
         formData.password,
-        { firstName: formData.firstName.trim(), lastName: formData.lastName.trim() }
+        { fullName: formData.fullName.trim(), phone: formData.phone.trim() }
       );
 
       // FIX VER-1: verification email is now sent inside AuthContext.signUp
@@ -269,50 +270,48 @@ export default function Register() {
                 </div>
               )}
 
-              {/* Name fields */}
-              <div className="grid grid-cols-2 gap-4">
-                {/* First name */}
+              {/* Name + phone */}
+              <div className="space-y-4">
                 <div>
-                  <label htmlFor="firstName" className="block text-sm font-medium text-gray-700 mb-1">
-                    <UserIcon className="w-4 h-4 inline mr-1" />{t('firstNameLabel')}
+                  <label htmlFor="fullName" className="block text-sm font-medium text-gray-700 mb-1">
+                    <UserIcon className="w-4 h-4 inline mr-1" />Full Name
                   </label>
                   <div className="relative">
                     <input
-                      id="firstName" name="firstName" type="text"
-                      autoComplete="given-name" required
-                      aria-invalid={errors.firstName && touched.firstName ? 'true' : 'false'}
-                      value={formData.firstName}
+                      id="fullName" name="fullName" type="text"
+                      autoComplete="name" required
+                      aria-invalid={errors.fullName && touched.fullName ? 'true' : 'false'}
+                      value={formData.fullName}
                       onChange={handleInputChange}
-                      onBlur={() => handleBlur('firstName')}
-                      className={getInputClassName('firstName')}
-                      placeholder={t('firstNamePlaceholder')}
+                      onBlur={() => handleBlur('fullName')}
+                      className={getInputClassName('fullName')}
+                      placeholder="Enter your full name"
                       disabled={isSubmitting || success}
                     />
                     <UserIcon className="w-5 h-5 text-gray-400 absolute top-2.5 left-3 pointer-events-none" />
                   </div>
-                  {renderError('firstName')}
+                  {renderError('fullName')}
                 </div>
 
-                {/* Last name */}
                 <div>
-                  <label htmlFor="lastName" className="block text-sm font-medium text-gray-700 mb-1">
-                    <UserIcon className="w-4 h-4 inline mr-1" />{t('lastNameLabel')}
+                  <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-1">
+                    <Phone className="w-4 h-4 inline mr-1" />Phone Number
                   </label>
                   <div className="relative">
                     <input
-                      id="lastName" name="lastName" type="text"
-                      autoComplete="family-name" required
-                      aria-invalid={errors.lastName && touched.lastName ? 'true' : 'false'}
-                      value={formData.lastName}
+                      id="phone" name="phone" type="tel"
+                      autoComplete="tel" required
+                      aria-invalid={errors.phone && touched.phone ? 'true' : 'false'}
+                      value={formData.phone}
                       onChange={handleInputChange}
-                      onBlur={() => handleBlur('lastName')}
-                      className={getInputClassName('lastName')}
-                      placeholder={t('lastNamePlaceholder')}
+                      onBlur={() => handleBlur('phone')}
+                      className={getInputClassName('phone')}
+                      placeholder="+265 999 123 456"
                       disabled={isSubmitting || success}
                     />
-                    <UserIcon className="w-5 h-5 text-gray-400 absolute top-2.5 left-3 pointer-events-none" />
+                    <Phone className="w-5 h-5 text-gray-400 absolute top-2.5 left-3 pointer-events-none" />
                   </div>
-                  {renderError('lastName')}
+                  {renderError('phone')}
                 </div>
               </div>
 

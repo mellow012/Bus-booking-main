@@ -8,7 +8,7 @@ import { getPendingSearch, buildSearchRedirectUrl, clearPendingSearch } from '@/
 import {
   Loader2, AlertCircle, User, Mail, Phone, Shield,
   Calendar, CreditCard, Activity, Settings, ChevronRight, Award, Trash2,
-  Key, RefreshCw, TrendingUp, MapPin, Bus as BusIcon, DollarSign, CheckCircle, Clock, XCircle, AlertTriangle,
+  Key, TrendingUp, MapPin, Bus as BusIcon, DollarSign, CheckCircle, Clock, XCircle, AlertTriangle,
   Edit, Eye, EyeOff, Users, ExternalLink, Search, Copy, Download, BarChart3, Smartphone, Bell, Zap, FileText, Share2, History as HistoryIcon
 } from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
@@ -26,7 +26,6 @@ interface UserProfile {
   lastName: string;
   email: string;
   phone?: string;
-  nationalId?: string;
   sex?: string;
   currentAddress?: string;
   role: UserRole;
@@ -134,7 +133,7 @@ const tabs = [
 
 const ProfilePage: React.FC = () => {
   const router = useRouter();
-  const { user, userProfile, updateUserProfile, signOut } = useAuth();
+  const { user, userProfile, updateUserProfile, signOut, refreshUserProfile } = useAuth();
   const toast = useAppToast();
 
   // Core state
@@ -171,6 +170,8 @@ const ProfilePage: React.FC = () => {
   // UI state
   const [statsLoading, setStatsLoading] = useState(false);
   const [showSensitiveInfo, setShowSensitiveInfo] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [showCancelModal, setShowCancelModal] = useState(false);
@@ -181,10 +182,11 @@ const ProfilePage: React.FC = () => {
     firstName: '',
     lastName: '',
     phone: '',
-    nationalId: '',
     sex: '',
     currentAddress: '',
     email: user?.email || '',
+    password: '',
+    confirmPassword: '',
   });
 
   // ─── Booking data ─────────────────────────────────────────────────────────
@@ -275,6 +277,10 @@ const ProfilePage: React.FC = () => {
       .slice(0, 3);
   }, [recentBookings]);
 
+  const displayedFirstName = profile?.firstName || userProfile?.firstName || '';
+  const displayedLastName = profile?.lastName || userProfile?.lastName || '';
+  const displayedPhone = profile?.phone || userProfile?.phone || '';
+
   // ─── User preferences ─────────────────────────────────────────────────────
   // Preferences are now loaded from API response
   const loadUserPreferences = useCallback(async () => {
@@ -329,10 +335,11 @@ const ProfilePage: React.FC = () => {
           firstName: userData.firstName || '',
           lastName: userData.lastName || '',
           phone: userData.phone || '',
-          nationalId: userData.nationalId || '',
           sex: userData.sex || '',
           currentAddress: userData.currentAddress || '',
           email: userData.email || user.email || '',
+          password: '',
+          confirmPassword: '',
         });
         await Promise.all([fetchBookingData(userData), loadUserPreferences()]);
       } catch (err: unknown) {
@@ -363,25 +370,42 @@ const ProfilePage: React.FC = () => {
     if (!formData.phone.match(/^\+265\d{9}$/)) {
       errors.push('Phone must be in +265 format (e.g., +265999123456)');
     }
-    // Email is read-only — not included in validation or save
+
+    // Optional password change
+    const pw = formData.password || '';
+    const cpw = formData.confirmPassword || '';
+    if ((pw && !cpw) || (!pw && cpw)) {
+      errors.push('To change password provide both Password and Confirm password');
+    }
+    if (pw && cpw) {
+      if (pw.length < 6) errors.push('Password must be at least 6 characters');
+      if (pw !== cpw) errors.push('Passwords do not match');
+    }
 
     if (errors.length > 0) { setError(errors.join('. ')); return; }
 
     setActionLoading(true);
     setError('');
     try {
+      // If changing password, update via Supabase auth first
+      if (pw && cpw) {
+        const supabase = createClient();
+        const { error: pwErr } = await supabase.auth.updateUser({ password: pw });
+        if (pwErr) throw pwErr;
+        try { await refreshUserProfile(); } catch (e) { /* ignore refresh errors */ }
+      }
+
       await updateUserProfile({
         firstName: formData.firstName,
         lastName: formData.lastName,
         phone: formData.phone,
-        nationalId: formData.nationalId || undefined,
         sex: formData.sex || undefined,
         currentAddress: formData.currentAddress || undefined,
       });
 
       setProfile(prev => prev ? { ...prev, ...formData, setupCompleted: true, updatedAt: new Date() } : null);
       setEditProfile(false);
-      setSuccess('Profile updated successfully!');
+      setSuccess(pw && cpw ? 'Profile and password updated successfully!' : 'Profile updated successfully!');
       toast.success('Profile Updated', 'Your details have been saved successfully.');
       
       // Check for pending search and redirect with it, otherwise just redirect to schedules
@@ -548,7 +572,7 @@ const ProfilePage: React.FC = () => {
   const calculateProfileCompletion = () => {
     const fields = [
       profile?.firstName, profile?.lastName, profile?.email,
-      profile?.phone, profile?.sex, profile?.currentAddress, profile?.nationalId
+      profile?.phone, profile?.sex, profile?.currentAddress
     ];
     const completed = fields.filter(f => f && f.trim() !== '').length;
     return Math.round((completed / fields.length) * 100);
@@ -558,6 +582,9 @@ const ProfilePage: React.FC = () => {
   const [activeView, setActiveView] = useState<'menu'|'bookings'|'payments'|'insights'|'settings'|'security'>('menu');
 
   const profileCompletion = calculateProfileCompletion();
+  const displayName = [profile?.firstName, profile?.lastName].filter(Boolean).join(' ').trim() || String(profile?.name ?? profile?.email ?? 'Customer');
+  const displayInitial = profile?.firstName?.charAt(0) || String(profile?.name ?? profile?.email ?? 'U').charAt(0) || 'U';
+  const displayPhone = profile?.phone || 'N/A';
 
   // ─── Render ───────────────────────────────────────────────────────────────
 
@@ -655,7 +682,7 @@ const ProfilePage: React.FC = () => {
               <div className="flex flex-col sm:flex-row items-center sm:items-start lg:items-center gap-4 sm:gap-6 w-full lg:w-auto">
                 <div className="relative flex-shrink-0">
                   <div className="w-20 h-20 sm:w-24 sm:h-24 bg-gradient-to-tr from-blue-600 to-indigo-600 rounded-3xl flex items-center justify-center text-white font-bold text-3xl sm:text-4xl shadow-xl shadow-blue-200/50 rotate-3">
-                    <span className="-rotate-3">{profile.firstName?.charAt(0) || 'U'}</span>
+                    <span className="-rotate-3">{displayedFirstName?.charAt(0) || 'U'}</span>
                   </div>
                   <div className="absolute -bottom-1 -right-1 w-8 h-8 bg-green-500 rounded-2xl border-4 border-white flex items-center justify-center shadow-lg">
                     <CheckCircle className="w-4 h-4 text-white" />
@@ -664,7 +691,7 @@ const ProfilePage: React.FC = () => {
                 <div className="min-w-0">
                   <div className="flex flex-col sm:flex-row sm:items-center gap-2 mb-1">
                     <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 truncate">
-                      {profile.firstName} {profile.lastName}
+                      {displayedFirstName} {displayedLastName}
                     </h1>
                     <span className="px-2 py-0.5 bg-blue-50 text-blue-600 text-[10px] font-bold uppercase tracking-wider rounded-lg border border-blue-100">Customer</span>
                   </div>
@@ -672,6 +699,12 @@ const ProfilePage: React.FC = () => {
                     <Mail className="w-3.5 h-3.5 mr-1.5" />
                     <span className="truncate">{profile.email}</span>
                   </p>
+                  {displayedPhone ? (
+                    <p className="text-gray-500 flex items-center justify-center sm:justify-start text-sm mb-3">
+                      <Phone className="w-3.5 h-3.5 mr-1.5 text-gray-400" />
+                      <span className="truncate">{displayedPhone}</span>
+                    </p>
+                  ) : null}
                   <div className="flex flex-wrap items-center justify-center sm:justify-start gap-3 text-xs font-medium text-gray-400">
                     <span className="flex items-center bg-gray-50 px-2 py-1 rounded-lg">
                       <Calendar className="w-3.5 h-3.5 mr-1.5 text-gray-400" />
@@ -696,14 +729,6 @@ const ProfilePage: React.FC = () => {
                   >
                     {editProfile ? <XCircle className="w-4 h-4" /> : <Edit className="w-4 h-4" />}
                     <span>{editProfile ? 'Close Editor' : 'Edit Profile'}</span>
-                  </button>
-
-                  <button
-                    onClick={() => fetchBookingData()}
-                    className="w-12 h-12 rounded-2xl bg-white border border-gray-100 text-gray-400 hover:text-indigo-600 hover:border-indigo-100 hover:shadow-md transition-all flex items-center justify-center shrink-0"
-                    disabled={statsLoading}
-                  >
-                    <RefreshCw className={`w-5 h-5 ${statsLoading ? 'animate-spin' : ''}`} />
                   </button>
                 </div>
               )}
@@ -834,15 +859,6 @@ const ProfilePage: React.FC = () => {
                                 <option value="other">Other</option>
                               </select>
                             </div>
-                            <div>
-                              <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">National ID</label>
-                              <div className="relative group">
-                                <input type={showSensitiveInfo ? 'text' : 'password'} value={formData.nationalId}
-                                  onChange={(e) => setFormData({ ...formData, nationalId: e.target.value })}
-                                  className="w-full px-5 py-3.5 bg-gray-50 border border-transparent rounded-2xl focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all outline-none" />
-                                <Shield className="w-4 h-4 text-gray-300 absolute right-4 top-4 group-focus-within:text-indigo-400 transition-colors" />
-                              </div>
-                            </div>
                           </div>
                         </section>
 
@@ -870,6 +886,32 @@ const ProfilePage: React.FC = () => {
                                   onChange={(e) => setFormData({ ...formData, currentAddress: e.target.value })}
                                   className="w-full px-5 py-3.5 bg-gray-50 border border-transparent rounded-2xl focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all outline-none" />
                                 <MapPin className="w-4 h-4 text-gray-300 absolute right-4 top-4 group-focus-within:text-indigo-400 transition-colors" />
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-6">
+                              <div>
+                                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Password</label>
+                                <div className="relative group">
+                                  <input type={showPassword ? 'text' : 'password'} value={formData.password}
+                                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                                    className="w-full px-5 py-3.5 bg-gray-50 border border-transparent rounded-2xl focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all outline-none"
+                                    placeholder="Enter new password (optional)" />
+                                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-3 text-gray-400">
+                                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                  </button>
+                                </div>
+                              </div>
+                              <div>
+                                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Confirm Password</label>
+                                <div className="relative group">
+                                  <input type={showConfirmPassword ? 'text' : 'password'} value={formData.confirmPassword}
+                                    onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+                                    className="w-full px-5 py-3.5 bg-gray-50 border border-transparent rounded-2xl focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all outline-none"
+                                    placeholder="Confirm new password" />
+                                  <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute right-3 top-3 text-gray-400">
+                                    {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                  </button>
+                                </div>
                               </div>
                             </div>
                           </div>
@@ -946,7 +988,6 @@ const ProfilePage: React.FC = () => {
                           { icon: <User className="w-5 h-5" />, color: 'text-blue-600', bg: 'bg-blue-50', label: 'Identity', value: `${profile.firstName} ${profile.lastName}`, sensitive: false },
                           { icon: <Mail className="w-5 h-5" />, color: 'text-green-600', bg: 'bg-green-50', label: 'E-mail', value: profile.email, sensitive: false },
                           { icon: <Phone className="w-5 h-5" />, color: 'text-purple-600', bg: 'bg-purple-50', label: 'Mobile', value: profile.phone || '—', sensitive: true },
-                          { icon: <Shield className="w-5 h-5" />, color: 'text-red-600', bg: 'bg-red-50', label: 'NID', value: profile.nationalId || '—', sensitive: true },
                           { icon: <Users className="w-5 h-5" />, color: 'text-indigo-600', bg: 'bg-indigo-50', label: 'Gender', value: profile.sex || '—', sensitive: false, capitalize: true },
                           { icon: <MapPin className="w-5 h-5" />, color: 'text-orange-600', bg: 'bg-orange-50', label: 'Location', value: profile.currentAddress || '—', sensitive: false },
                         ].map((item, i) => (

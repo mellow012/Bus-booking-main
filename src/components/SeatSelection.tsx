@@ -145,7 +145,7 @@ const SeatSelection: React.FC<SeatSelectionProps> = ({
 
   const getSeatClassName = useCallback((status: string) => {
     const base =
-      'w-8 h-8 sm:w-10 sm:h-10 rounded-xl text-xs sm:text-xs font-semibold transition-all duration-200 border-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2';
+      'w-8 h-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12 rounded-xl text-[10px] sm:text-xs lg:text-sm font-semibold transition-all duration-200 border-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2';
     switch (status) {
       case 'booked':
         return `${base} bg-gray-200 text-gray-500 border-gray-300 cursor-not-allowed opacity-75`;
@@ -254,73 +254,91 @@ const SeatSelection: React.FC<SeatSelectionProps> = ({
 
       {/* Seat Grid */}
       <div className="max-w-full mx-auto mb-6 overflow-x-auto">
-        <div className="space-y-3">
-          {seatLayout.map((row: (string | null)[], rowIndex: number) => {
-            const { aislePosition } = layoutConfig;
-            return (
-              <div key={rowIndex} className="inline-flex items-center justify-center gap-2 min-w-max">
-                {/* Row number */}
-                <div className="w-8 text-xs text-gray-400 text-center font-medium">
-                  {rowIndex + 1}
-                </div>
+        <div className="mx-auto max-w-[34rem] rounded-[32px] border border-gray-200 bg-slate-50 p-4 shadow-sm">
+          <div className="mb-4 flex justify-center">
+            <div className="h-2.5 w-28 rounded-full bg-slate-200" />
+          </div>
+          <div className="space-y-3">
+            {seatLayout.map((row: (string | null)[], rowIndex: number) => {
+              const { aislePosition } = layoutConfig;
+              return (
+                <div key={rowIndex} className="flex items-center gap-2 min-w-max">
+                  {/* Row number */}
+                  <div className="w-8 text-xs text-gray-400 text-center font-medium flex-shrink-0">
+                    {rowIndex + 1}
+                  </div>
 
-                {/* Left seats */}
-                <div className="flex gap-1">
-                  {row.slice(0, aislePosition).map((seat: string | null, colIndex: number) => {
-                    if (!seat)
-                      return (
-                        <div key={`spacer-left-${rowIndex}-${colIndex}`} className="w-10 h-10" />
-                      );
-                    const status = getSeatStatus(seat);
-                    return (
-                      <button
-                        key={seat}
-                        className={getSeatClassName(status)}
-                        onClick={() => handleSeatClick(seat)}
-                        onMouseEnter={() => setHoveredSeat(seat)}
-                        onMouseLeave={() => setHoveredSeat(null)}
-                        disabled={status === 'booked' || disabled}
-                        aria-label={getSeatAriaLabel(seat, status)}
-                        aria-pressed={status === 'selected'}
-                      >
-                        {seat}
-                      </button>
-                    );
-                  })}
-                </div>
+                  {/* Seating area (centered) */}
+                  <div className="flex-1 flex items-center justify-center">
+                    {/* Left seats */}
+                    <div className="flex gap-1">
+                      {row.slice(0, aislePosition).map((seat: string | null, colIndex: number) => {
+                        if (!seat)
+                          return (
+                            <div
+                              key={`spacer-left-${rowIndex}-${colIndex}`}
+                              className="w-8 h-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12"
+                            />
+                          );
+                        const status = getSeatStatus(seat);
+                        return (
+                          <button
+                            key={seat}
+                            className={getSeatClassName(status)}
+                            onClick={() => handleSeatClick(seat)}
+                            onMouseEnter={() => setHoveredSeat(seat)}
+                            onMouseLeave={() => setHoveredSeat(null)}
+                            disabled={status === 'booked' || disabled}
+                            aria-label={getSeatAriaLabel(seat, status)}
+                            aria-pressed={status === 'selected'}
+                          >
+                            {seat}
+                          </button>
+                        );
+                      })}
 
-                {/* Aisle */}
-                <div className="w-8 flex justify-center" aria-hidden="true">
-                  <div className="w-px h-6 bg-gradient-to-b from-gray-200 via-gray-300 to-gray-200" />
-                </div>
+                    </div>
 
-                {/* Right seats */}
-                <div className="flex gap-1">
-                  {row.slice(aislePosition).map((seat: string | null, colIndex: number) => {
-                    if (!seat)
-                      return (
-                        <div key={`spacer-right-${rowIndex}-${colIndex}`} className="w-10 h-10" />
-                      );
-                    const status = getSeatStatus(seat);
-                    return (
-                      <button
-                        key={seat}
-                        className={getSeatClassName(status)}
-                        onClick={() => handleSeatClick(seat)}
-                        onMouseEnter={() => setHoveredSeat(seat)}
-                        onMouseLeave={() => setHoveredSeat(null)}
-                        disabled={status === 'booked' || disabled}
-                        aria-label={getSeatAriaLabel(seat, status)}
-                        aria-pressed={status === 'selected'}
-                      >
-                        {seat}
-                      </button>
-                    );
-                  })}
+                    {/* Aisle */}
+                    <div className="w-8 flex justify-center mx-3" aria-hidden="true">
+                      <div className="w-px h-8 sm:h-10 lg:h-12 bg-gradient-to-b from-gray-200 via-gray-300 to-gray-200" />
+                    </div>
+
+                    {/* Right seats */}
+                    <div className="flex gap-1">
+                      {row.slice(aislePosition).map((seat: string | null, colIndex: number) => {
+                        if (!seat)
+                          return (
+                            <div
+                              key={`spacer-right-${rowIndex}-${colIndex}`}
+                              className="w-8 h-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12"
+                            />
+                          );
+                        const status = getSeatStatus(seat);
+                        return (
+                          <button
+                            key={seat}
+                            className={getSeatClassName(status)}
+                            onClick={() => handleSeatClick(seat)}
+                            onMouseEnter={() => setHoveredSeat(seat)}
+                            onMouseLeave={() => setHoveredSeat(null)}
+                            disabled={status === 'booked' || disabled}
+                            aria-label={getSeatAriaLabel(seat, status)}
+                            aria-pressed={status === 'selected'}
+                          >
+                            {seat}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
+          <div className="mt-4 flex justify-center">
+            <div className="h-1.5 w-20 rounded-full bg-slate-200" />
+          </div>
         </div>
       </div>
 
