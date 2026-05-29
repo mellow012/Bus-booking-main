@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { 
   LockClosedIcon,
@@ -137,6 +138,8 @@ export default function ResetPassword() {
   const [success, setSuccess] = useState(false);
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   
+  const { user } = useAuth();
+  
   // UI state
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -145,10 +148,20 @@ export default function ResetPassword() {
   // Verify reset token on mount
   useEffect(() => {
     const verifyToken = async () => {
-      if (!token) {
-        setErrors({ general: 'Invalid or missing reset token. Please request a new password reset link.' });
+      // With Supabase's built-in email flow, clicking the link logs the user in automatically
+      if (user) {
+        setEmail(user.email || '');
         setIsVerifying(false);
         return;
+      }
+
+      if (!token) {
+        // Wait briefly to see if the Supabase client is still parsing the URL hash to log the user in
+        const timeout = setTimeout(() => {
+          setErrors({ general: 'Invalid or missing reset token. Please request a new password reset link.' });
+          setIsVerifying(false);
+        }, 1500);
+        return () => clearTimeout(timeout);
       }
 
       try {
@@ -177,8 +190,13 @@ export default function ResetPassword() {
       }
     };
 
-    verifyToken();
-  }, [token]);
+    if (user || token) {
+      verifyToken();
+    } else {
+      // Start the timeout logic above if no user and no token yet
+      verifyToken();
+    }
+  }, [token, user]);
 
   // Update password strength when password changes
   useEffect(() => {
@@ -247,8 +265,8 @@ export default function ResetPassword() {
       return;
     }
 
-    if (!token) {
-      setErrors({ general: 'Invalid reset token. Please request a new password reset link.' });
+    if (!token && !user) {
+      setErrors({ general: 'Invalid reset token and no active session. Please request a new link.' });
       return;
     }
 

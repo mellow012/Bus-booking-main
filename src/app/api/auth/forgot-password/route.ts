@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/utils/supabase/admin';
 import { authRateLimiter, getClientIp } from '@/lib/rateLimiter';
-import { sendGenericPasswordResetEmail } from '@/lib/email-service';
 
 export async function POST(request: NextRequest) {
   try {
@@ -48,7 +47,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, message: 'If an account exists, a reset link has been sent.' });
     }
 
-    // 3. Generate reset link
+    // 3. Send reset link using Supabase
     let baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
     if (!baseUrl.startsWith('http')) {
       baseUrl = 'http://localhost:3000';
@@ -57,26 +56,17 @@ export async function POST(request: NextRequest) {
     // Use the client-provided redirectUrl if it exists, otherwise default to /reset-password
     const finalRedirectUrl = clientRedirectUrl || `${baseUrl}/reset-password`;
 
-    const { data: linkData, error: linkError } = await adminClient.auth.admin.generateLink({
-      type: 'recovery',
-      email: trimmedEmail,
-      options: {
-        redirectTo: finalRedirectUrl,
-      },
+    const { error: resetError } = await adminClient.auth.resetPasswordForEmail(trimmedEmail, {
+      redirectTo: finalRedirectUrl,
     });
 
-    if (linkError || !linkData.properties?.action_link) {
-      console.error('[forgot-password] generateLink failed:', linkError);
+    if (resetError) {
+      console.error('[forgot-password] resetPasswordForEmail failed:', resetError);
       return NextResponse.json(
-        { error: 'Internal server error', message: 'Failed to generate reset link' },
+        { error: 'Internal server error', message: 'Failed to send reset link' },
         { status: 500 }
       );
     }
-
-    const resetLink = linkData.properties.action_link;
-
-    // 4. Send email
-    await sendGenericPasswordResetEmail(trimmedEmail, resetLink);
 
     return NextResponse.json({
       success: true,
