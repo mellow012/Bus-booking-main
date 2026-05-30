@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { 
@@ -123,10 +123,29 @@ const getErrorMessage = (error: any): string => {
   return error?.message || 'An unexpected error occurred. Please try again.';
 };
 
+const getResetTokenFromUrl = (): string | null => {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  const query = new URLSearchParams(window.location.search);
+  const queryToken = query.get('token') || query.get('token_hash');
+  if (queryToken) {
+    return queryToken;
+  }
+
+  const hash = window.location.hash.startsWith('#') ? window.location.hash.slice(1) : window.location.hash;
+  if (!hash) {
+    return null;
+  }
+
+  const hashParams = new URLSearchParams(hash);
+  return hashParams.get('token') || hashParams.get('token_hash');
+};
+
 export default function ResetPassword() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const token = searchParams.get('token') || searchParams.get('token_hash'); // Support both legacy and Supabase token_hash
+  const [token, setToken] = useState<string | null>(null);
   
   // Form state
   const [password, setPassword] = useState('');
@@ -147,6 +166,12 @@ export default function ResetPassword() {
 
   // Verify reset token on mount
   useEffect(() => {
+    const initToken = getResetTokenFromUrl();
+    if (initToken && !token) {
+      setToken(initToken);
+      return;
+    }
+
     // With Supabase's built-in email flow, clicking the link logs the user in automatically
     if (user) {
       setEmail(user.email || '');
@@ -155,16 +180,20 @@ export default function ResetPassword() {
       return;
     }
 
-    if (token) {
-      // Legacy token-based flow
+    if (initToken || token) {
       const verifyToken = async () => {
         try {
+          const actualToken = token || initToken;
+          if (!actualToken) {
+            throw new Error('Invalid or missing reset token. Please request a new password reset link.');
+          }
+
           const response = await fetch('/api/auth/verify-reset-token', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ token }),
+            body: JSON.stringify({ token: actualToken }),
           });
 
           if (!response.ok) {
@@ -183,6 +212,7 @@ export default function ResetPassword() {
           setIsVerifying(false);
         }
       };
+
       verifyToken();
       return;
     }
@@ -395,7 +425,7 @@ export default function ResetPassword() {
   }
 
   // Error state for invalid/expired code
-  if (errors.general && !token) {
+  if (errors.general && !token && !user) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
         <div className="sm:mx-auto sm:w-full sm:max-w-md">
