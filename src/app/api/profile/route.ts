@@ -66,6 +66,8 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
+    console.log('[DEBUG /api/profile] user.id:', user.id, 'DB id:', userProfile.id, 'uid:', userProfile.uid, 'setupCompleted:', userProfile.setupCompleted);
+
     // Calculate stats
     const bookings = userProfile.bookings || [];
     const completedBookings = bookings.filter(b => b.bookingStatus === 'confirmed');
@@ -179,6 +181,10 @@ export async function PUT(req: NextRequest) {
         ...(nationalId !== undefined && { nationalId }),
         ...(sex !== undefined && { sex }),
         ...(currentAddress !== undefined && { currentAddress }),
+        // When a user updates their profile via this endpoint we consider
+        // the setup flow complete and persist that server-side so subsequent
+        // visits reflect view-only mode.
+        setupCompleted: true,
       },
     });
 

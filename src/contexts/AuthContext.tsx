@@ -382,8 +382,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!user?.id) throw new Error('No authenticated user found');
     
     try {
-      const response = await fetch('/api/auth/profile', {
-        method: 'PATCH',
+      const response = await fetch('/api/profile', {
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           firstName:      profile.firstName.trim(),
@@ -397,7 +397,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
 
       if (!response.ok) throw new Error('Failed to update profile');
-      await refreshUserProfile();
+
+      try {
+        await refreshUserProfile();
+      } catch (refreshError) {
+        console.warn('[AuthContext] refreshUserProfile failed after profile update:', refreshError);
+      }
     } catch (error: any) {
       throw new Error('Profile update failed. Please try again.');
     }

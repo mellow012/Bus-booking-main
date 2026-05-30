@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, FormEvent, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useRef, FormEvent, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { getPendingSearch, buildSearchRedirectUrl, clearPendingSearch } from '@/lib/searchStorage';
@@ -295,11 +295,28 @@ const ProfilePage: React.FC = () => {
 
   // ─── Init ─────────────────────────────────────────────────────────────────
 
+  // ─── Fetch profile data (runs ONCE on mount) ─────────────────────────────
+  const hasInitializedRef = useRef(false);
+  const [localSetupCompleted, setLocalSetupCompleted] = useState(false);
+
   useEffect(() => {
-    if (!user) {
+    if (typeof window !== 'undefined') {
+      try {
+        setLocalSetupCompleted(localStorage.getItem('profileSetupCompleted') === 'true');
+      } catch (e) {
+        console.warn('Unable to read local setup flag:', e);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!user?.id || hasInitializedRef.current) return;
+    if (!(user as any).email_confirmed_at) {
       router.push('/login');
       return;
     }
+
+    hasInitializedRef.current = true;
 
     const fetchData = async () => {
       setLoading(true);
@@ -383,9 +400,11 @@ const ProfilePage: React.FC = () => {
 
         const { data: userData } = await response.json();
 
-        if (userData && !userData.setupCompleted) {
+        // Only force edit mode if setup has never been completed (allow local override)
+        if (userData && userData.setupCompleted === false && !localSetupCompleted) {
           setEditProfile(true);
         }
+        // If setupCompleted is true or locally completed, editProfile stays false (read-only)
 
         const createdAtDate = userData.createdAt ? new Date(userData.createdAt) : new Date();
         setProfile({ ...userData, createdAt: createdAtDate } as any);
@@ -410,7 +429,8 @@ const ProfilePage: React.FC = () => {
     };
 
     fetchData();
-  }, [user, router, fetchBookingData, loadUserPreferences]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
 
   // ─── Handlers ─────────────────────────────────────────────────────────────
 
@@ -441,11 +461,48 @@ const ProfilePage: React.FC = () => {
         currentAddress: formData.currentAddress || undefined,
       });
 
-      setProfile(prev => prev ? { ...prev, firstName, lastName, ...formData, setupCompleted: true, updatedAt: new Date() } : null);
-      setEditProfile(false);
+      // Re-fetch server profile to ensure we use the persisted truth
+      try {
+        const resp = await fetch('/api/profile', {
+          method: 'GET',
+          cache: 'no-store',
+          headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache, no-store, must-revalidate' }
+        });
+        if (resp.ok) {
+          const { data: fresh } = await resp.json();
+          if (fresh) {
+            const createdAtDate = fresh.createdAt ? new Date(fresh.createdAt) : new Date();
+            setProfile({ ...fresh, createdAt: createdAtDate } as any);
+            // Close editor only if server marks setupComplete or phone/name present
+            const shouldClose = fresh.setupCompleted === true || (fresh.phone && fresh.phone.trim()) || (fresh.firstName && fresh.lastName);
+            setEditProfile(!shouldClose ? true : false);
+          } else {
+            // Fall back to optimistic update if server returned null
+            setProfile(prev => prev ? { ...prev, firstName, lastName, ...formData, setupCompleted: true, updatedAt: new Date() } : null);
+            setEditProfile(false);
+          }
+        } else {
+          // If the server GET failed, keep optimistic local state but still notify success
+          setProfile(prev => prev ? { ...prev, firstName, lastName, ...formData, setupCompleted: true, updatedAt: new Date() } : null);
+          setEditProfile(false);
+        }
+      } catch (fetchErr) {
+        console.error('Post-update profile fetch failed:', fetchErr);
+        setProfile(prev => prev ? { ...prev, firstName, lastName, ...formData, setupCompleted: true, updatedAt: new Date() } : null);
+        setEditProfile(false);
+      }
+
       setSuccess('Profile updated successfully!');
+      try {
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('profileSetupCompleted', 'true');
+          setLocalSetupCompleted(true);
+        }
+      } catch (e) {
+        // ignore localStorage failures
+      }
       toast.success('Profile Updated', 'Your details have been saved successfully.');
-      
+
       // Check for pending search and redirect with it
       const pendingSearch = getPendingSearch();
       if (pendingSearch) {
@@ -720,7 +777,7 @@ const ProfilePage: React.FC = () => {
           </div>
           
           {/* Welcome/Action Banner for New Users */}
-          {(!profile.setupCompleted || !profile.phone?.trim() || (!profile.firstName?.trim() && !profile.lastName?.trim())) && !editProfile && (
+          {(!profile.setupCompleted && !localSetupCompleted) && !editProfile && (
             <div className="mb-8 bg-gradient-to-r from-blue-600 to-indigo-700 rounded-[2rem] p-6 sm:p-8 text-white shadow-xl shadow-blue-200 relative overflow-hidden anim-fade-up">
               <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 blur-3xl rounded-full -mr-20 -mt-20" />
               <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
