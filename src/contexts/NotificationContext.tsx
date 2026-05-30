@@ -70,7 +70,7 @@ export const NotificationProvider: React.FC<{ children: ReactNode; userId?: stri
     try {
       const response = await fetch('/api/notifications/list?userId=' + userId);
       
-      if (response.status === 401) {
+      if (response.status === 401 || response.status === 403) {
         return;
       }
 

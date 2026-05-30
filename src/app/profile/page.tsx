@@ -305,9 +305,9 @@ const ProfilePage: React.FC = () => {
       setLoading(true);
       setError('');
       try {
-        // Add timeout to prevent indefinite waiting
+        // Add timeout to prevent indefinite waiting (increased to 30s for cold starts)
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+        const timeoutId = setTimeout(() => controller.abort(), 30000);
 
         const response = await fetch('/api/profile', {
           method: 'GET',
@@ -320,7 +320,62 @@ const ProfilePage: React.FC = () => {
         clearTimeout(timeoutId);
 
         if (!response.ok) {
-          setError('User profile not found. Please complete your profile.');
+          if (response.status === 404) {
+            // Profile doesn't exist in DB yet — trigger creation from Supabase metadata
+            console.log('[Profile] No DB record found, triggering sync from auth metadata...');
+            await refreshUserProfile(user.id);
+            
+            // Retry the fetch after sync
+            const retryResponse = await fetch('/api/profile', {
+              method: 'GET',
+              headers: { 'Content-Type': 'application/json' },
+            });
+            
+            if (retryResponse.ok) {
+              const { data: retryData } = await retryResponse.json();
+              if (retryData) {
+                if (!retryData.setupCompleted) setEditProfile(true);
+                const createdAtDate = retryData.createdAt ? new Date(retryData.createdAt) : new Date();
+                setProfile({ ...retryData, createdAt: createdAtDate } as any);
+                setFormData({
+                  fullName: [retryData.firstName, retryData.lastName].filter(Boolean).join(' ').trim() || '',
+                  phone: retryData.phone || '',
+                  sex: retryData.sex || '',
+                  currentAddress: retryData.currentAddress || '',
+                  email: retryData.email || user.email || '',
+                });
+                await Promise.all([fetchBookingData(retryData), loadUserPreferences()]);
+                setLoading(false);
+                return;
+              }
+            }
+            
+            // If retry also failed, show the form with whatever we have from metadata
+            const metaFirst = (user as any).user_metadata?.first_name || '';
+            const metaLast = (user as any).user_metadata?.last_name || '';
+            const metaPhone = (user as any).user_metadata?.phone || '';
+            setProfile({
+              id: user.id,
+              firstName: metaFirst,
+              lastName: metaLast,
+              email: user.email || '',
+              phone: metaPhone,
+              role: 'customer' as any,
+              setupCompleted: false,
+              createdAt: new Date(),
+            } as any);
+            setFormData({
+              fullName: [metaFirst, metaLast].filter(Boolean).join(' ').trim() || '',
+              phone: metaPhone,
+              sex: '',
+              currentAddress: '',
+              email: user.email || '',
+            });
+            setEditProfile(true);
+            setLoading(false);
+            return;
+          }
+          setError('Failed to load profile. Please try again.');
           return;
         }
 
@@ -603,7 +658,12 @@ const ProfilePage: React.FC = () => {
   if (!profile) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-6">
-        <AlertMessage type="error" message={error || 'Access denied'} onClose={() => router.push('/')} />
+        <AlertMessage 
+          type="error" 
+          message={error || 'Access denied'} 
+          onClose={() => router.push('/')} 
+          autoClose={false} 
+        />
       </div>
     );
   }

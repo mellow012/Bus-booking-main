@@ -79,9 +79,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const metaEmailConfirmed = sessionUser?.email_confirmed_at ?? user?.email_confirmed_at;
 
     try {
-      // Add timeout to prevent indefinite waiting
+      // Add timeout to prevent indefinite waiting (increased to 30s for cold starts)
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
 
       const response = await fetch('/api/auth/profile', { signal: controller.signal });
       clearTimeout(timeoutId);
