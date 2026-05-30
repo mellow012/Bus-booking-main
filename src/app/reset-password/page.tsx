@@ -147,55 +147,53 @@ export default function ResetPassword() {
 
   // Verify reset token on mount
   useEffect(() => {
-    const verifyToken = async () => {
-      // With Supabase's built-in email flow, clicking the link logs the user in automatically
-      if (user) {
-        setEmail(user.email || '');
-        setIsVerifying(false);
-        return;
-      }
-
-      if (!token) {
-        // Wait briefly to see if the Supabase client is still parsing the URL hash to log the user in
-        const timeout = setTimeout(() => {
-          setErrors({ general: 'Invalid or missing reset token. Please request a new password reset link.' });
-          setIsVerifying(false);
-        }, 1500);
-        return () => clearTimeout(timeout);
-      }
-
-      try {
-        const response = await fetch('/api/auth/verify-reset-token', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ token }),
-        });
-
-        if (!response.ok) {
-          const data = await response.json();
-          setErrors({ general: data.message || getErrorMessage(data) });
-          setIsVerifying(false);
-          return;
-        }
-
-        const data = await response.json();
-        setEmail(data.email);
-        setIsVerifying(false);
-      } catch (error: any) {
-        console.error('Token verification error:', error);
-        setErrors({ general: error.message || 'Failed to verify reset token' });
-        setIsVerifying(false);
-      }
-    };
-
-    if (user || token) {
-      verifyToken();
-    } else {
-      // Start the timeout logic above if no user and no token yet
-      verifyToken();
+    // With Supabase's built-in email flow, clicking the link logs the user in automatically
+    if (user) {
+      setEmail(user.email || '');
+      setErrors({});
+      setIsVerifying(false);
+      return;
     }
+
+    if (token) {
+      // Legacy token-based flow
+      const verifyToken = async () => {
+        try {
+          const response = await fetch('/api/auth/verify-reset-token', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ token }),
+          });
+
+          if (!response.ok) {
+            const data = await response.json();
+            setErrors({ general: data.message || getErrorMessage(data) });
+            setIsVerifying(false);
+            return;
+          }
+
+          const data = await response.json();
+          setEmail(data.email);
+          setIsVerifying(false);
+        } catch (error: any) {
+          console.error('Token verification error:', error);
+          setErrors({ general: error.message || 'Failed to verify reset token' });
+          setIsVerifying(false);
+        }
+      };
+      verifyToken();
+      return;
+    }
+
+    // No user and no token yet — wait briefly for Supabase to parse the URL hash and establish session
+    const timeout = setTimeout(() => {
+      setErrors({ general: 'Invalid or missing reset token. Please request a new password reset link.' });
+      setIsVerifying(false);
+    }, 3000);
+
+    return () => clearTimeout(timeout);
   }, [token, user]);
 
   // Update password strength when password changes
