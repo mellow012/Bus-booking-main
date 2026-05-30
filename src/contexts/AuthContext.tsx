@@ -69,9 +69,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // ─── Profile management ───────────────────────────────────────────────────
 
-  const refreshUserProfile = useCallback(async (uid?: string) => {
+  const refreshUserProfile = useCallback(async (uid?: string, sessionUser?: any) => {
     const targetUid = uid ?? user?.id;
     if (!targetUid) return;
+
+    // Use sessionUser metadata if provided (from onAuthStateChange), otherwise fall back to state
+    const meta = sessionUser?.user_metadata ?? user?.user_metadata;
+    const metaEmail = sessionUser?.email ?? user?.email;
+    const metaEmailConfirmed = sessionUser?.email_confirmed_at ?? user?.email_confirmed_at;
 
     try {
       // Add timeout to prevent indefinite waiting
@@ -110,15 +115,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
           // Check if we should update missing name or phone from user metadata (non-blocking)
           const needsMetadataSync = (!data.firstName || !data.phone) && 
-                                    (user?.user_metadata?.first_name || user?.user_metadata?.phone);
+                                    (meta?.first_name || meta?.phone);
           if (needsMetadataSync) {
             fetch('/api/auth/profile', {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                firstName: data.firstName || user?.user_metadata?.first_name || '',
-                lastName: data.lastName || user?.user_metadata?.last_name || '',
-                phone: data.phone || user?.user_metadata?.phone || '',
+                firstName: data.firstName || meta?.first_name || '',
+                lastName: data.lastName || meta?.last_name || '',
+                phone: data.phone || meta?.phone || '',
               }),
             }).then(async (res) => {
               if (res.ok) {
@@ -129,22 +134,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
         } else {
           // Initialize profile if not exists (non-blocking)
-          const metaFirstName = user?.user_metadata?.first_name || '';
-          const metaLastName = user?.user_metadata?.last_name || '';
-          const metaPhone = user?.user_metadata?.phone || '';
-          const isMetaSetupComplete = !!(metaFirstName && metaPhone);
+          const metaFirstName = meta?.first_name || '';
+          const metaLastName = meta?.last_name || '';
+          const metaPhone = meta?.phone || '';
 
           fetch('/api/auth/profile', {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              email: user?.email || '',
+              email: metaEmail || '',
               firstName: metaFirstName,
               lastName: metaLastName,
               phone: metaPhone,
               role: 'customer',
               isActive: true,
-              emailVerified: user?.email_confirmed_at ? true : false,
+              emailVerified: metaEmailConfirmed ? true : false,
               setupCompleted: false,
             }),
           }).then(async (res) => {
@@ -185,8 +189,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           return;
         }
 
-        // Refresh profile without blocking - fire and forget
-        refreshUserProfile(session.user.id);
+        // Refresh profile without blocking - pass session.user so metadata is available immediately
+        refreshUserProfile(session.user.id, session.user);
       } else {
         setUser(null);
         setUserProfile(null);
