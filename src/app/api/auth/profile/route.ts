@@ -17,8 +17,16 @@ export async function GET(req: NextRequest) {
     }
 
     const { success, data, error } = await dbActions.getUserById(user.id);
+    
     if (!success) {
-      return NextResponse.json({ error }, { status: 500 });
+      console.error('[API Auth Profile] Failed to fetch user:', error);
+      return NextResponse.json({ error: 'Database error' }, { status: 500 });
+    }
+    
+    if (!data) {
+      // NOTE: We don't return 404 here anymore, we return null data
+      // so the client can initialize the profile
+      return NextResponse.json({ data: null });
     }
 
     return NextResponse.json({ success: true, data });

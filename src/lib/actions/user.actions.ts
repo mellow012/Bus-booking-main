@@ -15,6 +15,9 @@ export async function getUserById(id: string) {
           { id },
           { uid: id }
         ]
+      },
+      orderBy: {
+        setupCompleted: 'desc'
       }
     });
     return { success: true, data: user as User | null };
@@ -36,7 +39,8 @@ export async function syncUser(id: string, data: Partial<User>) {
     // First try by id (most specific)
     if (id) {
       existing = await prisma.user.findFirst({
-        where: { OR: [{ id }, { uid: id }] }
+        where: { OR: [{ id }, { uid: id }] },
+        orderBy: { setupCompleted: 'desc' }
       });
     }
 

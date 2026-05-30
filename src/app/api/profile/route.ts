@@ -20,8 +20,12 @@ export async function GET(req: NextRequest) {
       where: {
         OR: [
           { id: user.id },
-          { uid: user.id }
+          { uid: user.id },
+          ...(user.email ? [{ email: user.email }] : [])
         ]
+      },
+      orderBy: {
+        setupCompleted: 'desc'
       },
       include: {
         bookings: {
@@ -125,6 +129,10 @@ export async function GET(req: NextRequest) {
         currentAddress: userProfile.currentAddress,
         setupCompleted: userProfile.setupCompleted,
       },
+    }, {
+      headers: {
+        'Cache-Control': 'no-store, max-age=0',
+      }
     });
   } catch (error) {
     console.error('GET /api/profile error:', error);
