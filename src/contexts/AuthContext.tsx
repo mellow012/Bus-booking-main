@@ -166,7 +166,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // ─── Auth state listener ──────────────────────────────────────────────────
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (session?.user) {
         const augmentedUser = {
           ...session.user,
@@ -178,6 +178,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Set loading to false immediately to allow redirects, then fetch profile in background
         setLoading(false);
         setIsInitialized(true);
+
+        // If the user clicked a password recovery link, redirect to the reset page
+        if (event === 'PASSWORD_RECOVERY') {
+          router.push('/reset-password');
+          return;
+        }
+
         // Refresh profile without blocking - fire and forget
         refreshUserProfile(session.user.id);
       } else {
