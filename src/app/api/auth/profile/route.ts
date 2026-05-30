@@ -3,6 +3,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth-utils';
 import * as dbActions from '@/lib/actions/user.actions';
 
+export const dynamic = 'force-dynamic';
+
 /**
  * GET /api/auth/profile
  * Fetch the authenticated user's profile from SQL.

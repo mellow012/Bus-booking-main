@@ -13,7 +13,7 @@ export const MobileBottomNav = () => {
   const needsProfileAttention = Boolean(
     userProfile &&
     userProfile.role === 'customer' &&
-    (!userProfile.setupCompleted || !userProfile.firstName?.trim() || !userProfile.lastName?.trim() || !userProfile.phone?.trim())
+    (!userProfile.setupCompleted || !userProfile.phone?.trim() || (!userProfile.firstName?.trim() && !userProfile.lastName?.trim()))
   );
 
   const navItems = [

@@ -311,8 +311,10 @@ const ProfilePage: React.FC = () => {
 
         const response = await fetch('/api/profile', {
           method: 'GET',
+          cache: 'no-store',
           headers: {
             'Content-Type': 'application/json',
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
           },
           signal: controller.signal,
         });
@@ -444,16 +446,13 @@ const ProfilePage: React.FC = () => {
       setSuccess('Profile updated successfully!');
       toast.success('Profile Updated', 'Your details have been saved successfully.');
       
-      // Check for pending search and redirect with it, otherwise just redirect to schedules
+      // Check for pending search and redirect with it
       const pendingSearch = getPendingSearch();
       if (pendingSearch) {
         const redirectUrl = buildSearchRedirectUrl(pendingSearch);
         clearPendingSearch();
         // Redirect immediately to search results
         router.push(redirectUrl);
-      } else {
-        // Redirect immediately to schedules
-        router.push('/schedules');
       }
     } catch (err: unknown) {
       setError(`Failed to update profile: ${(err as any).message}`);
@@ -721,7 +720,7 @@ const ProfilePage: React.FC = () => {
           </div>
           
           {/* Welcome/Action Banner for New Users */}
-          {(!profile.setupCompleted || !profile.phone?.trim() || !profile.firstName?.trim() || !profile.lastName?.trim()) && !editProfile && (
+          {(!profile.setupCompleted || !profile.phone?.trim() || (!profile.firstName?.trim() && !profile.lastName?.trim())) && !editProfile && (
             <div className="mb-8 bg-gradient-to-r from-blue-600 to-indigo-700 rounded-[2rem] p-6 sm:p-8 text-white shadow-xl shadow-blue-200 relative overflow-hidden anim-fade-up">
               <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 blur-3xl rounded-full -mr-20 -mt-20" />
               <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">

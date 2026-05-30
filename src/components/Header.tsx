@@ -115,7 +115,7 @@ const Header: React.FC = () => {
   const isCustomer     = user && userProfile && !isSuperAdmin && !isCompanyAdmin && !isOperator && !isConductor;
   const needsProfileAttention = Boolean(
     isCustomer &&
-    (!userProfile?.setupCompleted || !userProfile?.firstName?.trim() || !userProfile?.lastName?.trim() || !userProfile?.phone?.trim())
+    (!userProfile?.setupCompleted || !userProfile?.phone?.trim() || (!userProfile?.firstName?.trim() && !userProfile?.lastName?.trim()))
   );
 
   const adminRoute = isSuperAdmin ? '/admin' : isCompanyAdmin ? '/company/admin' : isOperator ? '/company/operator/dashboard' : null;

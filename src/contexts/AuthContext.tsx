@@ -83,7 +83,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 30000);
 
-      const response = await fetch('/api/auth/profile', { signal: controller.signal });
+      const response = await fetch('/api/auth/profile', { 
+        signal: controller.signal,
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        }
+      });
       clearTimeout(timeoutId);
 
       if (response.ok) {
