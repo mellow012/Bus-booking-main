@@ -129,6 +129,15 @@ export function validateCSRFRequest(request: NextRequest): {
 } {
   // Only state-mutating methods require CSRF protection
   const method = request.method?.toUpperCase() ?? '';
+  const pathname = request.nextUrl.pathname;
+
+  // ─── Webhooks Exclusion ─────────────────────────────────────────────────────
+  // External webhooks (like Supabase Auth Hooks) cannot provide CSRF tokens.
+  // These routes are secured via signature verification in the route handler.
+  if (pathname === '/api/auth/supabase-email-hook') {
+    return { valid: true };
+  }
+
   if (!requiresCSRFProtection(method)) {
     return { valid: true };
   }
