@@ -278,8 +278,11 @@ export default function ResetPassword() {
       return;
     }
 
-    // No user session and no token data found in URL
-    if (!isProcessingAuth) {
+    // If we've finished loading auth but still have no user and no valid token/code 
+    // found in the URL to process manually, then the link is invalid.
+    // We check !code and !token to ensure we aren't interrupting an async verification.
+    const isHandlingAsync = !!code || !!(token || initToken);
+    if (!isHandlingAsync) {
       setErrors({ general: 'Invalid or missing reset token. Please request a new password reset link.' });
       setIsVerifying(false);
     }
