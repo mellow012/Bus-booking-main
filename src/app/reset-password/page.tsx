@@ -3,16 +3,11 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '@/contexts/AuthContext';
 import { createClient as createBrowserClient } from '@/utils/supabase/client';
 import { Button } from '@/components/ui/button';
-import { 
-  LockClosedIcon,
-  EyeIcon,
-  EyeSlashIcon,
-  ExclamationTriangleIcon,
-  CheckCircleIcon,
-  XCircleIcon
+import {
+  LockClosedIcon, EyeIcon, EyeSlashIcon,
+  ExclamationTriangleIcon, CheckCircleIcon, XCircleIcon
 } from '@heroicons/react/24/outline';
 
 const getCookie = (name: string): string | null => {
@@ -42,25 +37,11 @@ const MAX_PASSWORD_LENGTH = 128;
 const checkPasswordStrength = (password: string): PasswordStrength => {
   let score = 0;
   const suggestions: string[] = [];
-
   if (password.length >= MIN_PASSWORD_LENGTH) score++;
   if (password.length >= 12) score++;
-  if (/[a-z]/.test(password) && /[A-Z]/.test(password)) {
-    score++;
-  } else {
-    suggestions.push('Use both uppercase and lowercase letters');
-  }
-  if (/\d/.test(password)) {
-    score++;
-  } else {
-    suggestions.push('Include at least one number');
-  }
-  if (/[!@#$%^&*(),.?":{}|<>]/.test(password)) {
-    score++;
-  } else {
-    suggestions.push('Add a special character (!@#$%^&*)');
-  }
-
+  if (/[a-z]/.test(password) && /[A-Z]/.test(password)) { score++; } else { suggestions.push('Use both uppercase and lowercase letters'); }
+  if (/\d/.test(password)) { score++; } else { suggestions.push('Include at least one number'); }
+  if (/[!@#$%^&*(),.?":{}|<>]/.test(password)) { score++; } else { suggestions.push('Add a special character (!@#$%^&*)'); }
   const strengthMap = {
     0: { label: 'Very Weak', color: 'bg-red-500' },
     1: { label: 'Weak', color: 'bg-orange-500' },
@@ -69,7 +50,6 @@ const checkPasswordStrength = (password: string): PasswordStrength => {
     4: { label: 'Strong', color: 'bg-green-500' },
     5: { label: 'Very Strong', color: 'bg-green-600' },
   };
-
   const strength = strengthMap[score as keyof typeof strengthMap] || strengthMap[0];
   return { score, label: strength.label, color: strength.color, suggestions };
 };
@@ -93,10 +73,7 @@ const getErrorMessage = (error: any): string => {
     switch (error.code) {
       case 'expired-token': return 'This password reset link has expired. Please request a new one.';
       case 'invalid-token': return 'This password reset link is invalid. Please request a new one.';
-      case 'user-disabled': return 'This account has been disabled. Please contact support.';
-      case 'user-not-found': return 'No account found. The user may have been deleted.';
       case 'weak-password': return 'Password is too weak. Please choose a stronger password.';
-      case 'network-error': return 'Network error. Please check your connection and try again.';
       default: return 'Failed to reset password. Please try again or contact support.';
     }
   }
@@ -117,65 +94,48 @@ export default function ResetPassword() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [passwordStrength, setPasswordStrength] = useState<PasswordStrength | null>(null);
 
-  const { user, loading } = useAuth();
+  // Runs once on mount — completely independent of AuthContext
+  useEffect(() => {
+    const supabase = createBrowserClient();
+    let settled = false;
 
+    const settle = (sessionUser: any) => {
+      if (settled) return;
+      settled = true;
+      setEmail(sessionUser.email || '');
+      setIsVerifying(false);
+    };
+
+    // Listen for PASSWORD_RECOVERY or SIGNED_IN events
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if ((event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN') && session?.user) {
+        settle(session.user);
+      }
+    });
+
+    // Also check existing session immediately
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) settle(session.user);
+    });
+
+    // 5s timeout fallback
+    const timeout = setTimeout(() => {
+      if (!settled) {
+        settled = true;
+        setErrors({ general: 'Invalid or missing reset token. Please request a new password reset link.' });
+        setIsVerifying(false);
+      }
+    }, 5000);
+
+    return () => {
+      clearTimeout(timeout);
+      subscription.unsubscribe();
+    };
+  }, []);
 
   useEffect(() => {
-  if (loading) return;
-
-  const checkSession = async () => {
-    try {
-      const supabase = createBrowserClient();
-
-      // If hash contains access_token, give Supabase client time to process it
-      const hasHashToken = window.location.hash.includes('access_token=');
-      if (hasHashToken) {
-        await new Promise(resolve => setTimeout(resolve, 1000));
-      }
-
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        setEmail(session.user.email || '');
-        setIsVerifying(false);
-        return;
-      }
-
-      if (user) {
-        setEmail(user.email || '');
-        setIsVerifying(false);
-        return;
-      }
-
-      // Check for PKCE code
-      const params = new URLSearchParams(window.location.search);
-      const code = params.get('code');
-      if (code) {
-        const { error } = await supabase.auth.exchangeCodeForSession(code);
-        if (error) throw error;
-        const cleanUrl = new URL(window.location.href);
-        cleanUrl.searchParams.delete('code');
-        window.history.replaceState({}, document.title, cleanUrl.toString());
-        return;
-      }
-
-      setErrors({ general: 'Invalid or missing reset token. Please request a new password reset link.' });
-      setIsVerifying(false);
-
-    } catch (err: any) {
-      setErrors({ general: err.message || 'Failed to verify reset link.' });
-      setIsVerifying(false);
-    }
-  };
-
-  checkSession();
-}, [user, loading]);
-
-  useEffect(() => {
-    if (password) {
-      setPasswordStrength(checkPasswordStrength(password));
-    } else {
-      setPasswordStrength(null);
-    }
+    if (password) { setPasswordStrength(checkPasswordStrength(password)); }
+    else { setPasswordStrength(null); }
   }, [password]);
 
   const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -215,7 +175,6 @@ export default function ResetPassword() {
       return;
     }
 
-    // Check for active session
     const supabase = createBrowserClient();
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
@@ -228,14 +187,12 @@ export default function ResetPassword() {
 
     try {
       const { error: updateError } = await supabase.auth.updateUser({ password });
-
       if (updateError) {
         setErrors({ general: updateError.message || 'Failed to update password' });
         setIsSubmitting(false);
         return;
       }
 
-      // Sync to Prisma
       const response = await fetch('/api/auth/reset-password', {
         method: 'POST',
         headers: {
@@ -308,7 +265,6 @@ export default function ResetPassword() {
     );
   };
 
-  // Loading state
   if (isVerifying) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex flex-col justify-center items-center py-12 sm:px-6 lg:px-8">
@@ -323,8 +279,7 @@ export default function ResetPassword() {
     );
   }
 
-  // Error state
-  if (errors.general && !user) {
+  if (errors.general && !email) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
         <div className="sm:mx-auto sm:w-full sm:max-w-md">
@@ -356,7 +311,6 @@ export default function ResetPassword() {
     );
   }
 
-  // Success state
   if (success) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
@@ -392,7 +346,6 @@ export default function ResetPassword() {
     );
   }
 
-  // Main form
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
@@ -434,15 +387,11 @@ export default function ResetPassword() {
                 <LockClosedIcon className="w-4 h-4 inline mr-1" />New Password
               </label>
               <div className="relative">
-                <input
-                  id="password" name="password"
-                  type={showPassword ? 'text' : 'password'}
+                <input id="password" name="password" type={showPassword ? 'text' : 'password'}
                   autoComplete="new-password" required autoFocus
                   aria-invalid={errors.password && touched.password ? 'true' : 'false'}
                   value={password} onChange={handlePasswordChange} onBlur={() => handleBlur('password')}
-                  className={getInputClassName('password')}
-                  placeholder="Create a strong password" disabled={isSubmitting}
-                />
+                  className={getInputClassName('password')} placeholder="Create a strong password" disabled={isSubmitting} />
                 <LockClosedIcon className="w-5 h-5 text-gray-400 absolute top-2.5 left-3 pointer-events-none" />
                 <button type="button" className="absolute top-2.5 right-3 text-gray-400 hover:text-gray-600 focus:outline-none transition-colors duration-200"
                   onClick={() => setShowPassword(!showPassword)} disabled={isSubmitting}>
@@ -462,15 +411,11 @@ export default function ResetPassword() {
                 <LockClosedIcon className="w-4 h-4 inline mr-1" />Confirm New Password
               </label>
               <div className="relative">
-                <input
-                  id="confirmPassword" name="confirmPassword"
-                  type={showConfirmPassword ? 'text' : 'password'}
+                <input id="confirmPassword" name="confirmPassword" type={showConfirmPassword ? 'text' : 'password'}
                   autoComplete="new-password" required
                   aria-invalid={errors.confirmPassword && touched.confirmPassword ? 'true' : 'false'}
                   value={confirmPassword} onChange={handleConfirmPasswordChange} onBlur={() => handleBlur('confirmPassword')}
-                  className={getInputClassName('confirmPassword')}
-                  placeholder="Re-enter your new password" disabled={isSubmitting}
-                />
+                  className={getInputClassName('confirmPassword')} placeholder="Re-enter your new password" disabled={isSubmitting} />
                 <LockClosedIcon className="w-5 h-5 text-gray-400 absolute top-2.5 left-3 pointer-events-none" />
                 <button type="button" className="absolute top-2.5 right-3 text-gray-400 hover:text-gray-600 focus:outline-none transition-colors duration-200"
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)} disabled={isSubmitting}>

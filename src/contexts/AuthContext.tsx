@@ -1,10 +1,9 @@
 'use client';
-import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { createClient } from '@/utils/supabase/client';
-import { User, type AuthError } from '@supabase/supabase-js';
+import { User } from '@supabase/supabase-js';
 import { UserProfile, UserRole, CompanyRole } from '@/types';
 import { useRouter, usePathname } from 'next/navigation';
-import Image from 'next/image';
 
 const getCookie = (name: string): string | null => {
   if (typeof document === 'undefined') return null;
@@ -34,20 +33,13 @@ const splitFullName = (fullName: string) => {
   return { firstName, lastName };
 };
 
-const _isCompanyRole = (role?: UserRole): role is CompanyRole =>
-  COMPANY_ROLES.includes(role as CompanyRole);
-
 interface AuthContextType {
   user: (User & { uid: string; emailVerified: boolean; getIdToken: () => Promise<string> }) | null;
   userProfile: UserProfile | null;
   setUserProfile: (profile: UserProfile | null) => void;
   signInWithGoogle: () => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (
-    email: string,
-    password: string,
-    profile: { fullName: string; phone?: string }
-  ) => Promise<void>;
+  signUp: (email: string, password: string, profile: { fullName: string; phone?: string }) => Promise<void>;
   updateUserProfile: (profile: UpdateProfilePayload) => Promise<void>;
   signOut: () => Promise<void>;
   loading: boolean;
@@ -64,47 +56,39 @@ interface UpdateProfilePayload {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
 const supabase = createClient();
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<(User & { uid: string; emailVerified: boolean; getIdToken: () => Promise<string> }) | null>(null);
-  const [userProfile,   setUserProfile]   = useState<UserProfile | null>(null);
-  const [loading,       setLoading]       = useState(true);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [loading, setLoading] = useState(true);
   const [isInitialized, setIsInitialized] = useState(false);
 
-  const router   = useRouter();
+  const router = useRouter();
   const pathname = usePathname();
-
-  // ─── Profile management ───────────────────────────────────────────────────
 
   const refreshUserProfile = useCallback(async (uid?: string, sessionUser?: any) => {
     const targetUid = uid ?? user?.id;
     if (!targetUid) return;
 
-    // Industry Standard: Prevent redundant fetching if profile is already loaded and fresh
-    if (userProfile && userProfile.id === targetUid && !uid) {
-      return;
-    }
+    if (userProfile && userProfile.id === targetUid && !uid) return;
 
-    // Use sessionUser metadata if provided (from onAuthStateChange), otherwise fall back to state
     const meta = sessionUser?.user_metadata ?? user?.user_metadata;
     const metaEmail = sessionUser?.email ?? user?.email;
     const metaEmailConfirmed = sessionUser?.email_confirmed_at ?? user?.email_confirmed_at;
 
     try {
-      // Add timeout to prevent indefinite waiting (increased to 30s for cold starts)
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 30000);
 
-      const response = await fetch('/api/auth/profile', { 
+      const response = await fetch('/api/auth/profile', {
         signal: controller.signal,
         cache: 'no-store',
         headers: {
           'Cache-Control': 'no-cache, no-store, must-revalidate',
           'Pragma': 'no-cache',
-          'Expires': '0'
-        }
+          'Expires': '0',
+        },
       });
       clearTimeout(timeoutId);
 
@@ -113,23 +97,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (data) {
           setUserProfile(data as UserProfile);
 
-          // ── Auto-activate team members on first sign-in (non-blocking) ──
           const isTeamRole = ['operator', 'conductor'].includes(data.role);
           const needsActivation = isTeamRole && data.invitationSent && (!data.isActive || !data.setupCompleted);
-
           if (needsActivation) {
-            // Fire and forget - don't wait for activation
             fetch('/api/auth/profile', {
               method: 'PATCH',
-              headers: { 
-                'Content-Type': 'application/json',
-                'x-csrf-token': getCookie('__csrf_token') || ''
-              },
-              body: JSON.stringify({
-                isActive: true,
-                setupCompleted: true,
-                passwordSet: true,
-              }),
+              headers: { 'Content-Type': 'application/json', 'x-csrf-token': getCookie('__csrf_token') || '' },
+              body: JSON.stringify({ isActive: true, setupCompleted: true, passwordSet: true }),
             }).then(async (res) => {
               if (res.ok) {
                 const { data: updatedData } = await res.json();
@@ -138,16 +112,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }).catch((err) => console.error('[AuthContext] Auto-activate failed:', err));
           }
 
-          // Check if we should update missing name or phone from user metadata (non-blocking)
-          const needsMetadataSync = (!data.firstName || !data.phone) && 
-                                    (meta?.first_name || meta?.phone);
+          const needsMetadataSync = (!data.firstName || !data.phone) && (meta?.first_name || meta?.phone);
           if (needsMetadataSync) {
             fetch('/api/auth/profile', {
               method: 'PATCH',
-              headers: { 
-                'Content-Type': 'application/json',
-                'x-csrf-token': getCookie('__csrf_token') || ''
-              },
+              headers: { 'Content-Type': 'application/json', 'x-csrf-token': getCookie('__csrf_token') || '' },
               body: JSON.stringify({
                 firstName: data.firstName || meta?.first_name || '',
                 lastName: data.lastName || meta?.last_name || '',
@@ -161,22 +130,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }).catch((err) => console.error('[AuthContext] Metadata sync failed:', err));
           }
         } else {
-          // Initialize profile if not exists (non-blocking)
-          const metaFirstName = meta?.first_name || '';
-          const metaLastName = meta?.last_name || '';
-          const metaPhone = meta?.phone || '';
-
           fetch('/api/auth/profile', {
             method: 'PATCH',
-            headers: { 
-              'Content-Type': 'application/json',
-              'x-csrf-token': getCookie('__csrf_token') || ''
-            },
+            headers: { 'Content-Type': 'application/json', 'x-csrf-token': getCookie('__csrf_token') || '' },
             body: JSON.stringify({
               email: metaEmail || '',
-              firstName: metaFirstName,
-              lastName: metaLastName,
-              phone: metaPhone,
+              firstName: meta?.first_name || '',
+              lastName: meta?.last_name || '',
+              phone: meta?.phone || '',
               role: 'customer',
               isActive: true,
               emailVerified: metaEmailConfirmed ? true : false,
@@ -191,14 +152,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       }
     } catch (error: any) {
-      // Only log if it's not a timeout/abort
       if (error.name !== 'AbortError') {
         console.error('[AuthContext] refreshUserProfile failed:', error);
       }
     }
   }, [user?.id, user?.email, user?.email_confirmed_at]);
-
-  // ─── Auth state listener ──────────────────────────────────────────────────
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
@@ -210,17 +168,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           getIdToken: async () => session.access_token,
         };
         setUser(augmentedUser);
-        // Set loading to false immediately to allow redirects, then fetch profile in background
         setLoading(false);
         setIsInitialized(true);
 
-        // If the user clicked a password recovery link, redirect to the reset page
+        // PASSWORD_RECOVERY: don't redirect — reset page handles it via onAuthStateChange
         if (event === 'PASSWORD_RECOVERY') {
-          router.push('/reset-password');
           return;
         }
 
-        // Refresh profile without blocking - pass session.user so metadata is available immediately
         refreshUserProfile(session.user.id, session.user);
       } else {
         setUser(null);
@@ -234,46 +189,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ─── Route guard ──────────────────────────────────────────────────────────
-
   useEffect(() => {
-    // Only run after auth is initialized
     if (!isInitialized) return;
 
     const publicRoutes = [
       '/login', '/register', '/', '/about', '/contact',
       '/forgot-password', '/reset-password', '/verify-email',
       '/company/setup', '/company/conductor/setup', '/company/operator/signup',
-      '/search', '/schedules'
+      '/search', '/schedules',
     ];
     const isPublicRoute = publicRoutes.includes(pathname) || pathname.startsWith('/bus/');
 
-    // Skip setup page check if needed or implement same as before
-    const isSetupPage = false; // logic would go here if needed
-
-    if (!user && !isSetupPage && !isPublicRoute) {
+    if (!user && !isPublicRoute) {
       const currentPath = typeof window !== 'undefined' ? pathname + window.location.search : pathname;
       router.push(`/login?redirect=${encodeURIComponent(currentPath)}`);
       return;
     }
 
-    // If user exists, begin immediate redirects while profile loads in background
     if (user) {
       const emailVerified = !!user.email_confirmed_at;
-      const isSuperAdmin  = userProfile?.role === 'superadmin';
+      const isSuperAdmin = userProfile?.role === 'superadmin';
 
       if (!emailVerified && !isPublicRoute && !isSuperAdmin) {
         router.push('/verify-email');
         return;
       }
 
-      // Only check these routes if we have the profile (it may still be loading)
       if (userProfile) {
         if (emailVerified && pathname === '/verify-email') {
           redirectToDashboard(userProfile);
           return;
         }
-
         if (['/login', '/register'].includes(pathname)) {
           redirectToDashboard(userProfile);
           return;
@@ -283,7 +229,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [user, userProfile, isInitialized, router, pathname]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const redirectToDashboard = useCallback((profile: UserProfile) => {
-    // Check for redirect parameter in URL
     if (typeof window !== 'undefined') {
       const searchParams = new URLSearchParams(window.location.search);
       const redirect = searchParams.get('redirect');
@@ -294,89 +239,54 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     switch (profile.role) {
-      case 'superadmin':
-        router.push('/admin');
-        break;
+      case 'superadmin': router.push('/admin'); break;
       case 'company_admin':
-        router.push(
-          profile.companyId
-            ? `/company/admin?companyId=${profile.companyId}`
-            : '/company/setup'
-        );
+        router.push(profile.companyId ? `/company/admin?companyId=${profile.companyId}` : '/company/setup');
         break;
       case 'operator':
-        if (profile.companyId) {
-          router.push(`/company/operator/dashboard?companyId=${profile.companyId}`);
-        } else {
-          router.push('/login');
-        }
+        router.push(profile.companyId ? `/company/operator/dashboard?companyId=${profile.companyId}` : '/login');
         break;
       case 'conductor':
-        if (profile.companyId) {
-          router.push('/company/conductor/dashboard');
-        } else {
-          router.push('/login');
-        }
+        router.push(profile.companyId ? '/company/conductor/dashboard' : '/login');
         break;
-      case 'customer':
-        router.push('/');
-        break;
-      default:
-        router.push('/');
+      case 'customer': router.push('/'); break;
+      default: router.push('/');
     }
   }, [router]);
-
-  // ─── Google Sign In ───────────────────────────────────────────────────────
 
   const signInWithGoogle = async (): Promise<void> => {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        // Ensure this URL is added to your Supabase Redirect URLs
         redirectTo: `${window.location.origin}/auth/callback`,
-        queryParams: {
-          access_type: 'offline',
-          prompt: 'select_account',
-        },
+        queryParams: { access_type: 'offline', prompt: 'select_account' },
       },
     });
     if (error) throw new Error(error.message);
   };
 
-  // ─── signIn ───────────────────────────────────────────────────────────────
-
   const signIn = async (email: string, password: string): Promise<void> => {
-    if (!email?.trim() || !password?.trim()) {
-      throw new Error('Email and password are required');
-    }
-
+    if (!email?.trim() || !password?.trim()) throw new Error('Email and password are required');
     const { error } = await supabase.auth.signInWithPassword({
       email: email.trim().toLowerCase(),
       password,
     });
-
     if (error) {
       const messages: Record<string, string> = {
         'Invalid login credentials': 'Invalid email or password.',
-        'Email not confirmed':        'Please verify your email address before signing in.',
+        'Email not confirmed': 'Please verify your email address before signing in.',
       };
       throw new Error(messages[error.message] || error.message);
     }
   };
-
-  // ─── signUp ───────────────────────────────────────────────────────────────
 
   const signUp = async (
     email: string,
     password: string,
     profile: { fullName: string; phone?: string }
   ): Promise<void> => {
-    if (!email?.trim() || !password?.trim()) {
-      throw new Error('Email and password are required');
-    }
-    if (!profile.fullName?.trim()) {
-      throw new Error('Full name is required');
-    }
+    if (!email?.trim() || !password?.trim()) throw new Error('Email and password are required');
+    if (!profile.fullName?.trim()) throw new Error('Full name is required');
 
     const { firstName, lastName } = splitFullName(profile.fullName);
 
@@ -387,74 +297,54 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         emailRedirectTo: `${window.location.origin}/verify-email?mode=verified`,
         data: {
           first_name: firstName,
-          last_name:  lastName,
-          phone:      formatPhoneToE164(profile.phone),
-        }
-      }
+          last_name: lastName,
+          phone: formatPhoneToE164(profile.phone),
+        },
+      },
     });
 
-    if (error) {
-      throw new Error(error.message);
-    }
+    if (error) throw new Error(error.message);
 
     if (data.user) {
-      // Sync with Prisma (may return 401 if unauthenticated, which will fall back to sync on login)
       await fetch('/api/auth/profile', {
         method: 'PATCH',
-        headers: { 
-          'Content-Type': 'application/json',
-          'x-csrf-token': getCookie('__csrf_token') || ''
-        },
+        headers: { 'Content-Type': 'application/json', 'x-csrf-token': getCookie('__csrf_token') || '' },
         body: JSON.stringify({
-          email:          data.user.email,
+          email: data.user.email,
           firstName,
           lastName,
-          phone:          formatPhoneToE164(profile.phone),
-          role:           'customer',
-          isActive:       true,
-          emailVerified:  false,
+          phone: formatPhoneToE164(profile.phone),
+          role: 'customer',
+          isActive: true,
+          emailVerified: false,
           setupCompleted: false,
         }),
       }).catch(err => console.warn('[AuthContext] Unauthenticated sync skipped during registration:', err));
     }
   };
 
-  // ─── updateUserProfile ────────────────────────────────────────────────────
-
   const updateUserProfile = async (profile: UpdateProfilePayload): Promise<void> => {
     if (!user?.id) throw new Error('No authenticated user found');
-    
+    const response = await fetch('/api/profile', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'x-csrf-token': getCookie('__csrf_token') || '' },
+      body: JSON.stringify({
+        firstName: profile.firstName.trim(),
+        lastName: profile.lastName.trim(),
+        phone: formatPhoneToE164(profile.phone),
+        setupCompleted: true,
+        nationalId: profile.nationalId,
+        sex: profile.sex,
+        currentAddress: profile.currentAddress,
+      }),
+    });
+    if (!response.ok) throw new Error('Failed to update profile');
     try {
-      const response = await fetch('/api/profile', {
-        method: 'PUT',
-        headers: { 
-          'Content-Type': 'application/json',
-          'x-csrf-token': getCookie('__csrf_token') || ''
-        },
-        body: JSON.stringify({
-          firstName:      profile.firstName.trim(),
-          lastName:       profile.lastName.trim(),
-          phone:          formatPhoneToE164(profile.phone),
-          setupCompleted: true,
-          nationalId:     profile.nationalId,
-          sex:            profile.sex,
-          currentAddress: profile.currentAddress,
-        }),
-      });
-
-      if (!response.ok) throw new Error('Failed to update profile');
-
-      try {
-        await refreshUserProfile();
-      } catch (refreshError) {
-        console.warn('[AuthContext] refreshUserProfile failed after profile update:', refreshError);
-      }
-    } catch (error: any) {
-      throw new Error('Profile update failed. Please try again.');
+      await refreshUserProfile();
+    } catch (refreshError) {
+      console.warn('[AuthContext] refreshUserProfile failed after profile update:', refreshError);
     }
   };
-
-  // ─── signOut ──────────────────────────────────────────────────────────────
 
   const signOutUser = async (): Promise<void> => {
     const { error } = await supabase.auth.signOut();
@@ -464,19 +354,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     router.push('/login');
   };
 
-  // ─── Context value ────────────────────────────────────────────────────────
-
   const contextValue: AuthContextType = {
-    user,
-    userProfile,
-    setUserProfile,
-    signInWithGoogle,
-    signIn,
-    signUp,
-    updateUserProfile,
-    signOut: signOutUser,
-    loading,
-    refreshUserProfile,
+    user, userProfile, setUserProfile,
+    signInWithGoogle, signIn, signUp,
+    updateUserProfile, signOut: signOutUser,
+    loading, refreshUserProfile,
   };
 
   if (!isInitialized) {
