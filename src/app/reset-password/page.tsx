@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import { createClient as createBrowserClient } from '@/utils/supabase/client';
 import { Button } from '@/components/ui/button';
 import { 
   LockClosedIcon,
@@ -192,12 +193,21 @@ export default function ResetPassword() {
             throw new Error('Invalid or missing reset token. Please request a new password reset link.');
           }
 
+          const supabase = createBrowserClient();
+          const { data: { session } } = await supabase.auth.getSession();
+
+          if (session?.user) {
+            setEmail(session.user.email || '');
+            setIsVerifying(false);
+            return;
+          }
+
           const response = await fetch('/api/auth/verify-reset-token', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ token: actualToken }),
+            body: JSON.stringify({ token_hash: actualToken }),
           });
 
           if (!response.ok) {
