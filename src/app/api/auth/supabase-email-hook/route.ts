@@ -33,6 +33,8 @@ export async function POST(request: NextRequest) {
 
     const { user, email_data } = payload ?? {};
     const action = email_data?.email_action_type;
+    console.log('[hook] email_data:', JSON.stringify(email_data));
+    console.log('[hook] user:', JSON.stringify(user));
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
     const appUrl = process.env.NEXT_PUBLIC_APP_URL!;
 
