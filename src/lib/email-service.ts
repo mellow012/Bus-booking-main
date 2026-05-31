@@ -126,7 +126,6 @@ export async function sendGenericPasswordResetEmail(
   resetLink: string
 ): Promise<void> {
   const mailOptions = {
-    from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
     to: email,
     subject: 'Reset Your TibhukeBus Password',
     html: `
@@ -188,7 +187,6 @@ export async function sendPasswordResetEmail(
   companyId: string
 ): Promise<void> {
   const mailOptions = {
-    from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
     to: email,
     subject: `Complete Your ${companyName} Account Setup`,
     html: `
@@ -235,7 +233,6 @@ export async function sendOperatorInviteEmail(
     : "In this role, you'll be able to view your assigned trips, check passenger manifests, and manage your daily schedule.";
 
   const mailOptions = {
-    from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
     to: email,
     subject: `You've been invited to join ${companyName} as a ${roleLabel}`,
     html: `

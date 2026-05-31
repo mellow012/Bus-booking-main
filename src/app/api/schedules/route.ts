@@ -56,6 +56,11 @@ export async function GET(request: NextRequest) {
       console.error('[schedule-generator] Async roll error:', err);
     });
 
+    // Industry Standard: Round grace period to nearest 5 mins to improve cache hit rates
+    const now = Date.now();
+    const roundedNow = Math.floor(now / (5 * 60 * 1000)) * (5 * 60 * 1000);
+    const gracePeriod = new Date(roundedNow - 15 * 60 * 1000);
+
     const searchParams = request.nextUrl.searchParams;
     
     // Extract query parameters
@@ -94,7 +99,6 @@ export async function GET(request: NextRequest) {
       where.departureDateTime = {};
       if (startDate) {
         const start = new Date(startDate);
-        const gracePeriod = new Date(Date.now() - 15 * 60 * 1000);
         where.departureDateTime.gte = start < gracePeriod ? gracePeriod : start;
       }
       if (endDate) where.departureDateTime.lte = new Date(endDate);
@@ -102,7 +106,6 @@ export async function GET(request: NextRequest) {
       // Only fetch schedules departing from 15 minutes ago onwards.
       // This prevents departed/completed schedules from filling up the 'take: 30' query limit
       // and causing all results to be filtered out in-memory.
-      const gracePeriod = new Date(Date.now() - 15 * 60 * 1000);
       where.departureDateTime = { gte: gracePeriod };
     }
 
@@ -225,8 +228,8 @@ export async function GET(request: NextRequest) {
       pagination: {
         page,
         limit,
-        total: deduplicated.length,
-        pages: Math.ceil(deduplicated.length / limit),
+        total,
+        pages: Math.ceil(total / (limit || 1)),
       },
     });
   } catch (error: any) {
@@ -245,4 +248,3 @@ export async function GET(request: NextRequest) {
     );
   }
 }
-

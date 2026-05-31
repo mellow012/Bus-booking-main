@@ -29,28 +29,15 @@ const envSchema = z.object({
 
   // ─── Encryption ────────────────────────────────────────────────────────────
   MASTER_ENCRYPTION_KEY: z.string().length(64, 'MASTER_ENCRYPTION_KEY must be a 64-character hex string'),
-
+  SUPABASE_HOOK_SECRET: z.string().min(1, 'SUPABASE_HOOK_SECRET is required'),
   // ─── Email ─────────────────────────────────────────────────────────────────
-  EMAIL_HOST: z.string().min(1, 'EMAIL_HOST is required').optional(),
-  EMAIL_PORT: z.string().regex(/^\d+$/, 'EMAIL_PORT must be numeric').optional(),
-  EMAIL_USER: z.string().min(1, 'EMAIL_USER is required').optional(),
-  EMAIL_PASS: z.string().min(1, 'EMAIL_PASS is required').optional(),
-  EMAIL_FROM: z.string().min(1, 'EMAIL_FROM is required').optional(),
-  RESEND_API_KEY: z.string().min(1, 'RESEND_API_KEY is required').optional(),
-  RESEND_FROM: z.string().min(1, 'RESEND_FROM is required').optional(),
+  RESEND_API_KEY: z.string().min(1, 'RESEND_API_KEY is required for uniform email services'),
+  RESEND_FROM: z.string().min(1, 'RESEND_FROM is required (e.g., no-reply@yourdomain.com)'),
 
   // ─── App ───────────────────────────────────────────────────────────────────
   NEXT_PUBLIC_APP_URL: z.string().url().optional(),
   NODE_ENV:            z.enum(['development', 'production', 'test']).optional(),
-}).refine(
-  (env) =>
-    Boolean(env.RESEND_API_KEY?.trim()) ||
-    (Boolean(env.EMAIL_HOST?.trim()) && Boolean(env.EMAIL_USER?.trim()) && Boolean(env.EMAIL_PASS?.trim())),
-  {
-    message: 'Either RESEND_API_KEY or all of EMAIL_HOST, EMAIL_USER, and EMAIL_PASS must be set',
-    path: ['RESEND_API_KEY'],
-  }
-);
+});
 
 const _env = envSchema.safeParse(process.env);
 

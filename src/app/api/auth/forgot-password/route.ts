@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/utils/supabase/server';
+import { createAdminClient } from '@/utils/supabase/admin';
 import { authRateLimiter, getClientIp } from '@/lib/rateLimiter';
 import { withErrorHandling, createSuccessResponse, Errors } from '@/lib/errorHandler';
+import { sendGenericPasswordResetEmail } from '@/lib/email-service';
 
 export const POST = withErrorHandling(async (request: NextRequest) => {
     const ip = getClientIp(request);
@@ -18,19 +19,29 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
     if (!email) throw Errors.validationError({ email: 'Email is required' });
 
     const trimmedEmail = email.trim().toLowerCase();
-    const supabase = await createClient();
+    const supabaseAdmin = createAdminClient();
 
-    // 2. Use Supabase's native reset method
     let baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
     if (!baseUrl.startsWith('http')) {
       baseUrl = 'http://localhost:3000';
     }
 
-    const { error: resetError } = await supabase.auth.resetPasswordForEmail(trimmedEmail, {
-      redirectTo: clientRedirectUrl || `${baseUrl}/reset-password`,
+    // 1. Generate the recovery link using the Admin API
+    // This bypasses Supabase's built-in emailer and gives us the URL directly.
+    const { data, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
+      type: 'recovery',
+      email: trimmedEmail,
+      options: {
+        redirectTo: clientRedirectUrl || `${baseUrl}/reset-password`,
+      },
     });
 
-    if (resetError) throw resetError;
+    if (linkError) throw linkError;
+
+    // 2. Send the custom branded email via Resend
+    if (data?.properties?.action_link) {
+      await sendGenericPasswordResetEmail(trimmedEmail, data.properties.action_link);
+    }
 
     return createSuccessResponse(null, 'If an account exists, a reset link has been sent to your email.');
 });

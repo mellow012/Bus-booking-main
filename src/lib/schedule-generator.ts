@@ -55,9 +55,16 @@ export async function checkAndRollSchedules(force = false) {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
+    // Calculate target range: Today until June 30, 2024
+    const targetEndDate = new Date(2024, 6, 30); // Month is 0-indexed (6 = July, so 5 = June)
+    const diffTime = Math.max(0, targetEndDate.getTime() - today.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) || 1;
+
     // Update in parallel transaction chunks to be extremely fast and efficient
     const chunkSize = 20;
     let updatedCount = 0;
+
+    console.log(`[schedule-generator] Spreading ${schedules.length} schedules over ${diffDays} days until end of June.`);
 
     for (let i = 0; i < schedules.length; i += chunkSize) {
       const chunk = schedules.slice(i, i + chunkSize);
@@ -68,8 +75,8 @@ export async function checkAndRollSchedules(force = false) {
             const globalIdx = i + idx;
             const departure = new Date(today);
 
-            // Spread schedules over the next 7 days (today + 0 to 6 days)
-            const daysOffset = globalIdx % 7;
+            // Spread schedules over the entire range until end of June
+            const daysOffset = globalIdx % diffDays;
             departure.setDate(today.getDate() + daysOffset);
 
             // Spread hours: 6:00, 8:00, 10:00, 12:00, 14:00, 16:00, 18:00
