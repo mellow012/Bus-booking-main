@@ -18,16 +18,12 @@ export async function POST(request: NextRequest) {
     const supabase = await createClient();
 
     // Verify the OTP (recovery token)
-    // If the client passed an explicit `token` (e.g. Supabase `access_token`),
-    // call verifyOtp with `token`; otherwise use `token_hash`.
-    let data: any;
-    let error: any;
-
-    if (token) {
-      ({ data, error } = await supabase.auth.verifyOtp({ token, type: 'recovery' }));
-    } else {
-      ({ data, error } = await supabase.auth.verifyOtp({ token_hash: actualToken, type: 'recovery' }));
-    }
+    // Use `token_hash` for server-side verification. Cast to `any` to satisfy
+    // supabase client typings when tokens come in different formats (hash vs token).
+    const { data, error } = await supabase.auth.verifyOtp({
+      token_hash: actualToken as any,
+      type: 'recovery',
+    });
 
     if (error) {
       console.error('[verify-reset-token] verification failed:', error);
