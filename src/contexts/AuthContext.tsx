@@ -2,7 +2,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { createClient } from '@/utils/supabase/client';
 import { User } from '@supabase/supabase-js';
-import { UserProfile, UserRole, CompanyRole } from '@/types';
+import { UserProfile, CompanyRole } from '@/types';
 import { useRouter, usePathname } from 'next/navigation';
 
 const getCookie = (name: string): string | null => {
@@ -24,8 +24,6 @@ const formatPhoneToE164 = (phone?: string): string => {
   return '+' + digits;
 };
 
-const COMPANY_ROLES: CompanyRole[] = ['company_admin', 'operator', 'conductor'];
-
 const splitFullName = (fullName: string) => {
   const parts = fullName.trim().split(/\s+/).filter(Boolean);
   const firstName = parts[0] || '';
@@ -35,7 +33,7 @@ const splitFullName = (fullName: string) => {
 
 interface AuthContextType {
   user: (User & { uid: string; emailVerified: boolean; getIdToken: () => Promise<string> }) | null;
-  userProfile: UserProfile | null;
+  userProfile: UserProfile | null; // 👈 Exposed user profile instance
   setUserProfile: (profile: UserProfile | null) => void;
   signInWithGoogle: () => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
@@ -43,7 +41,7 @@ interface AuthContextType {
   updateUserProfile: (profile: UpdateProfilePayload) => Promise<void>;
   signOut: () => Promise<void>;
   loading: boolean;
-  refreshUserProfile: (uid?: string) => Promise<void>;
+  refreshUserProfile: (uid?: string, sessionUser?: any) => Promise<void>;
 }
 
 interface UpdateProfilePayload {
@@ -60,18 +58,49 @@ const supabase = createClient();
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<(User & { uid: string; emailVerified: boolean; getIdToken: () => Promise<string> }) | null>(null);
-  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null); // 👈 Profile local react state tracking
   const [loading, setLoading] = useState(true);
   const [isInitialized, setIsInitialized] = useState(false);
 
   const router = useRouter();
   const pathname = usePathname();
 
+  // Redirect routing rules strictly driven by userProfile configuration parameters
+  const redirectToDashboard = useCallback((profile: UserProfile) => {
+    if (typeof window !== 'undefined') {
+      const searchParams = new URLSearchParams(window.location.search);
+      const redirect = searchParams.get('redirect');
+      if (redirect && redirect.startsWith('/')) {
+        router.push(redirect);
+        return;
+      }
+    }
+
+    switch (profile.role) {
+      case 'superadmin': 
+        router.push('/admin'); 
+        break;
+      case 'company_admin':
+        router.push(profile.companyId ? `/company/admin?companyId=${profile.companyId}` : '/company/setup');
+        break;
+      case 'operator':
+        router.push(profile.companyId ? `/company/operator/dashboard?companyId=${profile.companyId}` : '/login');
+        break;
+      case 'conductor':
+        router.push(profile.companyId ? '/company/conductor/dashboard' : '/login');
+        break;
+      case 'customer': 
+        router.push('/'); 
+        break;
+      default: 
+        router.push('/');
+    }
+  }, [router]);
+
+  // Network engine query layer updating userProfile fields from api data context pipelines
   const refreshUserProfile = useCallback(async (uid?: string, sessionUser?: any) => {
     const targetUid = uid ?? user?.id;
     if (!targetUid) return;
-
-    if (userProfile && userProfile.id === targetUid && !uid) return;
 
     const meta = sessionUser?.user_metadata ?? user?.user_metadata;
     const metaEmail = sessionUser?.email ?? user?.email;
@@ -92,81 +121,78 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
       clearTimeout(timeoutId);
 
-      // Check if response is actually JSON to prevent "Type Content Error"
       const contentType = response.headers.get('content-type');
       if (!response.ok || !contentType || !contentType.includes('application/json')) {
         console.warn('[AuthContext] Profile fetch failed or returned non-JSON:', response.status);
         return;
       }
 
-      if (response.ok) {
-        const { data } = await response.json();
-        if (data) {
-          setUserProfile(data as UserProfile);
+      const { data } = await response.json();
+      if (data) {
+        setUserProfile(data as UserProfile);
 
-          const isTeamRole = ['operator', 'conductor'].includes(data.role);
-          const needsActivation = isTeamRole && data.invitationSent && (!data.isActive || !data.setupCompleted);
-          if (needsActivation) {
-            fetch('/api/auth/profile', {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json', 'x-csrf-token': getCookie('__csrf_token') || '' },
-              body: JSON.stringify({ isActive: true, setupCompleted: true, passwordSet: true }),
+        const isTeamRole = ['operator', 'conductor'].includes(data.role);
+        const needsActivation = isTeamRole && data.invitationSent && (!data.isActive || !data.setupCompleted);
+        if (needsActivation) {
+          fetch('/api/auth/profile', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json', 'x-csrf-token': getCookie('__csrf_token') || '' },
+            body: JSON.stringify({ isActive: true, setupCompleted: true, passwordSet: true }),
+          })
+            .then(async (res) => {
+              const cType = res.headers.get('content-type');
+              if (res.ok && cType?.includes('application/json')) {
+                const { data: updatedData } = await res.json();
+                if (updatedData) setUserProfile(updatedData as UserProfile);
+              }
             })
-              .then(async (res) => {
-                const cType = res.headers.get('content-type');
-                // Check for JSON and non-empty status to prevent "Type Content Error" (JSON parsing crash)
-                if (res.ok && res.status !== 204 && cType?.includes('application/json')) {
-                  const { data: updatedData } = await res.json();
-                  if (updatedData) setUserProfile(updatedData as UserProfile);
-                }
-              })
-              .catch((err) => console.error('[AuthContext] Auto-activate failed:', err));
-          }
+            .catch((err) => console.error('[AuthContext] Auto-activate failed:', err));
+        }
 
-          const needsMetadataSync = (!data.firstName || !data.phone) && (meta?.first_name || meta?.phone);
-          if (needsMetadataSync) {
-            fetch('/api/auth/profile', {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json', 'x-csrf-token': getCookie('__csrf_token') || '' },
-              body: JSON.stringify({
-                firstName: data.firstName || meta?.first_name || '',
-                lastName: data.lastName || meta?.last_name || '',
-                phone: data.phone || meta?.phone || '',
-              }),
-            })
-              .then(async (res) => {
-                const cType = res.headers.get('content-type');
-                if (res.ok && res.status !== 204 && cType?.includes('application/json')) {
-                  const { data: updatedData } = await res.json();
-                  if (updatedData) setUserProfile(updatedData as UserProfile);
-                }
-              })
-              .catch((err) => console.error('[AuthContext] Metadata sync failed:', err));
-          }
-        } else {
+        const needsMetadataSync = (!data.firstName || !data.phone) && (meta?.first_name || meta?.phone);
+        if (needsMetadataSync) {
           fetch('/api/auth/profile', {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json', 'x-csrf-token': getCookie('__csrf_token') || '' },
             body: JSON.stringify({
-              email: metaEmail || '',
-              firstName: meta?.first_name || '',
-              lastName: meta?.last_name || '',
-              phone: meta?.phone || '',
-              role: 'customer',
-              isActive: true,
-              emailVerified: metaEmailConfirmed ? true : false,
-              setupCompleted: false,
+              firstName: data.firstName || meta?.first_name || '',
+              lastName: data.lastName || meta?.last_name || '',
+              phone: data.phone || meta?.phone || '',
             }),
           })
             .then(async (res) => {
               const cType = res.headers.get('content-type');
-              if (res.ok && res.status !== 204 && cType?.includes('application/json')) {
-                const { data: newData } = await res.json();
-                if (newData) setUserProfile(newData as UserProfile);
+              if (res.ok && cType?.includes('application/json')) {
+                const { data: updatedData } = await res.json();
+                if (updatedData) setUserProfile(updatedData as UserProfile);
               }
             })
-            .catch((err) => console.error('[AuthContext] Profile init failed:', err));
+            .catch((err) => console.error('[AuthContext] Metadata sync failed:', err));
         }
+      } else {
+        // Automatically initialize profile layout fallback configurations if user entry doesn't exist
+        fetch('/api/auth/profile', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', 'x-csrf-token': getCookie('__csrf_token') || '' },
+          body: JSON.stringify({
+            email: metaEmail || '',
+            firstName: meta?.first_name || '',
+            lastName: meta?.last_name || '',
+            phone: meta?.phone || '',
+            role: 'customer',
+            isActive: true,
+            emailVerified: !!metaEmailConfirmed,
+            setupCompleted: false,
+          }),
+        })
+          .then(async (res) => {
+            const cType = res.headers.get('content-type');
+            if (res.ok && cType?.includes('application/json')) {
+              const { data: newData } = await res.json();
+              if (newData) setUserProfile(newData as UserProfile);
+            }
+          })
+          .catch((err) => console.error('[AuthContext] Profile init failed:', err));
       }
     } catch (error: any) {
       if (error.name !== 'AbortError') {
@@ -188,7 +214,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setLoading(false);
         setIsInitialized(true);
 
-        // Skip profile refresh for recovery flows
         const isRecovery = event === 'PASSWORD_RECOVERY' || 
                           pathname === '/reset-password' || 
                           pathname === '/auth/callback' || 
@@ -199,9 +224,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                             window.location.search.includes('type=recovery')
                           ));
 
-        if (isRecovery) {
-          return;
-        }
+        if (isRecovery) return;
 
         refreshUserProfile(session.user.id, session.user);
       } else {
@@ -213,8 +236,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     return () => subscription.unsubscribe();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [pathname, refreshUserProfile]);
 
   useEffect(() => {
     if (!isInitialized) return;
@@ -222,17 +244,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const publicRoutes = [
       '/login', '/register', '/', '/about', '/contact',
       '/forgot-password', '/reset-password', '/verify-email',
-      '/auth/callback', // Essential for Supabase PKCE flow
+      '/auth/callback',
       '/company/setup', '/company/conductor/setup', '/company/operator/signup',
       '/search', '/schedules',
     ];
     const isPublicRoute = publicRoutes.includes(pathname) || pathname.startsWith('/bus/');
 
-    // LOCK-DOWN: If we are in any part of the recovery or callback flow, 
-    // do NOT perform any redirects or guards. Let the specific pages handle it.
     const isRecoveryFlow = pathname === '/reset-password' || 
                           pathname === '/auth/callback' ||
                           pathname === '/forgot-password' ||
+                          pathname === '/verify-email' ||
                           (typeof window !== 'undefined' && (
                             window.location.href.includes('type=recovery') || 
                             window.location.href.includes('access_token=') ||
@@ -267,33 +288,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       }
     }
-  }, [user, userProfile, isInitialized, router, pathname]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const redirectToDashboard = useCallback((profile: UserProfile) => {
-    if (typeof window !== 'undefined') {
-      const searchParams = new URLSearchParams(window.location.search);
-      const redirect = searchParams.get('redirect');
-      if (redirect && redirect.startsWith('/')) {
-        router.push(redirect);
-        return;
-      }
-    }
-
-    switch (profile.role) {
-      case 'superadmin': router.push('/admin'); break;
-      case 'company_admin':
-        router.push(profile.companyId ? `/company/admin?companyId=${profile.companyId}` : '/company/setup');
-        break;
-      case 'operator':
-        router.push(profile.companyId ? `/company/operator/dashboard?companyId=${profile.companyId}` : '/login');
-        break;
-      case 'conductor':
-        router.push(profile.companyId ? '/company/conductor/dashboard' : '/login');
-        break;
-      case 'customer': router.push('/'); break;
-      default: router.push('/');
-    }
-  }, [router]);
+  }, [user, userProfile, isInitialized, router, pathname, redirectToDashboard]);
 
   const signInWithGoogle = async (): Promise<void> => {
     const { error } = await supabase.auth.signInWithOAuth({
@@ -347,19 +342,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (error) {
       const messages: Record<string, string> = {
         'User already registered': 'This email is already associated with an account. Please sign in or reset your password.',
-        'Invalid Content-Type: Missing Content-Type header': 'A server-side configuration error occurred during registration (Auth Hook failure).',
-        'Email rate limit exceeded': 'Rate limit reached. Please wait an hour before requesting another email or try a different address.',
+        'Invalid Content-Type: Missing Content-Type header': 'A server-side configuration error occurred during registration.',
+        'Email rate limit exceeded': 'Rate limit reached. Please wait an hour before trying again.',
       };
       throw new Error(messages[error.message] || error.message);
     }
 
-    // Handle Supabase Identity Obfuscation: If user exists, it returns success but with an empty identities array
     if (data.user && data.user.identities && data.user.identities.length === 0) {
       throw new Error('This email is already associated with an account. Please sign in or reset your password.');
     }
 
-    // Only attempt profile PATCH if we actually have a session or if the API is public
-    // If email confirmation is ON, data.session will be null here.
     if (data.user && data.session) {
       await fetch('/api/auth/profile', {
         method: 'PATCH',
@@ -374,7 +366,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           emailVerified: false,
           setupCompleted: false,
         }),
-      }).catch(err => console.warn('[AuthContext] Unauthenticated sync skipped during registration:', err));
+      }).catch(err => console.warn('[AuthContext] Unauthenticated profile sync skipped:', err));
     }
   };
 
@@ -394,11 +386,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }),
     });
     if (!response.ok) throw new Error('Failed to update profile');
-    try {
-      await refreshUserProfile();
-    } catch (refreshError) {
-      console.warn('[AuthContext] refreshUserProfile failed after profile update:', refreshError);
-    }
+    await refreshUserProfile();
   };
 
   const signOutUser = async (): Promise<void> => {
@@ -410,10 +398,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const contextValue: AuthContextType = {
-    user, userProfile, setUserProfile,
-    signInWithGoogle, signIn, signUp,
-    updateUserProfile, signOut: signOutUser,
-    loading, refreshUserProfile,
+    user, 
+    userProfile, // 👈 Included in the exported provider map value
+    setUserProfile,
+    signInWithGoogle, 
+    signIn, 
+    signUp,
+    updateUserProfile, 
+    signOut: signOutUser,
+    loading, 
+    refreshUserProfile,
   };
 
   if (!isInitialized) {

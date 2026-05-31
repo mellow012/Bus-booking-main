@@ -1,15 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { sendVerificationEmail } from '@/lib/email-service'; 
+import { sendVerificationEmail } from '@/lib/email-service'; // Assuming this exists based on previous context
 
-const SUCCESS = () => NextResponse.json({ status: 'success' }, { status: 200 });
+const SUCCESS = () => new NextResponse(JSON.stringify({ status: 'success' }), { 
+  status: 200, 
+  headers: { 'Content-Type': 'application/json' } 
+});
 
 export async function POST(request: NextRequest) {
   try {
-    // Supabase sends a POST with a JSON body to Auth Hooks
+    // Supabase sends a POST with a JSON body
     const payload = await request.json();
     const { user, email_data, action } = payload;
     
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://www.tibhukebus.com';
+    // Ensure this URL matches your production domain strictly
+    const appUrl = 'https://www.tibhukebus.com';
 
     // Build the link pointing back to your App domain to support PKCE
     const buildLink = (type: string) => {
@@ -27,11 +31,13 @@ export async function POST(request: NextRequest) {
       case 'signup':
       case 'magiclink': {
         const url = buildLink('signup');
+        console.log(`[hook] Sending signup email to ${user.email} with URL: ${url}`);
         await sendVerificationEmail(user.email, url);
         break;
       }
       case 'recovery': {
         const url = buildLink('recovery');
+        console.log(`[hook] Sending recovery email to ${user.email} with URL: ${url}`);
         await sendVerificationEmail(user.email, url); 
         break;
       }
@@ -43,7 +49,7 @@ export async function POST(request: NextRequest) {
 
   } catch (error: any) {
     console.error('[hook] Error:', error.message);
-    // Still return 200 JSON to satisfy GoTrue requirements
+    // Still return 200/JSON to prevent Supabase GoTrue from retrying or logging a 405/500 crash
     return SUCCESS();
   }
 }

@@ -1,455 +1,91 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import Link from 'next/link';
-import { useAuth } from '@/contexts/AuthContext';
+import React, { useState } from 'react';
+import { createClient } from '@/utils/supabase/client';
 import { useRouter } from 'next/navigation';
-import { createClient as createBrowserClient } from '@/utils/supabase/client';
-import { Button } from '@/components/ui/button';
-import {
-  LockClosedIcon, EyeIcon, EyeSlashIcon,
-  ExclamationTriangleIcon, CheckCircleIcon, XCircleIcon
-} from '@heroicons/react/24/outline';
 
-const getCookie = (name: string): string | null => {
-  if (typeof document === 'undefined') return null;
-  const value = `; ${document.cookie}`;
-  const parts = value.split(`; ${name}=`);
-  if (parts.length === 2) return parts.pop()?.split(';').shift() || null;
-  return null;
-};
-
-interface FormErrors {
-  password?: string;
-  confirmPassword?: string;
-  general?: string;
-}
-
-interface PasswordStrength {
-  score: number;
-  label: string;
-  color: string;
-  suggestions: string[];
-}
-
-const MIN_PASSWORD_LENGTH = 6;
-const MAX_PASSWORD_LENGTH = 128;
-
-const checkPasswordStrength = (password: string): PasswordStrength => {
-  let score = 0;
-  const suggestions: string[] = [];
-  if (password.length >= MIN_PASSWORD_LENGTH) score++;
-  if (password.length >= 12) score++;
-  if (/[a-z]/.test(password) && /[A-Z]/.test(password)) { score++; } else { suggestions.push('Use both uppercase and lowercase letters'); }
-  if (/\d/.test(password)) { score++; } else { suggestions.push('Include at least one number'); }
-  if (/[!@#$%^&*(),.?":{}|<>]/.test(password)) { score++; } else { suggestions.push('Add a special character (!@#$%^&*)'); }
-  const strengthMap = {
-    0: { label: 'Very Weak', color: 'bg-red-500' },
-    1: { label: 'Weak', color: 'bg-orange-500' },
-    2: { label: 'Fair', color: 'bg-yellow-500' },
-    3: { label: 'Good', color: 'bg-blue-500' },
-    4: { label: 'Strong', color: 'bg-green-500' },
-    5: { label: 'Very Strong', color: 'bg-green-600' },
-  };
-  const strength = strengthMap[score as keyof typeof strengthMap] || strengthMap[0];
-  return { score, label: strength.label, color: strength.color, suggestions };
-};
-
-const validatePassword = (password: string): string => {
-  if (!password) return 'Password is required';
-  if (password.length < MIN_PASSWORD_LENGTH) return `Password must be at least ${MIN_PASSWORD_LENGTH} characters`;
-  if (password.length > MAX_PASSWORD_LENGTH) return `Password must be less than ${MAX_PASSWORD_LENGTH} characters`;
-  if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(password)) return 'Password must contain uppercase, lowercase, and a number';
-  return '';
-};
-
-const validateConfirmPassword = (password: string, confirmPassword: string): string => {
-  if (!confirmPassword) return 'Please confirm your password';
-  if (password !== confirmPassword) return 'Passwords do not match';
-  return '';
-};
-
-const getErrorMessage = (error: any): string => {
-  if (error?.code) {
-    switch (error.code) {
-      case 'expired-token': return 'This password reset link has expired. Please request a new one.';
-      case 'invalid-token': return 'This password reset link is invalid. Please request a new one.';
-      case 'weak-password': return 'Password is too weak. Please choose a stronger password.';
-      default: return 'Failed to reset password. Please try again or contact support.';
-    }
-  }
-  return error?.message || 'An unexpected error occurred. Please try again.';
-};
-
-export default function ResetPassword() {
-  const router = useRouter();
-  const { user: authUser, loading: authLoading } = useAuth();
+export default function ResetPasswordPage() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [email, setEmail] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isVerifying, setIsVerifying] = useState(true);
-  const [errors, setErrors] = useState<FormErrors>({});
-  const [success, setSuccess] = useState(false);
-  const [touched, setTouched] = useState<Record<string, boolean>>({});
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [passwordStrength, setPasswordStrength] = useState<PasswordStrength | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState({ type: '', text: '' });
+  
+  const router = useRouter();
+  const supabase = createClient();
 
-  // Runs once on mount — completely independent of AuthContext
-  useEffect(() => {
-    const supabase = createBrowserClient();
-    let settled = false;
-
-    const settle = (sessionUser: any) => {
-      if (settled) return;
-      settled = true;
-      setEmail(sessionUser.email || '');
-      setIsVerifying(false);
-    };
-
-    // Listen for PASSWORD_RECOVERY or SIGNED_IN events
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if ((event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN') && session?.user) {
-        settle(session.user);
-      }
-    });
-
-    // Also check existing session immediately
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) settle(session.user);
-    });
-
-    // 5s timeout fallback
-    const timeout = setTimeout(() => {
-      if (!settled) {
-        settled = true;
-        setErrors({ general: 'Invalid or missing reset token. Please request a new password reset link.' });
-        setIsVerifying(false);
-      }
-    }, 5000);
-
-    return () => {
-      clearTimeout(timeout);
-      subscription.unsubscribe();
-    };
-  }, []);
-
-  useEffect(() => {
-    if (password) { setPasswordStrength(checkPasswordStrength(password)); }
-    else { setPasswordStrength(null); }
-  }, [password]);
-
-  const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setPassword(e.target.value);
-    if (errors.password || errors.general) {
-      setErrors(prev => { const n = { ...prev }; delete n.password; delete n.general; return n; });
-    }
-  };
-
-  const handleConfirmPasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setConfirmPassword(e.target.value);
-    if (errors.confirmPassword) {
-      setErrors(prev => { const n = { ...prev }; delete n.confirmPassword; return n; });
-    }
-  };
-
-  const handleBlur = (field: string) => {
-    setTouched(prev => ({ ...prev, [field]: true }));
-    if (field === 'password') {
-      const error = validatePassword(password);
-      if (error) setErrors(prev => ({ ...prev, password: error }));
-    } else if (field === 'confirmPassword') {
-      const error = validateConfirmPassword(password, confirmPassword);
-      if (error) setErrors(prev => ({ ...prev, confirmPassword: error }));
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    setTouched({ password: true, confirmPassword: true });
-
-    const passwordError = validatePassword(password);
-    const confirmPasswordError = validateConfirmPassword(password, confirmPassword);
-
-    if (passwordError || confirmPasswordError) {
-      setErrors({ password: passwordError, confirmPassword: confirmPasswordError });
+    if (!password || password !== confirmPassword) {
+      setMessage({ type: 'error', text: 'Passwords do not match.' });
       return;
     }
 
-    const supabase = createBrowserClient();
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
-      setErrors({ general: 'No active session. Please request a new reset link.' });
-      return;
-    }
+    setLoading(true);
+    setMessage({ type: '', text: '' });
 
-    setIsSubmitting(true);
-    setErrors({});
+    const { error } = await supabase.auth.updateUser({ password });
 
-    try {
-      const { error: updateError } = await supabase.auth.updateUser({ password });
-      if (updateError) {
-        setErrors({ general: updateError.message || 'Failed to update password' });
-        setIsSubmitting(false);
-        return;
-      }
-
-      const response = await fetch('/api/auth/reset-password', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-csrf-token': getCookie('__csrf_token') || '',
-        },
-        body: JSON.stringify({ email }),
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        setErrors({ general: data.error?.message || data.message || getErrorMessage(data) });
-        setIsSubmitting(false);
-        return;
-      }
-
-      setSuccess(true);
+    if (error) {
+      setMessage({ type: 'error', text: error.message });
+    } else {
+      setMessage({ type: 'success', text: 'Password has been updated successfully.' });
       setTimeout(() => {
-        router.push(`/login?email=${encodeURIComponent(email)}&reset=success`);
-      }, 3000);
-
-    } catch (error: any) {
-      console.error('Password reset error:', error);
-      setErrors({ general: error.message || 'Failed to reset password' });
-    } finally {
-      setIsSubmitting(false);
+        router.push('/login');
+      }, 2000);
     }
+    setLoading(false);
   };
-
-  const getInputClassName = (field: 'password' | 'confirmPassword') => {
-    const base = "appearance-none block w-full px-3 py-2.5 pl-10 pr-10 border rounded-lg placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors duration-200";
-    return errors[field] && touched[field]
-      ? `${base} border-red-300 text-red-900 placeholder-red-300 focus:ring-red-500 focus:border-red-500`
-      : `${base} border-gray-300 focus:ring-blue-500 focus:border-blue-500`;
-  };
-
-  const renderPasswordStrength = () => {
-    if (!passwordStrength || !password) return null;
-    return (
-      <div className="mt-2">
-        <div className="flex items-center justify-between mb-1">
-          <span className="text-xs font-medium text-gray-700">Password Strength:</span>
-          <span className={`text-xs font-medium ${passwordStrength.score >= 4 ? 'text-green-600' : passwordStrength.score >= 3 ? 'text-blue-600' : passwordStrength.score >= 2 ? 'text-yellow-600' : 'text-red-600'}`}>
-            {passwordStrength.label}
-          </span>
-        </div>
-        <div className="flex space-x-1">
-          {[...Array(5)].map((_, i) => (
-            <div key={i} className={`h-1.5 flex-1 rounded-full transition-colors duration-300 ${i < passwordStrength.score ? passwordStrength.color : 'bg-gray-200'}`} />
-          ))}
-        </div>
-        {passwordStrength.suggestions.length > 0 && (
-          <ul className="mt-2 space-y-1">
-            {passwordStrength.suggestions.map((s, i) => (
-              <li key={i} className="text-xs text-gray-600 flex items-start"><span className="mr-1">•</span>{s}</li>
-            ))}
-          </ul>
-        )}
-      </div>
-    );
-  };
-
-  const renderPasswordMatch = () => {
-    if (!confirmPassword || !touched.confirmPassword) return null;
-    const isMatch = password === confirmPassword;
-    return (
-      <div className={`mt-1 flex items-center text-sm ${isMatch ? 'text-green-600' : 'text-red-600'}`}>
-        {isMatch ? <><CheckCircleIcon className="w-4 h-4 mr-1" />Passwords match</> : <><XCircleIcon className="w-4 h-4 mr-1" />Passwords do not match</>}
-      </div>
-    );
-  };
-
-  if (isVerifying) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex flex-col justify-center items-center py-12 sm:px-6 lg:px-8">
-        <div className="text-center">
-          <svg className="animate-spin h-12 w-12 text-blue-600 mx-auto" fill="none" viewBox="0 0 24 24">
-            <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" className="opacity-25" />
-            <path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" className="opacity-75" />
-          </svg>
-          <p className="mt-4 text-gray-600">Verifying reset link...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (errors.general && !email) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
-        <div className="sm:mx-auto sm:w-full sm:max-w-md">
-          <div className="flex justify-center">
-            <div className="w-16 h-16 bg-red-500 rounded-full flex items-center justify-center shadow-lg">
-              <ExclamationTriangleIcon className="w-10 h-10 text-white" />
-            </div>
-          </div>
-          <h1 className="mt-6 text-center text-4xl font-extrabold text-gray-900 tracking-tight">Invalid Reset Link</h1>
-        </div>
-        <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-          <div className="bg-white py-10 px-6 shadow-xl rounded-2xl sm:px-12">
-            <div className="text-center space-y-4">
-              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-left">
-                <p className="font-medium">{errors.general}</p>
-              </div>
-              <div className="pt-4 space-y-3">
-                <Button onClick={() => router.push('/forgot-password')} className="w-full flex justify-center items-center py-2.5 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200">
-                  Request New Reset Link
-                </Button>
-                <Link href="/login" className="block text-center text-sm text-blue-600 hover:text-blue-500 focus:outline-none focus:underline transition-colors duration-200">
-                  Back to Sign In
-                </Link>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (success) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
-        <div className="sm:mx-auto sm:w-full sm:max-w-md">
-          <div className="flex justify-center">
-            <div className="w-16 h-16 bg-green-500 rounded-full flex items-center justify-center shadow-lg">
-              <CheckCircleIcon className="w-10 h-10 text-white" />
-            </div>
-          </div>
-          <h1 className="mt-6 text-center text-4xl font-extrabold text-gray-900 tracking-tight">Password Reset Successful</h1>
-          <p className="mt-2 text-center text-sm text-gray-600">Your password has been updated</p>
-        </div>
-        <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-          <div className="bg-white py-10 px-6 shadow-xl rounded-2xl sm:px-12">
-            <div className="text-center space-y-4">
-              <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg">
-                <CheckCircleIcon className="w-5 h-5 inline mr-2" />
-                <span className="text-sm font-medium">Your password has been successfully reset!</span>
-              </div>
-              <div className="text-sm text-gray-600 space-y-2">
-                <p>You can now sign in with your new password.</p>
-                <p className="text-xs">Redirecting you to the login page...</p>
-              </div>
-              <div className="pt-4">
-                <Button onClick={() => router.push('/login')} className="w-full flex justify-center items-center py-2.5 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200">
-                  Continue to Sign In
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
-      <div className="sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="flex justify-center">
-          <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center shadow-lg">
-            <span className="text-white font-bold text-3xl">B</span>
+    <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
+      <div className="max-w-md w-full space-y-8 bg-white p-8 rounded-xl shadow-sm border border-slate-100">
+        <div>
+          <h2 className="text-center text-3xl font-bold tracking-tight text-slate-900">
+            Reset your password
+          </h2>
+          <p className="mt-2 text-center text-sm text-slate-600">
+            Please enter your new secure credentials below.
+          </p>
+        </div>
+        <form className="mt-8 space-y-6" onSubmit={handleResetPassword}>
+          {message.text && (
+            <div className={`p-3 rounded text-sm ${message.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+              {message.text}
+            </div>
+          )}
+          <div className="space-y-4 rounded-md shadow-sm">
+            <div>
+              <label className="text-sm font-medium text-slate-700">New Password</label>
+              <input
+                type="password"
+                required
+                className="appearance-none rounded-md relative block w-full px-3 py-2 border border-slate-300 placeholder-slate-500 text-slate-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium text-slate-700">Confirm New Password</label>
+              <input
+                type="password"
+                required
+                className="appearance-none rounded-md relative block w-full px-3 py-2 border border-slate-300 placeholder-slate-500 text-slate-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+              />
+            </div>
           </div>
-        </div>
-        <h1 className="mt-6 text-center text-4xl font-extrabold text-gray-900 tracking-tight">Set New Password</h1>
-        <p className="mt-2 text-center text-sm text-gray-600">{email && `for ${email}`}</p>
-      </div>
 
-      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="bg-white py-10 px-6 shadow-xl rounded-2xl sm:px-12">
-          <form className="space-y-6" onSubmit={handleSubmit} noValidate>
-
-            {errors.general && (
-              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex items-start" role="alert">
-                <ExclamationTriangleIcon className="w-5 h-5 mr-2 flex-shrink-0 mt-0.5" />
-                <div>
-                  <p className="font-medium">Password Reset Failed</p>
-                  <p className="text-sm mt-1">{errors.general}</p>
-                </div>
-              </div>
-            )}
-
-            <div className="bg-blue-50 border border-blue-200 text-blue-700 px-4 py-3 rounded-lg">
-              <p className="text-sm font-medium mb-2">Password Requirements:</p>
-              <ul className="text-xs space-y-1 list-disc list-inside">
-                <li>At least {MIN_PASSWORD_LENGTH} characters long</li>
-                <li>Contains uppercase and lowercase letters</li>
-                <li>Contains at least one number</li>
-                <li>Contains at least one special character</li>
-              </ul>
-            </div>
-
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
-                <LockClosedIcon className="w-4 h-4 inline mr-1" />New Password
-              </label>
-              <div className="relative">
-                <input id="password" name="password" type={showPassword ? 'text' : 'password'}
-                  autoComplete="new-password" required autoFocus
-                  aria-invalid={errors.password && touched.password ? 'true' : 'false'}
-                  value={password} onChange={handlePasswordChange} onBlur={() => handleBlur('password')}
-                  className={getInputClassName('password')} placeholder="Create a strong password" disabled={isSubmitting} />
-                <LockClosedIcon className="w-5 h-5 text-gray-400 absolute top-2.5 left-3 pointer-events-none" />
-                <button type="button" className="absolute top-2.5 right-3 text-gray-400 hover:text-gray-600 focus:outline-none transition-colors duration-200"
-                  onClick={() => setShowPassword(!showPassword)} disabled={isSubmitting}>
-                  {showPassword ? <EyeSlashIcon className="w-5 h-5" /> : <EyeIcon className="w-5 h-5" />}
-                </button>
-              </div>
-              {errors.password && touched.password && (
-                <div className="mt-1 flex items-center text-sm text-red-600" role="alert">
-                  <ExclamationTriangleIcon className="w-4 h-4 mr-1 flex-shrink-0" />{errors.password}
-                </div>
-              )}
-              {renderPasswordStrength()}
-            </div>
-
-            <div>
-              <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">
-                <LockClosedIcon className="w-4 h-4 inline mr-1" />Confirm New Password
-              </label>
-              <div className="relative">
-                <input id="confirmPassword" name="confirmPassword" type={showConfirmPassword ? 'text' : 'password'}
-                  autoComplete="new-password" required
-                  aria-invalid={errors.confirmPassword && touched.confirmPassword ? 'true' : 'false'}
-                  value={confirmPassword} onChange={handleConfirmPasswordChange} onBlur={() => handleBlur('confirmPassword')}
-                  className={getInputClassName('confirmPassword')} placeholder="Re-enter your new password" disabled={isSubmitting} />
-                <LockClosedIcon className="w-5 h-5 text-gray-400 absolute top-2.5 left-3 pointer-events-none" />
-                <button type="button" className="absolute top-2.5 right-3 text-gray-400 hover:text-gray-600 focus:outline-none transition-colors duration-200"
-                  onClick={() => setShowConfirmPassword(!showConfirmPassword)} disabled={isSubmitting}>
-                  {showConfirmPassword ? <EyeSlashIcon className="w-5 h-5" /> : <EyeIcon className="w-5 h-5" />}
-                </button>
-              </div>
-              {errors.confirmPassword && touched.confirmPassword && (
-                <div className="mt-1 flex items-center text-sm text-red-600" role="alert">
-                  <ExclamationTriangleIcon className="w-4 h-4 mr-1 flex-shrink-0" />{errors.confirmPassword}
-                </div>
-              )}
-              {renderPasswordMatch()}
-            </div>
-
-            <div>
-              <Button type="submit" disabled={isSubmitting}
-                className="w-full flex justify-center items-center py-2.5 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200">
-                {isSubmitting ? (
-                  <>
-                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
-                      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" className="opacity-25" />
-                      <path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" className="opacity-75" />
-                    </svg>
-                    Resetting Password...
-                  </>
-                ) : (
-                  <><LockClosedIcon className="w-5 h-5 mr-2" />Reset Password</>
-                )}
-              </Button>
-            </div>
-          </form>
-        </div>
+          <div>
+            <button
+              type="submit"
+              disabled={loading}
+              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+            >
+              {loading ? 'Updating...' : 'Update Password'}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );
