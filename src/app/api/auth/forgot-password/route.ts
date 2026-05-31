@@ -20,7 +20,9 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
 
     const trimmedEmail = email.trim().toLowerCase();
     const supabaseAdmin = createAdminClient();
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    let baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    // Ensure no trailing slash for consistent matching
+    baseUrl = baseUrl.replace(/\/$/, '');
 
     // 1. Generate the recovery link using the Admin API
     // type: 'recovery' generates a tokenized URL that allows a user to reset their password
@@ -28,7 +30,7 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
       type: 'recovery',
       email: trimmedEmail,
       options: {
-        redirectTo: clientRedirectUrl || `${baseUrl}/reset-password`,
+        redirectTo: (clientRedirectUrl || `${baseUrl}/reset-password`).split('#')[0],
       },
     });
 

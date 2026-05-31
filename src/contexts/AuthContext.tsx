@@ -33,6 +33,7 @@ interface AuthContextType {
   user: (User & { uid: string; emailVerified: boolean; getIdToken: () => Promise<string> }) | null;
   userProfile: UserProfile | null;
   setUserProfile: (profile: UserProfile | null) => void;
+  signInWithGoogle: () => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (
     email: string,
@@ -308,6 +309,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [router]);
 
+  // ─── Google Sign In ───────────────────────────────────────────────────────
+
+  const signInWithGoogle = async (): Promise<void> => {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        // Ensure this URL is added to your Supabase Redirect URLs
+        redirectTo: `${window.location.origin}/auth/callback`,
+        queryParams: {
+          access_type: 'offline',
+          prompt: 'select_account',
+        },
+      },
+    });
+    if (error) throw new Error(error.message);
+  };
+
   // ─── signIn ───────────────────────────────────────────────────────────────
 
   const signIn = async (email: string, password: string): Promise<void> => {
@@ -429,6 +447,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     user,
     userProfile,
     setUserProfile,
+    signInWithGoogle,
     signIn,
     signUp,
     updateUserProfile,

@@ -187,18 +187,39 @@ export async function sendPasswordResetEmail(
     to: email,
     subject: `Complete Your ${companyName} Account Setup`,
     html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2>Welcome to BusBooking Platform!</h2>
-        <p>Your company <strong>${companyName}</strong> has been created.</p>
-        <p>Click below to set your password and complete setup:</p>
-        <div style="text-align: center; margin: 30px 0;">
-          <a href="${resetLink}" 
-             style="background-color: #007bff; color: white; padding: 12px 24px; 
-                    text-decoration: none; border-radius: 5px; display: inline-block;">
-            Set Up Account
-          </a>
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 40px auto; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.07); border: 1px solid #e2e8f0;">
+        <div style="background: linear-gradient(135deg, #2563eb, #1e40af); padding: 32px 40px; text-align: center;">
+          <h1 style="color: #ffffff; margin: 0; font-size: 28px; font-weight: 700;">TibhukeBus</h1>
+          <p style="color: #bfdbfe; margin: 8px 0 0; font-size: 14px;">Partner Portal 🚍</p>
         </div>
-        <p><small>This link expires in 24 hours. Company ID: ${companyId}</small></p>
+        <div style="padding: 40px;">
+          <h2 style="color: #1e293b; margin: 0 0 16px; font-size: 22px;">Welcome to the Platform!</h2>
+          <p style="color: #475569; line-height: 1.7; margin: 0 0 16px;">
+            Your company, <strong style="color: #1e293b;">${companyName}</strong>, has been successfully registered on TibhukeBus.
+          </p>
+          <p style="color: #475569; line-height: 1.7; margin: 0 0 16px;">
+            To begin managing your routes and schedules, you need to set up your administrator account and choose a password.
+          </p>
+          <div style="text-align: center; margin: 36px 0;">
+            <a href="${resetLink}" 
+               style="background-color: #2563eb; color: #ffffff; padding: 14px 36px; 
+                      text-decoration: none; border-radius: 8px; font-weight: 600; 
+                      font-size: 16px; display: inline-block;">
+              Set Up Account
+            </a>
+          </div>
+          <div style="background: #f1f5f9; padding: 16px; border-radius: 8px;">
+            <p style="margin: 0; color: #64748b; font-size: 13px; text-align: center;">
+              <strong>⏳ Link expires in 24 hours</strong><br/>
+              Company ID: ${companyId}
+            </p>
+          </div>
+        </div>
+        <div style="background: #f8fafc; padding: 24px; text-align: center; border-top: 1px solid #e2e8f0;">
+          <p style="color: #94a3b8; font-size: 12px; margin: 0;">
+            TibhukeBus Admin • safe travels across Malawi
+          </p>
+        </div>
       </div>
     `,
   };
