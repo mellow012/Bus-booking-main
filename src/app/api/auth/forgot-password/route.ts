@@ -20,14 +20,10 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
 
     const trimmedEmail = email.trim().toLowerCase();
     const supabaseAdmin = createAdminClient();
-
-    let baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-    if (!baseUrl.startsWith('http')) {
-      baseUrl = 'http://localhost:3000';
-    }
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 
     // 1. Generate the recovery link using the Admin API
-    // This bypasses Supabase's built-in emailer and gives us the URL directly.
+    // type: 'recovery' generates a tokenized URL that allows a user to reset their password
     const { data, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
       type: 'recovery',
       email: trimmedEmail,
@@ -38,7 +34,7 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
 
     if (linkError) throw linkError;
 
-    // 2. Send the custom branded email via Resend
+    // 2. Hand off the link to our uniform Resend service
     if (data?.properties?.action_link) {
       await sendGenericPasswordResetEmail(trimmedEmail, data.properties.action_link);
     }

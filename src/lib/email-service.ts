@@ -23,10 +23,7 @@ function getResendApiKey(): string {
 
 function getFromAddress(): string {
   return (
-    process.env.RESEND_FROM?.trim() ||
-    process.env.EMAIL_FROM?.trim() ||
-    process.env.EMAIL_USER?.trim() ||
-    'admin@tibhukebus.com'
+    process.env.RESEND_FROM?.trim() || 'TibhukeBus <admin@tibhukebus.com>'
   );
 }
 

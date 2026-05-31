@@ -130,11 +130,10 @@ const getResetTokenFromUrl = (): string | null => {
   }
 
   const query = new URLSearchParams(window.location.search);
-  // Support both `token`/`token_hash` and Supabase's `access_token` in query
-  const queryToken = query.get('token') || query.get('token_hash') || query.get('access_token');
-  if (queryToken) {
-    return queryToken;
-  }
+  // We only look for token_hash/token in the query parameters.
+  // access_token in the hash fragment is handled automatically by the Supabase client.
+  const tokenHash = query.get('token_hash') || query.get('token');
+  if (tokenHash) return tokenHash;
 
   const hash = window.location.hash.startsWith('#') ? window.location.hash.slice(1) : window.location.hash;
   if (!hash) {
@@ -142,10 +141,8 @@ const getResetTokenFromUrl = (): string | null => {
   }
 
   const hashParams = new URLSearchParams(hash);
-  // Supabase often returns tokens in the URL hash as `access_token`.
-  return (
-    hashParams.get('token') || hashParams.get('token_hash') || hashParams.get('access_token')
-  );
+  // Check hash fragment only for token_hash.
+  return hashParams.get('token_hash') || hashParams.get('token');
 };
 
 export default function ResetPassword() {
@@ -228,7 +225,14 @@ export default function ResetPassword() {
           const supabase = createBrowserClient();
           const { data: { session } } = await supabase.auth.getSession();
 
-     // If we have a token hash but no session, verify it via API
+          // If we already have a session (established via hash fragment by Supabase client),
+          // skip the manual verification API call as the token has already been consumed.
+          if (session?.user) {
+            setEmail(session.user.email || '');
+            setIsVerifying(false);
+            return;
+          }
+
           const response = await fetch('/api/auth/verify-reset-token', {
             method: 'POST',
             headers: {
