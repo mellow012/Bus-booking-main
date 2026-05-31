@@ -1,0 +1,10 @@
+[lcl-host]
+realm-apid = 'localhost'
+
+[org]
+apid = 'mellow012'
+
+[service]
+apid = 'booknpay'
+category = 'javascript'
+cert-style = 'acme'
