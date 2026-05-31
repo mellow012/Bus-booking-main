@@ -1,42 +1,49 @@
-import { createClient } from '@/utils/supabase/server'; // Ensure you have a server-side client utility
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { sendVerificationEmail } from '@/lib/email-service'; 
 
-export async function GET(request: Request) {
-  const { searchParams, origin } = new URL(request.url);
-  const token_hash = searchParams.get('token_hash');
-  const type = searchParams.get('type');
-  const next = searchParams.get('next') ?? '/';
+const SUCCESS = () => NextResponse.json({ status: 'success' }, { status: 200 });
 
-  if (token_hash && type) {
-    const supabase = await createClient();
-
-    const { error } = await supabase.auth.verifyOtp({
-      token_hash,
-      type: type as any,
-    });
-
-    if (!error) {
-      // If this was a password reset, send them to the clean reset page
-      if (type === 'recovery') {
-        return NextResponse.redirect(`${origin}/reset-password`);
-      }
-      
-      // Successful verification for other types (signup, invite, etc.)
-      return NextResponse.redirect(`${origin}${next}`);
-    }
+export async function POST(request: NextRequest) {
+  try {
+    // Supabase sends a POST with a JSON body to Auth Hooks
+    const payload = await request.json();
+    const { user, email_data, action } = payload;
     
-    console.error('[auth callback] Verification error:', error.message);
-  }
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://www.tibhukebus.com';
 
-  // Handle standard OAuth 'code' exchange
-  const code = searchParams.get('code');
-  if (code) {
-    const supabase = await createClient();
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
-    if (!error) return NextResponse.redirect(`${origin}${next}`);
-  }
+    // Build the link pointing back to your App domain to support PKCE
+    const buildLink = (type: string) => {
+      const qs = new URLSearchParams({
+        token_hash: email_data.token_hash,
+        type: type,
+        next: type === 'recovery' ? '/reset-password' : '/'
+      });
+      return `${appUrl}/auth/callback?${qs.toString()}`;
+    };
 
-  const errorUrl = new URL('/login', origin);
-  errorUrl.searchParams.set('error', 'Invalid or expired authentication link.');
-  return NextResponse.redirect(errorUrl);
+    console.log(`[hook] Processing ${action} for ${user.email}`);
+
+    switch (action) {
+      case 'signup':
+      case 'magiclink': {
+        const url = buildLink('signup');
+        await sendVerificationEmail(user.email, url);
+        break;
+      }
+      case 'recovery': {
+        const url = buildLink('recovery');
+        await sendVerificationEmail(user.email, url); 
+        break;
+      }
+      default:
+        console.log('[hook] Unhandled action:', action);
+    }
+
+    return SUCCESS();
+
+  } catch (error: any) {
+    console.error('[hook] Error:', error.message);
+    // Still return 200 JSON to satisfy GoTrue requirements
+    return SUCCESS();
+  }
 }
