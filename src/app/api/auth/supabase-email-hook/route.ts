@@ -3,7 +3,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Webhook } from 'standardwebhooks';
 import { sendVerificationEmail } from '@/lib/email-service';
 
-const SUCCESS = new NextResponse(null, { status: 200 });
+// Use a function to ensure a fresh JSON response with correct headers every time
+const SUCCESS = () => NextResponse.json({ status: 'success' }, { status: 200 });
 
 function buildVerifyUrl(supabaseUrl: string, token_hash: string, type: string, redirect_to: string) {
   const qs = new URLSearchParams({ token_hash, type, redirect_to });
@@ -27,7 +28,7 @@ export async function POST(request: NextRequest) {
       payload = wh.verify(rawBody, headers);
     } catch (err: any) {
       console.error('[hook] Signature verification failed:', err.message);
-      return SUCCESS;
+      return SUCCESS();
     }
 
     const { user, email_data } = payload ?? {};
@@ -66,10 +67,10 @@ export async function POST(request: NextRequest) {
         console.log('[hook] Unhandled action:', action);
     }
 
-    return SUCCESS;
+    return SUCCESS();
 
   } catch (error: any) {
     console.error('[hook] Error:', error.message);
-    return SUCCESS;
+    return SUCCESS();
   }
 }

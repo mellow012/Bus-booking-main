@@ -92,6 +92,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
       clearTimeout(timeoutId);
 
+      // Check if response is actually JSON to prevent "Type Content Error"
+      const contentType = response.headers.get('content-type');
+      if (!response.ok || !contentType || !contentType.includes('application/json')) {
+        console.warn('[AuthContext] Profile fetch failed or returned non-JSON:', response.status);
+        return;
+      }
+
       if (response.ok) {
         const { data } = await response.json();
         if (data) {
@@ -104,12 +111,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json', 'x-csrf-token': getCookie('__csrf_token') || '' },
               body: JSON.stringify({ isActive: true, setupCompleted: true, passwordSet: true }),
-            }).then(async (res) => {
-              if (res.ok) {
-                const { data: updatedData } = await res.json();
-                if (updatedData) setUserProfile(updatedData as UserProfile);
-              }
-            }).catch((err) => console.error('[AuthContext] Auto-activate failed:', err));
+            })
+              .then(async (res) => {
+                const cType = res.headers.get('content-type');
+                // Check for JSON and non-empty status to prevent "Type Content Error" (JSON parsing crash)
+                if (res.ok && res.status !== 204 && cType?.includes('application/json')) {
+                  const { data: updatedData } = await res.json();
+                  if (updatedData) setUserProfile(updatedData as UserProfile);
+                }
+              })
+              .catch((err) => console.error('[AuthContext] Auto-activate failed:', err));
           }
 
           const needsMetadataSync = (!data.firstName || !data.phone) && (meta?.first_name || meta?.phone);
@@ -122,12 +133,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 lastName: data.lastName || meta?.last_name || '',
                 phone: data.phone || meta?.phone || '',
               }),
-            }).then(async (res) => {
-              if (res.ok) {
-                const { data: updatedData } = await res.json();
-                if (updatedData) setUserProfile(updatedData as UserProfile);
-              }
-            }).catch((err) => console.error('[AuthContext] Metadata sync failed:', err));
+            })
+              .then(async (res) => {
+                const cType = res.headers.get('content-type');
+                if (res.ok && res.status !== 204 && cType?.includes('application/json')) {
+                  const { data: updatedData } = await res.json();
+                  if (updatedData) setUserProfile(updatedData as UserProfile);
+                }
+              })
+              .catch((err) => console.error('[AuthContext] Metadata sync failed:', err));
           }
         } else {
           fetch('/api/auth/profile', {
@@ -143,12 +157,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               emailVerified: metaEmailConfirmed ? true : false,
               setupCompleted: false,
             }),
-          }).then(async (res) => {
-            if (res.ok) {
-              const { data: newData } = await res.json();
-              if (newData) setUserProfile(newData as UserProfile);
-            }
-          }).catch((err) => console.error('[AuthContext] Profile init failed:', err));
+          })
+            .then(async (res) => {
+              const cType = res.headers.get('content-type');
+              if (res.ok && res.status !== 204 && cType?.includes('application/json')) {
+                const { data: newData } = await res.json();
+                if (newData) setUserProfile(newData as UserProfile);
+              }
+            })
+            .catch((err) => console.error('[AuthContext] Profile init failed:', err));
         }
       }
     } catch (error: any) {
@@ -159,7 +176,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [user?.id, user?.email, user?.email_confirmed_at]);
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (session?.user) {
         const augmentedUser = {
           ...session.user,
@@ -171,8 +188,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setLoading(false);
         setIsInitialized(true);
 
-        // PASSWORD_RECOVERY: don't redirect — reset page handles it via onAuthStateChange
-        if (event === 'PASSWORD_RECOVERY') {
+        // Skip profile refresh for recovery flows
+        const isRecovery = event === 'PASSWORD_RECOVERY' || 
+                          pathname === '/reset-password' || 
+                          (typeof window !== 'undefined' && 
+                            (window.location.href.includes('type=recovery') || window.location.hash.includes('type=recovery')));
+
+        if (isRecovery) {
           return;
         }
 
@@ -195,10 +217,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const publicRoutes = [
       '/login', '/register', '/', '/about', '/contact',
       '/forgot-password', '/reset-password', '/verify-email',
+      '/auth/callback', // Essential for Supabase PKCE flow
       '/company/setup', '/company/conductor/setup', '/company/operator/signup',
       '/search', '/schedules',
     ];
     const isPublicRoute = publicRoutes.includes(pathname) || pathname.startsWith('/bus/');
+
+    // Enhanced recovery flow detection to prevent unwanted redirects
+    const isRecoveryFlow = pathname === '/reset-password' || 
+                          pathname === '/auth/callback' ||
+                          (typeof window !== 'undefined' && 
+                            (window.location.href.includes('type=recovery') || window.location.hash.includes('type=recovery')));
+    if (isRecoveryFlow) return;
 
     if (!user && !isPublicRoute) {
       const currentPath = typeof window !== 'undefined' ? pathname + window.location.search : pathname;
@@ -303,9 +333,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       },
     });
 
-    if (error) throw new Error(error.message);
+    if (error) {
+      const messages: Record<string, string> = {
+        'User already registered': 'This email is already associated with an account. Please sign in or reset your password.',
+        'Invalid Content-Type: Missing Content-Type header': 'A server-side configuration error occurred during registration (Auth Hook failure).',
+        'Email rate limit exceeded': 'Rate limit reached. Please wait an hour before requesting another email or try a different address.',
+      };
+      throw new Error(messages[error.message] || error.message);
+    }
 
-    if (data.user) {
+    // Handle Supabase Identity Obfuscation: If user exists, it returns success but with an empty identities array
+    if (data.user && data.user.identities && data.user.identities.length === 0) {
+      throw new Error('This email is already associated with an account. Please sign in or reset your password.');
+    }
+
+    // Only attempt profile PATCH if we actually have a session or if the API is public
+    // If email confirmation is ON, data.session will be null here.
+    if (data.user && data.session) {
       await fetch('/api/auth/profile', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', 'x-csrf-token': getCookie('__csrf_token') || '' },
