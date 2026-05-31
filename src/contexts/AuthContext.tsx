@@ -191,8 +191,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Skip profile refresh for recovery flows
         const isRecovery = event === 'PASSWORD_RECOVERY' || 
                           pathname === '/reset-password' || 
-                          (typeof window !== 'undefined' && 
-                            (window.location.href.includes('type=recovery') || window.location.hash.includes('type=recovery')));
+                          (typeof window !== 'undefined' && ( 
+                            window.location.href.includes('type=recovery') ||
+                            window.location.href.includes('access_token=') ||
+                            window.location.hash.includes('recovery') ||
+                            window.location.search.includes('type=recovery')
+                          ));
 
         if (isRecovery) {
           return;

@@ -10,13 +10,14 @@ export async function GET(request: Request) {
   if (token_hash && type) {
     const supabase = await createClient();
 
+    // verifyOtp is the standard method to handle PKCE token hashes
     const { error } = await supabase.auth.verifyOtp({
       token_hash,
       type: type as any,
     });
 
     if (!error) {
-      // If this was a password reset, send them to the clean reset page
+      // Special handling for recovery: Ensure they land on the reset page
       if (type === 'recovery') {
         return NextResponse.redirect(`${origin}/reset-password`);
       }
@@ -28,15 +29,8 @@ export async function GET(request: Request) {
     console.error('[auth callback] Verification error:', error.message);
   }
 
-  // Handle standard OAuth 'code' exchange
-  const code = searchParams.get('code');
-  if (code) {
-    const supabase = await createClient();
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
-    if (!error) return NextResponse.redirect(`${origin}${next}`);
-  }
-
+  // If verification fails, redirect to login with a descriptive error
   const errorUrl = new URL('/login', origin);
-  errorUrl.searchParams.set('error', 'Invalid or expired authentication link.');
+  errorUrl.searchParams.set('error', 'The verification link is invalid or has expired.');
   return NextResponse.redirect(errorUrl);
 }
