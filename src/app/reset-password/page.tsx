@@ -344,15 +344,28 @@ export default function ResetPassword() {
     setErrors({});
 
     try {
+      // 1. Update password in Supabase directly from the client.
+      // When following a recovery link, the session is established on the client side.
+      // Updating here ensures we use that active session immediately without waiting for cookie sync.
+      const supabase = createBrowserClient();
+      const { error: updateError } = await supabase.auth.updateUser({
+        password: password,
+      });
+
+      if (updateError) {
+        setErrors({ general: updateError.message || 'Failed to update password in auth provider' });
+        setIsSubmitting(false);
+        return;
+      }
+
+      // 2. Call the API to sync the user record in PostgreSQL (Prisma).
       const response = await fetch('/api/auth/reset-password', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          token,
           email,
-          password,
         }),
       });
 
@@ -724,30 +737,7 @@ export default function ResetPassword() {
                 )}
               </Button>
             </div>
-
-            {/* Back to Login */}
-            <div className="text-center">
-              <Link 
-                href="/login"
-                className="text-sm font-medium text-gray-600 hover:text-gray-900 focus:outline-none focus:underline transition-colors duration-200"
-              >
-                Back to Sign In
-              </Link>
-            </div>
           </form>
-
-          {/* Additional Help */}
-          <div className="mt-6 pt-6 border-t border-gray-200 text-center">
-            <p className="text-xs text-gray-500">
-              Having trouble?{' '}
-              <Link 
-                href="/contact" 
-                className="text-blue-600 hover:text-blue-500 focus:outline-none focus:underline transition-colors duration-200"
-              >
-                Contact support
-              </Link>
-            </p>
-          </div>
         </div>
       </div>
     </div>

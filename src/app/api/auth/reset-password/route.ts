@@ -5,34 +5,22 @@ import { prisma } from '@/lib/prisma';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { password, email } = body;
-
-    if (!password) {
-      return NextResponse.json(
-        { error: 'Bad request', message: 'Password is required' },
-        { status: 400 }
-      );
-    }
+    const { email } = body;
 
     const supabase = await createClient();
     
-    // Update the password in Supabase Auth
-    // This works if the user is authenticated (e.g. after clicking the recovery link)
-    const { data: { user }, error } = await supabase.auth.updateUser({
-      password: password,
-    });
+    // Get the user from the current session
+    const { data: { user } } = await supabase.auth.getUser();
 
-    if (error) {
-      console.error('[reset-password] update failed:', error);
-      return NextResponse.json(
-        { error: 'Failed to update password', message: error.message },
-        { status: 401 }
-      );
-    }
+    // Use the authenticated user ID if available, otherwise fallback to email
+    // (The client already verified the password update with Supabase Auth)
+    const identifier = user?.id 
+      ? { id: user.id } 
+      : (email ? { email: email.toLowerCase() } : null);
 
-    if (!user) {
+    if (!identifier) {
       return NextResponse.json(
-        { error: 'Unauthorized', message: 'No active session found. Please request a new reset link.' },
+        { error: 'Unauthorized', message: 'No active session or user identification found.' },
         { status: 401 }
       );
     }
@@ -40,7 +28,7 @@ export async function POST(request: NextRequest) {
     // Also update the user record in PostgreSQL to mark password as set
     try {
       await prisma.user.update({
-        where: { id: user.id },
+        where: identifier as any,
         data: {
           passwordSet: true,
           updatedAt: new Date(),

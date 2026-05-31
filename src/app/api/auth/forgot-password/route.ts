@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/utils/supabase/admin';
 import { authRateLimiter, getClientIp } from '@/lib/rateLimiter';
+import { sendGenericPasswordResetEmail } from '@/lib/email-service';
 
 export async function POST(request: NextRequest) {
   try {
@@ -47,26 +48,35 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, message: 'If an account exists, a reset link has been sent.' });
     }
 
-    // 3. Send reset link using Supabase
+    // 3. Generate recovery link using generateLink (same pattern as email verification & company/setup)
+    // This creates a Supabase-hosted action_link that handles the token exchange server-side,
+    // then redirects to our app with tokens in the URL hash — no PKCE code exchange needed.
     let baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
     if (!baseUrl.startsWith('http')) {
       baseUrl = 'http://localhost:3000';
     }
 
-    // Use the client-provided redirectUrl if it exists, otherwise default to /reset-password
     const finalRedirectUrl = clientRedirectUrl || `${baseUrl}/reset-password`;
 
-    const { error: resetError } = await adminClient.auth.resetPasswordForEmail(trimmedEmail, {
-      redirectTo: finalRedirectUrl,
+    const { data: linkData, error: linkError } = await adminClient.auth.admin.generateLink({
+      type: 'recovery',
+      email: trimmedEmail,
+      options: {
+        redirectTo: finalRedirectUrl,
+      },
     });
 
-    if (resetError) {
-      console.error('[forgot-password] resetPasswordForEmail failed:', resetError);
+    if (linkError || !linkData.properties?.action_link) {
+      console.error('[forgot-password] generateLink failed:', linkError);
       return NextResponse.json(
-        { error: 'Internal server error', message: 'Failed to send reset link' },
+        { error: 'Internal server error', message: 'Failed to generate reset link' },
         { status: 500 }
       );
     }
+
+    // 4. Send custom email with the action_link (same pattern as sendVerificationEmail)
+    const resetLink = linkData.properties.action_link;
+    await sendGenericPasswordResetEmail(trimmedEmail, resetLink);
 
     return NextResponse.json({
       success: true,
@@ -81,3 +91,4 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
