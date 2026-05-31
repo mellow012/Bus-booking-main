@@ -73,6 +73,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const targetUid = uid ?? user?.id;
     if (!targetUid) return;
 
+    // Industry Standard: Prevent redundant fetching if profile is already loaded and fresh
+    if (userProfile && userProfile.id === targetUid && !uid) {
+      return;
+    }
+
     // Use sessionUser metadata if provided (from onAuthStateChange), otherwise fall back to state
     const meta = sessionUser?.user_metadata ?? user?.user_metadata;
     const metaEmail = sessionUser?.email ?? user?.email;

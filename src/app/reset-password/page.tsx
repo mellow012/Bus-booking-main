@@ -228,12 +228,7 @@ export default function ResetPassword() {
           const supabase = createBrowserClient();
           const { data: { session } } = await supabase.auth.getSession();
 
-          if (session?.user) {
-            setEmail(session.user.email || '');
-            setIsVerifying(false);
-            return;
-          }
-
+     // If we have a token hash but no session, verify it via API
           const response = await fetch('/api/auth/verify-reset-token', {
             method: 'POST',
             headers: {

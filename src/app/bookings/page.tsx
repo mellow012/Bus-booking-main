@@ -721,9 +721,11 @@ const BookingsPage: React.FC = () => {
     setCurrentPage(1);
   }, []);
 
-  const fetchBookings = useCallback(async (retryCount = 0) => {
+  const fetchBookings = useCallback(async () => {
     if (!user?.id) return;
-    setLoading(true);
+    // Only show the main loader if we have no data yet. 
+    // Otherwise, it's a "silent" background refresh to improve UX.
+    if (bookings.length === 0) setLoading(true);
     setError('');
     try {
       // Always fetch ALL bookings — tab switching filters client-side (no re-fetch)
@@ -782,11 +784,7 @@ const BookingsPage: React.FC = () => {
       // Use the current activeFilter ref via setActiveFilter's callback pattern
       setActiveFilter(current => { applyFiltersLogic(valid, current, {}); return current; });
     } catch (err) {
-      if (retryCount < 2) {
-        setTimeout(() => fetchBookings(retryCount + 1), 1000 * 2 ** retryCount);
-        return;
-      }
-      setError('Failed to load bookings. Please check your connection and try again.');
+      setError('Failed to load bookings. Please refresh the page.');
     } finally {
       setLoading(false);
     }
