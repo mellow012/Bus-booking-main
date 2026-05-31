@@ -228,11 +228,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     ];
     const isPublicRoute = publicRoutes.includes(pathname) || pathname.startsWith('/bus/');
 
-    // Enhanced recovery flow detection to prevent unwanted redirects
+    // LOCK-DOWN: If we are in any part of the recovery or callback flow, 
+    // do NOT perform any redirects or guards. Let the specific pages handle it.
     const isRecoveryFlow = pathname === '/reset-password' || 
                           pathname === '/auth/callback' ||
-                          (typeof window !== 'undefined' && 
-                            (window.location.href.includes('type=recovery') || window.location.hash.includes('type=recovery')));
+                          pathname === '/forgot-password' ||
+                          (typeof window !== 'undefined' && (
+                            window.location.href.includes('type=recovery') || 
+                            window.location.href.includes('access_token=') ||
+                            window.location.hash.includes('recovery') ||
+                            window.location.search.includes('type=recovery')
+                          ));
     if (isRecoveryFlow) return;
 
     if (!user && !isPublicRoute) {

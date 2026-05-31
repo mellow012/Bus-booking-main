@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import { createClient as createBrowserClient } from '@/utils/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -82,6 +83,7 @@ const getErrorMessage = (error: any): string => {
 
 export default function ResetPassword() {
   const router = useRouter();
+  const { user: authUser, loading: authLoading } = useAuth();
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [email, setEmail] = useState('');
