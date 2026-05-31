@@ -36,14 +36,18 @@ function getResendClient(): Resend {
   return _resend;
 }
 
-async function sendResendEmail(options: { to: string; subject: string; html: string }) {
-  const response = await getResendClient().emails.send({
-    from: getFromAddress(),
+async function sendResendEmail(options: { to: string; subject: string; html: string; from?: string }) {
+  const { data, error } = await getResendClient().emails.send({
+    from: options.from || getFromAddress(),
     to: options.to,
     subject: options.subject,
     html: options.html,
   });
-  return response;
+
+  if (error) {
+    throw new Error(`[Resend] ${error.name}: ${error.message}`);
+  }
+  return data;
 }
 
 // ─── Health check helper ──────────────────────────────────────────────────────
@@ -74,8 +78,8 @@ export async function sendVerificationEmail(email: string, verificationLink: str
   };
 
   try {
-    const info = await sendResendEmail(mailOptions);
-    console.log('[email-service] Verification email sent:', info.data?.id);
+    const data = await sendResendEmail(mailOptions);
+    console.log('[email-service] Verification email sent:', data?.id);
   } catch (error: any) {
     console.error('[email-service] Failed to send verification email to', email, ':', error.message);
     throw new Error('Email sending failed');
@@ -167,8 +171,8 @@ export async function sendGenericPasswordResetEmail(
   };
 
   try {
-    const info = await sendResendEmail(mailOptions);
-    console.log('[email-service] Generic password reset sent:', info.data?.id);
+    const data = await sendResendEmail(mailOptions);
+    console.log('[email-service] Generic password reset sent:', data?.id);
   } catch (error: any) {
     console.error('[email-service] Failed to send generic password reset to', email, ':', error.message);
     throw new Error('Email sending failed');
@@ -205,8 +209,8 @@ export async function sendPasswordResetEmail(
   };
 
   try {
-    const info = await sendResendEmail(mailOptions);
-    console.log('[email-service] Password reset sent:', info.data?.id);
+    const data = await sendResendEmail(mailOptions);
+    console.log('[email-service] Password reset sent:', data?.id);
   } catch (error: any) {
     console.error('[email-service] Failed to send password reset to', email, ':', error.message);
     throw new Error('Email sending failed');
@@ -275,8 +279,8 @@ export async function sendOperatorInviteEmail(
   };
 
   try {
-    const info = await sendResendEmail(mailOptions);
-    console.log(`[email-service] ${roleLabel} invite sent:`, info.data?.id);
+    const data = await sendResendEmail(mailOptions);
+    console.log(`[email-service] ${roleLabel} invite sent:`, data?.id);
   } catch (error: any) {
     console.error(`[email-service] Failed to send ${roleLabel} invite to`, email, ':', error.message);
     throw new Error('Failed to send invitation email');

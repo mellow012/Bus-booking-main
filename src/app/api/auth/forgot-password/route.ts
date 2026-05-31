@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createAdminClient } from '@/utils/supabase/admin';
+import { createClient } from '@/utils/supabase/server';
 import { authRateLimiter, getClientIp } from '@/lib/rateLimiter';
-import { sendGenericPasswordResetEmail } from '@/lib/email-service';
 
 export async function POST(request: NextRequest) {
   try {
@@ -35,54 +34,30 @@ export async function POST(request: NextRequest) {
     }
 
     const trimmedEmail = email.trim().toLowerCase();
-    const adminClient = createAdminClient();
+    const supabase = await createClient();
 
-    // 2. Check if user exists (security: we always return 200, but only send if exists)
-    const { data: { users }, error: listError } = await adminClient.auth.admin.listUsers();
-    if (listError) throw listError;
-    
-    const user = users.find(u => u.email === trimmedEmail);
-
-    if (!user) {
-      // Return success even if user not found to prevent email enumeration
-      return NextResponse.json({ success: true, message: 'If an account exists, a reset link has been sent.' });
-    }
-
-    // 3. Generate recovery link using generateLink (same pattern as email verification & company/setup)
-    // This creates a Supabase-hosted action_link that handles the token exchange server-side,
-    // then redirects to our app with tokens in the URL hash — no PKCE code exchange needed.
+    // 2. Use Supabase's native reset method
     let baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
     if (!baseUrl.startsWith('http')) {
       baseUrl = 'http://localhost:3000';
     }
 
-    const finalRedirectUrl = clientRedirectUrl || `${baseUrl}/reset-password`;
-
-    const { data: linkData, error: linkError } = await adminClient.auth.admin.generateLink({
-      type: 'recovery',
-      email: trimmedEmail,
-      options: {
-        redirectTo: finalRedirectUrl,
-      },
+    const { error: resetError } = await supabase.auth.resetPasswordForEmail(trimmedEmail, {
+      redirectTo: clientRedirectUrl || `${baseUrl}/reset-password`,
     });
 
-    if (linkError || !linkData.properties?.action_link) {
-      console.error('[forgot-password] generateLink failed:', linkError);
+    if (resetError) {
+      console.error('[forgot-password] Supabase reset error:', resetError);
       return NextResponse.json(
-        { error: 'Internal server error', message: 'Failed to generate reset link' },
-        { status: 500 }
+        { error: resetError.message, message: 'Could not process password reset request.' },
+        { status: resetError.status || 400 }
       );
     }
 
-    // 4. Send custom email with the action_link (same pattern as sendVerificationEmail)
-    const resetLink = linkData.properties.action_link;
-    await sendGenericPasswordResetEmail(trimmedEmail, resetLink);
-
-    return NextResponse.json({
-      success: true,
-      message: 'Password reset link sent successfully',
+    return NextResponse.json({ 
+      success: true, 
+      message: 'If an account exists, a reset link has been sent to your email.' 
     });
-
   } catch (error: any) {
     console.error('[forgot-password] Unhandled error:', error);
     return NextResponse.json(
@@ -91,4 +66,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-
