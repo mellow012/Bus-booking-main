@@ -112,12 +112,27 @@ interface InlinePassengerFormProps {
   onBack: () => void;
   loading: boolean;
   error: string;
+  bookingForSelf: boolean;
+  onToggleSelf: (val: boolean) => void;
 }
 
 const InlinePassengerForm: React.FC<InlinePassengerFormProps> = ({
   passengers, formState, onChange, onAgeBlur, onSubmit, onBack, loading, error,
+  bookingForSelf, onToggleSelf,
 }) => (
   <div className="space-y-5 min-w-0">
+    <div className="flex items-center gap-2 mb-4 p-3 bg-blue-50/50 rounded-xl border border-blue-100">
+      <input
+        type="checkbox"
+        id="bookingForSelf"
+        checked={bookingForSelf}
+        onChange={(e) => onToggleSelf(e.target.checked)}
+        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+      />
+      <Label htmlFor="bookingForSelf" className="text-sm font-semibold text-blue-800 cursor-pointer">
+        I am travelling (Auto-fill my details)
+      </Label>
+    </div>
     {formState.map((p, i) => (
       <div key={i} className="p-4 border border-gray-200 rounded-xl bg-white space-y-4 min-w-0">
         <div className="flex items-center gap-2 mb-1">
@@ -209,7 +224,7 @@ export default function BookBus() {
   const { id: scheduleId } = useParams() as { id: string };
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, userProfile } = useAuth();
 
   const passengers = parseInt(searchParams.get("passengers") || "1", 10);
 
@@ -240,6 +255,8 @@ export default function BookBus() {
   const [passengerError,   setPassengerError]   = useState("");
   const [success,          setSuccess]          = useState("");
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
+  const [bookingForSelf,   setBookingForSelf]   = useState(true);
+
   // FIX UX-1: replaces window.confirm() for duplicate name check
   const [dupNameModalOpen, setDupNameModalOpen] = useState(false);
   const [pendingPassengerSubmit, setPendingPassengerSubmit] = useState(false);
@@ -484,13 +501,41 @@ setDisplayPrice(calcSegmentPrice(
       .then(() => {
         setSelectedSeats(seats);
         setCurrentStep("passengers");
-        setPassengerForms(seats.map(seat => ({
-          name: "", ageInput: "18", age: 18,
-          gender: "male" as const, seatNumber: seat, ticketType: "adult" as const,
+        setPassengerForms(seats.map((seat, index) => ({
+          name: (index === 0 && bookingForSelf && userProfile) 
+            ? `${userProfile.firstName} ${userProfile.lastName}`.trim() 
+            : "",
+          ageInput: "18",
+          age: 18,
+          gender: (index === 0 && bookingForSelf && userProfile?.sex) 
+            ? (userProfile.sex.toLowerCase() as any) 
+            : ("male" as const),
+          seatNumber: seat, 
+          ticketType: "adult" as const,
         })));
       })
       .catch(err => setError(err.message || "Failed to reserve seats. Please try again."));
-  }, [passengers, schedule?.bookedSeats, holdSeats, originStopId, destinationStopId]);
+  }, [passengers, schedule?.bookedSeats, holdSeats, originStopId, destinationStopId, bookingForSelf, userProfile]);
+
+  const toggleBookingForSelf = (val: boolean) => {
+    setBookingForSelf(val);
+    if (passengerForms.length > 0) {
+      setPassengerForms(prev => prev.map((p, i) => {
+        if (i !== 0) return p;
+        if (val && userProfile) {
+          return {
+            ...p,
+            name: `${userProfile.firstName} ${userProfile.lastName}`.trim(),
+            ageInput: "18",
+            age: 18,
+            gender: (userProfile.sex?.toLowerCase() as any) || "male"
+          };
+        } else {
+          return { ...p, name: "", ageInput: "18", age: 18, gender: "male" };
+        }
+      }));
+    }
+  };
 
   // Core passenger validation — returns true if valid, false if not
   const validatePassengers = (): boolean => {
@@ -885,6 +930,8 @@ setDisplayPrice(calcSegmentPrice(
                   onChange={handlePassengerFieldChange} onAgeBlur={handleAgeBlur}
                   onSubmit={handlePassengerSubmit} onBack={goBackToSeats}
                   loading={bookingLoading} error={passengerError}
+                  bookingForSelf={bookingForSelf}
+                  onToggleSelf={toggleBookingForSelf}
                 />
               </CardContent>
             </Card>
