@@ -12,12 +12,11 @@ function buildVerifyUrl(supabaseUrl: string, token_hash: string, type: string, r
 
 export async function POST(request: NextRequest) {
   try {
-
     const rawBody = await request.text();
     const headers = {
-  ...Object.fromEntries(request.headers),
-  'content-type': 'application/json', // ← add this
-};
+      ...Object.fromEntries(request.headers),
+      'content-type': 'application/json',
+    };
 
     const secret = process.env.SUPABASE_HOOK_SECRET ?? '';
     const base64Secret = secret.replace(/^v1,whsec_/, '');
@@ -28,20 +27,18 @@ export async function POST(request: NextRequest) {
       payload = wh.verify(rawBody, headers);
     } catch (err: any) {
       console.error('[hook] Signature verification failed:', err.message);
-      return SUCCESS; // always 200 so auth isn't blocked
+      return SUCCESS;
     }
 
     const { user, email_data } = payload ?? {};
     const action = email_data?.email_action_type;
-    console.log('[hook] email_data:', JSON.stringify(email_data));
-    console.log('[hook] user:', JSON.stringify(user));
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
     const appUrl = process.env.NEXT_PUBLIC_APP_URL!;
 
     switch (action) {
       case 'signup':
       case 'magiclink': {
-        const url = buildVerifyUrl(supabaseUrl, email_data.token_hash, 'signup', appUrl);
+        const url = `${supabaseUrl}/auth/v1/verify?token_hash=${email_data.token_hash}&type=signup&redirect_to=${encodeURIComponent(email_data.redirect_to || appUrl)}`;
         await sendVerificationEmail(user.email, url);
         break;
       }
@@ -73,6 +70,6 @@ export async function POST(request: NextRequest) {
 
   } catch (error: any) {
     console.error('[hook] Error:', error.message);
-    return SUCCESS; // always 200
+    return SUCCESS;
   }
 }

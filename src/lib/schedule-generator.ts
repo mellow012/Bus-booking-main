@@ -55,13 +55,13 @@ export async function checkAndRollSchedules(force = false) {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    // Calculate target range: Today until June 30, 2024
-    const targetEndDate = new Date(2024, 6, 30); // Month is 0-indexed (6 = July, so 5 = June)
+    // Calculate target range: Today until June 30, 2024 (Month 5 is June)
+    const targetEndDate = new Date(2024, 5, 30);
     const diffTime = Math.max(0, targetEndDate.getTime() - today.getTime());
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) || 1;
 
     // Update in parallel transaction chunks to be extremely fast and efficient
-    const chunkSize = 20;
+    const chunkSize = 10; // Reduced chunk size to prevent driver timeouts
     let updatedCount = 0;
 
     console.log(`[schedule-generator] Spreading ${schedules.length} schedules over ${diffDays} days until end of June.`);
@@ -114,11 +114,14 @@ export async function checkAndRollSchedules(force = false) {
           await Promise.all(promises);
         },
         {
-          timeout: 25000 // 25 seconds timeout to accommodate high remote DB latency
+          timeout: 15000 // Reduced timeout to fail faster and allow retries
         }
       );
 
       updatedCount += chunk.length;
+      
+      // Small throttle delay (100ms) to prevent EAUTHTIMEOUT on remote connections
+      await new Promise(resolve => setTimeout(resolve, 100));
     }
 
     console.log(`[schedule-generator] Successfully rolled ${updatedCount} schedules forward to the future.`);

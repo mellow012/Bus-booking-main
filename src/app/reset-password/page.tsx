@@ -119,50 +119,56 @@ export default function ResetPassword() {
 
   const { user, loading } = useAuth();
 
+
   useEffect(() => {
-    if (loading) return;
+  if (loading) return;
 
-    const checkSession = async () => {
-      try {
-        const supabase = createBrowserClient();
-        const { data: { session } } = await supabase.auth.getSession();
+  const checkSession = async () => {
+    try {
+      const supabase = createBrowserClient();
 
-        if (session?.user) {
-          setEmail(session.user.email || '');
-          setIsVerifying(false);
-          return;
-        }
-
-        if (user) {
-          setEmail(user.email || '');
-          setIsVerifying(false);
-          return;
-        }
-
-        // Check for PKCE code
-        const params = new URLSearchParams(window.location.search);
-        const code = params.get('code');
-        if (code) {
-          const { error } = await supabase.auth.exchangeCodeForSession(code);
-          if (error) throw error;
-          const cleanUrl = new URL(window.location.href);
-          cleanUrl.searchParams.delete('code');
-          window.history.replaceState({}, document.title, cleanUrl.toString());
-          return; // AuthContext listener will update user
-        }
-
-        // No session, no code — invalid link
-        setErrors({ general: 'Invalid or missing reset token. Please request a new password reset link.' });
-        setIsVerifying(false);
-
-      } catch (err: any) {
-        setErrors({ general: err.message || 'Failed to verify reset link.' });
-        setIsVerifying(false);
+      // If hash contains access_token, give Supabase client time to process it
+      const hasHashToken = window.location.hash.includes('access_token=');
+      if (hasHashToken) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
       }
-    };
 
-    checkSession();
-  }, [user, loading]);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        setEmail(session.user.email || '');
+        setIsVerifying(false);
+        return;
+      }
+
+      if (user) {
+        setEmail(user.email || '');
+        setIsVerifying(false);
+        return;
+      }
+
+      // Check for PKCE code
+      const params = new URLSearchParams(window.location.search);
+      const code = params.get('code');
+      if (code) {
+        const { error } = await supabase.auth.exchangeCodeForSession(code);
+        if (error) throw error;
+        const cleanUrl = new URL(window.location.href);
+        cleanUrl.searchParams.delete('code');
+        window.history.replaceState({}, document.title, cleanUrl.toString());
+        return;
+      }
+
+      setErrors({ general: 'Invalid or missing reset token. Please request a new password reset link.' });
+      setIsVerifying(false);
+
+    } catch (err: any) {
+      setErrors({ general: err.message || 'Failed to verify reset link.' });
+      setIsVerifying(false);
+    }
+  };
+
+  checkSession();
+}, [user, loading]);
 
   useEffect(() => {
     if (password) {
