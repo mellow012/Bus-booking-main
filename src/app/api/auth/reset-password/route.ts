@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
 import { prisma } from '@/lib/prisma';
+import { withErrorHandling, createSuccessResponse, Errors } from '@/lib/errorHandler';
 
-export async function POST(request: NextRequest) {
-  try {
+export const POST = withErrorHandling(async (request: NextRequest) => {
     const body = await request.json();
     const { email } = body;
 
@@ -19,10 +19,7 @@ export async function POST(request: NextRequest) {
       : (email ? { email: email.toLowerCase() } : null);
 
     if (!identifier) {
-      return NextResponse.json(
-        { error: 'Unauthorized', message: 'No active session or user identification found.' },
-        { status: 401 }
-      );
+      throw Errors.unauthorized('No active session or user identification found.');
     }
 
     // Also update the user record in PostgreSQL to mark password as set
@@ -39,16 +36,5 @@ export async function POST(request: NextRequest) {
       // We don't fail the request if Prisma update fails, but we log it
     }
 
-    return NextResponse.json({
-      success: true,
-      message: 'Password updated successfully',
-    });
-
-  } catch (error: any) {
-    console.error('[reset-password] Unhandled error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error', message: error.message || 'Failed to process request' },
-      { status: 500 }
-    );
-  }
-}
+    return createSuccessResponse(null, 'Password updated successfully');
+});

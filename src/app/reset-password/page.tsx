@@ -371,7 +371,9 @@ export default function ResetPassword() {
 
       if (!response.ok) {
         const data = await response.json();
-        setErrors({ general: data.message || getErrorMessage(data) });
+        // Handle structured error response from errorHandler.ts
+        const apiMessage = data.error?.message || data.message || getErrorMessage(data);
+        setErrors({ general: apiMessage });
         setIsSubmitting(false);
         return;
       }

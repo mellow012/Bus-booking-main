@@ -107,10 +107,11 @@ export default function ForgotPassword() {
       
       if (!response.ok) {
         // For security, we show success message even if user doesn't exist
-        if (data.code === 'user-not-found') {
+        if (data.error?.code === 'NOT_FOUND' || data.code === 'user-not-found') {
           setSuccess(true);
         } else {
-          setError({ general: data.message || getErrorMessage(data) });
+          const apiMessage = data.error?.message || data.message || getErrorMessage(data);
+          setError({ general: apiMessage });
         }
       } else {
         setSuccess(true);
