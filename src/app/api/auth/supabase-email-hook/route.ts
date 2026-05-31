@@ -12,8 +12,12 @@ function buildVerifyUrl(supabaseUrl: string, token_hash: string, type: string, r
 
 export async function POST(request: NextRequest) {
   try {
+
     const rawBody = await request.text();
-    const headers = Object.fromEntries(request.headers);
+    const headers = {
+  ...Object.fromEntries(request.headers),
+  'content-type': 'application/json', // ← add this
+};
 
     const secret = process.env.SUPABASE_HOOK_SECRET ?? '';
     const base64Secret = secret.replace(/^v1,whsec_/, '');
