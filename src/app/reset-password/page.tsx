@@ -129,7 +129,8 @@ const getResetTokenFromUrl = (): string | null => {
   }
 
   const query = new URLSearchParams(window.location.search);
-  const queryToken = query.get('token') || query.get('token_hash');
+  // Support both `token`/`token_hash` and Supabase's `access_token` in query
+  const queryToken = query.get('token') || query.get('token_hash') || query.get('access_token');
   if (queryToken) {
     return queryToken;
   }
@@ -140,7 +141,10 @@ const getResetTokenFromUrl = (): string | null => {
   }
 
   const hashParams = new URLSearchParams(hash);
-  return hashParams.get('token') || hashParams.get('token_hash');
+  // Supabase often returns tokens in the URL hash as `access_token`.
+  return (
+    hashParams.get('token') || hashParams.get('token_hash') || hashParams.get('access_token')
+  );
 };
 
 export default function ResetPassword() {
