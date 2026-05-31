@@ -15,6 +15,14 @@ import {
   XCircleIcon
 } from '@heroicons/react/24/outline';
 
+const getCookie = (name: string): string | null => {
+  if (typeof document === 'undefined') return null;
+  const value = `; ${document.cookie}`;
+  const parts = value.split(`; ${name}=`);
+  if (parts.length === 2) return parts.pop()?.split(';').shift() || null;
+  return null;
+};
+
 // Types
 interface FormErrors {
   password?: string;
@@ -173,6 +181,13 @@ export default function ResetPassword() {
       return;
     }
 
+    // If we have an access_token in the hash or a PKCE code in the search, 
+    // Supabase is currently processing the session. We should wait for 'user' 
+    // to be populated by AuthContext rather than showing an error.
+    const currentHash = typeof window !== 'undefined' ? window.location.hash : '';
+    const currentSearch = typeof window !== 'undefined' ? window.location.search : '';
+    const isProcessingAuth = currentHash.includes('access_token=') || currentSearch.includes('code=');
+
     // If user is already authenticated (via active session or successful code exchange)
     if (user) {
       setEmail(user.email || '');
@@ -237,6 +252,7 @@ export default function ResetPassword() {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
+              'x-csrf-token': getCookie('__csrf_token') || ''
             },
             body: JSON.stringify({ token_hash: actualToken }),
           });
@@ -262,9 +278,11 @@ export default function ResetPassword() {
       return;
     }
 
-    // No user session, no code, and no token in URL
-    setErrors({ general: 'Invalid or missing reset token. Please request a new password reset link.' });
-    setIsVerifying(false);
+    // No user session and no token data found in URL
+    if (!isProcessingAuth) {
+      setErrors({ general: 'Invalid or missing reset token. Please request a new password reset link.' });
+      setIsVerifying(false);
+    }
   }, [token, user, loading]);
 
   // Update password strength when password changes
@@ -362,6 +380,7 @@ export default function ResetPassword() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'x-csrf-token': getCookie('__csrf_token') || ''
         },
         body: JSON.stringify({
           email,

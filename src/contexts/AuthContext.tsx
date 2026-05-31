@@ -6,6 +6,14 @@ import { UserProfile, UserRole, CompanyRole } from '@/types';
 import { useRouter, usePathname } from 'next/navigation';
 import Image from 'next/image';
 
+const getCookie = (name: string): string | null => {
+  if (typeof document === 'undefined') return null;
+  const value = `; ${document.cookie}`;
+  const parts = value.split(`; ${name}=`);
+  if (parts.length === 2) return parts.pop()?.split(';').shift() || null;
+  return null;
+};
+
 const formatPhoneToE164 = (phone?: string): string => {
   if (!phone) return '';
   let p = phone.trim().replace(/[\s\-()]/g, '');
@@ -113,7 +121,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             // Fire and forget - don't wait for activation
             fetch('/api/auth/profile', {
               method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
+              headers: { 
+                'Content-Type': 'application/json',
+                'x-csrf-token': getCookie('__csrf_token') || ''
+              },
               body: JSON.stringify({
                 isActive: true,
                 setupCompleted: true,
@@ -133,7 +144,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (needsMetadataSync) {
             fetch('/api/auth/profile', {
               method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
+              headers: { 
+                'Content-Type': 'application/json',
+                'x-csrf-token': getCookie('__csrf_token') || ''
+              },
               body: JSON.stringify({
                 firstName: data.firstName || meta?.first_name || '',
                 lastName: data.lastName || meta?.last_name || '',
@@ -154,7 +168,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
           fetch('/api/auth/profile', {
             method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+              'Content-Type': 'application/json',
+              'x-csrf-token': getCookie('__csrf_token') || ''
+            },
             body: JSON.stringify({
               email: metaEmail || '',
               firstName: metaFirstName,
@@ -384,7 +401,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Sync with Prisma (may return 401 if unauthenticated, which will fall back to sync on login)
       await fetch('/api/auth/profile', {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-csrf-token': getCookie('__csrf_token') || ''
+        },
         body: JSON.stringify({
           email:          data.user.email,
           firstName,
@@ -407,7 +427,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const response = await fetch('/api/profile', {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-csrf-token': getCookie('__csrf_token') || ''
+        },
         body: JSON.stringify({
           firstName:      profile.firstName.trim(),
           lastName:       profile.lastName.trim(),
