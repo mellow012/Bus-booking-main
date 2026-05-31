@@ -69,6 +69,7 @@ export async function middleware(request: NextRequest) {
   if (
     pathname.startsWith('/_next') ||
     pathname.startsWith('/api/webhooks') ||
+    pathname.startsWith('/api/auth/supabase-email-hook') || 
     pathname.includes('.')
   ) {
     return NextResponse.next();
