@@ -162,7 +162,7 @@ export default function ResetPassword() {
   const [success, setSuccess] = useState(false);
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   
   // UI state
   const [showPassword, setShowPassword] = useState(false);
@@ -171,17 +171,49 @@ export default function ResetPassword() {
 
   // Verify reset token on mount
   useEffect(() => {
-    const initToken = getResetTokenFromUrl();
-    if (initToken && !token) {
-      setToken(initToken);
+    // If auth state is still loading, wait
+    if (loading) {
       return;
     }
 
-    // With Supabase's built-in email flow, clicking the link logs the user in automatically
+    // If user is already authenticated (via active session or successful code exchange)
     if (user) {
       setEmail(user.email || '');
       setErrors({});
       setIsVerifying(false);
+      return;
+    }
+
+    // Check if we have a PKCE code in the URL query string
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('code');
+    if (code) {
+      const exchangeCode = async () => {
+        try {
+          const supabase = createBrowserClient();
+          const { error } = await supabase.auth.exchangeCodeForSession(code);
+          if (error) throw error;
+          
+          // Clear code from URL
+          const cleanUrl = new URL(window.location.href);
+          cleanUrl.searchParams.delete('code');
+          window.history.replaceState({}, document.title, cleanUrl.toString());
+          
+          // The auth listener in AuthContext will fire and user state will update
+        } catch (err: any) {
+          console.error('[reset-password] Code exchange failed:', err);
+          setErrors({ general: err.message || 'Failed to establish session. Please request a new password reset link.' });
+          setIsVerifying(false);
+        }
+      };
+      
+      exchangeCode();
+      return;
+    }
+
+    const initToken = getResetTokenFromUrl();
+    if (initToken && !token) {
+      setToken(initToken);
       return;
     }
 
@@ -231,14 +263,10 @@ export default function ResetPassword() {
       return;
     }
 
-    // No user and no token yet — wait briefly for Supabase to parse the URL hash and establish session
-    const timeout = setTimeout(() => {
-      setErrors({ general: 'Invalid or missing reset token. Please request a new password reset link.' });
-      setIsVerifying(false);
-    }, 3000);
-
-    return () => clearTimeout(timeout);
-  }, [token, user]);
+    // No user session, no code, and no token in URL
+    setErrors({ general: 'Invalid or missing reset token. Please request a new password reset link.' });
+    setIsVerifying(false);
+  }, [token, user, loading]);
 
   // Update password strength when password changes
   useEffect(() => {
