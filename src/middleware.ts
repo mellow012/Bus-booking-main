@@ -1,20 +1,5 @@
-// middleware.ts
-// ─────────────────────────────────────────────────────────────────────────────
-// Next.js middleware — validates the Supabase session on every request.
-//
-// WHAT THIS DOES:
-//   1. Skips static assets, webhooks, and file requests
-//   2. Delegates session refresh to the Supabase SSR helper
-//   3. Redirects unauthenticated users away from protected routes → /login
-//   4. Redirects authenticated users away from /login and /register → /
-//   5. Enforces role-based access control (RBAC) on dashboard routes
-//   6. Forwards x-user-id, x-user-email, x-user-role headers downstream
-// ─────────────────────────────────────────────────────────────────────────────
-
 import { NextRequest, NextResponse } from 'next/server';
 import { updateSession } from '@/utils/supabase/middleware';
-
-// ─── Route definitions ────────────────────────────────────────────────────────
 
 // Routes that require the user to be logged in
 const PROTECTED_ROUTES = [
@@ -30,16 +15,6 @@ const PROTECTED_ROUTES = [
 // Routes that logged-in users should be bounced away from
 const AUTH_ROUTES = ['/login', '/register'];
 
-// ─── RBAC: which roles may access which route prefixes ────────────────────────
-//
-// If a user is authenticated but their role is NOT in the allowed list,
-// they are redirected to /unauthorized.
-//
-// The role is read from the Supabase JWT user_metadata.role field, which is
-// synced from our Postgres User table on login and staff invitation.
-// If the metadata has not been synced yet the RBAC check is skipped gracefully
-// (the client-side AuthContext guard acts as a secondary safety layer).
-//
 type AppRole = 'superadmin' | 'company_admin' | 'operator' | 'conductor' | 'customer';
 
 const ROLE_ROUTE_MAP: Array<{ prefix: string; allowed: AppRole[] }> = [
@@ -48,8 +23,6 @@ const ROLE_ROUTE_MAP: Array<{ prefix: string; allowed: AppRole[] }> = [
   { prefix: '/company/operator',  allowed: ['operator', 'company_admin', 'superadmin'] },
   { prefix: '/company/conductor', allowed: ['conductor', 'company_admin', 'superadmin'] },
 ];
-
-// ─── CSRF helper ──────────────────────────────────────────────────────────────
 
 function isCsrfSafe(request: NextRequest): boolean {
   const { method } = request;
@@ -60,16 +33,16 @@ function isCsrfSafe(request: NextRequest): boolean {
   try { return new URL(origin).host === host; } catch { return false; }
 }
 
-// ─── Middleware ───────────────────────────────────────────────────────────────
-
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Skip static files, Next internals, and webhooks
+  // 💡 FIX: Explicitly ignore the auth callback engine pathing entirely 
+  // to ensure server-side OTP token/code cookie generation routines complete without middleware interference.
   if (
     pathname.startsWith('/_next') ||
     pathname.startsWith('/api/webhooks') ||
     pathname.startsWith('/api/auth/supabase-email-hook') || 
+    pathname.startsWith('/auth/callback') || 
     pathname.includes('.')
   ) {
     return NextResponse.next();
@@ -81,16 +54,19 @@ export async function middleware(request: NextRequest) {
     return new NextResponse('Forbidden', { status: 403 });
   }
 
-  // ── Refresh Supabase session & get the current user ────────────────────────
-  // updateSession() MUST be called before any redirect logic to ensure
-  // the session cookie is refreshed on every request.
+  // Refresh Supabase session & get the current user
   const { supabaseResponse, user, role } = await updateSession(request);
-
   const isAuth = !!user;
 
   // ── Redirect authenticated users away from login/register ─────────────────
   if (isAuth && AUTH_ROUTES.some(r => pathname.startsWith(r))) {
-    return NextResponse.redirect(new URL('/', request.url));
+    const redirectUrl = new URL('/', request.url);
+    // 💡 FIX: Merge the cookie headers into the redirect response!
+    const res = NextResponse.redirect(redirectUrl);
+    supabaseResponse.cookies.getAll().forEach(cookie => {
+      res.cookies.set(cookie.name, cookie.value, cookie);
+    });
+    return res;
   }
 
   // ── Protect routes that require authentication ─────────────────────────────
@@ -98,24 +74,29 @@ export async function middleware(request: NextRequest) {
   if (needsAuth && !isAuth) {
     const loginUrl = new URL('/login', request.url);
     loginUrl.searchParams.set('from', pathname);
-    return NextResponse.redirect(loginUrl);
+    
+    // Pass cookies downstream even on unauthenticated blocks to clear old corrupted tracking keys safely
+    const res = NextResponse.redirect(loginUrl);
+    supabaseResponse.cookies.getAll().forEach(cookie => {
+      res.cookies.set(cookie.name, cookie.value, cookie);
+    });
+    return res;
   }
 
   // ── RBAC: Enforce role-based access for authenticated users ───────────────
-  // Only enforce when the role is present in JWT metadata.
-  // If role is missing (metadata not yet synced), skip and let client-side guard handle it.
   if (isAuth && role) {
     const matched = ROLE_ROUTE_MAP.find(entry => pathname.startsWith(entry.prefix));
     if (matched && !matched.allowed.includes(role as AppRole)) {
-      console.warn(
-        `[middleware] RBAC blocked: role="${role}" tried to access "${pathname}" ` +
-        `(allowed: ${matched.allowed.join(', ')})`
-      );
-      return NextResponse.redirect(new URL('/unauthorized', request.url));
+      console.warn(`[middleware] RBAC blocked: role="${role}" tried to access "${pathname}"`);
+      const res = NextResponse.redirect(new URL('/unauthorized', request.url));
+      supabaseResponse.cookies.getAll().forEach(cookie => {
+        res.cookies.set(cookie.name, cookie.value, cookie);
+      });
+      return res;
     }
   }
 
-  // ── Forward user identity header to downstream API handlers ───────────────
+  // Forward user identity header to downstream API handlers
   if (user) {
     supabaseResponse.headers.set('x-user-id', user.id);
     supabaseResponse.headers.set('x-user-email', user.email ?? '');
@@ -127,13 +108,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * - svg, png, jpg, jpeg, gif, webp images
-     */
     '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 };
