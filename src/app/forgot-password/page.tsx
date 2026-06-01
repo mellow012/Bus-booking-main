@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
+import { createClient } from '@/utils/supabase/client'; // 💡 Import client-side Supabase
 import { 
   EnvelopeIcon, 
   ArrowLeftIcon,
@@ -11,14 +12,6 @@ import {
   CheckCircleIcon,
   InformationCircleIcon
 } from '@heroicons/react/24/outline';
-
-const getCookie = (name: string): string | null => {
-  if (typeof document === 'undefined') return null;
-  const value = `; ${document.cookie}`;
-  const parts = value.split(`; ${name}=`);
-  if (parts.length === 2) return parts.pop()?.split(';').shift() || null;
-  return null;
-};
 
 // Types
 interface FormErrors {
@@ -37,26 +30,8 @@ const validateEmail = (email: string): string => {
   return '';
 };
 
-const getErrorMessage = (error: unknown): string => {
-  if (error && typeof error === 'object' && 'code' in error) {
-    const errObj = error as { code: string };
-    switch (errObj.code) {
-      case 'user-not-found':
-        // Don't reveal if user exists for security
-        return 'If an account exists with this email, a password reset link has been sent.';
-      case 'invalid-email':
-        return 'Please enter a valid email address.';
-      case 'too-many-requests':
-        return 'Too many requests. Please try again later.';
-      case 'network-error':
-        return 'Network error. Please check your connection and try again.';
-      default:
-        return 'Unable to send reset email. Please try again or contact support.';
-    }
-  }
-  if (error instanceof Error) return error.message;
-  return (error as any)?.message || 'An unexpected error occurred. Please try again.';
-};
+// Initialize client instance once outside the react render window cycle
+const supabase = createClient();
 
 export default function ForgotPassword() {
   const router = useRouter();
@@ -100,34 +75,27 @@ export default function ForgotPassword() {
     setError({});
 
     try {
-      const response = await fetch('/api/auth/forgot-password', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-csrf-token': getCookie('__csrf_token') || ''
-        },
-        body: JSON.stringify({
-          email,
-          redirectUrl: `${window.location.origin}/reset-password`,
-        }),
+      // 💡 FIXED: Directly invoke Supabase client SDK on the client side.
+      // This automatically triggers the "Send Email Hook" configured in your Supabase dashboard.
+      const { error: apiError } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
+        // 💡 FIXED: Direct the verification link to pass through your auth/callback route.
+        // This exchanges the recovery code for valid session cookies before mounting the reset-password page.
+        redirectTo: `${window.location.origin}/auth/callback?next=/reset-password`,
       });
-
-      const data = await response.json();
       
-      if (!response.ok) {
-        // For security, we show success message even if user doesn't exist
-        if (data.error?.code === 'NOT_FOUND' || data.code === 'user-not-found') {
-          setSuccess(true);
+      if (apiError) {
+        // Handle specific rate limits safely 
+        if (apiError.status === 429 || apiError.message.includes('rate limit')) {
+          setError({ general: 'Too many requests. Please wait a few minutes before trying again.' });
         } else {
-          const apiMessage = data.error?.message || data.message || getErrorMessage(data);
-          setError({ general: apiMessage });
+          setError({ general: apiError.message });
         }
       } else {
         setSuccess(true);
       }
     } catch (err: unknown) {
       console.error('Password reset error:', err);
-      setError({ general: (err as any).message || 'Unable to send reset email. Please try again.' });
+      setError({ general: 'An unexpected connection failure occurred. Please try again.' });
     } finally {
       setIsSubmitting(false);
     }
