@@ -56,7 +56,7 @@ export async function checkAndRollSchedules(force = false) {
     today.setHours(0, 0, 0, 0);
 
     // Calculate target range: Today until June 30, 2024 (Month 5 is June)
-    const targetEndDate = new Date(2024, 5, 30);
+    const targetEndDate = new Date(2026, 6, 30);
     const diffTime = Math.max(0, targetEndDate.getTime() - today.getTime());
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) || 1;
 
