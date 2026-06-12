@@ -7,7 +7,7 @@ import { useAuth } from '@/contexts/AuthContext';
 
 export const MobileBottomNav = () => {
   const router = useRouter();
-  const pathname = usePathname();
+  const pathname = usePathname() || '';
   const { userProfile } = useAuth();
 
   const needsProfileAttention = Boolean(

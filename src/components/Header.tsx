@@ -35,7 +35,7 @@ const UserSkeleton = () => (
 const Header: React.FC = () => {
   const { user, userProfile, signOut, loading } = useAuth();
   const router   = useRouter();
-  const pathname = usePathname();
+  const pathname = usePathname() || '';
   const t        = useTranslations('nav');
 
   const isAuthPage = pathname?.includes('/login') || pathname?.includes('/register') || pathname?.includes('/forgot-password');

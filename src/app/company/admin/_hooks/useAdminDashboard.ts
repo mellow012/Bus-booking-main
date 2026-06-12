@@ -121,7 +121,7 @@ export function useAdminDashboard() {
     if (!userProfile) return;
     if (userProfile.role !== 'company_admin') { showAlert('error', 'Access denied.'); router.push('/'); return; }
     if (!userProfile.companyId) { showAlert('info', 'Please finish setting up your company.'); router.push('/company/setup'); return; }
-    const urlCompanyId = searchParams.get('companyId');
+    const urlCompanyId = searchParams?.get('companyId');
     if (urlCompanyId && urlCompanyId !== userProfile.companyId) {
       showAlert('error', 'Restricted access: URL company mismatch.');
       router.push(`/company/admin?companyId=${userProfile.companyId}`);

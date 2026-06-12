@@ -53,9 +53,9 @@ function CompanySetupContent() {
     if (!idToFetch && continueUrl) {
       try {
         const decodedUrl = new URL(continueUrl);
-        const opId = decodedUrl.searchParams.get('operatorId');
-        const compId = decodedUrl.searchParams.get('companyId');
-        const condId = decodedUrl.searchParams.get('conductorId');
+        const opId = decodedUrl.searchParams?.get('operatorId');
+        const compId = decodedUrl.searchParams?.get('companyId');
+        const condId = decodedUrl.searchParams?.get('conductorId');
         idToFetch = condId || opId || compId || null;
         detectedType = condId ? 'conductor' : opId ? 'operator' : 'company';
       } catch (e) {

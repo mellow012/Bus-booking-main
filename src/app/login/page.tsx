@@ -100,7 +100,7 @@ const useLoginAttempts = () => {
 export default function Login() {
   const router       = useRouter();
   const searchParams = useSearchParams();
-  const isVerified   = searchParams.get('verified') === 'true';
+  const isVerified   = searchParams?.get('verified') === 'true';
   // FIX: use AuthContext.signIn so the __session cookie is created properly.
   // Previously the page called Firebase directly and skipped session creation,
   // which caused middleware to reject every subsequent request.
@@ -166,7 +166,7 @@ export default function Login() {
       resetAttempts();
       
       // Check for redirectTo parameter to ensure user returns to their previous context (e.g., booking or search)
-      const dest = searchParams.get('redirectTo');
+      const dest = searchParams?.get('redirectTo');
       if (dest) {
         router.push(dest);
       }

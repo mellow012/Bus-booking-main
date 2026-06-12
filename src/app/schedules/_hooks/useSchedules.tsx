@@ -23,17 +23,17 @@ export default function useSchedules(initialSchedules: any[], initialCompanies: 
   const [companies, setCompanies] = useState<any[]>(initialCompanies || []);
 
   // Search/Filter state
-  const [searchFrom, setSearchFrom] = useState(searchParams.get('from') || "");
-  const [searchTo, setSearchTo] = useState(searchParams.get('to') || "");
-  const [searchDate, setSearchDate] = useState(searchParams.get('date') || "");
-  const [passengers, setPassengers] = useState(parseInt(searchParams.get('passengers') || "1"));
+  const [searchFrom, setSearchFrom] = useState(searchParams?.get('from') || "");
+  const [searchTo, setSearchTo] = useState(searchParams?.get('to') || "");
+  const [searchDate, setSearchDate] = useState(searchParams?.get('date') || "");
+  const [passengers, setPassengers] = useState(parseInt(searchParams?.get('passengers') || "1"));
 
   const [activeFilter, setActiveFilter] = useState("all");
   const [sortBy, setSortBy] = useState<'price' | 'time' | 'company'>('price');
 
   const [selectedCompany, setSelectedCompany] = useState("");
   const [selectedTimeSlot, setSelectedTimeSlot] = useState("");
-  const [selectedTerminal, setSelectedTerminal] = useState(searchParams.get('terminal') || "");
+  const [selectedTerminal, setSelectedTerminal] = useState(searchParams?.get('terminal') || "");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [showFilters, setShowFilters] = useState(false);
 

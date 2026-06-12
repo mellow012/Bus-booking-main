@@ -15,7 +15,7 @@ export default function VerifyEmailPage() {
   const [status,  setStatus]  = useState<'waiting' | 'loading' | 'success' | 'error'>('loading');
   const [message, setMessage] = useState('');
 
-  const mode = searchParams.get('mode');
+  const mode = searchParams?.get('mode');
 
   const { sendVerificationEmail } = useEmailVerification();
   const [resending,     setResending]     = useState(false);

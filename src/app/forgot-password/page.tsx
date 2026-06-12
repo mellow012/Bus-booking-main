@@ -36,7 +36,7 @@ const supabase = createClient();
 export default function ForgotPassword() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const emailParam = searchParams.get('email');
+  const emailParam = searchParams?.get('email');
 
   // Form state
   const [email, setEmail] = useState(emailParam || '');

@@ -64,7 +64,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isInitialized, setIsInitialized] = useState(false);
 
   const router = useRouter();
-  const pathname = usePathname();
+  const pathname = usePathname() || '';
 
   // Redirect routing rules strictly driven by userProfile configuration parameters
   const redirectToDashboard = useCallback((profile: UserProfile) => {
