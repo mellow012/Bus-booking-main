@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth-utils';
 import prisma from '@/lib/prisma';
+import { logger } from '@/lib/logger';
 
 /**
  * GET /api/bookings
@@ -20,9 +21,18 @@ export async function GET(req: NextRequest) {
     const status = searchParams.get('status')?.toLowerCase(); // 'pending', 'confirmed', 'cancelled'
     const sortBy = searchParams.get('sortBy') ?? 'date'; // 'date', 'price'
 
-    // ── Fetch user profile ────────────────────────────────────────────────────
-    const userData = await prisma.user.findUnique({ where: { uid: user.id } });
+    // ── Fetch user profile (support both DB `id` and external `uid`) ──────────
+    logger.logSuccess('api', `GET /api/bookings current user: ${user?.id ?? 'unknown'}`, { metadata: { user } });
+    const userData = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { id: user.id },
+          { uid: user.id },
+        ],
+      },
+    });
     if (!userData) {
+      await logger.logWarning('api', `User not found for id/uid: ${user.id}`, { metadata: { userId: user.id } });
       return NextResponse.json({ error: 'User profile not found in database. Please complete registration.' }, { status: 404 });
     }
 
@@ -88,7 +98,7 @@ export async function GET(req: NextRequest) {
       pages: Math.ceil(total / limit),
     });
   } catch (error) {
-    console.error('GET /api/bookings error:', error);
+    await logger.logError('api', 'GET /api/bookings error', error);
     return NextResponse.json(
       { error: 'Failed to fetch bookings' },
       { status: 500 }

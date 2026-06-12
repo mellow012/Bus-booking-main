@@ -32,7 +32,7 @@ const ProfileCompletionBanner: React.FC<{ onDismiss: () => void }> = ({ onDismis
               Complete your profile setup
             </p>
             <p className="text-xs text-amber-700 truncate">
-              Finish your account details to access booking features.
+              Please update your account details for a faster and better checkout experience.
             </p>
           </div>
         </div>

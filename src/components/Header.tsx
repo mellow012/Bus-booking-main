@@ -38,6 +38,8 @@ const Header: React.FC = () => {
   const pathname = usePathname();
   const t        = useTranslations('nav');
 
+  const isAuthPage = pathname?.includes('/login') || pathname?.includes('/register') || pathname?.includes('/forgot-password');
+
   const [isMenuOpen,     setIsMenuOpen]     = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isScrolled,     setIsScrolled]     = useState(false);
@@ -67,7 +69,7 @@ const Header: React.FC = () => {
       .then(data => {
         if (data.success && data.data.length > 0) setHasPromotions(true);
       })
-      .catch(err => console.error('Error checking promotions:', err));
+      .catch(() => {});
 
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
@@ -98,7 +100,7 @@ const Header: React.FC = () => {
 
   const handleLogout = async () => {
     try { await signOut(); setIsUserMenuOpen(false); router.push('/'); }
-    catch (err) { console.error('Sign-out error:', err); }
+    catch (_) { /* ignore sign-out errors in UI */ }
   };
 
   const isActivePage = (href: string) => {
@@ -134,30 +136,34 @@ const Header: React.FC = () => {
     userProfile?.id ?? userProfile?.uid ?? user?.id;
 
   useEffect(() => {
-    if (!user || process.env.NODE_ENV !== 'development') return;
-    console.log('[Header] Role info:', { role: userProfile?.role, normalizedRole, isConductor, isOperator, isCompanyAdmin, isSuperAdmin, isCustomer, displayName });
+    // Development-only debug removed to avoid leaking role info to console
   }, [user, userProfile?.role, normalizedRole, isConductor, isOperator, isCompanyAdmin, isSuperAdmin, isCustomer, displayName]);
 
   if (isAdminPage) return null;
 
   return (
     <header className={`fixed top-0 left-0 right-0 z-30 transition-all duration-300 ${
-      isScrolled ? 'bg-white/95 backdrop-blur-lg shadow-lg border-b border-gray-200/50' : 'bg-white/80 backdrop-blur-sm'
+      isScrolled ? 'bg-white/95 backdrop-blur-lg shadow-lg border-b border-gray-200/50' : 'bg-white/90 backdrop-blur-sm'
     }`}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-6">
-        <div className="flex justify-between items-center py-4">
+        <div className={`flex justify-between items-center py-0 ${
+          isAuthPage 
+            ? 'min-h-[64px] sm:min-h-[80px] md:min-h-[100px] lg:min-h-[120px]' 
+            : 'min-h-[48px] sm:min-h-[56px] md:min-h-[64px] lg:min-h-[80px]'
+        }`}>
 
           {/* Logo */}
           <Link href="/" className="flex items-center space-x-2.5 group">
             <div className="relative shrink-0">
-              <div className="w-10 h-10 sm:w-14 sm:h-14 md:w-16 md:h-16 lg:w-20 lg:h-20 xl:w-24 xl:h-24 flex items-center justify-center transition-all duration-300 group-hover:scale-105">
-                <Image
+              <div className={`${
+                isAuthPage 
+                  ? 'h-16 sm:h-24 md:h-28 lg:h-32' // Aggressive logo scaling for auth pages
+                  : 'h-12 sm:h-14 md:h-16 lg:h-20' // Standard size
+              } flex items-center justify-center transition-all duration-300 group-hover:scale-105`}>
+                <img
                   src="/tibhukebus_logo_transparent.png"
                   alt="TibhukeBus Logo"
-                  width={192}
-                  height={192}
-                  className="object-contain w-auto h-full"
-                  priority
+                  className="object-contain w-auto h-full drop-shadow-sm contrast-[1.1] brightness-[1.02]"
                 />
               </div>
             </div>
@@ -266,7 +272,7 @@ const Header: React.FC = () => {
       {isMenuOpen && (
         <>
           <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 lg:hidden" onClick={() => setIsMenuOpen(false)} />
-          <div className="lg:hidden fixed inset-x-4 top-20 bg-white/95 glass rounded-3xl shadow-2xl z-50 max-h-[calc(100vh-120px)] overflow-y-auto animate-in fade-in zoom-in-95 duration-300">
+          <div className="lg:hidden fixed inset-x-4 top-16 bg-white/95 glass rounded-3xl shadow-2xl z-50 max-h-[calc(100vh-120px)] overflow-y-auto animate-in fade-in zoom-in-95 duration-300">
             <div className="p-6 space-y-6">
               <nav className="space-y-1">
                 {navigationItems.map(item => {

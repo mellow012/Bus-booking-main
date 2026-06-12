@@ -1,5 +1,8 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextRequest, NextResponse } from 'next/server';
+import { COOKIE_NAME, createSessionCookieValue, parseSessionCookieValue } from '@/lib/session';
+import { normalizeRole } from '@/lib/roles';
+import { logger } from '@/lib/logger';
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
@@ -28,11 +31,44 @@ export async function updateSession(request: NextRequest) {
   // Refresh session if expired — do NOT add any logic between createServerClient
   // and supabase.auth.getUser(). A simple mistake could make it very hard to debug
   // session issues.
+  // Fast-path: check signed session meta cookie to avoid calling Supabase on every request
+  try {
+    const cookie = request.cookies.get(COOKIE_NAME)?.value;
+    if (cookie) {
+      const meta = await parseSessionCookieValue(cookie);
+      if (meta && meta.userId) {
+        // Use the signed cookie payload as the fast-path identity for Edge runtime.
+        // Normalize role variants (super_admin vs superadmin etc) to canonical values
+        const normRole = normalizeRole(meta.role);
+        return { supabaseResponse, user: { id: meta.userId, email: undefined, user_metadata: { role: normRole } }, role: normRole ?? null };
+      }
+    }
+  } catch (err) {
+    await logger.logError('auth', 'Failed to parse session cookie', err);
+  }
+
+  // Fallback: ask Supabase for the auth user and hydrate session cookie
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const role = user?.user_metadata?.role;
+  if (!user) return { supabaseResponse, user: null, role: null };
 
-  return { supabaseResponse, user, role };
+  // Resolve role from Supabase metadata. Do not call Prisma here (Edge runtime).
+    try {
+      const rawRole = (user.user_metadata as any)?.role ?? null;
+      const role = normalizeRole(rawRole);
+      const session_version: number | null = null;
+      try {
+        const cookieValue = await createSessionCookieValue({ userId: String(user.id as any), role, session_version });
+        supabaseResponse.cookies.set(COOKIE_NAME, cookieValue, { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production', path: '/' });
+      } catch (err) {
+        await logger.logError('auth', 'Failed to set session cookie', err);
+      }
+
+      return { supabaseResponse, user, role };
+    } catch (err) {
+      await logger.logError('auth', 'Failed to resolve DB user for session', err);
+      return { supabaseResponse, user, role: normalizeRole((user.user_metadata as any)?.role ?? null) };
+    }
 }

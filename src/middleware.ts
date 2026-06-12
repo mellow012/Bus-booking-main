@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { updateSession } from '@/utils/supabase/middleware';
+import { logger } from '@/lib/logger';
 
 // Routes that require the user to be logged in
 const PROTECTED_ROUTES = [
@@ -50,7 +51,7 @@ export async function middleware(request: NextRequest) {
 
   // CSRF guard for state-changing requests
   if (!isCsrfSafe(request)) {
-    console.warn(`[middleware] CSRF violation blocked: ${request.method} ${pathname}`);
+    logger.logWarning('security', `CSRF violation blocked: ${request.method} ${pathname}`);
     return new NextResponse('Forbidden', { status: 403 });
   }
 
@@ -87,7 +88,7 @@ export async function middleware(request: NextRequest) {
   if (isAuth && role) {
     const matched = ROLE_ROUTE_MAP.find(entry => pathname.startsWith(entry.prefix));
     if (matched && !matched.allowed.includes(role as AppRole)) {
-      console.warn(`[middleware] RBAC blocked: role="${role}" tried to access "${pathname}"`);
+      logger.logWarning('security', `RBAC blocked: role="${role}" tried to access "${pathname}"`, { metadata: { role, pathname } });
       const res = NextResponse.redirect(new URL('/unauthorized', request.url));
       supabaseResponse.cookies.getAll().forEach(cookie => {
         res.cookies.set(cookie.name, cookie.value, cookie);
@@ -98,8 +99,9 @@ export async function middleware(request: NextRequest) {
 
   // Forward user identity header to downstream API handlers
   if (user) {
-    supabaseResponse.headers.set('x-user-id', user.id);
-    supabaseResponse.headers.set('x-user-email', user.email ?? '');
+    const u: any = user as any;
+    supabaseResponse.headers.set('x-user-id', u.id);
+    supabaseResponse.headers.set('x-user-email', u.email ?? '');
     if (role) supabaseResponse.headers.set('x-user-role', role);
   }
 

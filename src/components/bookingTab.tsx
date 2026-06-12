@@ -349,7 +349,7 @@ const BookingDetailModal: FC<{
 
 const BookingsTab: FC<BookingsTabProps> = ({ schedules, routes, buses, companyId, user, userProfile, isAdmin: isAdminProp }) => {
   const { success, error } = useAppToast();
-  const isAdmin = isAdminProp ?? (userProfile?.role === "company_admin" || userProfile?.role === "super_admin" || userProfile?.role === "admin");
+  const isAdmin = isAdminProp ?? (userProfile?.role === "company_admin" || userProfile?.role === "superadmin" || userProfile?.role === "admin");
 
   const [bookings,        setBookings]        = useState<Booking[]>([]);
   const [loadingBookings, setLoadingBookings] = useState(true);

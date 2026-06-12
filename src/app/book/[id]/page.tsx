@@ -1,9 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
-import { useParams, useSearchParams, useRouter } from "next/navigation";
-import { useAuth } from "@/contexts/AuthContext";
-import { Schedule, Bus, Route, Company } from "@/types";
+import { useRef } from "react";
 import SeatSelection from "@/components/SeatSelection";
 import AlertMessage from '@/components/AlertMessage';
 import BackButton from '@/components/BackButton';
@@ -19,6 +16,11 @@ import {
   TicketPercent, Loader2,
 } from "lucide-react";
 
+import InlinePassengerForm, { PassengerFormState } from "./InlinePassengerForm";
+import useBookBus from "./useBookBus";
+import BookingConfirmModal from "./BookingConfirmModal";
+import { formatTime, formatDate, formatDuration } from "./utils";
+
 // ================================
 // CONSTANTS
 // ================================
@@ -27,675 +29,36 @@ import {
 // ================================
 // INTERFACES
 // ================================
-interface NormalisedStop {
-  id: string;
-  name: string;
-  distanceFromOrigin: number;
-  order: number;
-}
+// Helpers and types extracted to ./utils and InlinePassengerForm
 
-interface PassengerFormState {
-  name: string;
-  ageInput: string;
-  age: number;
-  gender: "male" | "female" | "other";
-  seatNumber: string;
-  ticketType: "adult" | "child" | "senior";
-}
-
-// ================================
-// HELPERS
-// ================================
-
-function buildNormalisedStops(route: Route): NormalisedStop[] {
-  const stops: NormalisedStop[] = [];
-  stops.push({ id: "__origin__", name: route.origin, distanceFromOrigin: 0, order: -1 });
-
-  const intermediate = (route.stops ?? [])
-    .slice()
-    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-
-  intermediate.forEach((s, i) => {
-    stops.push({
-      id: s.id, name: s.name,
-      distanceFromOrigin: s.distanceFromOrigin > 0
-        ? s.distanceFromOrigin
-        : Math.round(((i + 1) / (intermediate.length + 1)) * (route.distance || 100)),
-      order: i,
-    });
-  });
-
-  stops.push({
-    id: "__destination__", name: route.destination,
-    distanceFromOrigin: route.distance || 100, order: intermediate.length,
-  });
-  return stops;
-}
-
-// ✅ New — stop-index based, matches server logic exactly
-function calcSegmentPrice(
-  originDist: number, destDist: number,
-  route: Route, schedulePrice: number, isFullTrip: boolean,
-  stops: NormalisedStop[], originId: string, destId: string,
-  segmentPrices?: Record<string, number>
-): number {
-  if (isFullTrip) return schedulePrice;
-
-  const key = `${originId}:${destId}`;
-  const price = segmentPrices?.[key];
-  if (typeof price === 'number' && price > 0) return price;
-
-  const oi = stops.findIndex(s => s.id === originId);
-  const di = stops.findIndex(s => s.id === destId);
-  if (oi !== -1 && di !== -1 && di > oi && stops.length > 1) {
-    const raw = ((di - oi) / (stops.length - 1)) * schedulePrice;
-    return Math.max(50, Math.round(raw / 50) * 50);
-  }
-
-  const segKm = Math.max(0, destDist - originDist);
-  const totalKm = route.distance || 0;
-  if (totalKm > 0 && segKm > 0)
-    return Math.max(50, Math.round(((segKm / totalKm) * schedulePrice) / 50) * 50);
-
-  return schedulePrice;
-}
-
-// ================================
-// INLINE PASSENGER FORM
-// ================================
-interface InlinePassengerFormProps {
-  passengers: number;
-  formState: PassengerFormState[];
-  onChange: (index: number, field: keyof PassengerFormState, value: string) => void;
-  onAgeBlur: (index: number) => void;
-  onSubmit: () => void;
-  onBack: () => void;
-  loading: boolean;
-  error: string;
-  bookingForSelf: boolean;
-  onToggleSelf: (val: boolean) => void;
-}
-
-const InlinePassengerForm: React.FC<InlinePassengerFormProps> = ({
-  passengers, formState, onChange, onAgeBlur, onSubmit, onBack, loading, error,
-  bookingForSelf, onToggleSelf,
-}) => (
-  <div className="space-y-5 min-w-0">
-    <div className="flex items-center gap-2 mb-4 p-3 bg-blue-50/50 rounded-xl border border-blue-100">
-      <input
-        type="checkbox"
-        id="bookingForSelf"
-        checked={bookingForSelf}
-        onChange={(e) => onToggleSelf(e.target.checked)}
-        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
-      />
-      <Label htmlFor="bookingForSelf" className="text-sm font-semibold text-blue-800 cursor-pointer">
-        I am travelling (Auto-fill my details)
-      </Label>
-    </div>
-    {formState.map((p, i) => (
-      <div key={i} className="p-4 border border-gray-200 rounded-xl bg-white space-y-4 min-w-0">
-        <div className="flex items-center gap-2 mb-1">
-          <span className="w-7 h-7 rounded-full bg-blue-600 text-white text-xs font-bold flex items-center justify-center shrink-0">
-            {i + 1}
-          </span>
-          <span className="font-semibold text-gray-800 text-sm">
-            Passenger {i + 1} — Seat {p.seatNumber}
-          </span>
-        </div>
-        <div>
-          <Label htmlFor={`name-${i}`} className="mb-1 block text-sm">
-            Full Name <span className="text-red-500">*</span>
-          </Label>
-          <Input
-            id={`name-${i}`} value={p.name}
-            onChange={e => onChange(i, "name", e.target.value)}
-            placeholder="e.g. Chisomo Banda" className="h-10 min-w-0" required
-          />
-        </div>
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <Label htmlFor={`age-${i}`} className="mb-1 block text-sm">
-              Age <span className="text-red-500">*</span>
-            </Label>
-            <Input
-              id={`age-${i}`} type="text" inputMode="numeric" pattern="[0-9]*"
-              value={p.ageInput}
-              onChange={e => onChange(i, "ageInput", e.target.value.replace(/\D/g, ""))}
-              onBlur={() => onAgeBlur(i)}
-              placeholder="e.g. 28" className="h-10 min-w-0" required
-            />
-          </div>
-          <div>
-            <Label htmlFor={`gender-${i}`} className="mb-1 block text-sm">
-              Gender <span className="text-red-500">*</span>
-            </Label>
-            <select
-              id={`gender-${i}`} value={p.gender}
-              onChange={e => onChange(i, "gender", e.target.value)}
-              className="w-full h-10 px-3 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 bg-white min-w-0"
-              required
-            >
-              <option value="male">Male</option>
-              <option value="female">Female</option>
-              <option value="other">Other</option>
-            </select>
-          </div>
-        </div>
-        <div>
-          <Label htmlFor={`ticket-${i}`} className="mb-1 block text-sm">Ticket Type</Label>
-          <select
-            id={`ticket-${i}`} value={p.ticketType}
-            onChange={e => onChange(i, "ticketType", e.target.value)}
-            className="w-full h-10 px-3 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 bg-white"
-          >
-            <option value="adult">Adult</option>
-            <option value="child">Child</option>
-            <option value="senior">Senior</option>
-          </select>
-        </div>
-      </div>
-    ))}
-    {error && (
-      <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
-        <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />{error}
-      </div>
-    )}
-    <div className="flex flex-col-reverse sm:flex-row gap-3 pt-2">
-      <BackButton
-        type="button"
-        onClick={onBack}
-        className="flex items-center gap-2 sm:flex-1"
-      />
-      <Button onClick={onSubmit} disabled={loading} className="bg-blue-600 hover:bg-blue-700 text-white sm:flex-1">
-        {loading
-          ? <span className="flex items-center gap-2"><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Saving…</span>
-          : "Continue to Review →"
-        }
-      </Button>
-    </div>
-  </div>
-);
+// Inline passenger form extracted to ./InlinePassengerForm
 
 // ================================
 // MAIN COMPONENT
 // ================================
 export default function BookBus() {
-  const { id: scheduleId } = useParams() as { id: string };
-  const searchParams = useSearchParams();
-  const router = useRouter();
-  const { user, userProfile } = useAuth();
+  const ref = useRef<HTMLDivElement | null>(null);
 
-  const passengers = parseInt(searchParams.get("passengers") || "1", 10);
-
-  const [schedule,   setSchedule]   = useState<Schedule | null>(null);
-  const [bus,        setBus]        = useState<Bus | null>(null);
-  const [route,      setRoute]      = useState<Route | null>(null);
-  const [company,    setCompany]    = useState<Company | null>(null);
-
-  const [selectedSeats,    setSelectedSeats]    = useState<string[]>([]);
-  const [passengerForms,   setPassengerForms]   = useState<PassengerFormState[]>([]);
-  const [currentStep,      setCurrentStep]      = useState<"seats" | "passengers" | "confirm">("seats");
-  const [reservationId,    setReservationId]    = useState<string | null>(null);
-
-  // PAY-2: Server-confirmed booking values — never trust client-calculated price
-  const [confirmedBookingId,     setConfirmedBookingId]     = useState<string | null>(null);
-  const [serverTotalAmount,      setServerTotalAmount]      = useState<number | null>(null);
-  const [serverCurrency,         setServerCurrency]         = useState<string>("MWK");
-
-  const [normalisedStops,      setNormalisedStops]      = useState<NormalisedStop[]>([]);
-  const [originStopId,         setOriginStopId]         = useState<string>("");
-  const [destinationStopId,    setDestinationStopId]    = useState<string>("");
-  // displayPrice is for UI only — the authoritative amount comes from the server
-  const [displayPrice,         setDisplayPrice]         = useState<number>(0);
-
-  const [loading,          setLoading]          = useState(true);
-  const [bookingLoading,   setBookingLoading]   = useState(false);
-  const [error,            setError]            = useState("");
-  const [passengerError,   setPassengerError]   = useState("");
-  const [success,          setSuccess]          = useState("");
-  const [confirmModalOpen, setConfirmModalOpen] = useState(false);
-  const [bookingForSelf,   setBookingForSelf]   = useState(true);
-
-  // FIX UX-1: replaces window.confirm() for duplicate name check
-  const [dupNameModalOpen, setDupNameModalOpen] = useState(false);
-  const [pendingPassengerSubmit, setPendingPassengerSubmit] = useState(false);
-  const [promoCode, setPromoCode] = useState("");
-  const [appliedPromo, setAppliedPromo] = useState<any>(null);
-  const [isValidatingPromo, setIsValidatingPromo] = useState(false);
-
-  // ── Helpers ────────────────────────────────────────────────────────────────
-
-  const formatTime = (timestamp: any) => {
-    if (!timestamp) return "N/A";
-    try {
-      const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
-      return date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
-    } catch { return "N/A"; }
-  };
-
-  const formatDate = (timestamp: any) => {
-    if (!timestamp) return "N/A";
-    try {
-      const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
-      return date.toLocaleDateString("en-GB", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
-    } catch { return "N/A"; }
-  };
-
-  const formatDuration = (minutes: number) => {
-    if (!minutes || minutes < 0) return "N/A";
-    const h = Math.floor(minutes / 60); const m = minutes % 60;
-    return h > 0 ? `${h}h ${m}m` : `${m}m`;
-  };
-
-  const stopName = (stopId: string) =>
-    normalisedStops.find(n => n.id === stopId)?.name ?? stopId;
-
-  // ── Seat reservation ───────────────────────────────────────────────────────
-
-  const holdSeats = useCallback(async (seats: string[]) => {
-    if (!schedule || !user) throw new Error("Missing schedule or user information");
-    
-    try {
-      const response = await fetch("/api/bookings/reserve-seats", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          scheduleId: schedule.id,
-          seatNumbers: seats,
-        }),
-      });
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.message || result.error || "Failed to reserve seats");
-      }
-
-      setReservationId(result.reservationId);
-    } catch (error: any) {
-      throw new Error(error.message || "Failed to reserve seats");
-    }
-  }, [schedule, user]);
-
-  const releaseSeats = useCallback(async () => {
-    if (!reservationId || !user) return;
-    try {
-      await fetch(`/api/bookings/reserve-seats/${reservationId}/release`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
-      
-      setReservationId(null);
-    } catch (e) { 
-      console.error("Failed to release seats:", e); 
-    }
-  }, [reservationId, user]);
-
-  // ── Data fetching ──────────────────────────────────────────────────────────
-
-  const fetchBookingData = async () => {
-    if (!scheduleId || typeof scheduleId !== "string") {
-      setError("Invalid schedule ID"); setLoading(false); return;
-    }
-    setLoading(true); setError("");
-    try {
-      const response = await fetch(`/api/bookings/details/${scheduleId}`);
-      
-      if (!response.ok) {
-        const result = await response.json();
-        throw new Error(result.error || "Failed to load booking information");
-      }
-
-      const { schedule: scheduleData, bus: busData, route: routeData, company: companyData } = await response.json();
-
-      if (!scheduleData || !busData || !routeData || !companyData) {
-        throw new Error("Incomplete booking information");
-      }
-
-      if ((scheduleData.availableSeats || 0) < passengers) {
-        throw new Error(`Not enough seats. Only ${scheduleData.availableSeats || 0} available.`);
-      }
-
-      // Transform API response (already has correct field names)
-      const schedule = {
-        id: scheduleData.id,
-        departureDateTime: new Date(scheduleData.departureDateTime),
-        arrivalDateTime: new Date(scheduleData.arrivalDateTime),
-        availableSeats: scheduleData.availableSeats,
-        bookedSeats: scheduleData.bookedSeats,
-        price: scheduleData.price,
-        baseFare: scheduleData.baseFare,
-        segmentPrices: scheduleData.segmentPrices,
-        departureLocation: scheduleData.departureLocation,
-        arrivalLocation: scheduleData.arrivalLocation,
-        busId: busData.id,
-        routeId: routeData.id,
-        companyId: companyData.id,
-      } as unknown as Schedule;
-
-      setSchedule(schedule);
-      setBus(busData as Bus);
-      setRoute(routeData as Route);
-      setCompany(companyData as Company);
-    } catch (e: any) {
-      setError(e.message || "Error loading booking information");
-    } finally { 
-      setLoading(false); 
-    }
-  };
-
-  // ── Stop / display price effects ───────────────────────────────────────────
-
-  useEffect(() => {
-    if (!route || !schedule) return;
-    let stops = buildNormalisedStops(route);
-
-    // SMART FILTER: Only show stops that haven't been passed
-    const departed = (schedule as any).departedStops || [];
-    const currentId = (schedule as any).currentStopId;
-
-    // Filter out any stop that is in the departed list
-    if (departed.length > 0) {
-      stops = stops.filter(s => !departed.includes(s.id));
-    }
-    
-    // If bus is AT a stop (currentStopId), we show that stop and everything after it
-    if (currentId) {
-      const idx = stops.findIndex(s => s.id === currentId);
-      if (idx !== -1) {
-        stops = stops.slice(idx);
-      }
-    }
-
-    setNormalisedStops(stops);
-    if (stops.length > 0) {
-      setOriginStopId(stops[0].id);
-      if (stops.length > 1) {
-        setDestinationStopId(stops[stops.length - 1].id);
-      } else {
-        setDestinationStopId("");
-      }
-    }
-  }, [route, schedule]);
-
-  useEffect(() => {
-    if (!route || !normalisedStops.length || !originStopId || !destinationStopId) return;
-    const originStop = normalisedStops.find(s => s.id === originStopId);
-    const destStop   = normalisedStops.find(s => s.id === destinationStopId);
-    if (!originStop || !destStop || originStop.distanceFromOrigin >= destStop.distanceFromOrigin) {
-      setDisplayPrice(0); return;
-    }
-    const isFullTrip = originStop.id === "__origin__" && destStop.id === "__destination__";
-    const segmentPrices: Record<string, number> = (schedule as any)?.segmentPrices ?? {};
-setDisplayPrice(calcSegmentPrice(
-  originStop.distanceFromOrigin, destStop.distanceFromOrigin,
-  route, schedule?.price ?? 0, isFullTrip,
-  normalisedStops, originStopId, destinationStopId, segmentPrices
-));
-  }, [originStopId, destinationStopId, normalisedStops, route, schedule]);
-
-  // ── Passenger form helpers ─────────────────────────────────────────────────
-
-  const handlePassengerFieldChange = (
-    index: number, field: keyof PassengerFormState, value: string
-  ) => {
-    setPassengerForms(prev => prev.map((p, i) => i !== index ? p : { ...p, [field]: value }));
-  };
-
-  const handleAgeBlur = (index: number) => {
-    setPassengerForms(prev => prev.map((p, i) => {
-      if (i !== index) return p;
-      const parsed = parseInt(p.ageInput, 10);
-      const clamped = isNaN(parsed) ? 1 : Math.min(120, Math.max(1, parsed));
-      return { ...p, age: clamped, ageInput: String(clamped) };
-    }));
-  };
-
-  const validatePromoCode = async () => {
-    if (!promoCode.trim()) return;
-    setIsValidatingPromo(true);
-    setError("");
-    try {
-      const res = await fetch('/api/promotions/validate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: promoCode, amount: displayPrice * passengers }),
-      });
-      const result = await res.json();
-      if (result.success) {
-        setAppliedPromo(result.data);
-        setSuccess(`Promo code "${result.data.code}" applied!`);
-      } else {
-        setError(result.error || 'Invalid promo code');
-        setAppliedPromo(null);
-      }
-    } catch (err) {
-      setError('Failed to validate promo code');
-    } finally {
-      setIsValidatingPromo(false);
-    }
-  };
-
-  // ── Booking flow handlers ──────────────────────────────────────────────────
-
-  const handleSeatSelection = useCallback((seats: string[]) => {
-    setError("");
-    if (seats.length !== passengers) {
-      setError(`Please select exactly ${passengers} seat${passengers > 1 ? "s" : ""}.`); return;
-    }
-    if (new Set(seats).size !== seats.length) {
-      setError("Duplicate seats selected. Please choose different seats."); return;
-    }
-    if (schedule?.bookedSeats?.some(s => seats.includes(s))) {
-      setError("One or more selected seats are already booked."); return;
-    }
-    if (!originStopId || !destinationStopId) {
-      setError("Please select boarding and alighting stops."); return;
-    }
-    holdSeats(seats)
-      .then(() => {
-        setSelectedSeats(seats);
-        setCurrentStep("passengers");
-        setPassengerForms(seats.map((seat, index) => ({
-          name: (index === 0 && bookingForSelf && userProfile) 
-            ? `${userProfile.firstName} ${userProfile.lastName}`.trim() 
-            : "",
-          ageInput: "18",
-          age: 18,
-          gender: (index === 0 && bookingForSelf && userProfile?.sex) 
-            ? (userProfile.sex.toLowerCase() as any) 
-            : ("male" as const),
-          seatNumber: seat, 
-          ticketType: "adult" as const,
-        })));
-      })
-      .catch(err => setError(err.message || "Failed to reserve seats. Please try again."));
-  }, [passengers, schedule?.bookedSeats, holdSeats, originStopId, destinationStopId, bookingForSelf, userProfile]);
-
-  const toggleBookingForSelf = (val: boolean) => {
-    setBookingForSelf(val);
-    if (passengerForms.length > 0) {
-      setPassengerForms(prev => prev.map((p, i) => {
-        if (i !== 0) return p;
-        if (val && userProfile) {
-          return {
-            ...p,
-            name: `${userProfile.firstName} ${userProfile.lastName}`.trim(),
-            ageInput: "18",
-            age: 18,
-            gender: (userProfile.sex?.toLowerCase() as any) || "male"
-          };
-        } else {
-          return { ...p, name: "", ageInput: "18", age: 18, gender: "male" };
-        }
-      }));
-    }
-  };
-
-  // Core passenger validation — returns true if valid, false if not
-  const validatePassengers = (): boolean => {
-    setPassengerError("");
-    if (passengerForms.length !== passengers) {
-      setPassengerError(`Please provide details for exactly ${passengers} passenger${passengers > 1 ? "s" : ""}.`);
-      return false;
-    }
-    const missing = passengerForms.some(p => !p.name.trim() || !p.ageInput || !p.gender || !p.seatNumber);
-    if (missing) {
-      setPassengerError("Please fill in all required fields for every passenger.");
-      return false;
-    }
-    const ageVals = passengerForms.map(p => parseInt(p.ageInput, 10));
-    if (ageVals.some(a => isNaN(a) || a < 1 || a > 120)) {
-      setPassengerError("Please enter a valid age (1–120) for each passenger.");
-      return false;
-    }
-    return true;
-  };
-
-  const proceedToConfirm = useCallback(() => {
-    // Commit numeric ages
-    setPassengerForms(prev => prev.map(p => ({
-      ...p,
-      age: Math.min(120, Math.max(1, parseInt(p.ageInput, 10) || 18)),
-    })));
-    setCurrentStep("confirm");
-    setConfirmModalOpen(true);
-  }, []);
-
-  const handlePassengerSubmit = useCallback(() => {
-    if (!validatePassengers()) return;
-    // FIX UX-1: replaced window.confirm() with Modal
-    const names = passengerForms.map(p => p.name.trim().toLowerCase());
-    const hasDuplicates = new Set(names).size !== names.length && passengers > 1;
-    if (hasDuplicates) {
-      setPendingPassengerSubmit(true);
-      setDupNameModalOpen(true);
-      return;
-    }
-    proceedToConfirm();
-  }, [passengerForms, passengers, proceedToConfirm]);
-
-  useEffect(() => {
-    // UX Fix: Whenever the booking step changes, reset scroll to top
-    // This ensures the user is focused on the new content and not lost at the bottom of the page.
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  }, [currentStep]);
-
-  // ── confirmBooking — PAY-2 fix ─────────────────────────────────────────────
-  // Previously this wrote totalAmount: calculatedPrice * passengers directly
-  // to Firestore from the client. A buyer could manipulate calculatedPrice
-  // in DevTools and pay any amount they wanted.
-  //
-  // Now we call POST /api/bookings/create which reads baseFare from Firestore
-  // server-side and returns the authoritative bookingId + totalAmount.
-  // The client displays the server's amount and never supplies a price.
-
-  const confirmBooking = async () => {
-    setBookingLoading(true);
-    setError("");
-    try {
-      if (!user?.id) throw new Error("User authentication required");
-      if (!schedule || !selectedSeats.length || !passengerForms.length)
-        throw new Error("Missing booking information");
-      if (!originStopId || !destinationStopId)
-        throw new Error("Please select boarding and alighting stops");
-
-      const response = await fetch("/api/bookings/create", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          scheduleId: schedule.id,
-          routeId:    schedule.routeId,
-          companyId:  schedule.companyId,
-          seatNumbers: selectedSeats,
-          passengerDetails: passengerForms.map(p => ({
-            firstName:  p.name.trim().split(" ")[0] || p.name.trim(),
-            lastName:   p.name.trim().split(" ").slice(1).join(" ") || "",
-            age:        Math.min(120, Math.max(1, parseInt(p.ageInput, 10) || p.age)),
-            gender:     p.gender,
-            seatNumber: p.seatNumber,
-            ticketType: p.ticketType,
-            originStopId,
-            destinationStopId,
-            originStopName:      stopName(originStopId),
-            destinationStopName: stopName(destinationStopId),
-          })),
-          promoCode: appliedPromo?.code,
-        }),
-      });
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.error || `Booking failed (${response.status})`);
-      }
-
-      // Store server-returned values for display — never calculate these client-side
-      setConfirmedBookingId(result.bookingId);
-      setServerTotalAmount(result.totalAmount);
-      setServerCurrency(result.currency ?? "MWK");
-
-      setSuccess("Booking created successfully! Redirecting to payment…");
-      setConfirmModalOpen(false);
-
-      // Redirect to payment page with the server-issued bookingId
-      // The payment page must read totalAmount from the booking document,
-      // never from a query param or local state.
-      setTimeout(() => router.push(`/bookings`), 1500);
-    } catch (e: any) {
-      console.error("Error creating booking:", e);
-      setError(`Failed to create booking: ${e.message || "Unknown error"}`);
-    } finally {
-      setBookingLoading(false);
-    }
-  };
-
-  // ── Navigation ─────────────────────────────────────────────────────────────
-
-  const goBackToSeats = () => {
-    setCurrentStep("seats"); setError(""); setPassengerError("");
-    if (selectedSeats.length > 0) {
-      releaseSeats().catch(console.error);
-      setSelectedSeats([]);
-    }
-  };
-
-  const goBackToPassengers = () => {
-    setCurrentStep("passengers"); setConfirmModalOpen(false); setError("");
-  };
-
-  // ── Effects ────────────────────────────────────────────────────────────────
-
-  useEffect(() => {
-    if (!user) { router.push("/register"); return; }
-    if (passengers < 1 || passengers > 10) {
-      setError("Invalid passenger count. Please select between 1 and 10 passengers.");
-      setTimeout(() => router.push("/schedules"), 3000);
-    }
-  }, [user, passengers, router]);
-
-  useEffect(() => {
-    if (user && scheduleId && passengers >= 1 && passengers <= 10) fetchBookingData();
-  }, [scheduleId, user]);
-
-  useEffect(() => {
-    if (error)   { const t = setTimeout(() => setError(""),   5000); return () => clearTimeout(t); }
-  }, [error]);
-  useEffect(() => {
-    if (success) { 
-      // Scroll to top to ensure the success message is in the user's direct line of sight
-      window.scrollTo({ top: 0, behavior: "smooth" });
-      const t = setTimeout(() => setSuccess(""), 5000); 
-      return () => clearTimeout(t); 
-    }
-  }, [success]);
+  const {
+    schedule, bus, route, company,
+    passengers,
+    selectedSeats, setSelectedSeats,
+    passengerForms, setPassengerForms,
+    currentStep, setCurrentStep,
+    reservationId,
+    confirmedBookingId, serverTotalAmount, serverCurrency,
+    normalisedStops, originStopId, setOriginStopId, destinationStopId, setDestinationStopId,
+    availableDestinations, handleOriginChange,
+    displayPrice,
+    loading, bookingLoading, error, setError, passengerError, success, setSuccess,
+    confirmModalOpen, setConfirmModalOpen,
+    bookingForSelf, toggleBookingForSelf,
+    dupNameModalOpen, setDupNameModalOpen, pendingPassengerSubmit, setPendingPassengerSubmit,
+    promoCode, setPromoCode, appliedPromo, setAppliedPromo, isValidatingPromo,
+    holdSeats, releaseSeats, fetchBookingData,
+    handleSeatSelection, handlePassengerFieldChange, handleAgeBlur, handlePassengerSubmit, proceedToConfirm,
+    confirmBooking, goBackToSeats, goBackToPassengers, validatePromoCode, stopName,
+  } = useBookBus();
 
   // ── Render: loading ────────────────────────────────────────────────────────
 
@@ -726,17 +89,14 @@ setDisplayPrice(calcSegmentPrice(
           <p className="text-gray-600 mb-6">{error || "Could not load booking. Please try again."}</p>
           <div className="space-y-3">
             <Button onClick={() => window.location.reload()} className="w-full">Try Again</Button>
-            <Button onClick={() => router.push("/schedules")} variant="outline" className="w-full">Back to Search</Button>
+            <Button onClick={() => (window.location.href = "/schedules")} variant="outline" className="w-full">Back to Search</Button>
           </div>
         </CardContent></Card>
       </div>
     );
   }
 
-  const availableDestinations = normalisedStops.filter(s => {
-    const origin = normalisedStops.find(n => n.id === originStopId);
-    return origin && s.distanceFromOrigin > origin.distanceFromOrigin;
-  });
+  // `availableDestinations` is provided by the hook (memoized)
 
   const boardingStopName  = originStopId      ? stopName(originStopId)      : route.origin;
   const alightingStopName = destinationStopId ? stopName(destinationStopId) : route.destination;
@@ -763,13 +123,7 @@ setDisplayPrice(calcSegmentPrice(
                   </Label>
                   <select
                     id="boardAt" value={originStopId}
-                    onChange={e => {
-                      setOriginStopId(e.target.value);
-                      const newOrigin = normalisedStops.find(s => s.id === e.target.value);
-                      const currentDest = normalisedStops.find(s => s.id === destinationStopId);
-                      if (newOrigin && currentDest && currentDest.distanceFromOrigin <= newOrigin.distanceFromOrigin)
-                        setDestinationStopId("");
-                    }}
+                    onChange={e => handleOriginChange(e.target.value)}
                     className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white text-sm"
                     required
                   >
@@ -970,135 +324,29 @@ setDisplayPrice(calcSegmentPrice(
         </Modal>
 
         {/* ── Step 3: Confirm booking modal ── */}
-        {confirmModalOpen && (
-          <Modal
-            isOpen={confirmModalOpen}
-            onClose={() => { if (!bookingLoading) setConfirmModalOpen(false); }}
-            title="Confirm Booking Details"
-          >
-            <div className="space-y-5">
-              <div className="bg-blue-50 p-3 rounded-lg">
-                <p className="text-sm text-blue-700 font-medium">
-                  Review all details before submitting. The final price will be confirmed by the server.
-                </p>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="p-3 bg-green-50 border border-green-100 rounded-lg">
-                  <p className="text-xs text-gray-500 mb-0.5">Pick-up Stop</p>
-                  <p className="font-semibold text-sm text-green-800">{stopName(originStopId)}</p>
-                </div>
-                <div className="p-3 bg-red-50 border border-red-100 rounded-lg">
-                  <p className="text-xs text-gray-500 mb-0.5">Drop-off Stop</p>
-                  <p className="font-semibold text-sm text-red-800">{stopName(destinationStopId)}</p>
-                </div>
-                <div className="p-3 bg-gray-50 rounded-lg">
-                  <p className="text-xs text-gray-500 mb-0.5">Departure</p>
-                  <p className="font-semibold text-sm">{formatDate(schedule.departureDateTime)}</p>
-                  <p className="text-sm text-blue-600 font-medium">{formatTime(schedule.departureDateTime)}</p>
-                </div>
-                <div className="p-3 bg-gray-50 rounded-lg">
-                  <p className="text-xs text-gray-500 mb-0.5">Seats</p>
-                  <p className="font-semibold text-sm">{selectedSeats.join(", ")}</p>
-                </div>
-                <div className="p-3 bg-blue-50 rounded-lg border border-blue-100 col-span-full">
-                  <p className="text-xs text-gray-500 mb-0.5">Price Summary</p>
-                  <div className="space-y-1">
-                    <div className="flex justify-between items-center text-sm">
-                      <span className="text-gray-600">Base Fare ({passengers}x)</span>
-                      <span className="font-semibold text-gray-900">MWK {(displayPrice * passengers).toLocaleString()}</span>
-                    </div>
-                    {appliedPromo && (
-                      <div className="flex justify-between items-center text-sm">
-                        <span className="text-green-600 flex items-center gap-1"><TicketPercent className="w-3 h-3" /> Promo: {appliedPromo.code}</span>
-                        <span className="font-semibold text-green-600">- MWK {appliedPromo.discount.toLocaleString()}</span>
-                      </div>
-                    )}
-                    <div className="pt-1 border-t border-blue-100 mt-1 flex justify-between items-center">
-                      <span className="font-bold text-gray-900">Total Amount</span>
-                      <span className="text-xl font-black text-blue-600">
-                        MWK {((displayPrice * passengers) - (appliedPromo?.discount || 0)).toLocaleString()}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Promo Code Input */}
-              {!appliedPromo ? (
-                <div className="space-y-2">
-                  <Label htmlFor="promoCode" className="text-xs font-black text-gray-400 uppercase tracking-widest">Have a Promo Code?</Label>
-                  <div className="flex gap-2">
-                    <Input
-                      id="promoCode"
-                      value={promoCode}
-                      onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
-                      placeholder="ENTER CODE"
-                      className="flex-1 font-black tracking-widest uppercase"
-                      disabled={isValidatingPromo}
-                    />
-                    <Button
-                      onClick={validatePromoCode}
-                      variant="outline"
-                      className="shrink-0 border-blue-200 text-blue-600 hover:bg-blue-50"
-                      disabled={isValidatingPromo || !promoCode.trim()}
-                    >
-                      {isValidatingPromo ? <Loader2 className="w-4 h-4 animate-spin" /> : "Apply"}
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <div className="p-3 bg-green-50 border border-green-100 rounded-xl flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="p-1.5 bg-green-100 text-green-600 rounded-lg">
-                      <TicketPercent className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <p className="text-xs font-black text-green-700 uppercase tracking-widest">{appliedPromo.code}</p>
-                      <p className="text-[10px] text-green-600 font-bold">{appliedPromo.title}</p>
-                    </div>
-                  </div>
-                  <button onClick={() => { setAppliedPromo(null); setPromoCode(""); }} className="text-xs font-bold text-red-500 hover:underline">Remove</button>
-                </div>
-              )}
-              <div>
-                <p className="text-sm font-semibold text-gray-700 mb-2">Passengers</p>
-                <div className="space-y-2">
-                  {passengerForms.map((p, i) => (
-                    <div key={i} className="p-3 bg-gray-50 rounded-lg flex items-center justify-between gap-3">
-                      <div>
-                        <p className="font-medium text-sm">{p.name}</p>
-                        <p className="text-xs text-gray-500">Age {p.ageInput} · {p.gender}</p>
-                      </div>
-                      <span className="text-xs font-semibold bg-blue-100 text-blue-700 px-2 py-1 rounded shrink-0">
-                        Seat {p.seatNumber}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div className="flex flex-col-reverse sm:flex-row gap-3 pt-4 border-t">
-                <Button onClick={goBackToPassengers} variant="outline" className="flex-1" disabled={bookingLoading}>
-                  Edit Details
-                </Button>
-                <Button
-                  onClick={confirmBooking}
-                  className="flex-1 bg-blue-600 text-white hover:bg-blue-700"
-                  disabled={bookingLoading}
-                >
-                  {bookingLoading
-                    ? <span className="flex items-center justify-center gap-2">
-                        <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                        <span>Creating booking…</span>
-                      </span>
-                    : <span className="flex items-center justify-center gap-2">
-                        <CreditCard className="w-4 h-4" /> Submit &amp; Pay
-                      </span>
-                  }
-                </Button>
-              </div>
-            </div>
-          </Modal>
-        )}
+        <BookingConfirmModal
+          isOpen={confirmModalOpen}
+          onClose={() => { if (!bookingLoading) setConfirmModalOpen(false); }}
+          schedule={schedule}
+          originStopId={originStopId}
+          destinationStopId={destinationStopId}
+          stopName={stopName}
+          formatDate={formatDate}
+          formatTime={formatTime}
+          selectedSeats={selectedSeats}
+          displayPrice={displayPrice}
+          passengers={passengers}
+          appliedPromo={appliedPromo}
+          promoCode={promoCode}
+          setPromoCode={setPromoCode}
+          isValidatingPromo={isValidatingPromo}
+          validatePromoCode={validatePromoCode}
+          setAppliedPromo={setAppliedPromo}
+          bookingLoading={bookingLoading}
+          passengerForms={passengerForms}
+          goBackToPassengers={goBackToPassengers}
+          confirmBooking={confirmBooking}
+        />
       </div>
     </div>
   );

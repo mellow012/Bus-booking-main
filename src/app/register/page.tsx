@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
-import Image from 'next/image';
+// use intrinsic image for logo to render at natural size
 import { useTranslations } from 'next-intl';
 import { EmailVerificationPrompt } from '@/components/EmailVerificationPrompt';
 import {
@@ -228,18 +228,15 @@ export default function Register() {
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
         <div className={`sm:mx-auto sm:w-full sm:max-w-md ${isSubmitting ? 'hidden' : ''}`}>
           <div className="flex justify-center">
-            <div className="w-20 h-20 sm:w-24 sm:h-24 flex items-center justify-center transition-transform duration-300 hover:scale-105">
-              <Image
+            <div className="flex items-center justify-center transition-transform duration-300 hover:scale-105">
+              <img
                 src="/tibhukebus_logo_transparent.png"
                 alt="TibhukeBus Logo"
-                width={96}
-                height={96}
-                className="object-contain"
-                priority
+                className="max-w-full h-auto object-contain"
               />
-            </div>  
+            </div>
           </div>
-          <h1 className="mt-6 text-center text-4xl font-extrabold text-gray-900 tracking-tight">
+          <h1 className="mt-2 text-center text-4xl font-extrabold text-gray-900 tracking-tight">
             {t('title')}
           </h1>
         </div>

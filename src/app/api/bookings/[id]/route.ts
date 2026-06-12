@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth-utils';
 import prisma from '@/lib/prisma';
+import { logger } from '@/lib/logger';
 
 /**
  * POST /api/bookings/[id]/cancel
@@ -82,7 +83,7 @@ export async function POST(
       booking: result[0],
     });
   } catch (error) {
-    console.error('POST /api/bookings/[id]/cancel error:', error);
+    await logger.logError('booking', 'POST /api/bookings/[id]/cancel error', error);
     return NextResponse.json(
       { error: 'Failed to cancel booking' },
       { status: 500 }
@@ -131,7 +132,7 @@ export async function GET(
       data: booking,
     });
   } catch (error) {
-    console.error('GET /api/bookings/[id] error:', error);
+    await logger.logError('booking', 'GET /api/bookings/[id] error', error);
     return NextResponse.json(
       { error: 'Failed to fetch booking' },
       { status: 500 }
@@ -184,7 +185,7 @@ export async function PATCH(
       data: updated,
     });
   } catch (error) {
-    console.error('PATCH /api/bookings/[id] error:', error);
+    await logger.logError('booking', 'PATCH /api/bookings/[id] error', error);
     return NextResponse.json(
       { error: 'Failed to update booking' },
       { status: 500 }
@@ -243,7 +244,7 @@ export async function DELETE(
       message: 'Booking deleted successfully',
     });
   } catch (error) {
-    console.error('DELETE /api/bookings/[id] error:', error);
+    await logger.logError('booking', 'DELETE /api/bookings/[id] error', error);
     return NextResponse.json(
       { error: 'Failed to delete booking' },
       { status: 500 }

@@ -1,10 +1,5 @@
 'use client';
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
-import * as dbActions from '@/lib/actions/db.actions';
-import { useAuth } from '@/contexts/AuthContext';
-import { Company, Schedule, Route, Bus, Booking } from '@/types';
+import { useRef } from 'react';
 import {
   Building2, Loader2, DollarSign, Users, Calendar, MapPin, X, User,
   Settings, AlertTriangle, Bell, Menu, LayoutDashboard, Search, HelpCircle,
@@ -33,7 +28,7 @@ import Image from 'next/image';
 // ── Extracted sub-components & hooks ─────────────────────────────────────────
 import DashboardSidebar from './_components/DashboardSidebar';
 import DashboardSubNav from './_components/DashboardSubNav';
-import { useAlert, useRealtimeBookings } from './_hooks/useDashboard';
+import useAdminDashboard from './_hooks/useAdminDashboard';
 import {
   TABS, CATEGORIES, BUS_TYPES, BUS_STATUSES, CAPACITY_LIMITS,
   TabType, CategoryType, DashboardData, TabObject,
@@ -42,58 +37,20 @@ import {
 
 // ── Main dashboard ────────────────────────────────────────────────────────────
 export default function AdminDashboard() {
-  const { user, userProfile, loading: authLoading, signOut } = useAuth();
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const { alert, showAlert, clearAlert } = useAlert();
-
-  const [activeTab, setActiveTab] = useState<TabType>('overview');
-  const [activeCategory, setActiveCategory] = useState<CategoryType>('overview');
-  const [categorySubTabs, setCategorySubTabs] = useState<Record<CategoryType, TabType>>({
-    overview: 'overview', fleet: 'schedules', sales: 'bookings',
-    team: 'operators', payments: 'payments', reports: 'reports', config: 'profile',
-  });
-  const [isMobileOpen, setIsMobileOpen] = useState(false);
-  const [isCollapsed, setIsCollapsed] = useState(false);
-  const [dashboardData, setDashboardData] = useState<DashboardData>({
-    company: null, schedules: [], routes: [], buses: [], bookings: [], reports: [],
-  });
-  const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchFocused, setSearchFocused] = useState(false);
-  const searchRef = useRef<HTMLDivElement>(null);
+  const {
+    user, userProfile, authLoading, signOut,
+    activeTab, setActiveTab, activeCategory, setActiveCategory, categorySubTabs, setCategorySubTabs,
+    isMobileOpen, setIsMobileOpen, isCollapsed, setIsCollapsed,
+    dashboardData, setDashboardData, loading, searchQuery, setSearchQuery, searchFocused, setSearchFocused, searchRef,
+    bookings, setBookings, realtimeStatus,
+    statistics, paymentSettings, availableTabs, isValidUser,
+    fetchInitialData, fetchCollectionData, updateDashboardData, addItem,
+    alert, showAlert, clearAlert,
+  } = useAdminDashboard();
 
   const companyId = userProfile?.companyId?.trim() || '';
-  const { bookings, setBookings, realtimeStatus } = useRealtimeBookings(companyId, showAlert, activeTab);
 
-  useEffect(() => { setDashboardData(prev => ({ ...prev, bookings })); }, [bookings]);
-
-  const statistics = useMemo(() => {
-    const now = new Date();
-    const yesterday = new Date(now);
-    yesterday.setDate(yesterday.getDate() - 1);
-    yesterday.setHours(0, 0, 0, 0);
-    return {
-      pendingBookings: bookings.filter(b => b.bookingStatus === 'pending').length,
-      missedSchedules: dashboardData.schedules.filter(s => {
-        const dep = new Date(s.departureDateTime);
-        return dep < now && s.status === 'active' && s.tripStatus === 'scheduled';
-      }).length,
-      newPayments: bookings.filter(b => {
-        if (b.paymentStatus !== 'paid' || !b.paidAt) return false;
-        return new Date(b.paidAt) > yesterday;
-      }).length,
-      pendingReports: (dashboardData.reports || []).length === 0 && bookings.some(b => b.paymentStatus === 'paid') ? 1 : 0,
-    };
-  }, [bookings, dashboardData.schedules, dashboardData.reports]);
-
-  const paymentSettings = dashboardData.company?.paymentSettings;
-  const availableTabs = useMemo(() => getAvailableTabs(paymentSettings), [paymentSettings]);
-  const isValidUser = useMemo(() =>
-    !!(user && userProfile?.role === 'company_admin' && userProfile.companyId),
-    [user, userProfile]);
-
-  const startTour = useCallback(() => {
+  const startTour = () => {
     const driverObj = driver({
       showProgress: true,
       steps: [
@@ -106,79 +63,7 @@ export default function AdminDashboard() {
       ]
     });
     driverObj.drive();
-  }, []);
-
-  const fetchCollectionData = useCallback(async (table: string, cId: string): Promise<any[]> => {
-    if (!cId) return [];
-    try {
-      const { data, error } = await supabase.from(table).select('*').eq('companyId', cId);
-      if (error) throw error;
-      return (data || []).map(d => ({
-        ...d,
-        departureDateTime: d.departureDateTime ? new Date(d.departureDateTime) : undefined,
-        arrivalDateTime:   d.arrivalDateTime   ? new Date(d.arrivalDateTime)   : undefined,
-        createdAt: new Date(d.createdAt),
-        updatedAt: new Date(d.updatedAt),
-      }));
-    } catch (err: any) { console.error(`Error fetching ${table}:`, err); throw err; }
-  }, []);
-
-  const fetchInitialData = useCallback(async () => {
-    if (!companyId || authLoading) return;
-    try {
-      setLoading(true);
-      const { data: companyData, error: companyError } = await supabase
-        .from('Company').select('*').eq('id', companyId).single();
-      if (companyError || !companyData) { showAlert('error', 'Company not found.'); return; }
-      const [schedules, routes, buses, reports] = await Promise.all([
-        fetchCollectionData('Schedule', companyId),
-        fetchCollectionData('Route', companyId),
-        fetchCollectionData('Bus', companyId),
-        fetchCollectionData('DailyReport', companyId),
-      ]);
-      setDashboardData(prev => ({
-        ...prev,
-        company: { ...companyData, createdAt: new Date(companyData.createdAt), updatedAt: new Date(companyData.updatedAt) } as Company,
-        schedules, routes, buses, reports,
-      }));
-    } catch (err: any) { showAlert('error', err.message || 'Failed to load dashboard data'); }
-    finally { setLoading(false); }
-  }, [companyId, authLoading, showAlert, fetchCollectionData]);
-
-  const updateDashboardData = useCallback(
-    <T extends keyof DashboardData>(key: T, value: DashboardData[T]) =>
-      setDashboardData(prev => ({ ...prev, [key]: value })), []);
-
-  const addItem = useCallback(async (table: string, data: any): Promise<string | null> => {
-    try {
-      const processed = { ...data, companyId };
-      let result: any;
-      if (table === 'Schedule') result = await dbActions.createSchedule(processed);
-      else if (table === 'Route') result = await dbActions.createRoute(processed);
-      else if (table === 'Bus') { validateBusData(processed); result = await dbActions.createBus(processed); }
-      else throw new Error(`Unsupported table: ${table}`);
-      if (!result.success) throw new Error(result.error);
-      showAlert('success', `${table} added successfully`);
-      await fetchInitialData();
-      return result.data!.id;
-    } catch (err: any) { showAlert('error', err.message || `Failed to add ${table}`); return null; }
-  }, [companyId, showAlert, fetchInitialData]);
-
-  // Auth guard
-  useEffect(() => {
-    if (authLoading) return;
-    if (!user) { router.push('/login'); return; }
-    if (!userProfile) return;
-    if (userProfile.role !== 'company_admin') { showAlert('error', 'Access denied.'); router.push('/'); return; }
-    if (!userProfile.companyId) { showAlert('info', 'Please finish setting up your company.'); router.push('/company/setup'); return; }
-    const urlCompanyId = searchParams.get('companyId');
-    if (urlCompanyId && urlCompanyId !== userProfile.companyId) {
-      showAlert('error', 'Restricted access: URL company mismatch.');
-      router.push(`/company/admin?companyId=${userProfile.companyId}`);
-      return;
-    }
-    fetchInitialData();
-  }, [user, userProfile, authLoading, router, searchParams, fetchInitialData, showAlert]);
+  };
 
   const renderActiveTab = () => {
     const { company, schedules, routes, buses } = dashboardData;
@@ -220,10 +105,10 @@ export default function AdminDashboard() {
       );
       case 'profile': return company ? (
         <CompanyProfileTab company={company} schedules={schedules} routes={routes}
-          setCompany={(c) => updateDashboardData('company', c as Company)} {...commonProps} />
+          setCompany={(c) => updateDashboardData('company', c as any)} {...commonProps} />
       ) : null;
       case 'settings': return company ? (
-        <SettingsTab company={company} setCompany={(c) => updateDashboardData('company', c as Company)} {...commonProps} />
+        <SettingsTab company={company} setCompany={(c) => updateDashboardData('company', c as any)} {...commonProps} />
       ) : null;
       case 'operators': return company ? <TeamManagementTab companyId={companyId} {...commonProps} /> : null;
       case 'payments': return company ? (
@@ -255,7 +140,7 @@ export default function AdminDashboard() {
         <AlertTriangle className="w-16 h-16 text-red-400 mx-auto mb-4" />
         <h2 className="text-xl font-semibold text-gray-800 mb-2">Access Denied</h2>
         <p className="text-gray-600 mb-6">You don&apos;t have permission to access this dashboard.</p>
-        <button onClick={() => router.push('/login')} className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">Go to Login</button>
+        <button onClick={() => (window.location.href = '/login')} className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">Go to Login</button>
       </div>
     </div>
   );
@@ -265,7 +150,7 @@ export default function AdminDashboard() {
         <Building2 className="w-16 h-16 text-gray-400 mx-auto mb-4" />
         <h2 className="text-xl font-semibold text-gray-800 mb-2">Company Not Found</h2>
         <p className="text-gray-600 mb-6">Please ensure your company is set up correctly.</p>
-        <button onClick={() => router.push('/support')} className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">Contact Support</button>
+        <button onClick={() => (window.location.href = '/support')} className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">Contact Support</button>
       </div>
     </div>
   );
@@ -275,7 +160,7 @@ export default function AdminDashboard() {
   return (
     <div className="min-h-screen bg-gray-50 flex">
       <DashboardSidebar
-        activeCategory={activeCategory}
+        activeCategory={activeCategory as CategoryType}
         setActiveCategory={(cat) => { setActiveCategory(cat); setActiveTab(categorySubTabs[cat]); }}
         isMobileOpen={isMobileOpen} setIsMobileOpen={setIsMobileOpen}
         company={company} onSignOut={signOut}
@@ -387,7 +272,7 @@ export default function AdminDashboard() {
         </header>
 
         <DashboardSubNav
-          activeTab={activeTab}
+          activeTab={activeTab as TabType}
           setActiveTab={(tab) => { setActiveTab(tab); setCategorySubTabs(prev => ({ ...prev, [activeCategory]: tab })); }}
           subTabs={CATEGORIES.find(c => c.id === activeCategory)?.subTabs || [] as any}
           availableTabs={availableTabs}
@@ -411,7 +296,7 @@ export default function AdminDashboard() {
         </main>
 
         <DashboardBottomNav
-          activeTab={activeTab}
+          activeTab={activeTab as TabType}
           onTabChange={(tabId) => {
             setActiveTab(tabId as TabType);
             const category = CATEGORIES.find(c => (c.subTabs as readonly string[]).includes(tabId))?.id;

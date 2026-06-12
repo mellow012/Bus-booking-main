@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
-import Image from 'next/image';
+// use intrinsic image for logo to render at natural size
 import { useTranslations } from 'next-intl';
 import { EnvelopeIcon, LockClosedIcon, EyeIcon, EyeSlashIcon, ExclamationTriangleIcon, CheckCircleIcon } from '@heroicons/react/24/outline';
 
@@ -164,7 +164,12 @@ export default function Login() {
       // the router manually here; both systems redirecting causes a race.
       await signIn(formData.email, formData.password);
       resetAttempts();
-      // Redirect is handled by AuthContext route guard — no router.push here.
+      
+      // Check for redirectTo parameter to ensure user returns to their previous context (e.g., booking or search)
+      const dest = searchParams.get('redirectTo');
+      if (dest) {
+        router.push(dest);
+      }
     } catch (error: any) {
       console.error('Login error:', error);
       incrementAttempts();
@@ -204,18 +209,15 @@ export default function Login() {
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <div className="flex justify-center">
-          <div className="w-20 h-20 sm:w-24 sm:h-24 flex items-center justify-center transition-transform duration-300 hover:scale-105">
-            <Image
+          <div className="flex items-center justify-center transition-transform duration-300 hover:scale-105 h-24 sm:h-32 md:h-40">
+            <img
               src="/tibhukebus_logo_transparent.png"
               alt="TibhukeBus Logo"
-              width={96}
-              height={96}
-              className="object-contain"
-              priority
+              className="w-auto h-full object-contain drop-shadow-2xl brightness-[1.02] contrast-[1.05]"
             />
           </div>
         </div>
-        <h1 className="mt-6 text-center text-4xl font-extrabold text-gray-900 tracking-tight">
+        <h1 className="mt-2 text-center text-4xl font-extrabold text-gray-900 tracking-tight">
           {t('title')}
         </h1>
       </div>

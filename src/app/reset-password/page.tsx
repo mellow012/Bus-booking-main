@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Image from 'next/image';
+// use intrinsic image for logo to render at natural size
 import { createClient } from '@/utils/supabase/client';
 import { Button } from '@/components/ui/button';
 import { 
@@ -68,19 +68,16 @@ export default function ResetPasswordPage() {
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         {/* Brand Logo consistent with Register page */}
         <div className="flex justify-center">
-          <div className="w-20 h-20 sm:w-24 sm:h-24 flex items-center justify-center transition-transform duration-300 hover:scale-105">
-            <Image
+          <div className="flex items-center justify-center transition-transform duration-300 hover:scale-105">
+            <img
               src="/tibhukebus_logo_transparent.png"
               alt="TibhukeBus Logo"
-              width={96}
-              height={96}
-              className="object-contain"
-              priority
+              className="max-w-full h-auto object-contain"
             />
           </div>
         </div>
         
-        <h1 className="mt-6 text-center text-4xl font-extrabold text-gray-900 tracking-tight">
+        <h1 className="mt-2 text-center text-4xl font-extrabold text-gray-900 tracking-tight">
           Secure your account
         </h1>
         <p className="mt-2 text-center text-sm text-gray-600">

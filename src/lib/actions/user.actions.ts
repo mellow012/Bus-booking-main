@@ -161,6 +161,8 @@ export async function updateUser(id: string, data: any) {
       where: { id },
       data: {
         ...sanitizedData,
+        // If role is being changed, increment sessionVersion to invalidate cached session cookies
+        ...(sanitizedData.role ? { sessionVersion: { increment: 1 } } : {}),
         updatedAt: new Date(),
       },
     });
@@ -180,6 +182,74 @@ export async function deleteUser(id: string) {
     return { success: true };
   } catch (error: unknown) {
     console.error('Error deleting user:', error);
+    return { success: false, error: (error as Error).message };
+  }
+}
+
+/**
+ * Set a user to `super_admin` role. Atomically updates role and sessionVersion
+ * and creates an ActivityLog entry recording the change.
+ */
+export async function setUserSuperAdmin(targetId: string, actor: { id: string; name?: string; role?: string; companyId?: string }) {
+  try {
+    const [user, log] = await prisma.$transaction([
+      prisma.user.update({
+        where: { id: targetId },
+        data: ( { role: 'superadmin', sessionVersion: { increment: 1 }, updatedAt: new Date() } as any ),
+      }),
+      prisma.activityLog.create({
+        data: {
+          userId: actor.id,
+          action: 'update_user_role',
+          description: `Set user ${targetId} role to superadmin`,
+          companyId: actor.companyId || null,
+          metadata: {
+            targetUserId: targetId,
+            targetRole: 'superadmin',
+            actorName: actor.name || '',
+            actorRole: actor.role || '',
+          },
+        },
+      }),
+    ]);
+    revalidatePath('/company/admin');
+    return { success: true, data: user };
+  } catch (error: unknown) {
+    console.error('Error setting user super admin:', error);
+    return { success: false, error: (error as Error).message };
+  }
+}
+
+/**
+ * Set a user to `chief_of_growth` role. Atomically updates role and sessionVersion
+ * and creates an ActivityLog entry recording the change.
+ */
+export async function setUserChiefOfGrowth(targetId: string, actor: { id: string; name?: string; role?: string; companyId?: string }) {
+  try {
+    const [user, log] = await prisma.$transaction([
+      prisma.user.update({
+        where: { id: targetId },
+        data: ( { role: 'chief_of_growth', sessionVersion: { increment: 1 }, updatedAt: new Date() } as any ),
+      }),
+      prisma.activityLog.create({
+        data: {
+          userId: actor.id,
+          action: 'update_user_role',
+          description: `Set user ${targetId} role to chief_of_growth`,
+          companyId: actor.companyId || null,
+          metadata: {
+            targetUserId: targetId,
+            targetRole: 'chief_of_growth',
+            actorName: actor.name || '',
+            actorRole: actor.role || '',
+          },
+        },
+      }),
+    ]);
+    revalidatePath('/company/admin');
+    return { success: true, data: user };
+  } catch (error: unknown) {
+    console.error('Error setting user chief of growth:', error);
     return { success: false, error: (error as Error).message };
   }
 }

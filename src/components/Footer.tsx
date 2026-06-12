@@ -125,13 +125,11 @@ const Footer: React.FC = () => {
                 aria-label="Go to BooknPay homepage"
               >
                 <div className="relative">
-                  <div className="w-12 h-12 flex items-center justify-center transition-all duration-300 group-hover:scale-105">
-                    <Image
+                  <div className="w-14 h-14 flex items-center justify-center transition-all duration-300 group-hover:scale-105">
+                    <img
                       src="/tibhukebus_logo_transparent.png"
                       alt="TibhukeBus Logo"
-                      width={48}
-                      height={48}
-                      className="object-contain w-auto"
+                      className="object-contain w-auto h-auto"
                       style={{ height: 'auto' }}
                     />
                   </div>

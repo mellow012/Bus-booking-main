@@ -30,6 +30,7 @@ model User {
   invitationSent   Boolean           @default(false)
   invitationSentAt DateTime?
   createdBy        String?
+  sessionVersion   Int                @default(1)
   activities       ActivityLog[]
   bookings         Booking[]
   groupRequests    GroupRequest[]

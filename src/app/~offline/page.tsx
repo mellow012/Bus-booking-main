@@ -1,4 +1,4 @@
-import Image from 'next/image';
+// use intrinsic image for logo to render at natural size
 
 export const metadata = {
   title: 'Offline - TibhukeBus',
@@ -24,14 +24,11 @@ export default function OfflinePage() {
 
       <div className="relative flex flex-col items-center gap-6 px-8 text-center max-w-sm">
         {/* Logo (greyscale when offline) */}
-        <div className="w-28 h-28 sm:w-32 sm:h-32 rounded-3xl overflow-hidden border border-white/10 flex items-center justify-center bg-white/5">
-          <Image
+        <div className="rounded-3xl overflow-hidden border border-white/10 flex items-center justify-center bg-white/5 p-2">
+          <img
             src="/tibhukebus_logo_transparent.png"
             alt="TibhukeBus"
-            width={128}
-            height={128}
-            className="w-full h-full object-contain p-2 grayscale opacity-60"
-            priority
+            className="max-w-full h-auto object-contain grayscale opacity-60"
           />
         </div>
 

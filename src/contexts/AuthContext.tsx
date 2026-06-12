@@ -3,6 +3,7 @@ import React, { createContext, useContext, useEffect, useState, useCallback } fr
 import { createClient } from '@/utils/supabase/client';
 import { User } from '@supabase/supabase-js';
 import { UserProfile, CompanyRole } from '@/types';
+import { normalizeRole } from '@/lib/roles';
 import { useRouter, usePathname } from 'next/navigation';
 
 const getCookie = (name: string): string | null => {
@@ -129,9 +130,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       const { data } = await response.json();
       if (data) {
-        setUserProfile(data as UserProfile);
+        const mergedRole = normalizeRole(data.role) ?? normalizeRole(meta?.role) ?? data.role ?? 'customer';
+        setUserProfile({ ...data, role: mergedRole } as UserProfile);
 
-        const isTeamRole = ['operator', 'conductor'].includes(data.role);
+        const isTeamRole = ['operator', 'conductor'].includes(mergedRole);
         const needsActivation = isTeamRole && data.invitationSent && (!data.isActive || !data.setupCompleted);
         if (needsActivation) {
           fetch('/api/auth/profile', {
@@ -139,13 +141,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             headers: { 'Content-Type': 'application/json', 'x-csrf-token': getCookie('__csrf_token') || '' },
             body: JSON.stringify({ isActive: true, setupCompleted: true, passwordSet: true }),
           })
-            .then(async (res) => {
-              const cType = res.headers.get('content-type');
-              if (res.ok && cType?.includes('application/json')) {
-                const { data: updatedData } = await res.json();
-                if (updatedData) setUserProfile(updatedData as UserProfile);
-              }
-            })
+                .then(async (res) => {
+                  const cType = res.headers.get('content-type');
+                  if (res.ok && cType?.includes('application/json')) {
+                    const { data: updatedData } = await res.json();
+                    if (updatedData) {
+                      const r = normalizeRole(updatedData.role) ?? normalizeRole(meta?.role) ?? updatedData.role ?? 'customer';
+                      setUserProfile({ ...updatedData, role: r } as UserProfile);
+                    }
+                  }
+                })
             .catch((err) => console.error('[AuthContext] Auto-activate failed:', err));
         }
 
@@ -160,13 +165,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               phone: data.phone || meta?.phone || '',
             }),
           })
-            .then(async (res) => {
-              const cType = res.headers.get('content-type');
-              if (res.ok && cType?.includes('application/json')) {
-                const { data: updatedData } = await res.json();
-                if (updatedData) setUserProfile(updatedData as UserProfile);
-              }
-            })
+                .then(async (res) => {
+                  const cType = res.headers.get('content-type');
+                  if (res.ok && cType?.includes('application/json')) {
+                    const { data: updatedData } = await res.json();
+                    if (updatedData) {
+                      const r = normalizeRole(updatedData.role) ?? normalizeRole(meta?.role) ?? updatedData.role ?? 'customer';
+                      setUserProfile({ ...updatedData, role: r } as UserProfile);
+                    }
+                  }
+                })
             .catch((err) => console.error('[AuthContext] Metadata sync failed:', err));
         }
       } else {
@@ -189,7 +197,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const cType = res.headers.get('content-type');
             if (res.ok && cType?.includes('application/json')) {
               const { data: newData } = await res.json();
-              if (newData) setUserProfile(newData as UserProfile);
+              if (newData) {
+                const r = normalizeRole(newData.role) ?? normalizeRole(meta?.role) ?? newData.role ?? 'customer';
+                setUserProfile({ ...newData, role: r } as UserProfile);
+              }
             }
           })
           .catch((err) => console.error('[AuthContext] Profile init failed:', err));
