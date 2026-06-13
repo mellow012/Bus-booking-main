@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     // Only privileged roles can access this endpoint
-    if (!['superadmin', 'company_admin'].includes(user.role ?? '')) {
+    if (!['superadmin', 'company_admin', 'chief_of_growth'].includes(user.role ?? '')) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 

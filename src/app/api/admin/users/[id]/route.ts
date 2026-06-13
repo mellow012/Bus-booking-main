@@ -19,7 +19,14 @@ export async function PATCH(req: NextRequest, context: any) {
     const newRole = body.role;
     if (!newRole) return NextResponse.json({ error: 'Missing role' }, { status: 400 });
 
-    const target = await prisma.user.findUnique({ where: { id: targetId } });
+    const target = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { id: targetId },
+          { uid: targetId }
+        ]
+      }
+    });
     if (!target) return NextResponse.json({ error: 'User not found' }, { status: 404 });
 
     // Rate limit role-change actions
@@ -33,7 +40,7 @@ export async function PATCH(req: NextRequest, context: any) {
 
     // Update role and increment sessionVersion to invalidate cached sessions
     const updated = await prisma.user.update({
-      where: { id: targetId },
+      where: { id: target.id },
       data: ( { role: newRole, sessionVersion: { increment: 1 }, updatedAt: new Date() } as any ),
       select: { id: true, email: true, firstName: true, lastName: true, role: true, companyId: true }
     });

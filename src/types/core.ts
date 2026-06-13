@@ -93,7 +93,7 @@ export interface Company extends BaseEntity {
 
 // ─── User roles ───────────────────────────────────────────────────────────────
 
-export type UserRole     = 'customer' | 'company_admin' | 'operator' | 'conductor' | 'superadmin';
+export type UserRole     = 'customer' | 'company_admin' | 'operator' | 'conductor' | 'superadmin' | 'chief_of_growth';
 export type CompanyRole  = 'company_admin' | 'operator' | 'conductor';
 export type TeamRole     = 'operator' | 'conductor';
 
@@ -159,6 +159,11 @@ export interface SuperAdminProfile extends UserProfileBase {
   companyId?: never;
 }
 
+export interface ChiefOfGrowthProfile extends UserProfileBase {
+  role: 'chief_of_growth';
+  companyId?: never;
+}
+
 /**
  * Discriminated union of all user profile shapes.
  *
@@ -172,7 +177,8 @@ export type UserProfile =
   | CompanyAdminProfile
   | OperatorProfile
   | ConductorProfile
-  | SuperAdminProfile;
+  | SuperAdminProfile
+  | ChiefOfGrowthProfile;
 
 // ─── Bus ──────────────────────────────────────────────────────────────────────
 

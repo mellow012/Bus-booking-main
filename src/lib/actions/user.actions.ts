@@ -92,6 +92,11 @@ export async function syncUser(id: string, data: Partial<User>) {
       data: createData,
     });
 
+    // Notify admins of new registration in background
+    notifyAdminsOfNewRegistration(user).catch(err => {
+      console.error('Error sending registration notification:', err);
+    });
+
     return { success: true, data: user as User };
   } catch (error: unknown) {
     const err = error as any;
@@ -192,19 +197,31 @@ export async function deleteUser(id: string) {
  */
 export async function setUserSuperAdmin(targetId: string, actor: { id: string; name?: string; role?: string; companyId?: string }) {
   try {
+    const targetUser = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { id: targetId },
+          { uid: targetId }
+        ]
+      }
+    });
+    if (!targetUser) {
+      return { success: false, error: 'User not found' };
+    }
+
     const [user, log] = await prisma.$transaction([
       prisma.user.update({
-        where: { id: targetId },
+        where: { id: targetUser.id },
         data: ( { role: 'superadmin', sessionVersion: { increment: 1 }, updatedAt: new Date() } as any ),
       }),
       prisma.activityLog.create({
         data: {
           userId: actor.id,
           action: 'update_user_role',
-          description: `Set user ${targetId} role to superadmin`,
+          description: `Set user ${targetUser.id} role to superadmin`,
           companyId: actor.companyId || null,
           metadata: {
-            targetUserId: targetId,
+            targetUserId: targetUser.id,
             targetRole: 'superadmin',
             actorName: actor.name || '',
             actorRole: actor.role || '',
@@ -226,19 +243,31 @@ export async function setUserSuperAdmin(targetId: string, actor: { id: string; n
  */
 export async function setUserChiefOfGrowth(targetId: string, actor: { id: string; name?: string; role?: string; companyId?: string }) {
   try {
+    const targetUser = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { id: targetId },
+          { uid: targetId }
+        ]
+      }
+    });
+    if (!targetUser) {
+      return { success: false, error: 'User not found' };
+    }
+
     const [user, log] = await prisma.$transaction([
       prisma.user.update({
-        where: { id: targetId },
+        where: { id: targetUser.id },
         data: ( { role: 'chief_of_growth', sessionVersion: { increment: 1 }, updatedAt: new Date() } as any ),
       }),
       prisma.activityLog.create({
         data: {
           userId: actor.id,
           action: 'update_user_role',
-          description: `Set user ${targetId} role to chief_of_growth`,
+          description: `Set user ${targetUser.id} role to chief_of_growth`,
           companyId: actor.companyId || null,
           metadata: {
-            targetUserId: targetId,
+            targetUserId: targetUser.id,
             targetRole: 'chief_of_growth',
             actorName: actor.name || '',
             actorRole: actor.role || '',
@@ -253,3 +282,44 @@ export async function setUserChiefOfGrowth(targetId: string, actor: { id: string
     return { success: false, error: (error as Error).message };
   }
 }
+
+/**
+ * Notify all Superadmins and Chief of Growth users of a new user registration.
+ */
+async function notifyAdminsOfNewRegistration(newUser: any) {
+  try {
+    const admins = await prisma.user.findMany({
+      where: {
+        role: {
+          in: ['superadmin', 'chief_of_growth']
+        }
+      },
+      select: { id: true }
+    });
+
+    if (!admins.length) return;
+
+    const name = [newUser.firstName, newUser.lastName].filter(Boolean).join(' ') || newUser.email || 'New User';
+
+    const notificationsData = admins.map(admin => ({
+      userId: admin.id,
+      title: 'New User Registration',
+      message: `${name} has registered on the platform as a ${newUser.role || 'customer'}.`,
+      type: 'registration',
+      priority: 'medium',
+      actionUrl: '/admin/chief-of-growth',
+      data: {
+        registeredUserId: newUser.id,
+        role: newUser.role || 'customer'
+      }
+    }));
+
+    await prisma.notification.createMany({
+      data: notificationsData
+    });
+  } catch (error) {
+    console.error('Failed to notify admins of new registration:', error);
+  }
+}
+
+

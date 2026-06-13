@@ -58,7 +58,7 @@ export const logAudit = async (
       data: {
         action: auditLog.action,
         userId: auditLog.userId,
-        companyId: auditLog.companyId,
+        companyId: auditLog.companyId && auditLog.companyId.trim() !== '' ? auditLog.companyId : null,
         description: auditLog.description,
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         metadata: {

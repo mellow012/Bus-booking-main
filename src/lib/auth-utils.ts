@@ -28,7 +28,9 @@ export async function getAuthUserFromRequest(request: NextRequest): Promise<Auth
   try {
     // Fast-path: try signed session cookie to avoid external calls
     try {
-      const cookie = request.cookies.get(COOKIE_NAME)?.value;
+      const cookie = request?.cookies && typeof request.cookies.get === 'function'
+        ? request.cookies.get(COOKIE_NAME)?.value
+        : undefined;
       if (cookie) {
         const meta = await parseSessionCookieValue(cookie);
         if (meta && meta.userId) {
@@ -97,4 +99,34 @@ export async function getAuthUserFromRequest(request: NextRequest): Promise<Auth
  */
 export async function getCurrentUser(request: NextRequest): Promise<AuthUser | null> {
   return getAuthUserFromRequest(request);
+}
+
+/**
+ * Get current user in App Router Server Components (no NextRequest needed).
+ * Uses the Supabase server client which reads cookies from next/headers automatically.
+ */
+export async function getCurrentUserFromServer(): Promise<AuthUser | null> {
+  try {
+    const supabase = await createClient();
+    const { data: { user: authUser }, error } = await supabase.auth.getUser();
+    if (error || !authUser) return null;
+
+    const profile = await prisma.user.findFirst({
+      where: { OR: [{ id: authUser.id }, { uid: authUser.id }] },
+      select: { id: true, role: true, companyId: true, firstName: true, lastName: true, email: true },
+    });
+
+    return {
+      id: profile?.id || authUser.id,
+      email: profile?.email ?? authUser.email,
+      emailVerified: authUser.email_confirmed_at ? true : false,
+      role: normalizeRole(profile?.role ?? (authUser.user_metadata as any)?.role) ?? undefined,
+      companyId: profile?.companyId ?? null,
+      firstName: profile?.firstName ?? undefined,
+      lastName: profile?.lastName ?? undefined,
+    };
+  } catch (error) {
+    await logger.logError('auth', 'Server component auth exception', error);
+    return null;
+  }
 }

@@ -7,7 +7,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import {
   Menu, X, User, LogOut, Search, Calendar,
-  Shield, ChevronDown, HomeIcon, BusIcon, Zap,
+  Shield, ChevronDown, HomeIcon, BusIcon, Zap, LayoutDashboard,
 } from 'lucide-react';
 import { NotificationBell } from '@/contexts/NotificationContext';
 import Image from 'next/image';
@@ -113,8 +113,9 @@ const Header: React.FC = () => {
   const isSuperAdmin   = normalizedRole === 'superadmin';
   const isCompanyAdmin = normalizedRole === 'company_admin' || normalizedRole === 'admin' || normalizedRole.includes('companyadmin');
   const isOperator     = normalizedRole === 'operator';
+  const isChiefOfGrowth = normalizedRole === 'chief_of_growth';
   const isConductor    = ['conductor','driver','crew','bus driver','bus conductor'].some(r => normalizedRole.includes(r));
-  const isCustomer     = user && userProfile && !isSuperAdmin && !isCompanyAdmin && !isOperator && !isConductor;
+  const isCustomer     = user && userProfile && !isSuperAdmin && !isCompanyAdmin && !isOperator && !isConductor && !isChiefOfGrowth;
   const needsProfileAttention = Boolean(
     isCustomer &&
     (!userProfile?.setupCompleted || !userProfile?.phone?.trim() || (!userProfile?.firstName?.trim() && !userProfile?.lastName?.trim()))
@@ -201,7 +202,9 @@ const Header: React.FC = () => {
                   </div>
                   <div className="hidden md:block text-left">
                     <div className="text-sm font-semibold text-gray-900 group-hover:text-blue-600">{displayName}</div>
-                    <div className="text-xs text-gray-500 capitalize">{userProfile?.role || t('member')}</div>
+                    <div className="text-xs text-gray-500 capitalize">
+                      {userProfile?.role === 'chief_of_growth' ? 'Chief of Growth' : (userProfile?.role || t('member'))}
+                    </div>
                   </div>
                   <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform duration-200 ${isUserMenuOpen ? 'rotate-180' : ''}`} />
                 </button>
@@ -218,12 +221,17 @@ const Header: React.FC = () => {
                       </div>
                     </div>
                     <div className="py-2">
+                      {isChiefOfGrowth && (
+                        <Link href="/admin/chief-of-growth" onClick={() => setIsUserMenuOpen(false)} className="flex items-center space-x-3 px-4 py-2 text-blue-700 hover:bg-blue-50 hover:text-blue-700 transition-colors duration-200">
+                          <LayoutDashboard className="w-4 h-4" /><span>Growth Dashboard</span>
+                        </Link>
+                      )}
                       {isCustomer && (
                         <Link href="/bookings" onClick={() => setIsUserMenuOpen(false)} className="flex items-center space-x-3 px-4 py-2 text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors duration-200">
                           <Calendar className="w-4 h-4" /><span>{t('myBookings')}</span>
                         </Link>
                       )}
-                      {isCustomer && (
+                      {(isCustomer || isChiefOfGrowth) && (
                         <Link href="/profile" onClick={() => setIsUserMenuOpen(false)} className="flex items-center space-x-3 px-4 py-2 text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors duration-200">
                           <User className="w-4 h-4" />
                           <span>{t('profile')}</span>
@@ -308,12 +316,17 @@ const Header: React.FC = () => {
                             <Shield className="w-5 h-5" /><span>{adminLabel}</span>
                           </Link>
                         )}
+                        {isChiefOfGrowth && (
+                          <Link href="/admin/chief-of-growth" onClick={() => setIsMenuOpen(false)} className="flex items-center space-x-3 p-4 text-blue-700 hover:bg-blue-50 rounded-2xl font-bold border border-blue-100">
+                            <LayoutDashboard className="w-5 h-5 text-blue-500" /><span>Growth Dashboard</span>
+                          </Link>
+                        )}
                         {isCustomer && (
                           <Link href="/bookings" onClick={() => setIsMenuOpen(false)} className="flex items-center space-x-3 p-4 text-gray-700 hover:bg-gray-50 rounded-2xl font-bold">
                             <Calendar className="w-5 h-5 text-gray-400" /><span>{t('myBookings')}</span>
                           </Link>
                         )}
-                        {isCustomer && (
+                        {(isCustomer || isChiefOfGrowth) && (
                           <Link href="/profile" onClick={() => setIsMenuOpen(false)} className="flex items-center space-x-3 p-4 text-gray-700 hover:bg-gray-50 rounded-2xl font-bold">
                             <User className="w-5 h-5 text-gray-400" />
                             <span>{t('profile')}</span>

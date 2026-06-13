@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
     const user = await getCurrentUser(req);
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    if (!['superadmin', 'company_admin'].includes(user.role ?? '')) {
+    if (!['superadmin', 'company_admin', 'chief_of_growth'].includes(user.role ?? '')) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
