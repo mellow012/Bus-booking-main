@@ -12,6 +12,7 @@ import { prisma } from '@/lib/prisma';
 import type { Prisma } from '@prisma/client';
 import { logger } from '@/lib/logger';
 import { getClientIp } from '@/lib/rateLimiter';
+import { serverCache } from '@/lib/cache';
 
 interface PassengerDetail {
   firstName:            string;
@@ -323,6 +324,9 @@ export async function POST(req: NextRequest) {
       
       return b;
     });
+
+    // Invalidate schedule cache so updated seat counts are reflected immediately
+    serverCache.invalidate('schedules');
 
     // Structured success log
     await logger.logBooking('created', result.id, {

@@ -322,4 +322,94 @@ async function notifyAdminsOfNewRegistration(newUser: any) {
   }
 }
 
+/**
+ * Set a user to `company_admin` role. Atomically updates role and sessionVersion
+ * and creates an ActivityLog entry recording the change.
+ */
+export async function setUserCompanyAdmin(targetId: string, actor: { id: string; name?: string; role?: string; companyId?: string }) {
+  try {
+    const targetUser = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { id: targetId },
+          { uid: targetId }
+        ]
+      }
+    });
+    if (!targetUser) {
+      return { success: false, error: 'User not found' };
+    }
 
+    const [user, log] = await prisma.$transaction([
+      prisma.user.update({
+        where: { id: targetUser.id },
+        data: ( { role: 'company_admin', sessionVersion: { increment: 1 }, updatedAt: new Date() } as any ),
+      }),
+      prisma.activityLog.create({
+        data: {
+          userId: actor.id,
+          action: 'update_user_role',
+          description: `Set user ${targetUser.id} role to company_admin`,
+          companyId: actor.companyId || null,
+          metadata: {
+            targetUserId: targetUser.id,
+            targetRole: 'company_admin',
+            actorName: actor.name || '',
+            actorRole: actor.role || '',
+          },
+        },
+      }),
+    ]);
+    revalidatePath('/company/admin');
+    return { success: true, data: user };
+  } catch (error: unknown) {
+    console.error('Error setting user company admin:', error);
+    return { success: false, error: (error as Error).message };
+  }
+}
+
+/**
+ * Set a user to `operator` role. Atomically updates role and sessionVersion
+ * and creates an ActivityLog entry recording the change.
+ */
+export async function setUserOperator(targetId: string, actor: { id: string; name?: string; role?: string; companyId?: string }) {
+  try {
+    const targetUser = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { id: targetId },
+          { uid: targetId }
+        ]
+      }
+    });
+    if (!targetUser) {
+      return { success: false, error: 'User not found' };
+    }
+
+    const [user, log] = await prisma.$transaction([
+      prisma.user.update({
+        where: { id: targetUser.id },
+        data: ( { role: 'operator', sessionVersion: { increment: 1 }, updatedAt: new Date() } as any ),
+      }),
+      prisma.activityLog.create({
+        data: {
+          userId: actor.id,
+          action: 'update_user_role',
+          description: `Set user ${targetUser.id} role to operator`,
+          companyId: actor.companyId || null,
+          metadata: {
+            targetUserId: targetUser.id,
+            targetRole: 'operator',
+            actorName: actor.name || '',
+            actorRole: actor.role || '',
+          },
+        },
+      }),
+    ]);
+    revalidatePath('/company/admin');
+    return { success: true, data: user };
+  } catch (error: unknown) {
+    console.error('Error setting user operator:', error);
+    return { success: false, error: (error as Error).message };
+  }
+}

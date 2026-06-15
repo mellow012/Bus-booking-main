@@ -78,9 +78,18 @@ export function useAdminDashboard() {
     if (!companyId || authLoading) return;
     try {
       setLoading(true);
+      console.log("[useAdminDashboard] Fetching Company with ID:", companyId);
       const { data: companyData, error: companyError } = await supabase
         .from('Company').select('*').eq('id', companyId).single();
-      if (companyError || !companyData) { showAlert('error', 'Company not found.'); return; }
+      
+      console.log("[useAdminDashboard] Company Fetch Result:", { companyData, companyError });
+      
+      if (companyError || !companyData) { 
+        console.error("[useAdminDashboard] ERROR fetching company:", companyError);
+        showAlert('error', `Company not found: ${companyError?.message || 'No data'}`); 
+        return; 
+      }
+      
       const [schedules, routes, buses, reports] = await Promise.all([
         fetchCollectionData('Schedule', companyId),
         fetchCollectionData('Route', companyId),

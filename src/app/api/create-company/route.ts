@@ -104,6 +104,17 @@ export async function POST(request: NextRequest): Promise<NextResponse<ApiRespon
       );
     }
 
+    const existingPrismaUser = await prisma.user.findFirst({
+      where: { email: trimmedEmail }
+    });
+
+    if (existingPrismaUser) {
+      return NextResponse.json(
+        { success: false, error: 'Email already in use by a user', message: '' },
+        { status: 400 }
+      );
+    }
+
     // ─── Create Supabase Auth user ───────────────────────────────────────────
     const { data: { user: userRecord }, error: createError } = await adminClient.auth.admin.createUser({
       email: trimmedEmail,
@@ -177,15 +188,21 @@ export async function POST(request: NextRequest): Promise<NextResponse<ApiRespon
     const tokenHash = linkData.properties.hashed_token;
     redirectUrl.searchParams.append('token_hash', tokenHash);
     
-    // Send our safe setup link rather than the raw single-use Supabase action_link
     const passwordResetLink = redirectUrl.toString();
-    await sendPasswordResetEmail(trimmedEmail, companyName.trim(), passwordResetLink, companyId);
+    try {
+      await sendPasswordResetEmail(trimmedEmail, companyName.trim(), passwordResetLink, companyId);
+    } catch (emailError: any) {
+      console.error('Non-fatal error: Failed to send setup email:', emailError.message);
+      // We don't throw here because the company and user are already created.
+    }
 
     return NextResponse.json({
       success: true,
-      message: 'Company created and setup email sent!',
+      message: 'Company created successfully. Setup email sent (check server logs if it failed).',
       companyId,
       adminUserId: userRecord.id,
+      // Provide the setup link in development so the admin can copy it if email fails
+      ...(process.env.NODE_ENV !== 'production' && { setupLink: passwordResetLink })
     });
 
   } catch (error: any) {

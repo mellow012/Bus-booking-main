@@ -48,6 +48,17 @@ export default function ResetPasswordPage() {
         throw error;
       }
 
+      // Mark the passwordSet flag as true in Prisma
+      try {
+        await fetch('/api/auth/reset-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: '' }) // user's ID is inferred from session on the server
+        });
+      } catch (dbErr) {
+        console.error('Failed to sync Prisma passwordSet flag:', dbErr);
+      }
+
       setSuccess(true);
       
       // Give them a moment to read the beautiful success screen before bouncing to login

@@ -49,7 +49,28 @@ export default function HomeSchedules() {
   }, [selectedCategory]);
 
 
+  // Client-side cache key based on city filter
+  const cacheKey = useMemo(() => `tb_schedules_${userCity || 'all'}`, [userCity]);
+
   const fetchSchedules = useCallback(async (refresh = false, silent = false) => {
+    // On first load (not refresh/silent), try to show cached data instantly
+    if (!refresh && !silent) {
+      try {
+        const cached = sessionStorage.getItem(cacheKey);
+        if (cached) {
+          const { data: cachedData, ts } = JSON.parse(cached);
+          const age = Date.now() - ts;
+          // If cache is less than 2 minutes old, show it and fetch silently
+          if (age < 120_000 && cachedData?.length > 0) {
+            setSchedules(cachedData);
+            setLoading(false);
+            // Still fetch fresh data in the background
+            silent = true;
+          }
+        }
+      } catch { /* ignore parse errors */ }
+    }
+
     if (!silent) {
       refresh ? setRefreshing(true) : setLoading(true);
     }
@@ -60,15 +81,22 @@ export default function HomeSchedules() {
       const response = await fetch(`/api/schedules?limit=30&sortBy=time${cityQuery}`);
       if (!response.ok) throw new Error(`API error: ${response.status}`);
       const { data, success } = await response.json();
-      if (success) setSchedules(data);
+      if (success) {
+        setSchedules(data);
+        // Cache the result in sessionStorage
+        try {
+          sessionStorage.setItem(cacheKey, JSON.stringify({ data, ts: Date.now() }));
+        } catch { /* quota exceeded — safe to ignore */ }
+      }
     } catch (err) {
       console.error('Failed to fetch schedules:', err);
-      setError("Failed to load schedules.");
+      // Only show error if we have no cached data to display
+      if (schedules.length === 0) setError("Failed to load schedules.");
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [userCity]);
+  }, [userCity, cacheKey, schedules.length]);
 
   // Sync with general city preference changes from other components
   useEffect(() => {
@@ -88,6 +116,9 @@ export default function HomeSchedules() {
     if (!isReady) return;
     fetchSchedules();
 
+    // Debounce real-time fetches to prevent API spam during bulk updates (like seeding)
+    let fetchTimeoutId: NodeJS.Timeout;
+    
     const supabase = createClient();
     const channel = supabase
       .channel("home-schedules")
@@ -95,7 +126,12 @@ export default function HomeSchedules() {
         "postgres_changes",
         { event: "*", schema: "public", table: "Schedule" },
         () => {
-          if (document.visibilityState === "visible") fetchSchedules(false, true);
+          if (document.visibilityState === "visible") {
+            clearTimeout(fetchTimeoutId);
+            fetchTimeoutId = setTimeout(() => {
+              fetchSchedules(false, true);
+            }, 1000); // 1-second debounce
+          }
         }
       )
       .subscribe();
@@ -106,6 +142,7 @@ export default function HomeSchedules() {
     document.addEventListener('visibilitychange', handleVisibility);
 
     return () => {
+      clearTimeout(fetchTimeoutId);
       supabase.removeChannel(channel);
       document.removeEventListener('visibilitychange', handleVisibility);
     };

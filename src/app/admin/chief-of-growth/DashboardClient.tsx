@@ -3,6 +3,7 @@
 import React, { useState, useMemo } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import useChiefGrowth from './_hooks/useChiefGrowth';
+import DashboardBottomNav from '@/components/DashboardBottomNav';
 import Fuse from 'fuse.js';
 import {
   AreaChart, Area, PieChart, Pie, Cell, BarChart, Bar,
@@ -264,7 +265,7 @@ function InnerDashboard({ initialData, initialMeta, stats }: Props) {
       </div>
 
       {/* ══ NAVIGATION TABS ══════════════════════════════════════════════════ */}
-      <div className="border-b border-slate-200 flex flex-wrap gap-0">
+      <div className="hidden md:flex border-b border-slate-200 flex-wrap gap-0">
         {[
           { id: 'users',     label: 'Users & Fleet',         icon: Users },
           { id: 'analytics', label: 'Engagement & Signups',  icon: BarChart3 },
@@ -801,6 +802,18 @@ function InnerDashboard({ initialData, initialMeta, stats }: Props) {
       <div className="text-center pt-2 pb-4">
         <p className="text-[10px] text-slate-300 font-medium">Growth Command Centre · Engagement-focused · No revenue metrics displayed</p>
       </div>
+
+      {/* ══ MOBILE BOTTOM NAV ════════════════════════════════════════════════ */}
+      <DashboardBottomNav
+        tabs={[
+          { id: 'users',     label: 'Users',      icon: Users },
+          { id: 'analytics', label: 'Analytics',  icon: BarChart3 },
+          { id: 'companies', label: 'Companies',  icon: Building2 },
+          { id: 'routes',    label: 'Routes',     icon: Map },
+        ]}
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+      />
 
     </div>
   );

@@ -11,6 +11,7 @@ import {
   Building2,
   Lock
 } from 'lucide-react';
+import { createClient } from '@/utils/supabase/client';
 
 interface SetupInfo {
   id: string;
@@ -148,6 +149,15 @@ function CompanySetupContent() {
 
     setLoading(true);
     try {
+      // 1. Update the password in Supabase Auth first
+      const supabase = createClient();
+      const { error: authError } = await supabase.auth.updateUser({ password });
+      
+      if (authError) {
+        throw authError;
+      }
+
+      // 2. Mark passwordSet as true in Prisma
       const response = await fetch('/api/auth/reset-password', {
         method: 'POST',
         headers: {
