@@ -1,7 +1,6 @@
 // app/api/payments/paychangu/charge/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { decryptSecret } from "@/lib/crypto.server";
 
 export async function POST(req: NextRequest) {
   try {
@@ -45,36 +44,22 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "This booking has already been paid" }, { status: 409 });
     }
 
-    // ── Get company PayChangu settings from Prisma ──────────────────────────────
+    // ── Ensure this company is allowed to accept PayChangu payments ───────────
     const company = booking.company;
     if (!company) {
       return NextResponse.json({ error: "Company not found" }, { status: 404 });
     }
     
     const ps = company.paymentSettings as Record<string, any>;
-
     if (!ps?.paychanguEnabled) {
-      return NextResponse.json({ error: "PayChangu is not enabled for this company" }, { status: 400 });
-    }
-    if (!ps?.paychanguSecretKeyEnc) {
-      return NextResponse.json({ error: "PayChangu secret key not configured" }, { status: 400 });
+      return NextResponse.json({ error: "PayChangu payments are disabled for this company" }, { status: 400 });
     }
 
-    if (!ps?.paychanguEnabled) {
-      return NextResponse.json({ error: "PayChangu is not enabled for this company" }, { status: 400 });
-    }
-    if (!ps?.paychanguSecretKeyEnc) {
-      return NextResponse.json({ error: "PayChangu secret key not configured" }, { status: 400 });
-    }
-
-    // ── Decrypt secret key ────────────────────────────────────────────────────
-    let secretKey: string;
-    try {
-      secretKey = await decryptSecret(ps.paychanguSecretKeyEnc);
-    } catch (e: any) {
-      console.error("[paychangu/charge] Decryption failed:", e.message);
+    const secretKey = process.env.PAYCHANGU_SECRET_KEY;
+    if (!secretKey) {
+      console.error("[paychangu/charge] PAYCHANGU_SECRET_KEY not set");
       return NextResponse.json(
-        { error: "Payment gateway configuration error — contact support" },
+        { error: "Payment gateway is not configured. Contact support." },
         { status: 500 },
       );
     }

@@ -22,7 +22,6 @@ interface Company {
     paychanguEnabled?:          boolean;
     paychanguReceiveNumber?:    string;
     paychanguPublicKey?:        string;
-    paychanguSecretKeyEnc?:     string; // AES-256-GCM encrypted blob
     currency?:                  string;
   };
   phone?: string;
@@ -139,16 +138,11 @@ const PaymentSettings: React.FC<{
   loading: boolean; setLoading: (l: boolean) => void;
   editMode: boolean; setEditMode: (m: boolean) => void;
 }> = ({ company, setCompany, setError, setSuccess, loading, setLoading, editMode, setEditMode }) => {
-  const [showSecret, setShowSecret] = useState(false);
-
-  const secretKeySet = !!company?.paymentSettings?.paychanguSecretKeyEnc;
-
   const { register, handleSubmit, reset, watch } = useForm({
     defaultValues: {
       paychanguEnabled:       company?.paymentSettings?.paychanguEnabled       ?? false,
       paychanguReceiveNumber: company?.paymentSettings?.paychanguReceiveNumber ?? "",
       paychanguPublicKey:     company?.paymentSettings?.paychanguPublicKey     ?? "",
-      paychanguSecretKey:     "", // always blank
       currency:               company?.paymentSettings?.currency               ?? "MWK",
     },
   });
@@ -159,7 +153,6 @@ const PaymentSettings: React.FC<{
     paychanguEnabled: boolean;
     paychanguReceiveNumber: string;
     paychanguPublicKey: string;
-    paychanguSecretKey: string;
     currency: string;
   }) => {
     setLoading(true); setError(""); setSuccess("");
@@ -171,35 +164,11 @@ const PaymentSettings: React.FC<{
           throw new Error("Public key is required");
         if (!data.paychanguPublicKey.toLowerCase().startsWith("pub-"))
           throw new Error('Public key must start with "pub-"');
-        if (!secretKeySet && !data.paychanguSecretKey?.trim())
-          throw new Error("Secret key is required for first-time setup");
-        if (data.paychanguSecretKey?.trim() && !data.paychanguSecretKey.trim().toLowerCase().startsWith("sec-"))
-          throw new Error('Secret key must start with "sec-"');
-      }
-
-      // Step 1: Encrypt secret key if provided
-      let paychanguSecretKeyEnc = company.paymentSettings?.paychanguSecretKeyEnc ?? null;
-      if (data.paychanguSecretKey?.trim()) {
-        const encRes = await fetch("/api/admin/encrypt-paychangu-key", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            companyId: company.id,
-            secretKey: data.paychanguSecretKey.trim().toLowerCase(),
-          }),
-        });
-        if (!encRes.ok) {
-          const err = await encRes.json().catch(() => ({}));
-          throw new Error(err.error || "Failed to encrypt secret key");
-        }
-        const encJson = await encRes.json();
-        paychanguSecretKeyEnc = encJson.encrypted;
       }
 
       // Step 2: Update company via unified API
       const updatedPaymentSettings = {
         paychanguEnabled:      data.paychanguEnabled,
-        paychanguSecretKeyEnc: paychanguSecretKeyEnc,
         currency:              data.currency || "MWK",
         paychanguReceiveNumber: data.paychanguEnabled ? data.paychanguReceiveNumber.trim() : null,
         paychanguPublicKey:     data.paychanguEnabled ? data.paychanguPublicKey.toLowerCase().trim() : null,
@@ -267,29 +236,9 @@ const PaymentSettings: React.FC<{
                 <p className="text-xs text-gray-400 mb-0.5">Public Key</p>
                 <p className="text-sm font-mono text-gray-900">{company.paymentSettings.paychanguPublicKey?.slice(0, 8)}{"•".repeat(8)}</p>
               </div>
-              <div className="bg-white px-5 py-3.5">
-                <p className="text-xs text-gray-400 mb-0.5">Secret Key</p>
-                <div className="flex items-center justify-between gap-1.5">
-                  <div className="flex items-center gap-1.5">
-                    {secretKeySet
-                      ? <><CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" /><p className="text-sm text-emerald-700 font-medium">Securely Encrypted</p></>
-                      : <><AlertCircle className="w-3.5 h-3.5 text-amber-500" /><p className="text-sm text-amber-600">Not configured</p></>}
-                  </div>
-                  {secretKeySet && (
-                    <button 
-                      onClick={() => setShowSecret(!showSecret)}
-                      className="text-xs text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1"
-                    >
-                      {showSecret ? <><Eye className="w-3.5 h-3.5" /> Hide</> : <><Eye className="w-3.5 h-3.5" /> Reveal</>}
-                    </button>
-                  )}
-                </div>
-                {showSecret && secretKeySet && (
-                  <div className="mt-2 p-2 bg-gray-50 rounded border border-gray-100 text-[10px] font-mono text-gray-500 break-all animate-in slide-in-from-top-1 duration-200">
-                    {company.paymentSettings?.paychanguSecretKeyEnc}
-                    <p className="mt-1 text-[9px] text-gray-400 font-sans italic">Note: This is the encrypted blob. The actual key is never shown for security.</p>
-                  </div>
-                )}
+              <div className="bg-white px-5 py-3.5 sm:col-span-2">
+                <p className="text-xs text-gray-400 mb-0.5">Gateway configuration</p>
+                <p className="text-sm text-gray-900">PayChangu is configured at the platform level. Companies only enable or disable access and provide optional metadata for reporting.</p>
               </div>
               <div className="bg-white px-5 py-3.5">
                 <p className="text-xs text-gray-400 mb-0.5">Currency</p>
@@ -344,17 +293,10 @@ const PaymentSettings: React.FC<{
                   <Input id="paychanguPublicKey" {...register("paychanguPublicKey")} placeholder="pub-xxxxxxxxxxxxxxxxxxxx" className="h-9 text-sm font-mono" />
                 </div>
                 <div className="sm:col-span-2">
-                  <Label htmlFor="paychanguSecretKey" className="text-xs font-medium text-gray-700 mb-1.5 flex items-center gap-1.5 block">
-                    <KeyRound className="w-3.5 h-3.5" /> Secret Key {secretKeySet && <span className="ml-1 text-emerald-600 font-normal">stored encrypted</span>}
-                  </Label>
-                  <div className="relative">
-                    <Input id="paychanguSecretKey" {...register("paychanguSecretKey")} type={showSecret ? "text" : "password"}
-                      placeholder={secretKeySet ? "Leave blank to keep existing key" : "sec-xxxxxxxxxxxxxxxxxxxx"} className="h-9 text-sm font-mono pr-14" />
-                    <button type="button" onClick={() => setShowSecret(v => !v)} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-gray-400 hover:text-gray-600">
-                      {showSecret ? "hide" : "show"}
-                    </button>
-                  </div>
-                </div>
+                <InfoBox>
+                  The PayChangu secret key is managed centrally by the platform. Only enable the gateway and configure the company receive number / public key metadata here.
+                </InfoBox>
+              </div>
               </div>
             </div>
           )}

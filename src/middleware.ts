@@ -16,10 +16,10 @@ const PROTECTED_ROUTES = [
 // Routes that logged-in users should be bounced away from
 const AUTH_ROUTES = ['/login', '/register'];
 
-type AppRole = 'superadmin' | 'company_admin' | 'operator' | 'conductor' | 'customer';
+type AppRole = 'superadmin' | 'company_admin' | 'operator' | 'conductor' | 'customer' | 'chief_of_growth' | 'chief_of_operations' | 'finance';
 
 const ROLE_ROUTE_MAP: Array<{ prefix: string; allowed: AppRole[] }> = [
-  { prefix: '/admin',             allowed: ['superadmin'] },
+  { prefix: '/admin',             allowed: ['superadmin', 'chief_of_operations'] },
   { prefix: '/company/admin',     allowed: ['company_admin', 'superadmin'] },
   { prefix: '/company/operator',  allowed: ['operator', 'company_admin', 'superadmin'] },
   { prefix: '/company/conductor', allowed: ['conductor', 'company_admin', 'superadmin'] },

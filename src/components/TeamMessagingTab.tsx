@@ -68,7 +68,7 @@ export default function TeamMessagingTab({ companyId, setError, setSuccess }: Te
       const broadcast = convRes.data?.find((c: any) => c.isBroadcast);
       if (broadcast) {
         setActiveConversation(broadcast);
-      } else if (userProfile?.role === 'company_admin') {
+      } else if (userProfile?.role === 'company_admin' || userProfile?.role === 'superadmin') {
         // Only admin can create the broadcast channel if it doesn't exist
         const newBroadcast = await dbActions.createConversation({
           companyId,

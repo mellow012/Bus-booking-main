@@ -15,7 +15,8 @@ export async function POST(req: Request, context: any) {
   try {
     const res = await setUserCompanyAdmin(targetId, { id: current.id, name: `${current.firstName || ''} ${current.lastName || ''}`.trim(), role: current.role, companyId: current.companyId ?? undefined });
     if (!res.success) return NextResponse.json({ error: res.error || 'Failed' }, { status: 500 });
-    return NextResponse.json({ success: true, data: res.data });
+    const payload = { success: true, data: res.data, deprecated: true, alternative: 'PATCH /api/admin/users/:id' };
+    return NextResponse.json(payload, { status: 200, headers: { Deprecation: 'true' } });
   } catch (err) {
     console.error('Error in set-company-admin route:', err);
     return NextResponse.json({ error: 'Server error' }, { status: 500 });

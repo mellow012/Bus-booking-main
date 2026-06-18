@@ -329,7 +329,7 @@ export const useBookingsList = () => {
         setTimeout(() => setSuccess(''), 6000); fetchBookings(); return;
       }
 
-      const apiRoute = selectedProvider === 'paychangu' ? '/api/payments/paychangu/initiate' : '/api/payments/flutterwave/initiate';
+      const apiRoute = selectedProvider === 'paychangu' ? '/api/payments/paychangu/charge' : '/api/payments/flutterwave/charge';
       const res = await fetch(apiRoute, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ bookingId: selectedBooking.id, paymentProvider: selectedProvider, customerDetails: { email: userDetails.email.toLowerCase().trim(), name: userDetails.name.trim(), phone: userDetails.phone.trim() }, metadata: { route: `${selectedBooking.route.origin}-${selectedBooking.route.destination}`, departure: selectedBooking.schedule.departureDateTime instanceof Date ? selectedBooking.schedule.departureDateTime.toISOString() : new Date(selectedBooking.schedule.departureDateTime as unknown as string).toISOString(), passengerCount: String(selectedBooking.passengerDetails.length), seatNumbers: selectedBooking.seatNumbers.join(','), subMethod: selectedSubId } }),

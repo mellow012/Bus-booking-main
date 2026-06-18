@@ -7,6 +7,9 @@ ALTER TABLE IF EXISTS "User" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE IF EXISTS "Booking" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE IF EXISTS "Schedule" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE IF EXISTS "Company" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS "Bus" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS "Route" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS "Payment" ENABLE ROW LEVEL SECURITY;
 
 -- -----------------------------
 -- Users: allow owners and superadmins
@@ -25,6 +28,33 @@ CREATE POLICY "Users: owner read/write" ON "User"
 CREATE POLICY "Users: company_admin read" ON "User"
   USING (auth.role() = 'company_admin' AND companyId = current_setting('jwt.claims.company_id')::text)
   WITH CHECK (false);
+
+-- -----------------------------
+-- Chief of Operations: full access for operational tables
+-- -----------------------------
+CREATE POLICY "Bookings: coo full access" ON "Booking"
+  USING (auth.role() = 'chief_of_operations')
+  WITH CHECK (auth.role() = 'chief_of_operations');
+
+CREATE POLICY "Schedules: coo full access" ON "Schedule"
+  USING (auth.role() = 'chief_of_operations')
+  WITH CHECK (auth.role() = 'chief_of_operations');
+
+CREATE POLICY "Bus: coo full access" ON "Bus"
+  USING (auth.role() = 'chief_of_operations')
+  WITH CHECK (auth.role() = 'chief_of_operations');
+
+CREATE POLICY "Route: coo full access" ON "Route"
+  USING (auth.role() = 'chief_of_operations')
+  WITH CHECK (auth.role() = 'chief_of_operations');
+
+CREATE POLICY "Payment: coo full access" ON "Payment"
+  USING (auth.role() = 'chief_of_operations')
+  WITH CHECK (auth.role() = 'chief_of_operations');
+
+CREATE POLICY "Company: coo full access" ON "Company"
+  USING (auth.role() = 'chief_of_operations')
+  WITH CHECK (auth.role() = 'chief_of_operations');
 
 -- -----------------------------
 -- Bookings: owners and company staff

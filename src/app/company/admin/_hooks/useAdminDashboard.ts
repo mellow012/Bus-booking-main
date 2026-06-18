@@ -57,7 +57,7 @@ export function useAdminDashboard() {
 
   const paymentSettings = dashboardData.company?.paymentSettings;
   const availableTabs = useMemo(() => getAvailableTabs(paymentSettings), [paymentSettings]);
-  const isValidUser = useMemo(() => !!(user && userProfile?.role === 'company_admin' && userProfile.companyId), [user, userProfile]);
+  const isValidUser = useMemo(() => !!(user && (userProfile?.role === 'company_admin' || userProfile?.role === 'superadmin') && userProfile.companyId), [user, userProfile]);
 
   const fetchCollectionData = useCallback(async (table: string, cId: string): Promise<any[]> => {
     if (!cId) return [];
@@ -128,7 +128,7 @@ export function useAdminDashboard() {
     if (authLoading) return;
     if (!user) { router.push('/login'); return; }
     if (!userProfile) return;
-    if (userProfile.role !== 'company_admin') { showAlert('error', 'Access denied.'); router.push('/'); return; }
+    if (!(userProfile.role === 'company_admin' || userProfile.role === 'superadmin')) { showAlert('error', 'Access denied.'); router.push('/'); return; }
     if (!userProfile.companyId) { showAlert('info', 'Please finish setting up your company.'); router.push('/company/setup'); return; }
     const urlCompanyId = searchParams?.get('companyId');
     if (urlCompanyId && urlCompanyId !== userProfile.companyId) {

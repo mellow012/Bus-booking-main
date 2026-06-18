@@ -4,7 +4,6 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import * as dbActions from '@/lib/actions/db.actions';
-// Firestore removed - Using SQL via API routes
 import {
   Loader2,
   Plus,
@@ -27,7 +26,7 @@ import {
   User,
   DollarSign,
   Calendar,
-  Map,
+  Map as MapIcon,
   Download,
   Phone,
   Mail,
@@ -49,22 +48,18 @@ import {
   Gift,
   Menu,
 } from 'lucide-react';
+import Image from 'next/image';
 import AlertMessage from '@/components/AlertMessage';
-import { Company, UserProfile, Booking, Schedule, Route, Bus, OperatorProfile, ConductorProfile, Promotion } from '@/types/index';
+import SettingsTab from '@/components/SettingsTab';
+import AdminPayments from '@/components/AdminPayments';
+import { Company, UserProfile, Booking, Schedule, Route, Bus, OperatorProfile, ConductorProfile, Promotion, AuditLog, AuditAction } from '@/types/index';
 import TabButton from '@/components/tabButton';
 import DashboardBottomNav from "@/components/DashboardBottomNav";
-import Image from "next/image";
+import AdminSidebar from '@/components/AdminSidebar';
 
-// ─── Kinetic Theme Components ───────────────────────────────────────────────
-
+// ─── Small UI components & constants restored for composability ───────────
 const KineticStatCard: React.FC<{
-  title: string;
-  value: string | number;
-  icon: any;
-  iconBg: string;
-  iconColor: string;
-  badge?: { text: string; className: string };
-  subtitle?: string;
+  title: string; value: string | number; icon: any; iconBg: string; iconColor: string; badge?: { text: string; className: string }; subtitle?: string;
 }> = ({ title, value, icon: Icon, iconBg, iconColor, badge, subtitle }) => (
   <div className="bg-white rounded-xl shadow-[0_2px_10px_-4px_rgba(0,0,0,0.1)] p-5 relative overflow-hidden flex flex-col justify-between min-h-[140px] border border-gray-100 transition-all hover:shadow-md group">
     <div className="flex justify-between items-start mb-2">
@@ -85,11 +80,7 @@ const KineticStatCard: React.FC<{
   </div>
 );
 
-// ─── StatusBadge ──────────────────────────────────────────────────────────────
-const StatusBadge: React.FC<{ status: string; type?: 'booking' | 'company' }> = ({
-  status,
-  type = 'company',
-}) => {
+const StatusBadge: React.FC<{ status: string; type?: 'booking' | 'company' }> = ({ status, type = 'company' }) => {
   const lower = status?.toLowerCase() || 'unknown';
   let color = 'bg-gray-100 text-gray-800';
   let Icon: React.FC<{ className?: string }> = AlertCircle;
@@ -114,30 +105,25 @@ const StatusBadge: React.FC<{ status: string; type?: 'booking' | 'company' }> = 
   );
 };
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ─── Types & Constants ─────────────────────────────────────────────────────
 type StatusFilter = 'all' | 'active' | 'inactive' | 'pending';
 type SortBy = 'name' | 'createdAt' | 'status' | 'email';
 type SortOrder = 'asc' | 'desc';
-type TabType = 'overview' | 'companies' | 'bookings' | 'profile' | 'routes' | 'schedules' | 'promotions';
+type TabType = 'overview' | 'companies' | 'users' | 'payments' | 'audit' | 'health' | 'profile' | 'bookings' | 'routes' | 'schedules' | 'promotions' | 'coo';
 
 interface AlertState { type: 'error' | 'success' | 'warning' | 'info'; message: string; id: string; }
 interface FormErrors { name?: string; email?: string; contact?: string; adminPhone?: string; adminFirstName?: string; adminLastName?: string; }
 interface LoadingStates { companies: boolean; bookings: boolean; promotions: boolean; creating: boolean; updating: boolean; deleting: boolean; initializing: boolean; }
 
-interface DashboardStats {
-  totalCompanies: number; activeCompanies: number; pendingCompanies: number; inactiveCompanies: number;
-  totalRevenue: number; monthlyRevenue: number; totalBookings: number; monthlyBookings: number;
-  monthlyGrowth: number; revenueGrowth: number;
-}
+interface DashboardStats { totalCompanies: number; activeCompanies: number; pendingCompanies: number; inactiveCompanies: number; totalRevenue: number; monthlyRevenue: number; totalBookings: number; monthlyBookings: number; monthlyGrowth: number; revenueGrowth: number; }
 
-interface CreateCompanyRequest {
-  name: string; email: string; contact: string; status: Company['status'];
-  address?: string; description?: string; adminFirstName?: string; adminLastName?: string; adminPhone?: string;
-}
+interface HealthStatus { status: 'ok' | 'degraded' | 'unhealthy'; checks: Record<string, 'ok' | 'degraded' | 'error'>; timestamp: string; }
 
-// ─── Constants ────────────────────────────────────────────────────────────────
+interface CreateCompanyRequest { name: string; email: string; contact: string; status: Company['status']; address?: string; description?: string; adminFirstName?: string; adminLastName?: string; adminPhone?: string; }
+
 const COMPANIES_PER_PAGE = 10;
 const BOOKINGS_PER_PAGE = 10;
+const USERS_PER_PAGE = 12;
 const MONTHLY_BOOKING_MULTIPLIER = 0.3;
 const DEFAULT_GROWTH_RATES = { monthly: 12.5, revenue: 18.2 } as const;
 
@@ -147,22 +133,6 @@ const STATUS_CONFIG = {
   inactive: { color: 'bg-red-100 text-red-800 border-red-200', icon: Ban },
 } as const;
 
-// ─── Utilities ────────────────────────────────────────────────────────────────
-const validateEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-const validatePhone = (phone: string) => !phone || /^\+?[\d\s\-()]{8,15}$/.test(phone);
-
-const convertTimestamp = (value: unknown): Date | null => {
-  if (!value) return null;
-  if (value instanceof Date) return value;
-  if (typeof value === 'string' || typeof value === 'number') {
-    const d = new Date(value);
-    return isNaN(d.getTime()) ? null : d;
-  }
-  // Handle complex objects that might be firestore-like or custom
-  const obj = value as Record<string, unknown>;
-  if (typeof obj.toDate === 'function') return (obj.toDate as () => Date)();
-  return null;
-};
 
 const formatDate = (date: Date | string | number | undefined | null): string => {
   if (!date) return '—';
@@ -179,6 +149,20 @@ const debounce = <T extends (...args: unknown[]) => void>(func: T, wait: number)
     clearTimeout(timeout);
     timeout = setTimeout(() => func(...args), wait);
   };
+};
+
+const fuzzyMatch = (text: string, query: string): boolean => {
+  const normalized = text.toLowerCase();
+  const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
+  return terms.every(term => {
+    let index = 0;
+    for (const char of term) {
+      index = normalized.indexOf(char, index);
+      if (index === -1) return false;
+      index += 1;
+    }
+    return true;
+  });
 };
 
 // ─── BookingsTab ──────────────────────────────────────────────────────────────
@@ -340,6 +324,78 @@ const BookingsTab: React.FC<{
   );
 };
 
+// ─── COO Tab (Minimal scaffold) ─────────────────────────────────────────────
+const COOTab: React.FC<{ setActiveTab: (t: TabType) => void }> = ({ setActiveTab }) => {
+  const [loading, setLoading] = useState(false);
+  const [stats, setStats] = useState<any>(null);
+
+  const fetchStats = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/admin/coo/payment-stats');
+      if (!res.ok) throw new Error('Failed to fetch');
+      const data = await res.json();
+      setStats(data);
+    } catch (err) {
+      console.error('COO stats fetch error', err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchStats(); }, [fetchStats]);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-xl font-black text-gray-900">Chief of Operations</h3>
+          <p className="text-[10px] text-gray-400 mt-1">Overview and cross-company operational controls.</p>
+        </div>
+        <div className="flex gap-2">
+          <button onClick={() => setActiveTab('bookings')} className="rounded-2xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white">Manage Bookings</button>
+          <button onClick={() => setActiveTab('schedules')} className="rounded-2xl border border-gray-200 px-4 py-2 text-xs font-semibold text-gray-700">Manage Schedules</button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+          <p className="text-xs uppercase tracking-widest text-gray-400">Total bookings</p>
+          <p className="mt-3 text-2xl font-black text-gray-900">{stats?.bookingAgg?._count?.id ?? '—'}</p>
+        </div>
+        <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+          <p className="text-xs uppercase tracking-widest text-gray-400">Total booking value</p>
+          <p className="mt-3 text-2xl font-black text-emerald-700">MWK {stats?.bookingAgg?._sum?.totalAmount ?? '—'}</p>
+        </div>
+        <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+          <p className="text-xs uppercase tracking-widest text-gray-400">Total payments</p>
+          <p className="mt-3 text-2xl font-black text-gray-900">{stats?.paymentAgg?._count?.id ?? '—'}</p>
+        </div>
+        <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+          <p className="text-xs uppercase tracking-widest text-gray-400">Payments value</p>
+          <p className="mt-3 text-2xl font-black text-emerald-700">MWK {stats?.paymentAgg?._sum?.amount ?? '—'}</p>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-2xl border shadow-sm p-4">
+        <h4 className="text-sm font-semibold text-gray-900 mb-2">By company</h4>
+        {loading ? <p className="text-sm text-gray-400">Loading…</p> : (
+          <div className="text-xs text-gray-600">
+            {stats?.byCompany?.length ? (
+              stats.byCompany.slice(0, 10).map((c: any) => (
+                <div key={c.companyId} className="flex items-center justify-between py-2 border-b last:border-b-0">
+                  <div className="text-sm">{c.companyId}</div>
+                  <div className="text-sm font-black">MWK {c._sum?.totalAmount ?? 0}</div>
+                </div>
+              ))
+            ) : <p className="text-sm text-gray-400">No data</p>}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 // ─── PromotionsTab ────────────────────────────────────────────────────────────
 const PromotionsTab: React.FC<{
   promotions: Promotion[];
@@ -467,7 +523,7 @@ const PromotionsTab: React.FC<{
         ) : promotions.map(promo => (
           <div key={promo.id} className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm hover:shadow-md transition-all group relative overflow-hidden">
             <div className={`absolute top-0 right-0 w-24 h-24 bg-gradient-to-br ${promo.isActive ? 'from-green-500/10 to-emerald-500/5' : 'from-gray-500/10 to-slate-500/5'} -mr-8 -mt-8 rounded-full blur-xl`} />
-            
+
             <div className="flex justify-between items-start mb-4 relative">
               <div className={`p-2.5 rounded-xl ${promo.isActive ? 'bg-emerald-50 text-emerald-600' : 'bg-gray-100 text-gray-400'}`}>
                 <TicketPercent className="w-5 h-5" />
@@ -494,7 +550,7 @@ const PromotionsTab: React.FC<{
               </div>
               <p className="text-xs font-bold text-indigo-600 mb-2">{promo.title}</p>
               <p className="text-[11px] text-gray-500 line-clamp-2 mb-4 h-8">{promo.description}</p>
-              
+
               <div className="grid grid-cols-2 gap-3 pt-4 border-t border-gray-50">
                 <div>
                   <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Discount</p>
@@ -587,13 +643,13 @@ const PromotionsTab: React.FC<{
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Start Date</label>
-                  <input type="date" value={editingPromotion?.startDate ? new Date(editingPromotion.startDate).toISOString().split('T')[0] : ''} 
+                  <input type="date" value={editingPromotion?.startDate ? new Date(editingPromotion.startDate).toISOString().split('T')[0] : ''}
                     onChange={e => setEditingPromotion(p => ({ ...p!, startDate: new Date(e.target.value) }))}
                     className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl text-sm font-bold focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all" />
                 </div>
                 <div>
                   <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">End Date</label>
-                  <input type="date" value={editingPromotion?.endDate ? new Date(editingPromotion.endDate).toISOString().split('T')[0] : ''} 
+                  <input type="date" value={editingPromotion?.endDate ? new Date(editingPromotion.endDate).toISOString().split('T')[0] : ''}
                     onChange={e => setEditingPromotion(p => ({ ...p!, endDate: new Date(e.target.value) }))}
                     className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl text-sm font-bold focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all" />
                 </div>
@@ -627,11 +683,6 @@ const PaymentSettingsModal: React.FC<{
   const [paychanguEnabled, setPaychanguEnabled] = useState<boolean>(ps.paychanguEnabled ?? false);
   const [paychanguReceiveNumber, setPaychanguReceiveNumber] = useState<string>(ps.paychanguReceiveNumber ?? '');
   const [paychanguPublicKey, setPaychanguPublicKey] = useState<string>(ps.paychanguPublicKey ?? '');
-  // Secret key field — always blank on load (never sent back to the browser)
-  // Only populated when the admin types a new key. Empty = keep existing encrypted value.
-  const [paychanguSecretKey, setPaychanguSecretKey] = useState<string>('');
-  const [secretKeySet, setSecretKeySet] = useState<boolean>(!!ps.paychanguSecretKeyEnc);
-  const [showSecret, setShowSecret] = useState<boolean>(false);
 
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -645,11 +696,6 @@ const PaymentSettingsModal: React.FC<{
         e.receiveNumber = 'Enter a valid phone number';
       if (paychanguPublicKey.trim() && !paychanguPublicKey.startsWith('pub-'))
         e.publicKey = 'Public key should start with pub-';
-      // Secret key required on first save; optional on updates (keep existing if blank)
-      if (!secretKeySet && !paychanguSecretKey.trim())
-        e.secretKey = 'Secret key is required — enter the sec-... key from your PayChangu dashboard';
-      if (paychanguSecretKey.trim() && !paychanguSecretKey.trim().toLowerCase().startsWith('sec-'))
-        e.secretKey = 'Secret key should start with sec-';
     }
 
     setErrors(e);
@@ -660,30 +706,11 @@ const PaymentSettingsModal: React.FC<{
     if (!validate()) return;
     setSaving(true);
     try {
-      // Encrypt the secret key server-side — the plaintext never goes to Firestore directly
-      let paychanguSecretKeyEnc: string | undefined = ps.paychanguSecretKeyEnc; // keep existing if not changed
-      if (paychanguSecretKey.trim()) {
-        const res = await fetch('/api/admin/encrypt-paychangu-key', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ companyId: company.id, secretKey: paychanguSecretKey.trim().toLowerCase() }),
-        });
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
-          throw new Error(err.error || 'Failed to encrypt secret key');
-        }
-        const data = await res.json();
-        paychanguSecretKeyEnc = data.encrypted; // server returns the encrypted blob
-      }
-
       const updated: Company['paymentSettings'] = Object.fromEntries(
         Object.entries({
           paychanguEnabled,
           paychanguReceiveNumber: paychanguReceiveNumber.trim() || null,
           paychanguPublicKey: paychanguPublicKey.trim() || null,
-          paychanguSecretKeyEnc: paychanguSecretKeyEnc ?? null,
         }).filter(([, v]) => v !== undefined)
       ) as Company['paymentSettings'];
 
@@ -752,35 +779,6 @@ const PaymentSettingsModal: React.FC<{
                 {errors.receiveNumber && <p className="text-red-500 text-xs mt-1">{errors.receiveNumber}</p>}
               </div>
 
-              {/* Secret key — encrypted server-side, never stored plaintext */}
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">
-                  Secret Key <span className="text-gray-400 font-normal">(sec-...)</span>
-                  {secretKeySet && (
-                    <span className="ml-2 inline-flex items-center gap-1 text-emerald-600">
-                      <CheckCircle className="w-3 h-3" /> stored encrypted
-                    </span>
-                  )}
-                </label>
-                <div className="relative">
-                  <input
-                    type={showSecret ? 'text' : 'password'}
-                    value={paychanguSecretKey}
-                    onChange={e => setPaychanguSecretKey(e.target.value)}
-                    placeholder={secretKeySet ? '••••••••  (leave blank to keep existing)' : 'sec-xxxxxxxxxxxxxxxx'}
-                    className={`w-full px-3 py-2 pr-10 border rounded-lg text-sm font-mono focus:ring-2 focus:ring-emerald-500 focus:border-transparent ${errors.secretKey ? 'border-red-400' : 'border-gray-300'}`}
-                  />
-                  <button type="button" onClick={() => setShowSecret(v => !v)}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs">
-                    {showSecret ? 'hide' : 'show'}
-                  </button>
-                </div>
-                {errors.secretKey && <p className="text-red-500 text-xs mt-1">{errors.secretKey}</p>}
-                <p className="text-xs text-gray-400 mt-1">
-                  Encrypted with AES-256-GCM before being stored. The encryption key lives only in your server env vars.
-                </p>
-              </div>
-
               {/* Public key */}
               <div>
                 <label className="block text-xs font-semibold text-gray-700 mb-1">
@@ -828,6 +826,22 @@ const fmt = (d: unknown): string => {
   if (!date) return '—';
   return new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'short', day: 'numeric' }).format(date);
 };
+
+// ── Small helpers ──────────────────────────────────────────────────────────
+const convertTimestamp = (v: unknown): Date | null => {
+  if (v === null || v === undefined) return null;
+  if (v instanceof Date) return v;
+  if (typeof v === 'number') return new Date(v);
+  if (typeof v === 'string') {
+    const parsed = Date.parse(v);
+    if (isNaN(parsed)) return null;
+    return new Date(parsed);
+  }
+  return null;
+};
+
+const validateEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+const validatePhone = (phone: string) => /^\+?[0-9\s-]{7,15}$/.test(phone);
 
 const STATUS_STYLES: Record<string, { bg: string; text: string; icon: React.ReactNode }> = {
   active: { bg: 'bg-emerald-50 border-emerald-200', text: 'text-emerald-700', icon: <CheckCircle className="w-3.5 h-3.5" /> },
@@ -1038,8 +1052,8 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
                         key={status}
                         onClick={() => onStatusChange(selected.id, status)}
                         className={`flex items-center gap-1.5 px-4 py-1.5 text-[11px] font-black uppercase tracking-wider rounded-lg transition-all ${isSelected
-                            ? `${style?.bg} ${style?.text} shadow-sm`
-                            : 'text-gray-400 hover:text-gray-600 hover:bg-white'
+                          ? `${style?.bg} ${style?.text} shadow-sm`
+                          : 'text-gray-400 hover:text-gray-600 hover:bg-white'
                           }`}
                       >
                         <span className="capitalize">{label}</span>
@@ -1225,22 +1239,551 @@ export default function SuperAdminDashboard() {
   });
   const [paymentModalCompany, setPaymentModalCompany] = useState<Company | null>(null);
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
+  const [selectedPaymentCompany, setSelectedPaymentCompany] = useState<Company | null>(null);
+  const [paymentCompanyQuery, setPaymentCompanyQuery] = useState('');
+  const [paymentCompanyPage, setPaymentCompanyPage] = useState(1);
+
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
+  const [auditLoading, setAuditLoading] = useState(false);
+  const [auditError, setAuditError] = useState<string>('');
+  const [auditActionFilter, setAuditActionFilter] = useState<string>('all');
+  const [auditStatusFilter, setAuditStatusFilter] = useState<'all' | 'success' | 'failed'>('all');
+  const [auditCompanyFilter, setAuditCompanyFilter] = useState<string>('');
+  const [auditStartDate, setAuditStartDate] = useState<string>('');
+  const [auditEndDate, setAuditEndDate] = useState<string>('');
+  const [auditSearchTerm, setAuditSearchTerm] = useState<string>('');
+  const [auditLimit, setAuditLimit] = useState<number>(100);
+
+  const [healthStatus, setHealthStatus] = useState<HealthStatus | null>(null);
+  const [healthLoading, setHealthLoading] = useState(false);
+  const [healthError, setHealthError] = useState<string>('');
 
   const [formData, setFormData] = useState<CreateCompanyRequest>({
     name: '', email: '', contact: '', status: 'pending',
     address: '', description: '', adminFirstName: '', adminLastName: '', adminPhone: '',
   });
 
+  // ── Unified Payment System State ───────────────────────────────────────────
+  // Master PayChangu Configuration
+  const [paychanguPublicKey, setPaychanguPublicKey] = useState<string>('');
+  const [paychanguSecretKey, setPaychanguSecretKey] = useState<string>('');
+  const [paymentEnvironment, setPaymentEnvironment] = useState<'test' | 'live'>('test');
+  const [paymentConfigSaving, setPaymentConfigSaving] = useState(false);
+  const [paymentConfigErrors, setPaymentConfigErrors] = useState<Record<string, string>>({});
+
+  // Commission Rates Configuration
+  const [paychanguFeePercent, setPaychanguFeePercent] = useState<number>(2.5); // What PayChangu takes
+  const [companyFeePercent, setCompanyFeePercent] = useState<number>(80);      // What company gets
+  // Platform fee is auto-calculated: 100 - paychanguFee - companyFee
+
+  // Transactions & Reports
+  const [transactionFilter, setTransactionFilter] = useState<'all' | 'successful' | 'failed' | 'pending'>('all');
+  const [transactionCompanyFilter, setTransactionCompanyFilter] = useState<string>('');
+  const [transactionPage, setTransactionPage] = useState(1);
+
+  // System Notification Preferences
+  const [notificationPreferences, setNotificationPreferences] = useState({
+    emailOnFailedTransaction: true,
+    dailySettlementEmail: true,
+    weeklyReportEmail: true,
+    webhookEnabled: false,
+    webhookUrl: '',
+    notificationEmail: '',
+  });
+
+  const AUDIT_ACTIONS: AuditAction[] = [
+    'create_schedule', 'update_schedule', 'delete_schedule', 'archive_schedule', 'create_booking', 'update_booking',
+    'mark_boarded', 'mark_no_show', 'collect_payment', 'generate_report', 'update_payment_status', 'login', 'logout',
+    'access_dashboard', 'export_data'
+  ];
+  const [notificationSaving, setNotificationSaving] = useState(false);
+
   const isAuthorized = useMemo(() => userProfile?.role === 'superadmin', [userProfile?.role]);
 
   // ── Alerts ─────────────────────────────────────────────────────────────────
   const showAlert = useCallback((type: AlertState['type'], message: string) => {
     const id = Date.now().toString();
-    setAlerts(prev => [...prev, { type, message, id }]);
+    setAlerts((prev: AlertState[]) => [...prev, { type, message, id }]);
     if (type === 'success' || type === 'info') {
-      setTimeout(() => setAlerts(prev => prev.filter(a => a.id !== id)), 5000);
+      setTimeout(() => setAlerts((prev: AlertState[]) => prev.filter(a => a.id !== id)), 5000);
     }
   }, []);
+
+  // ── Users list + Role management helpers ─────────────────────────────────
+  const [usersList, setUsersList] = useState<any[]>([]);
+  const [usersLoading, setUsersLoading] = useState(false);
+  const [userSearchTerm, setUserSearchTerm] = useState('');
+  const [usersPage, setUsersPage] = useState(1);
+  const [selectedUser, setSelectedUser] = useState<any | null>(null);
+  const [selectedUserRole, setSelectedUserRole] = useState<string>('');
+  const [userModalOpen, setUserModalOpen] = useState(false);
+  const [roleUpdating, setRoleUpdating] = useState(false);
+
+  const ROLE_OPTIONS = ['superadmin','chief_of_growth','chief_of_operations','finance','company_admin','operator','conductor','customer'];
+  const ROLE_LABELS: Record<string,string> = {
+    superadmin: 'Super Admin', chief_of_growth: 'Chief of Growth', chief_of_operations: 'Chief of Operations',
+    finance: 'Finance', company_admin: 'Company Admin', operator: 'Operator', conductor: 'Conductor', customer: 'Customer'
+  };
+
+  const fetchUsers = async () => {
+    setUsersLoading(true);
+    try {
+      const res = await fetch('/api/admin/users?limit=200', { credentials: 'same-origin' });
+      if (!res.ok) throw new Error('Failed to fetch users');
+      const json = await res.json();
+      setUsersList(json?.data || []);
+    } catch (e) {
+      console.error('Failed to load users', e);
+      showAlert('error', 'Failed to load users');
+    } finally { setUsersLoading(false); }
+  };
+
+  useEffect(() => { fetchUsers(); }, []);
+
+  const refreshUsers = () => fetchUsers();
+
+  const updateCompanySettings = useCallback((company: Company) => {
+    setCompanies(prev => prev.map(c => c.id === company.id ? company : c));
+    setSelectedPaymentCompany(company);
+  }, []);
+
+  const fetchAuditLogs = useCallback(async () => {
+    setAuditLoading(true);
+    setAuditError('');
+    try {
+      const params = new URLSearchParams();
+      if (auditActionFilter !== 'all') params.set('action', auditActionFilter);
+      if (auditStatusFilter !== 'all') params.set('status', auditStatusFilter);
+      if (auditCompanyFilter) params.set('companyId', auditCompanyFilter);
+      if (auditStartDate) params.set('startDate', auditStartDate);
+      if (auditEndDate) params.set('endDate', auditEndDate);
+      params.set('limit', String(auditLimit));
+
+      const res = await fetch(`/api/admin/audit-logs?${params.toString()}`, { credentials: 'same-origin' });
+      if (!res.ok) throw new Error(`Failed to load audit logs (${res.status})`);
+      const json = await res.json();
+      setAuditLogs(json?.data || []);
+    } catch (error: unknown) {
+      console.error('Failed to fetch audit logs', error);
+      setAuditError((error as Error).message || 'Failed to load audit logs');
+    } finally {
+      setAuditLoading(false);
+    }
+  }, [auditActionFilter, auditStatusFilter, auditCompanyFilter, auditStartDate, auditEndDate, auditLimit]);
+
+  const fetchHealthStatus = useCallback(async () => {
+    setHealthLoading(true);
+    setHealthError('');
+    try {
+      const res = await fetch('/api/health', { credentials: 'same-origin' });
+      if (!res.ok) throw new Error(`Health endpoint returned ${res.status}`);
+      const json = await res.json();
+      setHealthStatus(json as HealthStatus);
+    } catch (error: unknown) {
+      console.error('Failed to fetch health status', error);
+      setHealthError((error as Error).message || 'Unable to fetch health status');
+    } finally {
+      setHealthLoading(false);
+    }
+  }, []);
+
+  const filteredAuditLogs = useMemo(() => {
+    if (!auditSearchTerm.trim()) return auditLogs;
+    const query = auditSearchTerm.trim().toLowerCase();
+    return auditLogs.filter(log => {
+      return [
+        log.userName,
+        log.userRole,
+        log.action,
+        log.resourceType,
+        log.resourceName,
+        log.description,
+        log.status,
+        log.companyId,
+      ].some(value => value?.toString().toLowerCase().includes(query));
+    });
+  }, [auditLogs, auditSearchTerm]);
+
+  const auditPageData = useMemo(() => {
+    const totalItems = filteredAuditLogs.length;
+    const pageSize = 12;
+    const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+    return {
+      currentLogs: filteredAuditLogs.slice(0, pageSize),
+      totalItems,
+      totalPages,
+      currentPage: 1,
+    };
+  }, [filteredAuditLogs]);
+
+  const auditSummary = useMemo(() => {
+    const total = auditLogs.length;
+    const success = auditLogs.filter(log => log.status === 'success').length;
+    const failed = auditLogs.filter(log => log.status === 'failed').length;
+    const actions = Array.from(new Set(auditLogs.map(log => log.action)));
+    return { total, success, failed, actions };
+  }, [auditLogs]);
+
+  const healthSummary = useMemo(() => {
+    if (!healthStatus) return { ok: 0, degraded: 0, error: 0 };
+    const counts = { ok: 0, degraded: 0, error: 0 };
+    Object.values(healthStatus.checks).forEach(value => { counts[value] += 1; });
+    return counts;
+  }, [healthStatus]);
+
+  const refreshAudit = useCallback(() => fetchAuditLogs(), [fetchAuditLogs]);
+  const refreshHealth = useCallback(() => fetchHealthStatus(), [fetchHealthStatus]);
+
+  useEffect(() => {
+    if (activeTab === 'audit') fetchAuditLogs();
+  }, [activeTab, fetchAuditLogs]);
+
+  useEffect(() => {
+    if (activeTab === 'health') fetchHealthStatus();
+  }, [activeTab, fetchHealthStatus]);
+
+  const companyOptions = useMemo(() => companies.map(company => ({ id: company.id, name: company.name })), [companies]);
+
+  const auditStatusBadge = (status?: string) => {
+    if (!status) return 'bg-gray-100 text-gray-700';
+    const lower = String(status).toLowerCase();
+    if (lower === 'success') return 'bg-emerald-100 text-emerald-700';
+    if (lower === 'failed') return 'bg-red-100 text-red-700';
+    return 'bg-gray-100 text-gray-700';
+  };
+
+  const healthCheckBadge = (value: 'ok' | 'degraded' | 'error' | 'unhealthy') => {
+    if (value === 'ok') return 'bg-emerald-100 text-emerald-700';
+    if (value === 'degraded') return 'bg-amber-100 text-amber-700';
+    return 'bg-red-100 text-red-700';
+  };
+
+  const renderHealthCheckLabel = (key: string) => {
+    if (key === 'database') return 'Database';
+    if (key === 'email') return 'Email service';
+    return key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  };
+
+  const getActionName = (action: string) => {
+    return action.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  };
+
+  const getRelativeTime = (timestamp?: string | Date) => {
+    if (!timestamp) return 'N/A';
+    const date = new Date(timestamp);
+    const diffMs = Date.now() - date.getTime();
+    const minutes = Math.floor(diffMs / 60000);
+    if (minutes < 1) return 'just now';
+    if (minutes < 60) return `${minutes} min ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours} hr ago`;
+    const days = Math.floor(hours / 24);
+    return `${days} day${days > 1 ? 's' : ''} ago`;
+  };
+
+  const getAuditRowDescription = (log: AuditLog) => {
+    return log.description || `${getActionName(log.action)} on ${log.resourceType}`;
+  };
+
+  const getAuditColumnHeader = (label: string) => label;
+
+  const renderAuditRow = (log: AuditLog) => (
+    <tr key={log.id || `${log.action}_${log.timestamp.toISOString()}`} className="border-b last:border-b-0 hover:bg-gray-50 transition-colors">
+      <td className="px-4 py-4 text-sm text-gray-900">{log.userName || 'Unknown'}</td>
+      <td className="px-4 py-4 text-sm text-gray-900">{log.userRole}</td>
+      <td className="px-4 py-4 text-sm text-gray-900">{getActionName(log.action)}</td>
+      <td className="px-4 py-4 text-sm text-gray-900">{log.resourceType}</td>
+      <td className="px-4 py-4 text-sm text-gray-900">{log.resourceName || log.resourceId || '—'}</td>
+      <td className="px-4 py-4 text-sm text-gray-900">{getAuditRowDescription(log)}</td>
+      <td className="px-4 py-4 text-sm text-gray-900"><span className={`inline-flex rounded-full px-2 py-1 text-[10px] font-black uppercase tracking-wider ${auditStatusBadge(log.status)}`}>{log.status}</span></td>
+      <td className="px-4 py-4 text-sm text-gray-500">{getRelativeTime(log.timestamp)}</td>
+    </tr>
+  );
+
+  const renderHealthMetric = (key: string, value: 'ok' | 'degraded' | 'error' | 'unhealthy') => (
+    <div key={key} className="rounded-3xl border border-gray-100 bg-white p-4 shadow-sm flex items-center justify-between">
+      <div>
+        <p className="text-xs font-bold uppercase tracking-widest text-gray-400">{renderHealthCheckLabel(key)}</p>
+      </div>
+      <span className={`inline-flex items-center rounded-full px-3 py-1 text-[11px] font-black uppercase tracking-widest ${healthCheckBadge(value)}`}>
+        {value}
+      </span>
+    </div>
+  );
+
+  const renderHealthSummary = () => {
+    if (!healthStatus) return null;
+    return (
+      <div className="grid gap-4 sm:grid-cols-3">
+        {Object.entries(healthStatus.checks).map(([key, value]) => renderHealthMetric(key, value))}
+      </div>
+    );
+  };
+
+  const renderSystemHealthBox = () => (
+    <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-2xl font-black text-gray-900">System status</p>
+          <p className="text-sm text-gray-500 mt-1">Last checked {healthStatus ? getRelativeTime(healthStatus.timestamp) : 'never'}.</p>
+        </div>
+        <div className="inline-flex items-center gap-3 rounded-3xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm font-black text-gray-700">
+          Current: <span className={`rounded-full px-3 py-1 ${healthStatus ? healthCheckBadge(healthStatus.status) : 'bg-gray-100 text-gray-600'}`}>{healthStatus?.status ?? 'unknown'}</span>
+        </div>
+      </div>
+      <div className="mt-6 space-y-4">
+        {renderHealthSummary()}
+      </div>
+      {healthError ? <p className="mt-4 text-sm text-red-600">{healthError}</p> : null}
+      <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-xs uppercase tracking-widest text-gray-400">Health endpoint snapshot</p>
+        <button type="button" onClick={refreshHealth} className="inline-flex items-center justify-center rounded-2xl bg-indigo-600 px-4 py-2 text-sm font-black text-white hover:bg-indigo-700 transition">Refresh</button>
+      </div>
+    </div>
+  );
+
+  const renderAuditActionsPanel = () => (
+    <div className="grid gap-4 lg:grid-cols-4">
+      <div className="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm">
+        <p className="text-xs uppercase tracking-widest text-gray-400">Total events</p>
+        <p className="mt-3 text-3xl font-black text-gray-900">{auditSummary.total}</p>
+      </div>
+      <div className="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm">
+        <p className="text-xs uppercase tracking-widest text-gray-400">Successful</p>
+        <p className="mt-3 text-3xl font-black text-emerald-700">{auditSummary.success}</p>
+      </div>
+      <div className="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm">
+        <p className="text-xs uppercase tracking-widest text-gray-400">Failed</p>
+        <p className="mt-3 text-3xl font-black text-red-700">{auditSummary.failed}</p>
+      </div>
+      <div className="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm">
+        <p className="text-xs uppercase tracking-widest text-gray-400">Action types</p>
+        <p className="mt-3 text-3xl font-black text-gray-900">{auditSummary.actions.length}</p>
+      </div>
+    </div>
+  );
+
+  const companyPaymentStats = useMemo(() => {
+    const stats: Record<string, { revenue: number; pending: number; failed: number; bookings: number }> = {};
+    companies.forEach(c => { stats[c.id] = { revenue: 0, pending: 0, failed: 0, bookings: 0 }; });
+    bookings.forEach(b => {
+      const companyStats = stats[b.companyId as string];
+      if (!companyStats) return;
+      companyStats.revenue += (b as any).totalAmount || 0;
+      companyStats.bookings += 1;
+      const normalized = ((b as any).paymentStatus || '').toLowerCase();
+      if (['pending', 'unpaid'].includes(normalized)) companyStats.pending += 1;
+      if (['failed', 'cancelled'].includes(normalized)) companyStats.failed += 1;
+    });
+    return stats;
+  }, [companies, bookings]);
+
+  const filteredPaymentCompanies = useMemo(() => {
+    const query = paymentCompanyQuery.trim().toLowerCase();
+    return companies
+      .filter(c => !query || c.name.toLowerCase().includes(query) || c.email?.toLowerCase().includes(query))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [companies, paymentCompanyQuery]);
+
+  const paymentCompanyPagination = useMemo(() => {
+    const totalItems = filteredPaymentCompanies.length;
+    const pageSize = 8;
+    const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+    const currentPage = Math.min(paymentCompanyPage, totalPages);
+    const startIndex = (currentPage - 1) * pageSize;
+    return {
+      totalItems,
+      totalPages,
+      currentPage,
+      currentCompanies: filteredPaymentCompanies.slice(startIndex, startIndex + pageSize),
+      startIndex: totalItems > 0 ? startIndex + 1 : 0,
+      endIndex: Math.min(startIndex + pageSize, totalItems),
+      hasNext: currentPage < totalPages,
+      hasPrev: currentPage > 1,
+    };
+  }, [filteredPaymentCompanies, paymentCompanyPage]);
+
+  useEffect(() => {
+    setPaymentCompanyPage(1);
+  }, [paymentCompanyQuery]);
+
+  const paymentSummary = useMemo(() => {
+    const totalCompanies = companies.length;
+    const enabledCompanies = companies.filter(c => c.paymentSettings?.paychanguEnabled).length;
+    const fullyConfiguredCompanies = companies.filter(c => c.paymentSettings?.paychanguEnabled && c.paymentSettings?.paychanguPublicKey && c.paymentSettings?.paychanguSecretKeyEnc).length;
+    const incompleteConfigs = enabledCompanies - fullyConfiguredCompanies;
+    const totalRevenue = bookings.reduce((sum, b) => sum + (b.totalAmount || 0), 0);
+    const failedPayments = bookings.filter(b => ['failed', 'cancelled'].includes((b.paymentStatus || '').toLowerCase())).length;
+    const pendingPayments = bookings.filter(b => ['pending', 'unpaid'].includes((b.paymentStatus || '').toLowerCase())).length;
+    return {
+      totalCompanies,
+      enabledCompanies,
+      fullyConfiguredCompanies,
+      incompleteConfigs,
+      totalRevenue,
+      failedPayments,
+      pendingPayments,
+    };
+  }, [companies, bookings]);
+
+  // ── Commission Calculation Helpers ────────────────────────────────────────
+  const calculateCommissionSplit = (totalAmount: number) => {
+    const platformFeePercent = 100 - paychanguFeePercent - companyFeePercent;
+    return {
+      total: totalAmount,
+      paychanguFee: (totalAmount * paychanguFeePercent) / 100,
+      companyEarnings: (totalAmount * companyFeePercent) / 100,
+      platformEarnings: (totalAmount * platformFeePercent) / 100,
+      paychanguPercent: paychanguFeePercent,
+      companyPercent: companyFeePercent,
+      platformPercent: platformFeePercent,
+    };
+  };
+
+  // ── Mock Transaction Data ─────────────────────────────────────────────────
+  const mockTransactions = useMemo(() => {
+    return bookings.slice(0, 20).map((booking, idx) => {
+      const company = companies.find(c => c.id === booking.companyId);
+      const split = calculateCommissionSplit(booking.totalAmount || 0);
+      return {
+        id: `TXN-${idx + 1001}`,
+        bookingId: booking.id,
+        companyId: booking.companyId,
+        companyName: company?.name || 'Unknown',
+        amount: booking.totalAmount || 0,
+        status: (booking.paymentStatus || 'pending').toLowerCase() as 'successful' | 'failed' | 'pending',
+        date: booking.createdAt,
+        split,
+      };
+    });
+  }, [bookings, companies, calculateCommissionSplit]);
+
+  const filteredTransactions = useMemo(() => {
+    return mockTransactions.filter(t => {
+      const statusMatch = transactionFilter === 'all' || t.status === transactionFilter;
+      const companyMatch = !transactionCompanyFilter || t.companyId === transactionCompanyFilter;
+      return statusMatch && companyMatch;
+    });
+  }, [mockTransactions, transactionFilter, transactionCompanyFilter]);
+
+  const transactionPagination = useMemo(() => {
+    const totalItems = filteredTransactions.length;
+    const pageSize = 8;
+    const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+    const currentPage = Math.min(transactionPage, totalPages);
+    const startIndex = (currentPage - 1) * pageSize;
+    return {
+      totalItems,
+      totalPages,
+      currentPage,
+      currentTransactions: filteredTransactions.slice(startIndex, startIndex + pageSize),
+      startIndex: totalItems > 0 ? startIndex + 1 : 0,
+      endIndex: Math.min(startIndex + pageSize, totalItems),
+    };
+  }, [filteredTransactions, transactionPage]);
+
+  // ── Transaction Summary Stats ─────────────────────────────────────────────
+  const transactionStats = useMemo(() => {
+    const successful = mockTransactions.filter(t => t.status === 'successful').length;
+    const failed = mockTransactions.filter(t => t.status === 'failed').length;
+    const pending = mockTransactions.filter(t => t.status === 'pending').length;
+    const totalProcessed = mockTransactions.reduce((sum, t) => sum + t.amount, 0);
+    const totalPaychanguFees = mockTransactions.reduce((sum, t) => sum + t.split.paychanguFee, 0);
+    const totalCompanyEarnings = mockTransactions.reduce((sum, t) => sum + t.split.companyEarnings, 0);
+    const totalPlatformEarnings = mockTransactions.reduce((sum, t) => sum + t.split.platformEarnings, 0);
+
+    return {
+      successful,
+      failed,
+      pending,
+      totalProcessed,
+      totalPaychanguFees,
+      totalCompanyEarnings,
+      totalPlatformEarnings,
+    };
+  }, [mockTransactions]);
+
+  const handleRoleChange = async (id: string, newRole: string) => {
+    const previous = usersList;
+    setUsersList((prev: any[]) => prev.map(u => u.id === id ? { ...u, role: newRole } : u));
+    if (selectedUser?.id === id) {
+      setSelectedUser((prev: any) => prev ? { ...prev, role: newRole } : prev);
+    }
+    try {
+      const res = await fetch(`/api/admin/users/${encodeURIComponent(id)}`, {
+        method: 'PATCH', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role: newRole }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Failed' }));
+        throw new Error(err.error || 'Failed to update role');
+      }
+      showAlert('success', 'Role updated');
+    } catch (e: any) {
+      setUsersList(previous);
+      console.error('Role update failed', e);
+      showAlert('error', e.message || 'Failed to update role');
+    }
+  };
+
+  const filteredUsers = useMemo(() => {
+    const query = userSearchTerm.trim();
+    if (!query) return usersList;
+    return usersList.filter(user => {
+      const rawText = [
+        `${user.firstName || ''} ${user.lastName || ''}`,
+        user.email,
+        ROLE_LABELS[user.role] || user.role,
+        user.companyName || user.company?.name || user.companyId,
+        user.id,
+      ].filter(Boolean).join(' ');
+      return fuzzyMatch(rawText, query);
+    });
+  }, [usersList, userSearchTerm]);
+
+  const usersPagination = useMemo(() => {
+    const totalItems = filteredUsers.length;
+    const totalPages = Math.max(1, Math.ceil(totalItems / USERS_PER_PAGE));
+    const startIndex = (usersPage - 1) * USERS_PER_PAGE;
+    const currentUsers = filteredUsers.slice(startIndex, startIndex + USERS_PER_PAGE);
+    return {
+      currentUsers,
+      totalPages,
+      totalItems,
+      startIndex: totalItems > 0 ? startIndex + 1 : 0,
+      endIndex: Math.min(startIndex + USERS_PER_PAGE, totalItems),
+      hasPrevPage: usersPage > 1,
+      hasNextPage: usersPage < totalPages,
+    };
+  }, [filteredUsers, usersPage]);
+
+  const openUserDetails = useCallback((user: any) => {
+    setSelectedUser(user);
+    setSelectedUserRole(user.role || 'customer');
+    setUserModalOpen(true);
+  }, []);
+
+  const closeUserModal = useCallback(() => {
+    setUserModalOpen(false);
+    setSelectedUser(null);
+    setSelectedUserRole('');
+  }, []);
+
+  const handleUserRoleSave = async () => {
+    if (!selectedUser) return;
+    if (selectedUserRole === selectedUser.role) {
+      closeUserModal();
+      return;
+    }
+    setRoleUpdating(true);
+    try {
+      await handleRoleChange(selectedUser.id, selectedUserRole);
+      setSelectedUser((prev: any) => prev ? { ...prev, role: selectedUserRole } : prev);
+      closeUserModal();
+    } finally {
+      setRoleUpdating(false);
+    }
+  };
 
   const clearAlert = useCallback((id: string) => setAlerts(prev => prev.filter(a => a.id !== id)), []);
   const clearAllAlerts = useCallback(() => setAlerts([]), []);
@@ -1295,8 +1838,11 @@ export default function SuperAdminDashboard() {
 
     const fetchDashboardData = async () => {
       try {
-        const res = await fetch('/api/admin/data');
-        if (!res.ok) throw new Error('Failed to fetch dashboard data');
+        const res = await fetch('/api/admin/data', { credentials: 'same-origin' });
+        if (!res.ok) {
+          const body = await res.text().catch(() => 'Unable to read response');
+          throw new Error(`Failed to fetch dashboard data: ${res.status} ${body}`);
+        }
         const { data } = await res.json();
 
         setCompanies(data.companies);
@@ -1567,57 +2113,7 @@ export default function SuperAdminDashboard() {
         <div className="fixed inset-0 bg-black/40 z-40 lg:hidden backdrop-blur-sm" onClick={() => setIsMobileOpen(false)} />
       )}
       {/* Sidebar */}
-      <aside className={`w-64 bg-white border-r border-gray-100 h-screen fixed lg:sticky top-0 flex flex-col z-50 overflow-hidden transition-transform duration-300 ${isMobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
-        <div className="p-6 mb-2 flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 bg-indigo-900 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-100">
-              <Layers className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <h1 className="font-bold text-indigo-900 text-[15px] leading-tight">Super Admin</h1>
-              <p className="text-[10px] text-gray-400 font-bold tracking-wider uppercase">Platform Control</p>
-            </div>
-          </div>
-          <button onClick={() => setIsMobileOpen(false)} className="lg:hidden p-2 text-gray-500 hover:bg-gray-100 rounded-lg">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        <nav className="flex-1 overflow-y-auto px-3 pt-2">
-          <SidebarItem id="overview" label="Overview" icon={BarChart3} />
-          <SidebarItem id="companies" label="Companies" icon={Building2} />
-          <SidebarItem id="bookings" label="Bookings" icon={List} />
-          <SidebarItem id="routes" label="Routes" icon={Map} />
-          <SidebarItem id="schedules" label="Schedules" icon={Calendar} />
-          <SidebarItem id="promotions" label="Promotions" icon={TicketPercent} />
-          <SidebarItem id="profile" label="Profiles" icon={User} />
-
-          <div className="pt-4 mt-4 border-t border-gray-50">
-            <button
-              onClick={signOut}
-              className="w-full flex items-center group transition-all duration-200 relative rounded-xl h-11 px-4 space-x-3 text-red-500 hover:bg-red-50"
-            >
-              <Loader2 className="w-5 h-5 flex-shrink-0 group-hover:rotate-180 transition-transform" />
-              <span className="text-[13px] font-bold">Sign Out</span>
-            </button>
-          </div>
-        </nav>
-
-        <div className="p-4 bg-gray-50/50 m-3 rounded-2xl">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-indigo-900 flex items-center justify-center text-[10px] font-black text-white">
-              SA
-            </div>
-            <div className="min-w-0">
-              <p className="text-[12px] font-bold text-gray-900 truncate">{userProfile?.firstName || 'Admin'}</p>
-              <div className="flex items-center gap-1">
-                <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-                <p className="text-[10px] font-bold text-gray-500 uppercase">Super User</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </aside>
+      <AdminSidebar activeTab={String(activeTab)} setActiveTab={(t: string) => setActiveTab(t as TabType)} isMobileOpen={isMobileOpen} setIsMobileOpen={setIsMobileOpen} userProfile={userProfile} signOut={signOut} />
 
       <div className="flex-1 flex flex-col min-w-0">
         {/* Header */}
@@ -1673,7 +2169,7 @@ export default function SuperAdminDashboard() {
                   <KineticStatCard title="Total Companies" value={stats.totalCompanies} icon={Building2} iconBg="bg-blue-50" iconColor="text-blue-600" />
                   <KineticStatCard title="Total Revenue" value={`MWK ${stats.totalRevenue.toLocaleString()}`} icon={DollarSign} iconBg="bg-emerald-50" iconColor="text-emerald-600" subtitle={`MWK ${stats.monthlyRevenue.toLocaleString()} this month`} />
                   <KineticStatCard title="Total Bookings" value={stats.totalBookings} icon={List} iconBg="bg-indigo-50" iconColor="text-indigo-600" badge={{ text: `${stats.monthlyGrowth}% UP`, className: 'bg-green-100 text-green-700' }} />
-                  <KineticStatCard title="Active Routes" value={routes.length} icon={Map} iconBg="bg-violet-50" iconColor="text-violet-600" />
+                  <KineticStatCard title="Active Routes" value={routes.length} icon={MapIcon} iconBg="bg-violet-50" iconColor="text-violet-600" />
                   <KineticStatCard title="Active Companies" value={stats.activeCompanies} icon={CheckCircle} iconBg="bg-green-50" iconColor="text-green-600" />
                   <KineticStatCard title="Pending Review" value={stats.pendingCompanies} icon={Clock} iconBg="bg-amber-50" iconColor="text-amber-600" badge={stats.pendingCompanies > 0 ? { text: 'ACTION', className: 'bg-amber-100 text-amber-700' } : undefined} />
                   <KineticStatCard title="Schedules Live" value={schedules.length} icon={Calendar} iconBg="bg-sky-50" iconColor="text-sky-600" />
@@ -1723,9 +2219,9 @@ export default function SuperAdminDashboard() {
                         <UserCheck className="w-6 h-6 text-amber-600 group-hover:scale-110 transition-transform" />
                         <span className="text-xs font-bold text-amber-900">Audit Companies</span>
                       </button>
-                      <button onClick={() => setActiveTab('bookings')} className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl bg-violet-50/50 hover:bg-violet-50 border border-violet-100 border-dashed transition-all group">
-                        <CreditCard className="w-6 h-6 text-violet-600 group-hover:scale-110 transition-transform" />
-                        <span className="text-xs font-bold text-violet-900">Global Bookings</span>
+                      <button onClick={() => setActiveTab('users')} className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl bg-violet-50/50 hover:bg-violet-50 border border-violet-100 border-dashed transition-all group">
+                        <User2 className="w-6 h-6 text-violet-600 group-hover:scale-110 transition-transform" />
+                        <span className="text-xs font-bold text-violet-900">Role & Access</span>
                       </button>
                     </div>
                   </div>
@@ -1882,6 +2378,505 @@ export default function SuperAdminDashboard() {
               </div>
             )}
 
+            {/* ── USERS / ROLE & ACCESS ── */}
+            {activeTab === 'users' && (
+              <div className="space-y-6">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h3 className="text-xl font-black text-gray-900">Users & Role Management</h3>
+                    <p className="text-[10px] text-gray-400 mt-1">Search, assign platform roles, and review access.</p>
+                  </div>
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                    <div className="relative w-full sm:w-[320px]">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                      <input
+                        type="text"
+                        placeholder="Search users, email, role, company..."
+                        value={userSearchTerm}
+                        onChange={e => { setUserSearchTerm(e.target.value); setUsersPage(1); }}
+                        className="w-full pl-10 pr-4 py-2 rounded-2xl border border-gray-200 bg-gray-50 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={refreshUsers}
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-2xl bg-indigo-600 text-white text-sm font-bold hover:bg-indigo-700 transition"
+                    >
+                      <RefreshCw className="w-4 h-4" /> Refresh
+                    </button>
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-2xl border shadow-sm overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[720px] text-left text-sm">
+                      <thead className="bg-gray-50 border-b">
+                        <tr>
+                          <th className="px-4 py-3 text-xs font-black text-gray-400 uppercase tracking-wider">Name</th>
+                          <th className="px-4 py-3 text-xs font-black text-gray-400 uppercase tracking-wider">Email</th>
+                          <th className="px-4 py-3 text-xs font-black text-gray-400 uppercase tracking-wider">Role</th>
+                          <th className="px-4 py-3 text-xs font-black text-gray-400 uppercase tracking-wider">Company</th>
+                          <th className="px-4 py-3 text-xs font-black text-gray-400 uppercase tracking-wider">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredUsers.length === 0 && !usersLoading ? (
+                          <tr>
+                            <td colSpan={5} className="py-16 text-center text-gray-400">No users match your search.</td>
+                          </tr>
+                        ) : (
+                          usersPagination.currentUsers.map(u => (
+                            <tr key={u.id} className="border-b hover:bg-gray-50 transition-colors cursor-pointer" onClick={() => openUserDetails(u)}>
+                              <td className="px-4 py-4">
+                                <div className="font-bold text-gray-900">{u.firstName} {u.lastName}</div>
+                              </td>
+                              <td className="px-4 py-4 text-gray-600">{u.email}</td>
+                              <td className="px-4 py-4">
+                                <span className="inline-flex items-center px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider bg-indigo-50 text-indigo-700 border border-indigo-100">
+                                  {ROLE_LABELS[u.role] || u.role}
+                                </span>
+                              </td>
+                              <td className="px-4 py-4 text-gray-500">{u.companyName || u.company?.name || '—'}</td>
+                              <td className="px-4 py-4">
+                                <button
+                                  type="button"
+                                  onClick={e => { e.stopPropagation(); openUserDetails(u); }}
+                                  className="inline-flex items-center gap-2 px-3 py-2 rounded-2xl border border-gray-200 text-xs font-bold text-gray-700 hover:bg-gray-50 transition"
+                                >
+                                  <Eye className="w-3.5 h-3.5" /> View
+                                </button>
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between bg-gray-50">
+                    <div className="text-[11px] text-gray-500">
+                      Showing {usersPagination.startIndex}–{usersPagination.endIndex} of {usersPagination.totalItems} users
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setUsersPage(p => Math.max(p - 1, 1))}
+                        disabled={!usersPagination.hasPrevPage}
+                        className="inline-flex items-center justify-center w-9 h-9 rounded-2xl border border-gray-200 bg-white text-gray-600 disabled:opacity-40 hover:bg-gray-50 transition"
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                      </button>
+                      <span className="text-sm font-black text-gray-700">{usersPagination.currentUsers.length ? usersPage : 0} / {usersPagination.totalPages}</span>
+                      <button
+                        onClick={() => setUsersPage(p => Math.min(p + 1, usersPagination.totalPages))}
+                        disabled={!usersPagination.hasNextPage}
+                        className="inline-flex items-center justify-center w-9 h-9 rounded-2xl border border-gray-200 bg-white text-gray-600 disabled:opacity-40 hover:bg-gray-50 transition"
+                      >
+                        <ChevronRight className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {userModalOpen && selectedUser && (
+                  <div className="fixed inset-0 z-50 flex items-center justify-center px-4 py-6 bg-black/40">
+                    <div className="w-full max-w-2xl rounded-[28px] bg-white border border-gray-200 shadow-2xl overflow-hidden">
+                      <div className="flex items-center justify-between px-6 py-5 border-b">
+                        <div>
+                          <h4 className="text-lg font-black text-gray-900">User details</h4>
+                          <p className="text-xs text-gray-500">Review profile and update role for platform access.</p>
+                        </div>
+                        <button type="button" onClick={closeUserModal} className="text-gray-400 hover:text-gray-600">
+                          <X className="w-5 h-5" />
+                        </button>
+                      </div>
+                      <div className="space-y-4 px-6 py-5">
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                          <div>
+                            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Name</p>
+                            <p className="mt-2 text-sm font-bold text-gray-900">{selectedUser.firstName} {selectedUser.lastName}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Email</p>
+                            <p className="mt-2 text-sm text-gray-900">{selectedUser.email}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Company</p>
+                            <p className="mt-2 text-sm text-gray-900">{selectedUser.companyName || selectedUser.company?.name || '—'}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Current role</p>
+                            <span className="mt-2 inline-flex items-center px-3 py-1 rounded-full bg-indigo-50 text-indigo-700 text-xs font-black uppercase tracking-wide border border-indigo-100">
+                              {ROLE_LABELS[selectedUser.role] || selectedUser.role}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <label className="block text-[10px] font-black uppercase tracking-widest text-gray-400" htmlFor="role-select">Update role</label>
+                          <select
+                            id="role-select"
+                            value={selectedUserRole}
+                            onChange={e => setSelectedUserRole(e.target.value)}
+                            className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                          >
+                            {ROLE_OPTIONS.map(r => (
+                              <option key={r} value={r}>{ROLE_LABELS[r] || r}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                      <div className="flex flex-col gap-3 px-6 py-5 border-t bg-gray-50 sm:flex-row sm:justify-end">
+                        <button type="button" onClick={closeUserModal} className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm font-bold text-gray-700 hover:bg-gray-50 transition sm:w-auto">
+                          Cancel
+                        </button>
+                        <button type="button" onClick={handleUserRoleSave} disabled={roleUpdating} className="w-full rounded-2xl bg-indigo-600 px-4 py-3 text-sm font-bold text-white hover:bg-indigo-700 transition disabled:opacity-50 sm:w-auto">
+                          {roleUpdating ? 'Saving...' : 'Save role'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ── PAYMENTS / SYSTEM SETTINGS ── */}
+            {activeTab === 'payments' && (
+              <div className="space-y-6">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h3 className="text-xl font-black text-gray-900">Payments & System Settings</h3>
+                    <p className="text-[10px] text-gray-400 mt-1">Review gateway health, connected companies, and configure payment settings per partner.</p>
+                  </div>
+                  {selectedPaymentCompany ? (
+                    <button type="button" onClick={() => setSelectedPaymentCompany(null)}
+                      className="rounded-2xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition">
+                      Back to payment summary
+                    </button>
+                  ) : null}
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                  <StatPill icon={<CreditCard className="w-4 h-4 text-white" />} label="Companies linked" value={paymentSummary.totalCompanies} color="bg-slate-100 text-slate-700" />
+                  <StatPill icon={<Wifi className="w-4 h-4 text-white" />} label="Gateways active" value={`${paymentSummary.enabledCompanies}`} color="bg-emerald-100 text-emerald-700" />
+                  <StatPill icon={<Zap className="w-4 h-4 text-white" />} label="Fully configured" value={`${paymentSummary.fullyConfiguredCompanies}`} color="bg-indigo-100 text-indigo-700" />
+                  <StatPill icon={<AlertCircle className="w-4 h-4 text-white" />} label="Pending / failed" value={`${paymentSummary.pendingPayments} / ${paymentSummary.failedPayments}`} color="bg-amber-100 text-amber-700" />
+                </div>
+
+                {!selectedPaymentCompany ? (
+                  <div className="space-y-5">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <h4 className="text-sm font-semibold text-gray-900">Connected companies</h4>
+                        <p className="text-[10px] text-gray-400">Manage payment settings for each company on the platform.</p>
+                      </div>
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                        <div className="relative w-full sm:w-80">
+                          <input
+                            type="text"
+                            value={paymentCompanyQuery}
+                            onChange={e => setPaymentCompanyQuery(e.target.value)}
+                            placeholder="Search companies..."
+                            className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full text-left text-sm">
+                          <thead className="bg-gray-50">
+                            <tr>
+                              <th className="px-5 py-4 font-black uppercase tracking-wider text-gray-400">Company</th>
+                              <th className="px-5 py-4 font-black uppercase tracking-wider text-gray-400">Gateway</th>
+                              <th className="px-5 py-4 font-black uppercase tracking-wider text-gray-400">Configured</th>
+                              <th className="px-5 py-4 font-black uppercase tracking-wider text-gray-400">Revenue</th>
+                              <th className="px-5 py-4 font-black uppercase tracking-wider text-gray-400">Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100">
+                            {paymentCompanyPagination.currentCompanies.map(company => {
+                              const stats = companyPaymentStats[company.id] ?? { revenue: 0, pending: 0, failed: 0, bookings: 0 };
+                              return (
+                                <tr key={company.id} className="hover:bg-gray-50 transition-colors">
+                                  <td className="px-5 py-4">
+                                    <div className="font-semibold text-gray-900">{company.name}</div>
+                                    <div className="text-xs text-gray-400">{company.email || 'No email'}</div>
+                                  </td>
+                                  <td className="px-5 py-4">
+                                    {company.paymentSettings?.paychanguEnabled ? (
+                                      <span className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-semibold text-emerald-700">Enabled</span>
+                                    ) : (
+                                      <span className="inline-flex items-center gap-2 rounded-full bg-gray-100 px-3 py-1 text-[11px] font-semibold text-gray-600">Disabled</span>
+                                    )}
+                                  </td>
+                                  <td className="px-5 py-4">
+                                    {company.paymentSettings?.paychanguPublicKey ? (
+                                      <span className="inline-flex items-center gap-2 rounded-full bg-slate-50 px-3 py-1 text-[11px] font-semibold text-slate-700">Yes</span>
+                                    ) : (
+                                      <span className="inline-flex items-center gap-2 rounded-full bg-amber-50 px-3 py-1 text-[11px] font-semibold text-amber-700">Incomplete</span>
+                                    )}
+                                  </td>
+                                  <td className="px-5 py-4">
+                                    <div className="text-sm font-semibold text-gray-900">MWK {stats.revenue.toLocaleString()}</div>
+                                    <div className="text-xs text-gray-400">{stats.bookings} bookings</div>
+                                  </td>
+                                  <td className="px-5 py-4">
+                                    <button type="button" onClick={() => setSelectedPaymentCompany(company)}
+                                      className="rounded-2xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-700 transition">
+                                      Manage
+                                    </button>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                      <div className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between text-xs text-gray-500">
+                        <span>
+                          Showing {paymentCompanyPagination.startIndex}-{paymentCompanyPagination.endIndex} of {paymentCompanyPagination.totalItems} companies
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <button type="button" onClick={() => setPaymentCompanyPage(prev => Math.max(1, prev - 1))}
+                            disabled={!paymentCompanyPagination.hasPrev}
+                            className="rounded-2xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 disabled:opacity-50">
+                            Previous
+                          </button>
+                          <button type="button" onClick={() => setPaymentCompanyPage(prev => Math.min(paymentCompanyPagination.totalPages, prev + 1))}
+                            disabled={!paymentCompanyPagination.hasNext}
+                            className="rounded-2xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 disabled:opacity-50">
+                            Next
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-5">
+                    <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6">
+                      <p className="text-sm font-semibold text-gray-900">Edit payment settings for {selectedPaymentCompany.name}</p>
+                      <p className="text-xs text-gray-400 mt-1">Changes here update the company’s PayChangu integration and keep the platform settings in sync.</p>
+                    </div>
+                    <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6">
+                      <SettingsTab
+                        company={selectedPaymentCompany}
+                        setCompany={updateCompanySettings as any}
+                        setError={msg => showAlert('error', msg)}
+                        setSuccess={msg => showAlert('success', msg)}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ── AUDIT ── */}
+            {activeTab === 'audit' && (
+              <div className="space-y-6">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h3 className="text-xl font-black text-gray-900">Audit Log</h3>
+                    <p className="text-[10px] text-gray-400 mt-1">Recent sensitive actions, role changes and company approvals are listed here with filters and status details.</p>
+                  </div>
+                  <button type="button" onClick={refreshAudit} className="inline-flex items-center gap-2 rounded-2xl bg-indigo-600 px-4 py-2 text-sm font-black text-white hover:bg-indigo-700 transition">
+                    <RefreshCw className="w-4 h-4" /> Refresh audit logs
+                  </button>
+                </div>
+
+                <div className="grid gap-4 xl:grid-cols-4">
+                  <div className="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm">
+                    <p className="text-xs uppercase tracking-widest text-gray-400">Total events</p>
+                    <p className="mt-3 text-3xl font-black text-gray-900">{auditSummary.total}</p>
+                  </div>
+                  <div className="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm">
+                    <p className="text-xs uppercase tracking-widest text-gray-400">Successful</p>
+                    <p className="mt-3 text-3xl font-black text-emerald-700">{auditSummary.success}</p>
+                  </div>
+                  <div className="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm">
+                    <p className="text-xs uppercase tracking-widest text-gray-400">Failed</p>
+                    <p className="mt-3 text-3xl font-black text-red-700">{auditSummary.failed}</p>
+                  </div>
+                  <div className="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm">
+                    <p className="text-xs uppercase tracking-widest text-gray-400">Action types</p>
+                    <p className="mt-3 text-3xl font-black text-gray-900">{auditSummary.actions.length}</p>
+                  </div>
+                </div>
+
+                <div className="grid gap-4 xl:grid-cols-[1fr_280px]">
+                  <div className="space-y-4">
+                    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                      <div className="rounded-3xl border border-gray-100 bg-white p-4 shadow-sm">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Action</label>
+                        <select value={auditActionFilter} onChange={e => setAuditActionFilter(e.target.value)} className="mt-2 w-full rounded-2xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-200">
+                          <option value="all">All actions</option>
+                          {AUDIT_ACTIONS.map(action => (
+                            <option key={action} value={action}>{getActionName(action)}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="rounded-3xl border border-gray-100 bg-white p-4 shadow-sm">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Status</label>
+                        <select value={auditStatusFilter} onChange={e => setAuditStatusFilter(e.target.value as 'all' | 'success' | 'failed')} className="mt-2 w-full rounded-2xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-200">
+                          <option value="all">All statuses</option>
+                          <option value="success">Success</option>
+                          <option value="failed">Failed</option>
+                        </select>
+                      </div>
+                      <div className="rounded-3xl border border-gray-100 bg-white p-4 shadow-sm">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Company</label>
+                        <select value={auditCompanyFilter} onChange={e => setAuditCompanyFilter(e.target.value)} className="mt-2 w-full rounded-2xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-200">
+                          <option value="">All companies</option>
+                          {companyOptions.map(company => (
+                            <option key={company.id} value={company.id}>{company.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="space-y-3">
+                        <div className="rounded-3xl border border-gray-100 bg-white p-4 shadow-sm">
+                          <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">From</label>
+                          <input type="date" value={auditStartDate} onChange={e => setAuditStartDate(e.target.value)} className="mt-2 w-full rounded-2xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-200" />
+                        </div>
+                        <div className="rounded-3xl border border-gray-100 bg-white p-4 shadow-sm">
+                          <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">To</label>
+                          <input type="date" value={auditEndDate} onChange={e => setAuditEndDate(e.target.value)} className="mt-2 w-full rounded-2xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-200" />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="relative flex-1">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                        <input type="text" value={auditSearchTerm} onChange={e => setAuditSearchTerm(e.target.value)} placeholder="Search audit logs..." className="w-full rounded-2xl border border-gray-200 bg-white pl-10 pr-4 py-3 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-200" />
+                      </div>
+                      <button type="button" onClick={refreshAudit} className="inline-flex items-center gap-2 rounded-2xl bg-slate-100 px-4 py-3 text-sm font-black text-slate-700 hover:bg-slate-200 transition">Refresh</button>
+                    </div>
+
+                    <div className="overflow-x-auto rounded-3xl border border-gray-100 bg-white shadow-sm">
+                      <table className="min-w-full text-left text-sm">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            {['User', 'Role', 'Action', 'Resource', 'Target', 'Description', 'Status', 'When'].map(header => (
+                              <th key={header} className="px-4 py-4 text-[10px] font-black uppercase tracking-widest text-gray-400">{header}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {auditLoading ? (
+                            <tr>
+                              <td colSpan={8} className="py-12 text-center text-gray-500">Loading audit logs...</td>
+                            </tr>
+                          ) : filteredAuditLogs.length === 0 ? (
+                            <tr>
+                              <td colSpan={8} className="py-12 text-center text-gray-500">No audit logs found</td>
+                            </tr>
+                          ) : (
+                            filteredAuditLogs.slice(0, 12).map(renderAuditRow)
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                    {auditError ? <p className="text-sm text-red-600">{auditError}</p> : null}
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
+                      <p className="text-sm font-black text-gray-900">Audit insights</p>
+                      <p className="mt-3 text-sm text-gray-500">Audit logs are captured for platform access, booking and payment events. Filter by action, company, and date range to support investigations.</p>
+                    </div>
+                    <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
+                      <p className="text-sm font-black text-gray-900">Top action types</p>
+                      <div className="mt-4 space-y-2">
+                        {auditSummary.actions.slice(0, 6).map(action => (
+                          <div key={action} className="rounded-2xl bg-gray-50 px-4 py-3 text-sm text-gray-700">{getActionName(action)}</div>
+                        ))}
+                        {auditSummary.actions.length === 0 && <div className="text-sm text-gray-400">No actions to display.</div>}
+                      </div>
+                    </div>
+                    <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
+                      <p className="text-sm font-black text-gray-900">Query size</p>
+                      <div className="mt-3 flex items-center gap-3">
+                        <input type="number" min={10} max={500} value={auditLimit} onChange={e => setAuditLimit(Math.max(10, Math.min(500, Number(e.target.value))))} className="w-full rounded-2xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-200" />
+                        <span className="text-sm text-gray-500">records</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ── SYSTEM HEALTH ── */}
+            {activeTab === 'health' && (
+              <div className="space-y-6">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h3 className="text-xl font-black text-gray-900">System Health</h3>
+                    <p className="text-[10px] text-gray-400 mt-1">Key system metrics: database connectivity, email delivery readiness, and platform health signals.</p>
+                  </div>
+                  <button type="button" onClick={refreshHealth} className="inline-flex items-center gap-2 rounded-2xl bg-indigo-600 px-4 py-2 text-sm font-black text-white hover:bg-indigo-700 transition">
+                    <RefreshCw className="w-4 h-4" /> Refresh health
+                  </button>
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                  <div className="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm">
+                    <p className="text-xs uppercase tracking-widest text-gray-400">Overall status</p>
+                    <p className="mt-3 text-3xl font-black text-gray-900">{healthStatus?.status ?? 'unknown'}</p>
+                  </div>
+                  <div className="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm">
+                    <p className="text-xs uppercase tracking-widest text-gray-400">Checks passed</p>
+                    <p className="mt-3 text-3xl font-black text-emerald-700">{healthSummary.ok}</p>
+                  </div>
+                  <div className="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm">
+                    <p className="text-xs uppercase tracking-widest text-gray-400">Degraded</p>
+                    <p className="mt-3 text-3xl font-black text-amber-700">{healthSummary.degraded}</p>
+                  </div>
+                  <div className="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm">
+                    <p className="text-xs uppercase tracking-widest text-gray-400">Errors</p>
+                    <p className="mt-3 text-3xl font-black text-red-700">{healthSummary.error}</p>
+                  </div>
+                </div>
+
+                {healthError ? <div className="rounded-3xl border border-red-100 bg-red-50 p-5 text-sm text-red-700">{healthError}</div> : null}
+
+                <div className="grid gap-4 xl:grid-cols-[1fr_360px]">
+                  <div className="space-y-4">
+                    {healthLoading ? (
+                      <div className="rounded-3xl border border-gray-100 bg-white p-8 text-center text-gray-500">Checking system health...</div>
+                    ) : healthStatus ? (
+                      <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
+                        <div className="flex items-center justify-between gap-4">
+                          <div>
+                            <p className="text-sm font-semibold text-gray-900">Health checks</p>
+                            <p className="text-xs text-gray-400">Status by dependency</p>
+                          </div>
+                          <span className={`rounded-full px-3 py-1 text-[11px] font-black uppercase tracking-widest ${healthCheckBadge(healthStatus.status)}`}>{healthStatus.status}</span>
+                        </div>
+                        <div className="mt-5 grid gap-4">
+                          {Object.entries(healthStatus.checks).map(([key, value]) => renderHealthMetric(key, value))}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="rounded-3xl border border-gray-100 bg-white p-8 text-center text-gray-500">No health snapshot available yet.</div>
+                    )}
+
+                    <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
+                      <p className="text-sm font-semibold text-gray-900">Last updated</p>
+                      <p className="mt-3 text-sm text-gray-500">{healthStatus ? `${new Date(healthStatus.timestamp).toLocaleString()}` : 'Never'}</p>
+                    </div>
+                  </div>
+
+                  <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
+                    <p className="text-sm font-semibold text-gray-900">Health review</p>
+                    <div className="mt-4 space-y-3 text-sm text-gray-500">
+                      <p>Use this screen to verify that database and email dependencies are reachable and to react quickly when degraded status appears.</p>
+                      <p>Refresh after making infrastructure changes or deploying new code to confirm platform health.</p>
+                      <p>If the status remains degraded or unhealthy, inspect logs and dependency configurations immediately.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* ── BOOKINGS ── */}
             {activeTab === 'bookings' && (
               <BookingsTab bookings={bookings} companies={companies} schedules={schedules} routes={routes}
@@ -1945,7 +2940,7 @@ export default function SuperAdminDashboard() {
                                 <td className="px-6 py-5">
                                   <div className="flex items-center gap-3">
                                     <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center border border-indigo-100 group-hover:bg-indigo-600 transition-colors">
-                                      <Map className="w-5 h-5 text-indigo-600 group-hover:text-white transition-colors" />
+                                      <MapIcon className="w-5 h-5 text-indigo-600 group-hover:text-white transition-colors" />
                                     </div>
                                     <div>
                                       <p className="text-sm font-black text-gray-900 group-hover:text-indigo-600 transition-colors">{route.name}</p>
@@ -2106,13 +3101,18 @@ export default function SuperAdminDashboard() {
 
             {/* ── PROMOTIONS ── */}
             {activeTab === 'promotions' && (
-              <PromotionsTab 
-                promotions={promotions} 
-                loading={loadingStates.promotions} 
+              <PromotionsTab
+                promotions={promotions}
+                loading={loadingStates.promotions}
                 onRefresh={() => setRefreshCount(r => r + 1)}
                 setError={m => showAlert('error', m)}
                 setSuccess={m => showAlert('success', m)}
               />
+            )}
+            {activeTab === 'coo' && (
+              <div className="space-y-6">
+                <COOTab setActiveTab={(t) => setActiveTab(t as TabType)} />
+              </div>
             )}
           </div>
         </main>
@@ -2293,18 +3293,24 @@ export default function SuperAdminDashboard() {
           />
         )}
         {/* Mobile Bottom Nav */}
-        <DashboardBottomNav 
+        <DashboardBottomNav
           activeTab={activeTab}
           onTabChange={(id) => {
             setActiveTab(id as TabType);
             setIsMobileOpen(false);
           }}
-          tabs={[
-            { id: 'overview', label: 'Home', icon: BarChart3 },
-            { id: 'companies', label: 'Firms', icon: Building2 },
-            { id: 'bookings', label: 'Sales', icon: List },
-            { id: 'promotions', label: 'Promo', icon: TicketPercent },
-          ]}
+          tabs={(() => {
+            const base = [
+              { id: 'overview', label: 'Home', icon: BarChart3 },
+              { id: 'companies', label: 'Firms', icon: Building2 },
+              { id: 'users', label: 'Users', icon: User2 },
+              { id: 'payments', label: 'Pay', icon: CreditCard },
+            ];
+            if (userProfile && (userProfile.role === 'chief_of_operations' || userProfile.role === 'superadmin')) {
+              base.push({ id: 'coo', label: 'Ops', icon: BusIcon });
+            }
+            return base;
+          })()}
         />
       </div>
     </div>
