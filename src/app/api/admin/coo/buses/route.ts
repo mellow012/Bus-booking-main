@@ -14,9 +14,22 @@ export async function GET(req: NextRequest) {
     const page = Math.max(1, parseInt(searchParams.get('page') ?? '1', 10));
     const limit = Math.min(100, parseInt(searchParams.get('limit') ?? '25', 10));
     const companyId = searchParams.get('companyId');
+    const regionId = searchParams.get('regionId');
+    const routeId = searchParams.get('routeId');
+    const from = searchParams.get('from');
+    const to = searchParams.get('to');
 
     const where: any = {};
     if (companyId) where.companyId = companyId;
+    if (routeId || regionId || from || to) {
+      where.schedules = { some: {
+        ...(routeId ? { routeId } : {}),
+        ...(regionId ? { route: { is: { regionId } } } : {}),
+        ...(from || to ? { departureDateTime: {} as any } : {}),
+      } };
+      if (from) where.schedules.some.departureDateTime.gte = new Date(from);
+      if (to) where.schedules.some.departureDateTime.lte = new Date(to);
+    }
 
     const skip = (page - 1) * limit;
 

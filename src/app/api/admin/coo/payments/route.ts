@@ -13,7 +13,6 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const page = Math.max(1, parseInt(searchParams.get('page') ?? '1', 10));
     const limit = Math.min(100, parseInt(searchParams.get('limit') ?? '25', 10));
-    const status = searchParams.get('status')?.toLowerCase();
     const companyId = searchParams.get('companyId');
     const regionId = searchParams.get('regionId');
     const routeId = searchParams.get('routeId');
@@ -22,18 +21,13 @@ export async function GET(req: NextRequest) {
     const to = searchParams.get('to');
 
     const where: any = {};
-    if (status) where.bookingStatus = status;
-    if (companyId) where.companyId = companyId;
-    if (scheduleId) where.scheduleId = scheduleId;
 
-    // Filter by routeId or regionId via schedule relation
-    if (routeId) {
-      where.schedule = { is: { routeId } };
-    } else if (regionId) {
-      where.schedule = { is: { route: { is: { regionId } } } };
-    }
+    // Filter via booking relation when provided
+    if (companyId) where.booking = { is: { companyId } };
+    if (scheduleId) where.booking = { ...(where.booking || {}), is: { ...(where.booking?.is || {}), scheduleId } };
+    if (routeId) where.booking = { ...(where.booking || {}), is: { ...(where.booking?.is || {}), schedule: { is: { routeId } } } };
+    if (regionId) where.booking = { ...(where.booking || {}), is: { ...(where.booking?.is || {}), schedule: { is: { route: { is: { regionId } } } } } };
 
-    // Date range filter (booking.createdAt or schedule.departureDateTime based on preference)
     if (from || to) {
       const range: any = {};
       if (from) range.gte = new Date(from);
@@ -43,26 +37,21 @@ export async function GET(req: NextRequest) {
 
     const skip = (page - 1) * limit;
 
-    const [bookings, total] = await Promise.all([
-      prisma.booking.findMany({
+    const [payments, total] = await Promise.all([
+      prisma.payment.findMany({
         where,
-        include: {
-          schedule: { include: { route: true, bus: true, company: true } },
-          company: { select: { id: true, name: true } },
-          user: { select: { id: true, email: true, firstName: true, lastName: true } },
-          payments: true,
-        },
+        include: { booking: { include: { company: true, schedule: { include: { route: { include: { region: true } } } } } } },
         orderBy: { createdAt: 'desc' },
         skip,
         take: limit,
       }),
-      prisma.booking.count({ where }),
+      prisma.payment.count({ where }),
     ]);
 
-    await logger.logSuccess('api', `COO GET /api/admin/coo/bookings returned ${bookings.length} rows`, { metadata: { userId: user.id } });
-    return NextResponse.json({ bookings, total, page, limit });
+    await logger.logSuccess('api', `COO GET /api/admin/coo/payments returned ${payments.length} rows`, { metadata: { userId: user.id } });
+    return NextResponse.json({ payments, total, page, limit });
   } catch (err: any) {
-    await logger.logError('api', 'COO GET /api/admin/coo/bookings error', { error: String(err) });
+    await logger.logError('api', 'COO GET /api/admin/coo/payments error', { error: String(err) });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

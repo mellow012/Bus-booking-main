@@ -269,6 +269,7 @@ export interface Route extends BaseEntity {
 
   baseFare: number;
   pricePerKm?: number;
+  regionId?: string | null;
 
   assignedOperators?: RouteOperator[];
   assignedOperatorIds?: string[];

@@ -15,10 +15,20 @@ export async function GET(req: NextRequest) {
     const limit = Math.min(100, parseInt(searchParams.get('limit') ?? '25', 10));
     const companyId = searchParams.get('companyId');
     const routeId = searchParams.get('routeId');
+    const regionId = searchParams.get('regionId');
+
+    const from = searchParams.get('from');
+    const to = searchParams.get('to');
 
     const where: any = {};
     if (companyId) where.companyId = companyId;
     if (routeId) where.routeId = routeId;
+    if (regionId) where.route = { is: { regionId } };
+    if (from || to) {
+      where.departureDateTime = {} as any;
+      if (from) where.departureDateTime.gte = new Date(from);
+      if (to) where.departureDateTime.lte = new Date(to);
+    }
 
     const skip = (page - 1) * limit;
 

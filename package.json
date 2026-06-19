@@ -25,6 +25,7 @@
     "@supabase/ssr": "^0.10.2",
     "@supabase/supabase-js": "^2.106.2",
     "@tanstack/react-query": "^5.0.0",
+    "@tanstack/react-table": "^8.10.0",
     "@types/pg": "^8.20.0",
     "@types/qrcode": "^1.5.5",
     "@types/web-push": "^3.6.4",
@@ -64,7 +65,8 @@
     "tailwindcss-animate": "^1.0.7",
     "uuid": "^11.1.0",
     "web-push": "^3.6.7",
-    "zod": "^4.1.5"
+    "zod": "^4.1.5",
+    "zustand": "^5.0.14"
   },
   "devDependencies": {
     "@playwright/test": "^1.58.2",

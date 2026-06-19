@@ -51,7 +51,7 @@ model Operator {
   name                  String
   role                  String      @default("operator")
   status                String      @default("active")
-  region                String?
+  regionId              String?
   
   invitationSent        Boolean     @default(false)
   invitationSentAt      DateTime?
@@ -65,11 +65,13 @@ model Operator {
   routes                Route[]     @relation("OperatorRoutes")
   schedules             Schedule[]  @relation("OperatorSchedules")
   buses                 Bus[]       @relation("OperatorBuses")
+  region                Region?     @relation(fields: [regionId], references: [id])
 
   @@index([companyId])
   @@index([status])
   @@index([role])
   @@index([uid])
+  @@index([regionId])
 }
 
 model Company {
@@ -104,8 +106,26 @@ model Company {
   staff                User[]             @relation("CompanyStaff")
   conversations        Conversation[]
   operators            Operator[]
+  regions              Region[]
 
   @@index([status])
+}
+
+model Region {
+  id         String    @id @default(uuid())
+  name       String
+  code       String?   @unique
+  companyId  String?
+  isActive   Boolean   @default(true)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  company    Company?  @relation(fields: [companyId], references: [id])
+  routes     Route[]
+  operators  Operator[]
+
+  @@index([companyId])
+  @@index([isActive])
 }
 
 model Bus {
@@ -135,6 +155,7 @@ model Bus {
 model Route {
   id                String             @id @default(uuid())
   companyId         String
+  regionId          String?
   name              String
   origin              String
   destination         String
@@ -154,10 +175,12 @@ model Route {
   operators           Operator[]         @relation("OperatorRoutes")
   schedules           Schedule[]
   scheduleTemplates   ScheduleTemplate[]
+  region              Region?            @relation(fields: [regionId], references: [id])
 
   @@index([origin])
   @@index([destination])
   @@index([isActive])
+  @@index([regionId])
 }
 
 model Schedule {

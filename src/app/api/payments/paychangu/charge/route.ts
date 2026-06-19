@@ -44,17 +44,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "This booking has already been paid" }, { status: 409 });
     }
 
-    // ── Ensure this company is allowed to accept PayChangu payments ───────────
-    const company = booking.company;
-    if (!company) {
-      return NextResponse.json({ error: "Company not found" }, { status: 404 });
-    }
-    
-    const ps = company.paymentSettings as Record<string, any>;
-    if (!ps?.paychanguEnabled) {
-      return NextResponse.json({ error: "PayChangu payments are disabled for this company" }, { status: 400 });
-    }
-
     const secretKey = process.env.PAYCHANGU_SECRET_KEY;
     if (!secretKey) {
       console.error("[paychangu/charge] PAYCHANGU_SECRET_KEY not set");
@@ -79,7 +68,7 @@ export async function POST(req: NextRequest) {
       description,
       tx_ref:       customTxRef,
       callback_url: `${appUrl}/api/payments/paychangu/webhook`,
-      return_url:   `${appUrl}/api/payments/paychangu/verify/${bookingId}`,
+      return_url:   `${appUrl}/api/payments/paychangu/verify?tx_ref=${customTxRef}`,
     };
 
     // ── Direct fetch ───────────────────────────────────────────────────────────

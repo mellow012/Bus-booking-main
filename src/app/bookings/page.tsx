@@ -19,7 +19,6 @@ import { useAppToast } from '@/contexts/ToastContext';
 import useBookingsList, { BookingWithDetails, SearchFilters, resolveStopName } from './useBookingsList';
 import BookingCheckoutDrawer from './BookingCheckoutFlow';
 import BookingStatsGrid from './BookingStatsGrid';
-import BookingFilterToolbar from './BookingFilterToolbar';
 
 // ─── BookingCard ──────────────────────────────────────────────────────────────
 const BookingCard = memo<{
@@ -197,7 +196,7 @@ const BookingCard = memo<{
             </div>
             <div>
               <p className="text-sm font-medium text-emerald-800">Booking Approved — Payment Required</p>
-              <p className="text-xs text-emerald-700">Complete payment via PayChangu (mobile money) or Flutterwave (card) to secure your seats.</p>
+              <p className="text-xs text-emerald-700">Complete payment via PayChangu (mobile money) to secure your seats.</p>
             </div>
             <Shield className="w-5 h-5 text-emerald-600 ml-auto" />
           </div>
@@ -278,6 +277,52 @@ const BookingsPage: React.FC = () => {
     setSuccess,
     setError,
   } = useBookingsList();
+
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // Reset page when search query changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, setCurrentPage]);
+
+  // Client-side fuzzy search on top of status-filtered bookings
+  const searchedBookings = useMemo(() => {
+    if (!searchQuery.trim()) return filteredBookings;
+    const query = searchQuery.toLowerCase().trim();
+    return filteredBookings.filter((b) => {
+      const ref = (b.bookingReference || b.id.slice(-8)).toLowerCase();
+      const company = (b.company?.name || '').toLowerCase();
+      const origin = (b.route?.origin || '').toLowerCase();
+      const destination = (b.route?.destination || '').toLowerCase();
+      const originStop = resolveStopName(b.originStopId, b.originStopName, b.route, b.route?.origin || '').toLowerCase();
+      const destinationStop = resolveStopName(b.destinationStopId, b.destinationStopName, b.route, b.route?.destination || '').toLowerCase();
+      const passengerMatch = b.passengerDetails?.some((p) => p.name.toLowerCase().includes(query)) || false;
+      const status = b.bookingStatus.toLowerCase();
+      const pStatus = b.paymentStatus.toLowerCase();
+
+      return (
+        ref.includes(query) ||
+        company.includes(query) ||
+        origin.includes(query) ||
+        destination.includes(query) ||
+        originStop.includes(query) ||
+        destinationStop.includes(query) ||
+        passengerMatch ||
+        status.includes(query) ||
+        pStatus.includes(query)
+      );
+    });
+  }, [filteredBookings, searchQuery]);
+
+  // Adjust pagination for search results
+  const pageBookings = useMemo(() => {
+    return searchedBookings.slice((currentPage - 1) * bookingsPerPage, currentPage * bookingsPerPage);
+  }, [searchedBookings, currentPage, bookingsPerPage]);
+
+  const searchTotalPages = useMemo(() => {
+    return Math.ceil(searchedBookings.length / bookingsPerPage);
+  }, [searchedBookings.length, bookingsPerPage]);
+
 
   const handlePageBack = useCallback(() => {
     const canGoBack = typeof window !== 'undefined' && window.history.state && typeof window.history.state.idx === 'number' && window.history.state.idx > 0;
@@ -409,34 +454,62 @@ const BookingsPage: React.FC = () => {
             </div>
 
             <div className="mt-3">
-              <BookingFilterToolbar activeFilter={activeFilter} onStatusChange={handleStatusFilter} counts={{ all: bookingStats.all, pending: bookingStats.pending, confirmed: bookingStats.confirmed, cancelled: bookingStats.cancelled, upcoming: bookingStats.upcoming }} />
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Search bookings by reference, company, route, passenger name..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 transition-all duration-200 text-gray-900 placeholder-gray-500"
+                />
+                <Search className="w-5 h-5 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                  >
+                    <XCircle className="w-5 h-5" />
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 
-          {filteredBookings.length === 0 ? (
+          {bookings.length === 0 ? (
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-12 text-center">
               <div className="mx-auto w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mb-6"><BusIcon className="w-10 h-10 text-gray-400" /></div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">No {activeFilter === 'all' ? '' : activeFilter} bookings found</h3>
-              <p className="text-gray-600 mb-8 max-w-md mx-auto">{activeFilter === 'all' ? "You haven't made any bus bookings yet." : `You don't have any ${activeFilter} bookings.`}</p>
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">No bookings found</h3>
+              <p className="text-gray-600 mb-8 max-w-md mx-auto">You haven't made any bus bookings yet.</p>
               <button onClick={() => router.push('/schedules')} className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all hover:scale-105 shadow-lg">
                 <Search className="w-5 h-5" />Search for Buses
               </button>
             </div>
           ) : (
             <div className="space-y-6">
-              <BookingStatsGrid cards={statCards} />
-              {paginatedBookings.map((b) => (
-                <BookingCard key={b.id} booking={b} onCancel={handleCancelBooking} onDelete={handleDeleteBooking}
-                  onDownload={handleDownloadTicket} onPayment={handleProcessPayment} actionLoading={actionLoading}
-                  formatTime={formatTime} formatDate={formatDate} getStatusColor={getStatusColor} getPaymentStatusColor={getPaymentStatusColor}
-                />
-              ))}
-              {filteredBookings.length > bookingsPerPage && (
-                <div className="flex flex-col sm:flex-row items-center justify-between mt-6 gap-3">
-                  <button onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))} disabled={currentPage === 1} className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg disabled:opacity-50 hover:bg-gray-200 w-full sm:w-auto">Previous</button>
-                  <span className="text-sm text-gray-600">Page {currentPage} of {totalPages} ({filteredBookings.length} total)</span>
-                  <button onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))} disabled={currentPage === totalPages} className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg disabled:opacity-50 hover:bg-gray-200 w-full sm:w-auto">Next</button>
+              <BookingStatsGrid cards={statCards} activeFilter={activeFilter} onCardClick={handleStatusFilter} />
+              
+              {searchedBookings.length === 0 ? (
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-12 text-center">
+                  <div className="mx-auto w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mb-4"><Search className="w-8 h-8 text-gray-400" /></div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-1">No bookings match your search</h3>
+                  <p className="text-sm text-gray-600 max-w-md mx-auto">We couldn't find any bookings matching "{searchQuery}" under the "{activeFilter}" filter.</p>
                 </div>
+              ) : (
+                <>
+                  {pageBookings.map((b) => (
+                    <BookingCard key={b.id} booking={b} onCancel={handleCancelBooking} onDelete={handleDeleteBooking}
+                      onDownload={handleDownloadTicket} onPayment={handleProcessPayment} actionLoading={actionLoading}
+                      formatTime={formatTime} formatDate={formatDate} getStatusColor={getStatusColor} getPaymentStatusColor={getPaymentStatusColor}
+                    />
+                  ))}
+                  {searchedBookings.length > bookingsPerPage && (
+                    <div className="flex flex-col sm:flex-row items-center justify-between mt-6 gap-3">
+                      <button onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))} disabled={currentPage === 1} className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg disabled:opacity-50 hover:bg-gray-200 w-full sm:w-auto">Previous</button>
+                      <span className="text-sm text-gray-600">Page {currentPage} of {searchTotalPages} ({searchedBookings.length} total)</span>
+                      <button onClick={() => setCurrentPage((p) => Math.min(p + 1, searchTotalPages))} disabled={currentPage === searchTotalPages} className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg disabled:opacity-50 hover:bg-gray-200 w-full sm:w-auto">Next</button>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           )}

@@ -1,15 +1,24 @@
 'use client';
 
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   BusIcon, List, Calendar, Search, ChevronLeft, ChevronRight,
   CheckCircle, X, Eye, Loader2, Clock, AlertCircle
 } from 'lucide-react';
+import RegionsTab from '@/components/coo/RegionsTab';
+import BookingsTab from '@/components/coo/BookingsTab';
+import RoutesTab from '@/components/coo/RoutesTab';
+import SchedulesTab from '@/components/coo/SchedulesTab';
+import BusesTab from '@/components/coo/BusesTab';
+import PaymentsTab from '@/components/coo/PaymentsTab';
+import Breadcrumbs from '@/components/coo/Breadcrumbs';
+import useFilterStore from '@/lib/stores/filterStore';
 import Fuse from 'fuse.js';
 
-type Tab = 'overview' | 'schedules' | 'bookings' | 'routes' | 'buses';
+type Tab = 'overview' | 'regions' | 'routes' | 'schedules' | 'buses' | 'bookings' | 'payments';
 
 const ITEMS_PER_PAGE = 10;
 
@@ -35,7 +44,7 @@ const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
   );
 };
 
-export default function ChiefOfOperationsPage() {
+function ChiefOfOperationsPageContent() {
   const router = useRouter();
   const { userProfile } = useAuth();
   const [loading, setLoading] = useState(false);
@@ -112,7 +121,15 @@ export default function ChiefOfOperationsPage() {
   const fetchStats = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/admin/coo/payment-stats');
+      const s = useFilterStore.getState();
+      const url = new URL('/api/admin/coo/payment-stats', window.location.origin);
+      if (s.companyId) url.searchParams.set('companyId', s.companyId);
+      if (s.regionId) url.searchParams.set('regionId', s.regionId);
+      if (s.routeId) url.searchParams.set('routeId', s.routeId);
+      if (s.scheduleId) url.searchParams.set('scheduleId', s.scheduleId);
+      if (s.dateRange?.from) url.searchParams.set('from', s.dateRange.from);
+      if (s.dateRange?.to) url.searchParams.set('to', s.dateRange.to);
+      const res = await fetch(url.toString());
       if (!res.ok) throw new Error('Failed to fetch');
       const data = await res.json();
       setStats(data);
@@ -122,6 +139,12 @@ export default function ChiefOfOperationsPage() {
       setLoading(false);
     }
   }, []);
+
+  // Re-fetch stats when filters change
+  useEffect(() => {
+    const unsub = useFilterStore.subscribe(() => fetchStats());
+    return () => unsub();
+  }, [fetchStats]);
 
   const fetchList = useCallback(async (tab: Tab) => {
     setDataLoading(true);
@@ -170,10 +193,57 @@ export default function ChiefOfOperationsPage() {
     fetchStats();
   }, [userProfile, fetchStats, router]);
 
+  // Sync URL search params -> Zustand on mount
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const regionId = params.get('regionId');
+    const routeId = params.get('routeId');
+    const scheduleId = params.get('scheduleId');
+    const bookingId = params.get('bookingId');
+    const companyId = params.get('companyId');
+    const from = params.get('from');
+    const to = params.get('to');
+
+    const s = useFilterStore.getState();
+    if (regionId) s.setRegion(regionId);
+    if (routeId) s.setRoute(routeId);
+    if (scheduleId) s.setSchedule(scheduleId);
+    if (bookingId) s.setBooking({ id: bookingId, scheduleId, routeId, companyId, regionId });
+    if (companyId) s.setCompany(companyId);
+    if (from || to) s.setDateRange({ from, to });
+  }, []);
+
+  // Subscribe to filter store changes and update URL search params
+  useEffect(() => {
+    const unsub = useFilterStore.subscribe((state) => {
+      const params = new URLSearchParams(window.location.search);
+      if (state.regionId) params.set('regionId', state.regionId);
+      else params.delete('regionId');
+      if (state.routeId) params.set('routeId', state.routeId);
+      else params.delete('routeId');
+      if (state.scheduleId) params.set('scheduleId', state.scheduleId);
+      else params.delete('scheduleId');
+      if (state.bookingId) params.set('bookingId', state.bookingId);
+      else params.delete('bookingId');
+      if (state.companyId) params.set('companyId', state.companyId);
+      else params.delete('companyId');
+      if (state.dateRange?.from) params.set('from', state.dateRange.from);
+      else params.delete('from');
+      if (state.dateRange?.to) params.set('to', state.dateRange.to);
+      else params.delete('to');
+
+      const newUrl = `${window.location.pathname}?${params.toString()}`;
+      window.history.replaceState({}, '', newUrl);
+    });
+    return () => unsub();
+  }, []);
+
   useEffect(() => {
     setPage(1);
     fetchList(activeTab);
   }, [activeTab, fetchList]);
+
+  const { dateRange, setDateRange } = useFilterStore();
 
   return (
     <div className="p-6 space-y-6">
@@ -207,19 +277,31 @@ export default function ChiefOfOperationsPage() {
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
         {/* Tab buttons */}
         <div className="border-b border-gray-100 px-6 py-4 flex gap-2 flex-wrap">
-          {(['overview', 'bookings', 'schedules', 'routes', 'buses'] as Tab[]).map(tab => (
-            <button
-              key={tab}
-              onClick={() => { setActiveTab(tab); setPage(1); }}
-              className={`px-4 py-2 rounded-xl font-bold text-sm transition-all ${
-                activeTab === tab
-                  ? 'bg-indigo-600 text-white shadow-md'
-                  : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
-              }`}
-            >
-              {tab.charAt(0).toUpperCase() + tab.slice(1)}
-            </button>
-          ))}
+          {(['overview', 'regions', 'routes', 'schedules', 'buses', 'bookings', 'payments'] as Tab[]).map(tab => {
+            const badge = tab === 'bookings' ? (stats?.pendingBookings ?? 0)
+              : tab === 'payments' ? (stats?.pendingPayments ?? 0)
+              : 0;
+            return (
+              <button
+                key={tab}
+                onClick={() => { setActiveTab(tab); setPage(1); }}
+                className={`relative px-4 py-2 rounded-xl font-bold text-sm transition-all ${
+                  activeTab === tab
+                    ? 'bg-indigo-600 text-white shadow-md'
+                    : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                {badge > 0 && (
+                  <span className={`absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] flex items-center justify-center rounded-full text-[10px] font-black px-1 ${
+                    activeTab === tab ? 'bg-white text-indigo-600' : 'bg-red-500 text-white'
+                  } animate-pulse shadow`}>
+                    {badge > 99 ? '99+' : badge}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
 
         {/* Tab content */}
@@ -232,7 +314,7 @@ export default function ChiefOfOperationsPage() {
                   <div className="space-y-2">
                     {stats.byCompany.slice(0, 8).map((c: any, i: number) => (
                       <div key={c.companyId || i} className="flex items-center justify-between p-3 bg-white rounded-lg">
-                        <span className="text-sm font-medium text-gray-700 truncate">{c.companyId}</span>
+                        <span className="text-sm font-medium text-gray-700 truncate">{c.companyName ?? c.companyId}</span>
                         <span className="text-sm font-black text-emerald-600">MWK {c._sum?.totalAmount?.toLocaleString() ?? 0}</span>
                       </div>
                     ))}
@@ -298,171 +380,88 @@ export default function ChiefOfOperationsPage() {
                   )}
                 </select>
               )}
+
+              {/* Date range */}
+              <div className="flex items-center gap-2">
+                <input
+                  type="date"
+                  value={dateRange?.from ?? ''}
+                  onChange={(e) => setDateRange({ from: e.target.value || null, to: dateRange?.to ?? null })}
+                  className="px-3 py-2 border border-gray-200 rounded-lg text-sm"
+                />
+                <input
+                  type="date"
+                  value={dateRange?.to ?? ''}
+                  onChange={(e) => setDateRange({ from: dateRange?.from ?? null, to: e.target.value || null })}
+                  className="px-3 py-2 border border-gray-200 rounded-lg text-sm"
+                />
+                <button onClick={() => setDateRange({ from: null, to: null })} className="px-3 py-2 bg-gray-50 rounded-lg text-sm">Clear dates</button>
+              </div>
             </div>
           )}
 
-          {/* Bookings Table */}
+          {/* Breadcrumb + Clear filters */}
+          <div className="mb-4 flex items-center justify-between">
+            <Breadcrumbs />
+            <div>
+              <button onClick={() => useFilterStore.getState().clearAll()} className="px-3 py-2 bg-gray-50 rounded-lg text-sm">Clear filters</button>
+            </div>
+          </div>
+
+          {/* Regions tab (hierarchical root) */}
+          {activeTab === 'regions' && (
+            <div>
+              <RegionsTab companyId={filterCompany !== 'all' ? filterCompany : undefined} />
+            </div>
+          )}
+
+          {/* Bookings tab (now delegated to component) */}
           {activeTab === 'bookings' && (
             <div>
-              {dataLoading ? (
-                <div className="text-center py-12"><Loader2 className="w-8 h-8 animate-spin text-indigo-600 mx-auto" /></div>
-              ) : paginatedData.length === 0 ? (
-                <div className="text-center py-12 text-gray-500"><AlertCircle className="w-8 h-8 mx-auto mb-2 opacity-50" /><p>No bookings found</p></div>
-              ) : (
-                <>
-                  <div className="overflow-x-auto border border-gray-100 rounded-xl">
-                    <table className="w-full text-sm">
-                      <thead className="bg-gray-50 border-b border-gray-100">
-                        <tr>
-                          <th className="px-6 py-3 text-left font-bold text-gray-700">Reference</th>
-                          <th className="px-6 py-3 text-left font-bold text-gray-700">Company</th>
-                          <th className="px-6 py-3 text-left font-bold text-gray-700">Amount</th>
-                          <th className="px-6 py-3 text-left font-bold text-gray-700">Status</th>
-                          <th className="px-6 py-3 text-left font-bold text-gray-700">Payment</th>
-                          <th className="px-6 py-3 text-left font-bold text-gray-700">Date</th>
-                          <th className="px-6 py-3 text-center font-bold text-gray-700">Action</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-100">
-                        {paginatedData.map((b: any) => (
-                          <tr key={b.id} className="hover:bg-gray-50 transition-colors">
-                            <td className="px-6 py-3 font-bold text-gray-900">{b.bookingReference}</td>
-                            <td className="px-6 py-3 text-gray-700">{b.companyId}</td>
-                            <td className="px-6 py-3 font-bold text-gray-900">MWK {b.totalAmount?.toLocaleString() ?? 0}</td>
-                            <td className="px-6 py-3"><StatusBadge status={b.bookingStatus || 'unknown'} /></td>
-                            <td className="px-6 py-3"><StatusBadge status={b.paymentStatus || 'unknown'} /></td>
-                            <td className="px-6 py-3 text-gray-600 text-xs">{new Date(b.createdAt).toLocaleDateString()}</td>
-                            <td className="px-6 py-3 text-center"><button className="text-indigo-600 hover:text-indigo-700"><Eye className="w-4 h-4" /></button></td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  <Pagination page={page} totalPages={totalPages} onPageChange={setPage} total={filteredData.length} />
-                </>
-              )}
+              <BookingsTab companyId={filterCompany !== 'all' ? filterCompany : undefined} />
             </div>
           )}
 
           {/* Schedules Table */}
           {activeTab === 'schedules' && (
             <div>
-              {dataLoading ? (
-                <div className="text-center py-12"><Loader2 className="w-8 h-8 animate-spin text-indigo-600 mx-auto" /></div>
-              ) : paginatedData.length === 0 ? (
-                <div className="text-center py-12 text-gray-500"><AlertCircle className="w-8 h-8 mx-auto mb-2 opacity-50" /><p>No schedules found</p></div>
-              ) : (
-                <>
-                  <div className="overflow-x-auto border border-gray-100 rounded-xl">
-                    <table className="w-full text-sm">
-                      <thead className="bg-gray-50 border-b border-gray-100">
-                        <tr>
-                          <th className="px-6 py-3 text-left font-bold text-gray-700">Schedule ID</th>
-                          <th className="px-6 py-3 text-left font-bold text-gray-700">Route</th>
-                          <th className="px-6 py-3 text-left font-bold text-gray-700">Departure</th>
-                          <th className="px-6 py-3 text-left font-bold text-gray-700">Status</th>
-                          <th className="px-6 py-3 text-center font-bold text-gray-700">Action</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-100">
-                        {paginatedData.map((s: any) => (
-                          <tr key={s.id} className="hover:bg-gray-50 transition-colors">
-                            <td className="px-6 py-3 font-bold text-gray-900">{s.id?.substring(0, 8)}</td>
-                            <td className="px-6 py-3 text-gray-700">{s.routeId?.substring(0, 12)}</td>
-                            <td className="px-6 py-3 text-gray-600">{s.departureDateTime ? new Date(s.departureDateTime).toLocaleString() : '—'}</td>
-                            <td className="px-6 py-3"><StatusBadge status={s.status || 'unknown'} /></td>
-                            <td className="px-6 py-3 text-center"><button className="text-indigo-600 hover:text-indigo-700"><Eye className="w-4 h-4" /></button></td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  <Pagination page={page} totalPages={totalPages} onPageChange={setPage} total={filteredData.length} />
-                </>
-              )}
+              <SchedulesTab companyId={filterCompany !== 'all' ? filterCompany : undefined} />
             </div>
           )}
 
           {/* Routes Table */}
           {activeTab === 'routes' && (
             <div>
-              {dataLoading ? (
-                <div className="text-center py-12"><Loader2 className="w-8 h-8 animate-spin text-indigo-600 mx-auto" /></div>
-              ) : paginatedData.length === 0 ? (
-                <div className="text-center py-12 text-gray-500"><AlertCircle className="w-8 h-8 mx-auto mb-2 opacity-50" /><p>No routes found</p></div>
-              ) : (
-                <>
-                  <div className="overflow-x-auto border border-gray-100 rounded-xl">
-                    <table className="w-full text-sm">
-                      <thead className="bg-gray-50 border-b border-gray-100">
-                        <tr>
-                          <th className="px-6 py-3 text-left font-bold text-gray-700">Route Name</th>
-                          <th className="px-6 py-3 text-left font-bold text-gray-700">Origin</th>
-                          <th className="px-6 py-3 text-left font-bold text-gray-700">Destination</th>
-                          <th className="px-6 py-3 text-left font-bold text-gray-700">Company</th>
-                          <th className="px-6 py-3 text-center font-bold text-gray-700">Action</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-100">
-                        {paginatedData.map((r: any) => (
-                          <tr key={r.id} className="hover:bg-gray-50 transition-colors">
-                            <td className="px-6 py-3 font-bold text-gray-900">{r.name}</td>
-                            <td className="px-6 py-3 text-gray-700">{r.origin}</td>
-                            <td className="px-6 py-3 text-gray-700">{r.destination}</td>
-                            <td className="px-6 py-3 text-gray-700">{r.companyId}</td>
-                            <td className="px-6 py-3 text-center"><button className="text-indigo-600 hover:text-indigo-700"><Eye className="w-4 h-4" /></button></td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  <Pagination page={page} totalPages={totalPages} onPageChange={setPage} total={filteredData.length} />
-                </>
-              )}
+              <RoutesTab companyId={filterCompany !== 'all' ? filterCompany : undefined} />
             </div>
           )}
 
           {/* Buses Table */}
           {activeTab === 'buses' && (
             <div>
-              {dataLoading ? (
-                <div className="text-center py-12"><Loader2 className="w-8 h-8 animate-spin text-indigo-600 mx-auto" /></div>
-              ) : paginatedData.length === 0 ? (
-                <div className="text-center py-12 text-gray-500"><AlertCircle className="w-8 h-8 mx-auto mb-2 opacity-50" /><p>No buses found</p></div>
-              ) : (
-                <>
-                  <div className="overflow-x-auto border border-gray-100 rounded-xl">
-                    <table className="w-full text-sm">
-                      <thead className="bg-gray-50 border-b border-gray-100">
-                        <tr>
-                          <th className="px-6 py-3 text-left font-bold text-gray-700">Registration</th>
-                          <th className="px-6 py-3 text-left font-bold text-gray-700">Company</th>
-                          <th className="px-6 py-3 text-left font-bold text-gray-700">Seats</th>
-                          <th className="px-6 py-3 text-left font-bold text-gray-700">Status</th>
-                          <th className="px-6 py-3 text-center font-bold text-gray-700">Action</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-100">
-                        {paginatedData.map((b: any) => (
-                          <tr key={b.id} className="hover:bg-gray-50 transition-colors">
-                            <td className="px-6 py-3 font-bold text-gray-900">{b.registration}</td>
-                            <td className="px-6 py-3 text-gray-700">{b.companyId}</td>
-                            <td className="px-6 py-3 text-gray-700">{b.seatCount ?? '—'}</td>
-                            <td className="px-6 py-3"><StatusBadge status={b.isActive ? 'active' : 'inactive'} /></td>
-                            <td className="px-6 py-3 text-center"><button className="text-indigo-600 hover:text-indigo-700"><Eye className="w-4 h-4" /></button></td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  <Pagination page={page} totalPages={totalPages} onPageChange={setPage} total={filteredData.length} />
-                </>
-              )}
+              <BusesTab companyId={filterCompany !== 'all' ? filterCompany : undefined} />
+            </div>
+          )}
+
+          {/* Payments tab */}
+          {activeTab === 'payments' && (
+            <div>
+              <PaymentsTab companyId={filterCompany !== 'all' ? filterCompany : undefined} />
             </div>
           )}
         </div>
       </div>
     </div>
+  );
+}
+
+export default function ChiefOfOperationsPage() {
+  const [queryClient] = useState(() => new QueryClient());
+
+  return (
+    <QueryClientProvider client={queryClient}>
+      <ChiefOfOperationsPageContent />
+    </QueryClientProvider>
   );
 }
 

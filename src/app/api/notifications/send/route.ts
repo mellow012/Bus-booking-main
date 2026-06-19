@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
     const userRole = user.role || 'customer';
 
     // Check authorization - only admins and system can send
-    const ALLOWED_ROLES = ['superadmin', 'company_admin', 'operator']; // Added operator as they might need to send notifications
+    const ALLOWED_ROLES = ['superadmin', 'company_admin', 'operator', 'chief_of_operations'];
     if (!ALLOWED_ROLES.includes(userRole)) {
       await logger.logSecurityEvent('Unauthorized notification send attempt', request.headers.get('x-forwarded-for') || 'unknown', {
         userId,

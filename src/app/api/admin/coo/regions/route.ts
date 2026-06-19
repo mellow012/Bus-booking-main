@@ -14,23 +14,21 @@ export async function GET(req: NextRequest) {
     const page = Math.max(1, parseInt(searchParams.get('page') ?? '1', 10));
     const limit = Math.min(100, parseInt(searchParams.get('limit') ?? '25', 10));
     const companyId = searchParams.get('companyId');
-    const regionId = searchParams.get('regionId');
 
     const where: any = {};
     if (companyId) where.companyId = companyId;
-    if (regionId) where.regionId = regionId;
 
     const skip = (page - 1) * limit;
 
-    const [routes, total] = await Promise.all([
-      prisma.route.findMany({ where, orderBy: { updatedAt: 'desc' }, skip, take: limit, include: { company: true } }),
-      prisma.route.count({ where }),
+    const [regions, total] = await Promise.all([
+      prisma.region.findMany({ where, orderBy: { updatedAt: 'desc' }, skip, take: limit, include: { company: true } }),
+      prisma.region.count({ where }),
     ]);
 
-    await logger.logSuccess('api', `COO GET /api/admin/coo/routes returned ${routes.length} rows`, { metadata: { userId: user.id } });
-    return NextResponse.json({ routes, total, page, limit });
+    await logger.logSuccess('api', `COO GET /api/admin/coo/regions returned ${regions.length} rows`, { metadata: { userId: user.id } });
+    return NextResponse.json({ regions, total, page, limit });
   } catch (err: any) {
-    await logger.logError('api', 'COO GET /api/admin/coo/routes error', { error: String(err) });
+    await logger.logError('api', 'COO GET /api/admin/coo/regions error', { error: String(err) });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
