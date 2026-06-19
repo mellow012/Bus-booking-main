@@ -56,6 +56,8 @@ import { Company, UserProfile, Booking, Schedule, Route, Bus, OperatorProfile, C
 import TabButton from '@/components/tabButton';
 import DashboardBottomNav from "@/components/DashboardBottomNav";
 import AdminSidebar from '@/components/AdminSidebar';
+import { NotificationBell } from '@/contexts/NotificationContext';
+
 
 // ─── Small UI components & constants restored for composability ───────────
 const KineticStatCard: React.FC<{
@@ -2135,6 +2137,9 @@ export default function SuperAdminDashboard() {
             </div>
           </div>
           <div className="flex items-center gap-4">
+            {userProfile?.id && (
+              <NotificationBell userId={userProfile.id} className="relative" />
+            )}
             <button onClick={() => setRefreshCount(r => r + 1)} className="p-2 text-gray-400 hover:bg-gray-50 rounded-lg transition-all" title="Refresh Data">
               <RefreshCw className={`w-4 h-4 ${loadingStates.initializing ? 'animate-spin' : ''}`} />
             </button>

@@ -17,6 +17,8 @@ import PaymentsTab from '@/components/coo/PaymentsTab';
 import Breadcrumbs from '@/components/coo/Breadcrumbs';
 import useFilterStore from '@/lib/stores/filterStore';
 import Fuse from 'fuse.js';
+import { NotificationBell } from '@/contexts/NotificationContext';
+
 
 type Tab = 'overview' | 'regions' | 'routes' | 'schedules' | 'buses' | 'bookings' | 'payments';
 
@@ -253,8 +255,13 @@ function ChiefOfOperationsPageContent() {
           <h1 className="text-3xl font-black text-gray-900">Chief of Operations</h1>
           <p className="text-sm text-gray-500 mt-1">Platform-wide operations dashboard.</p>
         </div>
-        <div className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-100 rounded-full text-sm font-semibold text-indigo-700">
-          <BusIcon className="w-5 h-5" /> Operational Hub
+        <div className="flex items-center gap-4">
+          {userProfile?.id && (
+            <NotificationBell userId={userProfile.id} className="relative" />
+          )}
+          <div className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-100 rounded-full text-sm font-semibold text-indigo-700">
+            <BusIcon className="w-5 h-5" /> Operational Hub
+          </div>
         </div>
       </div>
 
