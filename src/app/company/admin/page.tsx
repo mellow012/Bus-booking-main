@@ -1,5 +1,5 @@
 'use client';
-import { useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
   Building2, Loader2, DollarSign, Users, Calendar, MapPin, X, User,
@@ -27,6 +27,8 @@ import DashboardBottomNav from '@/components/DashboardBottomNav';
 import Image from 'next/image';
 import CompanyAdminRegionsTab from '@/components/company-admin/RegionsTab';
 import CompanyAdminBreadcrumb from '@/components/company-admin/Breadcrumb';
+import { Schedule, Company, Route, Bus } from '@/types';
+
 
 // ── Extracted sub-components & hooks ─────────────────────────────────────────
 import DashboardSidebar from './_components/DashboardSidebar';
@@ -97,7 +99,7 @@ export default function AdminDashboard() {
       case 'routes': return (
         <RoutesTab companyId={companyId} routes={routes}
           setRoutes={(nr) => updateDashboardData('routes', typeof nr === 'function' ? nr(routes) : nr)}
-          {...commonProps} />
+          buses={buses} {...commonProps} />
       );
       case 'buses': return (
         <BusesTab buses={buses} companyId={companyId}
@@ -107,16 +109,17 @@ export default function AdminDashboard() {
       case 'bookings': return (
         <BookingsTab schedules={schedules} routes={routes} buses={buses} companyId={companyId}
           user={user} userProfile={userProfile}
-          isAdmin={userProfile?.role === 'company_admin' || userProfile?.role === 'superadmin'} />
+          isAdmin={userProfile?.role === 'company_admin' || userProfile?.role === 'superadmin'}
+          {...commonProps} />
       );
       case 'profile': return company ? (
-        <CompanyProfileTab company={company} schedules={schedules} routes={routes}
-          setCompany={(c) => updateDashboardData('company', c as any)} {...commonProps} />
+        <CompanyProfileTab company={company} schedules={schedules} routes={routes} 
+          setCompany={(c) => updateDashboardData('company', c as Company)} {...commonProps} />
       ) : null;
       case 'settings': return company ? (
-        <SettingsTab company={company} setCompany={(c) => updateDashboardData('company', c as any)} {...commonProps} />
+        <SettingsTab company={company} setCompany={(c) => updateDashboardData('company', c as Company)} {...commonProps} />
       ) : null;
-      case 'operators': return company ? <TeamManagementTab companyId={companyId} {...commonProps} /> : null;
+      case 'operators': return <TeamManagementTab companyId={companyId} {...commonProps} />;
       case 'payments': return company ? (
         <PaymentsTab company={company} paymentSettings={paymentSettings as unknown as Record<string, unknown> ?? {}}
           bookings={bookings} buses={buses} {...commonProps} />
@@ -126,10 +129,10 @@ export default function AdminDashboard() {
           companyId={companyId} user={user} userProfile={userProfile} {...commonProps} />
       );
       case 'notifications': return (
-        <NotificationsManagementTab userId={userProfile?.id || userProfile?.uid || user?.id || ''} companyId={companyId} {...commonProps} />
+        <NotificationsManagementTab userId={userProfile?.id ?? user?.id ?? ''} companyId={companyId} {...commonProps} />
       );
       case 'messages': return (
-        <TeamMessagingTab companyId={companyId} setError={(m) => showAlert('error', m)} setSuccess={(m) => showAlert('success', m)} />
+        <TeamMessagingTab companyId={companyId} {...commonProps} />
       );
       default: return <div className="text-center py-12"><p className="text-gray-500">Tab not found</p></div>;
     }
@@ -190,21 +193,24 @@ export default function AdminDashboard() {
                   placeholder="Search routes, buses, or schedules…"
                   className="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 pl-10 pr-4 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none text-gray-800 placeholder-gray-400 font-medium transition-all"
                 />
-                {searchFocused && searchQuery.trim().length > 0 && (() => {
-                  const q = searchQuery.trim();
-                  const routeFuse    = new Fuse(dashboardData.routes,    { keys: ['origin', 'destination'], threshold: 0.3 });
-                  const busFuse      = new Fuse(dashboardData.buses,     { keys: ['licensePlate', 'busType'], threshold: 0.3 });
+                {searchFocused && searchQuery.trim().length > 0 && useMemo(() => {
+                  const q = searchQuery.trim().toLowerCase();
+                  const routeFuse = new Fuse(dashboardData.routes, { keys: ['origin', 'destination'], threshold: 0.3 });
+                  const busFuse = new Fuse(dashboardData.buses, { keys: ['licensePlate', 'busType'], threshold: 0.3 });
                   const scheduleFuse = new Fuse(dashboardData.schedules, {
                     keys: [
-                      { name: 'route.origin',       getFn: (s) => dashboardData.routes.find(r => r.id === s.routeId)?.origin || '' },
-                      { name: 'route.destination',  getFn: (s) => dashboardData.routes.find(r => r.id === s.routeId)?.destination || '' },
-                      { name: 'bus.licensePlate',   getFn: (s) => dashboardData.buses.find(b  => b.id === s.busId)?.licensePlate  || '' },
-                    ], threshold: 0.3,
+                      { name: 'route.origin', getFn: (s: Schedule) => dashboardData.routes.find(r => r.id === s.routeId)?.origin || '' },
+                      { name: 'route.destination', getFn: (s: Schedule) => dashboardData.routes.find(r => r.id === s.routeId)?.destination || '' },
+                      { name: 'bus.licensePlate', getFn: (s: Schedule) => dashboardData.buses.find(b => b.id === s.busId)?.licensePlate || '' },
+                    ],
+                    threshold: 0.3,
                   });
-                  const matchedRoutes    = routeFuse.search(q).map(r => r.item).slice(0, 3);
-                  const matchedBuses     = busFuse.search(q).map(b => b.item).slice(0, 3);
+
+                  const matchedRoutes = routeFuse.search(q).map(r => r.item).slice(0, 3);
+                  const matchedBuses = busFuse.search(q).map(b => b.item).slice(0, 3);
                   const matchedSchedules = scheduleFuse.search(q).map(s => s.item).slice(0, 3);
                   const hasResults = matchedRoutes.length > 0 || matchedBuses.length > 0 || matchedSchedules.length > 0;
+
                   return hasResults ? (
                     <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden z-50 max-h-80 overflow-y-auto">
                       {matchedRoutes.length > 0 && <div>
@@ -244,7 +250,7 @@ export default function AdminDashboard() {
                       <p className="text-sm text-gray-500">No results for &quot;{searchQuery}&quot;</p>
                     </div>
                   );
-                })()}
+                }, [searchQuery, dashboardData])}
               </div>
             </div>
             <div className="flex items-center gap-3">
