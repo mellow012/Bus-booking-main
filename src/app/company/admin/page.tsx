@@ -1,5 +1,6 @@
 'use client';
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
   Building2, Loader2, DollarSign, Users, Calendar, MapPin, X, User,
   Settings, AlertTriangle, Bell, Menu, LayoutDashboard, Search, HelpCircle,
@@ -24,6 +25,8 @@ import TeamMessagingTab from '@/components/TeamMessagingTab';
 import ChartersTab from '@/components/ChartersTab';
 import DashboardBottomNav from '@/components/DashboardBottomNav';
 import Image from 'next/image';
+import CompanyAdminRegionsTab from '@/components/company-admin/RegionsTab';
+import CompanyAdminBreadcrumb from '@/components/company-admin/Breadcrumb';
 
 // ── Extracted sub-components & hooks ─────────────────────────────────────────
 import DashboardSidebar from './_components/DashboardSidebar';
@@ -47,6 +50,8 @@ export default function AdminDashboard() {
     fetchInitialData, fetchCollectionData, updateDashboardData, addItem,
     alert, showAlert, clearAlert,
   } = useAdminDashboard();
+
+  const [queryClient] = useState(() => new QueryClient());
 
   const companyId = userProfile?.companyId?.trim() || '';
 
@@ -79,6 +84,7 @@ export default function AdminDashboard() {
     );
     switch (activeTab) {
       case 'overview': return <OverviewTab dashboardData={dashboardData} realtimeStatus={realtimeStatus} setActiveTab={setActiveTab} />;
+      case 'regions': return <CompanyAdminRegionsTab />;
       case 'schedules': return (
         <SchedulesTab companyId={companyId} schedules={schedules} user={user} userProfile={userProfile}
           setSchedules={(ns) => updateDashboardData('schedules', Array.isArray(ns) ? ns : schedules)}
@@ -158,8 +164,9 @@ export default function AdminDashboard() {
   const { company } = dashboardData;
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
-      <DashboardSidebar
+    <QueryClientProvider client={queryClient}>
+      <div className="min-h-screen bg-gray-50 flex">
+        <DashboardSidebar
         activeCategory={activeCategory as CategoryType}
         setActiveCategory={(cat) => { setActiveCategory(cat); setActiveTab(categorySubTabs[cat]); }}
         isMobileOpen={isMobileOpen} setIsMobileOpen={setIsMobileOpen}
@@ -281,16 +288,11 @@ export default function AdminDashboard() {
 
         <main className="flex-1 px-4 sm:px-6 lg:px-8 py-8 pb-32 lg:pb-8">
           <div className="max-w-[1600px] mx-auto">
-            {company.status !== 'active' && (
-              <div className={`mb-6 p-4 rounded-xl border flex items-center gap-4 animate-in fade-in slide-in-from-top-2 duration-500 ${company.status === 'inactive' ? 'bg-amber-50 border-amber-200 text-amber-800' : 'bg-blue-50 border-blue-200 text-blue-800'}`}>
-                <AlertTriangle className={`w-5 h-5 shrink-0 ${company.status === 'inactive' ? 'text-amber-600' : 'text-blue-600'}`} />
-                <div>
-                  <p className="font-bold text-sm">{company.status === 'inactive' ? 'Company Operations are Paused' : 'Company in Setup Mode'}</p>
-                  <p className="text-xs opacity-90">{company.status === 'inactive' ? 'Your routes and schedules are currently hidden from customers.' : 'Your company is in setup mode and not yet visible to customers.'}</p>
-                </div>
-              </div>
-            )}
+
             {alert && <div className="mb-6"><AlertMessage type={alert.type} message={alert.message} onClose={clearAlert} /></div>}
+            {activeTab !== 'overview' && activeTab !== 'settings' && activeTab !== 'profile' && (
+              <CompanyAdminBreadcrumb />
+            )}
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">{renderActiveTab()}</div>
           </div>
         </main>
@@ -312,5 +314,6 @@ export default function AdminDashboard() {
         />
       </div>
     </div>
+    </QueryClientProvider>
   );
 }

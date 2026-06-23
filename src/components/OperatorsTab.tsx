@@ -15,7 +15,7 @@ import {
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type TeamRole = 'operator' | 'conductor';
+type TeamRole = 'operator';
 
 interface TeamMember {
   id: string; uid: string; email: string; name: string; firstName?: string; lastName?: string;
@@ -41,15 +41,7 @@ const ROLE_CONFIG = {
     badge: 'bg-indigo-50 text-indigo-700 border-indigo-100',
     tab:   'border-indigo-600 text-indigo-700 bg-indigo-50/50',
     permissions: 'Critical. Can execute scheduling logic, manage vessel assignments, and override booking states for their assigned corridor.',
-  },
-  conductor: {
-    label: 'Field Personnel', plural: 'Transit Crew',
-    description: 'Trip Execution & Validation',
-    icon: Bus, color: 'emerald',
-    badge: 'bg-emerald-50 text-emerald-700 border-emerald-100',
-    tab:   'border-emerald-600 text-emerald-700 bg-emerald-50/50',
-    permissions: 'Operational. Limited to viewing assigned manifests, validating passenger credentials, and real-time trip status reporting.',
-  },
+  }
 } as const;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -100,6 +92,13 @@ const TeamManagementTab: React.FC<TeamManagementTabProps> = ({
   const [resendingId,    setResendingId]    = useState<string | null>(null);
   const [loading,        setLoading]        = useState(true);
 
+  // Region and Route DB states
+  const [dbRegions, setDbRegions] = useState<{ id: string; name: string }[]>([]);
+  const [dbRoutes, setDbRoutes] = useState<{ id: string; name: string; origin: string; destination: string }[]>([]);
+  const [selectedRouteIds, setSelectedRouteIds] = useState<string[]>([]);
+  const [selectedRegionId, setSelectedRegionId] = useState<string>('');
+  const [editRegionId, setEditRegionId] = useState<string>('');
+
   const { user: currentUser } = useAuth();
 
   // ── Fetch ──────────────────────────────────────────────────────────────────
@@ -118,12 +117,21 @@ const TeamManagementTab: React.FC<TeamManagementTabProps> = ({
           setCompanyName(companyData.name || 'Your Company');
           setBranches(parseBranches(companyData.branches));
         }
+
+        // Fetch Regions & Routes via API (bypasses RLS issues)
+        const [regionsRes, routesRes] = await Promise.all([
+          window.fetch(`/api/admin/coo/regions?companyId=${companyId}&limit=100`, { credentials: 'same-origin' }).then(r => r.ok ? r.json() : null),
+          window.fetch(`/api/admin/coo/routes?companyId=${companyId}&limit=100`, { credentials: 'same-origin' }).then(r => r.ok ? r.json() : null),
+        ]);
+
+        if (regionsRes?.regions) setDbRegions(regionsRes.regions.filter((r: any) => r.isActive));
+        if (routesRes?.routes) setDbRoutes(routesRes.routes.map((r: any) => ({ id: r.id, name: r.name, origin: r.origin, destination: r.destination })));
         
         const { data: membersData, error: membersError } = await supabase
           .from('User')
           .select('*')
           .eq('companyId', companyId)
-          .in('role', ['operator', 'conductor']);
+          .eq('role', 'operator');
           
         if (!membersError && membersData) {
           setMembers(membersData.map(m => {
@@ -153,7 +161,7 @@ const TeamManagementTab: React.FC<TeamManagementTabProps> = ({
       .from('User')
       .select('*')
       .eq('companyId', companyId)
-      .in('role', ['operator', 'conductor']);
+      .eq('role', 'operator');
       
     if (!membersError && data) {
       setMembers(data.map(m => {
@@ -175,12 +183,36 @@ const TeamManagementTab: React.FC<TeamManagementTabProps> = ({
   const openAdd = (role: TeamRole) => {
     setAddingRole(role);
     setNewMember({ name: '', email: '', region: '' });
+    setSelectedRouteIds([]);
+    setSelectedRegionId('');
     setShowAddModal(true);
   };
 
-  const openEdit = (m: TeamMember) => {
+  const openEdit = async (m: TeamMember) => {
     setEditingMember(m);
     setEditData({ region: m.region || '', status: m.status });
+    
+    // Clear and load operator region and routes from Operator table
+    setSelectedRouteIds([]);
+    setEditRegionId('');
+    
+    try {
+      const { data: opData } = await supabase
+        .from('Operator')
+        .select('regionId, routes(id)')
+        .eq('id', m.id)
+        .maybeSingle();
+
+      if (opData) {
+        setEditRegionId(opData.regionId || '');
+        if (opData.routes) {
+          setSelectedRouteIds((opData.routes as any[]).map((r: any) => r.id));
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching operator assignments:', err);
+    }
+    
     setShowEditModal(true);
   };
 
@@ -188,7 +220,7 @@ const TeamManagementTab: React.FC<TeamManagementTabProps> = ({
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentUser) return setError('Not logged in');
-    if (addingRole === 'operator' && !newMember.region) return setError('Region is required for operators');
+    if (addingRole === 'operator' && !selectedRegionId) return setError('Region is required for operators');
     if (!newMember.name.trim()) return setError('Name is required');
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newMember.email)) return setError('Valid email required');
 
@@ -198,9 +230,13 @@ const TeamManagementTab: React.FC<TeamManagementTabProps> = ({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: newMember.name.trim(), email: newMember.email.trim(),
-          region: newMember.region.trim() || undefined,
-          role: addingRole, companyId, companyName,
+          name: newMember.name.trim(),
+          email: newMember.email.trim(),
+          regionId: selectedRegionId || undefined,
+          routeIds: selectedRouteIds,
+          role: addingRole,
+          companyId,
+          companyName,
           invitedBy: currentUser.id,
         }),
       });
@@ -208,7 +244,16 @@ const TeamManagementTab: React.FC<TeamManagementTabProps> = ({
       if (!res.ok || !result.success) throw new Error(result.error || 'Failed to send invite');
       await refreshMembers();
       setShowAddModal(false);
-      setSuccess(`Invitation sent to ${newMember.email}`);
+      if (result.emailFailed && result.inviteLink) {
+        try {
+          await navigator.clipboard.writeText(result.inviteLink);
+          setSuccess(`Recruited successfully! The invitation email could not be sent (Resend API key is invalid/expired), but the setup link has been copied to your clipboard: ${result.inviteLink}`);
+        } catch (clipErr) {
+          setSuccess(`Recruited successfully! Email failed to send (Resend API key is invalid/expired). Please share this setup link manually: ${result.inviteLink}`);
+        }
+      } else {
+        setSuccess(`Invitation sent to ${newMember.email}`);
+      }
     } catch (e: unknown) {
       setError((e as any).message);
     } finally {
@@ -221,29 +266,18 @@ const TeamManagementTab: React.FC<TeamManagementTabProps> = ({
     if (!editingMember) return;
     setActionLoading(true);
     try {
-      const updatePayload: any = {
-        isActive: editData.status === 'active',
-        updatedAt: new Date().toISOString(),
-      };
-      if (editingMember.role === 'operator') updatePayload.region = editData.region;
-      // If setting to active, also mark setupCompleted
-      if (editData.status === 'active') updatePayload.setupCompleted = true;
+      const result = await dbActions.updateOperatorAssignments(editingMember.id, {
+        regionId: editRegionId || null,
+        routeIds: selectedRouteIds,
+        status: editData.status
+      });
 
-      const { error } = await supabase
-        .from('User')
-        .update(updatePayload)
-        .eq('id', editingMember.id);
-
-      if (error) throw error;
+      if (!result.success) throw new Error(result.error);
       
-      setMembers(prev => prev.map(m =>
-        m.id === editingMember.id
-          ? { ...m, status: editData.status, region: editingMember.role === 'operator' ? editData.region : m.region }
-          : m
-      ));
+      await refreshMembers();
       setShowEditModal(false);
       setEditingMember(null);
-      setSuccess(`${editingMember.name} updated`);
+      setSuccess(`${editingMember.name} updated successfully`);
     } catch (e: unknown) {
       setError((e as any).message);
     } finally {
@@ -261,7 +295,16 @@ const TeamManagementTab: React.FC<TeamManagementTabProps> = ({
       });
       const result = await res.json();
       if (!res.ok || !result.success) throw new Error(result.error || 'Failed');
-      setSuccess(`Invitation resent to ${m.email}`);
+      if (result.emailFailed && result.inviteLink) {
+        try {
+          await navigator.clipboard.writeText(result.inviteLink);
+          setSuccess(`Link regenerated! The invitation email could not be sent (Resend API key is invalid/expired), but the link has been copied to your clipboard: ${result.inviteLink}`);
+        } catch (clipErr) {
+          setSuccess(`Link regenerated! Email failed to send (Resend API key is invalid/expired). Please share this link manually: ${result.inviteLink}`);
+        }
+      } else {
+        setSuccess(`Invitation resent to ${m.email}`);
+      }
     } catch (e: unknown) {
       setError((e as any).message);
     } finally {
@@ -326,190 +369,165 @@ const TeamManagementTab: React.FC<TeamManagementTabProps> = ({
 
   // ─── RENDER ────────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-6 sm:space-y-8 pb-12 px-2 sm:px-0">
+    <div className="space-y-6 pb-12">
 
-      {/* ── Header ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6 text-left">
+      {/* ── Header + Stats Row ── */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6">
         <div>
-          <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight flex items-center gap-3 uppercase">
-             TEAM HIERARCHY
-             <Shield className="w-5 h-5 text-indigo-600" />
+          <h2 className="text-2xl font-black text-gray-900 tracking-tight uppercase flex items-center gap-3">
+            Operators
+            <span className="text-xs font-bold bg-indigo-600 text-white px-2.5 py-1 rounded-xl">{members.length}</span>
           </h2>
-          <p className="text-[10px] sm:text-[11px] font-bold text-gray-400 uppercase tracking-widest mt-1.5 flex items-center gap-2">
-            Control personnel access & operational roles
+          <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mt-1">
+            Manage route operators and regional assignments
           </p>
         </div>
-        <div className="flex flex-wrap gap-3">
-          <button onClick={() => openAdd('operator')}
-            className="flex-1 sm:flex-none group flex items-center justify-center gap-2 px-6 py-3 bg-white border border-gray-100 rounded-2xl text-[11px] font-bold uppercase tracking-widest text-gray-900 shadow-sm hover:shadow-lg hover:border-indigo-100 hover:text-indigo-600 transition-all active:scale-95">
-            <UserCog className="w-4 h-4 group-hover:rotate-12 transition-transform" /> Recruit Operator
-          </button>
-          <button onClick={() => openAdd('conductor')}
-            className="flex-1 sm:flex-none group flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-2xl text-[11px] font-bold uppercase tracking-widest shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95">
-            <Bus className="w-4 h-4 group-hover:translate-x-1 transition-transform" /> Recruit Conductor
+
+        <div className="flex items-center gap-3">
+          {/* Inline Stats */}
+          <div className="hidden sm:flex items-center gap-3">
+            <div className="px-4 py-2.5 bg-emerald-50 border border-emerald-100 rounded-xl text-center">
+              <p className="text-lg font-black text-emerald-700">{teamStats('operator').active}</p>
+              <p className="text-[9px] font-bold text-emerald-600 uppercase tracking-widest">Active</p>
+            </div>
+            {teamStats('operator').pending > 0 && (
+              <div className="px-4 py-2.5 bg-amber-50 border border-amber-100 rounded-xl text-center">
+                <p className="text-lg font-black text-amber-700">{teamStats('operator').pending}</p>
+                <p className="text-[9px] font-bold text-amber-600 uppercase tracking-widest">Pending</p>
+              </div>
+            )}
+          </div>
+
+          <button
+            onClick={() => openAdd('operator')}
+            className="flex items-center gap-2 px-5 py-3 bg-indigo-600 text-white rounded-xl text-[11px] font-bold uppercase tracking-widest shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95"
+          >
+            <UserPlus className="w-4 h-4" /> Add Operator
           </button>
         </div>
       </div>
 
-      {/* ── Summary cards ── */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {(['operator', 'conductor'] as TeamRole[]).map(role => {
-          const cfg = ROLE_CONFIG[role];
-          const s   = teamStats(role);
-          const Icon = cfg.icon;
-          const isActive = activeTab === role;
-          
-          return (
-            <button key={role} onClick={() => setActiveTab(role)}
-              className={`p-6 sm:p-8 bg-white rounded-2xl sm:rounded-2xl shadow-sm border transition-all duration-500 flex flex-col text-left relative overflow-hidden group ${
-                isActive ? 'border-indigo-600 ring-2 ring-indigo-50 shadow-indigo-50' : 'border-gray-50 hover:border-indigo-200'
-              }`}>
-              <div className="absolute -right-8 -top-8 w-32 h-32 bg-indigo-600/5 rounded-full blur-3xl group-hover:bg-indigo-600/10 transition-colors"></div>
-              
-              <div className="flex items-center justify-between mb-6 relative z-10">
-                <div className={`p-4 rounded-2xl ${isActive ? 'bg-indigo-600 text-white' : 'bg-slate-50 text-indigo-400'} shadow-sm transition-all duration-500`}>
-                  <Icon className="w-6 h-6" />
-                </div>
-                {isActive && <div className="w-3 h-3 rounded-full bg-indigo-600 shadow-sm animate-pulse" />}
-              </div>
-              
-              <div className="relative z-10">
-                 <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em] mb-1">{cfg.plural}</p>
-                 <p className="text-3xl sm:text-4xl font-bold text-gray-900 leading-none tracking-tighter mb-4">{s.total}</p>
-                 <div className="flex flex-wrap items-center gap-4">
-                    <span className="flex items-center gap-2 text-[10px] font-bold text-emerald-600 uppercase tracking-widest bg-emerald-50 px-2.5 py-1 rounded-xl border border-emerald-100">
-                       <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> {s.active} Operational
-                    </span>
-                    {s.pending > 0 && (
-                       <span className="flex items-center gap-2 text-[10px] font-bold text-amber-600 uppercase tracking-widest bg-amber-50 px-2.5 py-1 rounded-xl border border-amber-100">
-                          <div className="w-1.5 h-1.5 rounded-full bg-amber-500" /> {s.pending} Pending
-                       </span>
-                    )}
-                 </div>
-              </div>
-            </button>
-          );
-        })}
-      </div>
-
-      {/* ── Table card ── */}
-      <div className="bg-white rounded-2xl sm:rounded-2xl shadow-sm border border-gray-100 overflow-hidden text-left">
-        {/* Tab Header Bar */}
-        <div className="flex p-2 bg-gray-50/50">
-          {(['operator', 'conductor'] as TeamRole[]).map(role => {
-            const cfg = ROLE_CONFIG[role];
-            const isActive = activeTab === role;
-            return (
-              <button 
-                key={role} 
-                onClick={() => setActiveTab(role)}
-                className={`flex items-center justify-center gap-3 px-4 sm:px-8 py-3 sm:py-4 rounded-2xl text-[10px] sm:text-[11px] font-bold uppercase tracking-widest transition-all flex-1 ${
-                  isActive 
-                    ? 'bg-white text-indigo-600 shadow-sm border border-gray-100' 
-                    : 'text-gray-400 hover:text-gray-600 hover:bg-white/50'
-                }`}
-              >
-                <cfg.icon className={`w-4 h-4 ${isActive ? 'text-indigo-600' : 'text-gray-300'}`} />
-                <span className="hidden sm:inline">{cfg.plural}</span>
-                <span className="sm:hidden">{role}</span>
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Table Content */}
+      {/* ── Table Card ── */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
         {loading ? (
-          <div className="flex items-center justify-center py-24">
-            <Loader2 className="w-10 h-10 animate-spin text-indigo-100" />
+          <div className="flex flex-col items-center justify-center py-24 gap-4">
+            <Loader2 className="w-8 h-8 animate-spin text-indigo-300" />
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Loading operators...</p>
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-24 gap-5">
+            <div className="w-16 h-16 bg-indigo-50 rounded-2xl flex items-center justify-center border border-indigo-100">
+              <UserCog className="w-8 h-8 text-indigo-300" />
+            </div>
+            <div className="text-center">
+              <p className="text-sm font-bold text-gray-900 uppercase tracking-tight">No operators yet</p>
+              <p className="text-xs text-gray-400 mt-1">Add your first operator to get started</p>
+            </div>
+            <button
+              onClick={() => openAdd('operator')}
+              className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-[11px] font-bold uppercase tracking-widest hover:bg-indigo-700 transition-all active:scale-95"
+            >
+              <UserPlus className="w-4 h-4" /> Add Operator
+            </button>
           </div>
         ) : (
-          <div className="overflow-x-auto text-left">
-            <table className="w-full min-w-[800px]">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[700px]">
               <thead>
-                <tr className="border-b border-gray-50 bg-gray-50/20">
-                  {["Personnel Identity", "Digital Access", ...(activeTab === 'operator' ? ["Deployment Region"] : []), "Operational Status", "Execution Control"].map(h => (
-                    <th key={h} className="px-8 py-6 text-[10px] font-bold text-gray-400 uppercase tracking-widest">{h}</th>
-                  ))}
+                <tr className="bg-gray-50 border-b border-gray-100">
+                  <th className="px-6 py-4 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">Operator</th>
+                  <th className="px-6 py-4 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">Email</th>
+                  <th className="px-6 py-4 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">Region</th>
+                  <th className="px-6 py-4 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">Status</th>
+                  <th className="px-6 py-4 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">Joined</th>
+                  <th className="px-6 py-4 text-right text-[10px] font-bold text-gray-400 uppercase tracking-widest">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {filtered.length === 0 ? (
-                  <tr>
-                    <td colSpan={activeTab === 'operator' ? 5 : 4} className="px-8 py-24 text-center">
-                      <div className="flex flex-col items-center gap-4 text-gray-300">
-                        <div className="w-16 h-16 bg-gray-50 rounded-2xl flex items-center justify-center border border-gray-50">
-                           {React.createElement(ROLE_CONFIG[activeTab].icon, { className: "w-8 h-8 opacity-20" })}
-                        </div>
-                        <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400">No {activeTab} records identified</p>
-                        <button onClick={() => openAdd(activeTab)} className="text-[11px] font-bold uppercase tracking-widest text-indigo-600 hover:text-indigo-700 bg-indigo-50 px-4 py-2 rounded-xl border border-indigo-100 transition-all">
-                          Initiate Recruitment
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ) : filtered.map(member => (
-                  <tr key={member.id} className="hover:bg-indigo-50/20 transition-all duration-300 group">
-                    <td className="px-8 py-6">
-                      <div className="flex items-center gap-4">
-                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-sm font-bold border group-hover:scale-110 transition-transform ${
-                          member.role === 'operator' ? 'bg-indigo-50 text-indigo-600 border-indigo-100' : 'bg-emerald-50 text-emerald-600 border-emerald-100'
-                        }`}>
+                {filtered.map(member => (
+                  <tr key={member.id} className="group hover:bg-indigo-50/30 transition-colors">
+                    {/* Operator */}
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-400 to-indigo-600 flex items-center justify-center text-white text-xs font-bold shrink-0 group-hover:scale-105 transition-transform">
                           {initials(member.name)}
                         </div>
                         <div>
-                          <p className="text-sm font-bold text-gray-900 uppercase tracking-tight">{member.name || 'ANONYMOUS UNIT'}</p>
-                          <p className="text-[9px] font-bold text-indigo-400 uppercase tracking-widest mt-1">ID: {member.id.substring(0,8).toUpperCase()}</p>
+                          <p className="text-sm font-bold text-gray-900">{member.name || 'Unnamed'}</p>
+                          <p className="text-[10px] text-gray-400 font-medium">ID: {member.id.substring(0, 8).toUpperCase()}</p>
                         </div>
                       </div>
                     </td>
 
-                    <td className="px-8 py-6">
-                      <div className="flex items-center gap-2.5">
-                        <div className="p-1.5 bg-slate-50 rounded-lg group-hover:bg-indigo-600 group-hover:text-white transition-colors">
-                           <Mail className="w-3.5 h-3.5" />
-                        </div>
-                        <span className="text-xs font-bold text-gray-600 lowercase">{member.email}</span>
+                    {/* Email */}
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-2">
+                        <Mail className="w-3.5 h-3.5 text-gray-300 shrink-0" />
+                        <span className="text-xs font-medium text-gray-600">{member.email}</span>
                       </div>
                     </td>
 
-                    {activeTab === 'operator' && (
-                      <td className="px-8 py-6">
-                        {member.region ? (
-                          <div className="flex items-center gap-2.5">
-                            <MapPin className="w-4 h-4 text-rose-300" />
-                            <span className="text-xs font-bold text-gray-900 uppercase tracking-tight">{member.region}</span>
-                          </div>
-                        ) : (
-                          <div className="inline-flex items-center gap-2 px-2.5 py-1 bg-rose-50 border border-rose-100 rounded-lg">
-                            <AlertTriangle className="w-3 h-3 text-rose-500" />
-                            <span className="text-[9px] font-bold text-rose-700 uppercase tracking-widest">Unassigned</span>
-                          </div>
-                        )}
-                      </td>
-                    )}
+                    {/* Region */}
+                    <td className="px-6 py-4">
+                      {member.region ? (
+                        <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 border border-blue-100 rounded-xl">
+                          <MapPin className="w-3.5 h-3.5 text-blue-500" />
+                          <span className="text-xs font-bold text-blue-700">{member.region}</span>
+                        </div>
+                      ) : (
+                        <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 border border-rose-100 rounded-xl">
+                          <AlertTriangle className="w-3.5 h-3.5 text-rose-400" />
+                          <span className="text-[10px] font-bold text-rose-600 uppercase tracking-widest">Unassigned</span>
+                        </div>
+                      )}
+                    </td>
 
-                    <td className="px-8 py-6">
+                    {/* Status */}
+                    <td className="px-6 py-4">
                       <StatusBadge status={member.status} />
                     </td>
 
-                    <td className="px-8 py-6">
-                      <div className="flex items-center gap-2">
+                    {/* Joined */}
+                    <td className="px-6 py-4">
+                      <span className="text-xs text-gray-500 font-medium">
+                        {member.createdAt ? new Date(member.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
+                      </span>
+                    </td>
+
+                    {/* Actions */}
+                    <td className="px-6 py-4">
+                      <div className="flex items-center justify-end gap-1.5">
                         {member.status === 'pending' && (
-                          <button onClick={() => handleResend(member)} disabled={resendingId === member.id}
-                            className="p-2.5 text-slate-400 hover:text-indigo-600 hover:bg-white rounded-xl transition-all shadow-sm hover:shadow active:scale-95 border border-transparent hover:border-indigo-100">
+                          <button
+                            onClick={() => handleResend(member)}
+                            disabled={resendingId === member.id}
+                            title="Resend invite"
+                            className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all border border-transparent hover:border-indigo-100"
+                          >
                             {resendingId === member.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                           </button>
                         )}
-                        <button onClick={() => openEdit(member)} 
-                          className="p-2.5 text-slate-400 hover:text-indigo-600 hover:bg-white rounded-xl transition-all shadow-sm hover:shadow active:scale-95 border border-transparent hover:border-indigo-100">
+                        <button
+                          onClick={() => openEdit(member)}
+                          title="Edit operator"
+                          className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all border border-transparent hover:border-indigo-100"
+                        >
                           <Edit3 className="w-4 h-4" />
                         </button>
-                        <button onClick={() => handleToggle(member)} disabled={actionLoading}
-                          className="p-2.5 text-slate-400 hover:text-amber-600 hover:bg-white rounded-xl transition-all shadow-sm hover:shadow active:scale-95 border border-transparent hover:border-amber-100">
+                        <button
+                          onClick={() => handleToggle(member)}
+                          disabled={actionLoading}
+                          title={member.status === 'active' ? 'Deactivate' : 'Activate'}
+                          className="p-2 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all border border-transparent hover:border-amber-100"
+                        >
                           {member.status === 'active' ? <Ban className="w-4 h-4" /> : <ShieldCheck className="w-4 h-4" />}
                         </button>
-                        <button onClick={() => handleDelete(member)} disabled={actionLoading}
-                          className="p-2.5 text-slate-400 hover:text-rose-600 hover:bg-white rounded-xl transition-all shadow-sm hover:shadow active:scale-95 border border-transparent hover:border-rose-100">
+                        <button
+                          onClick={() => handleDelete(member)}
+                          disabled={actionLoading}
+                          title="Remove operator"
+                          className="p-2 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all border border-transparent hover:border-rose-100"
+                        >
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
@@ -525,32 +543,6 @@ const TeamManagementTab: React.FC<TeamManagementTabProps> = ({
       {/* ── Add Modal ── */}
       <Modal isOpen={showAddModal} onClose={() => setShowAddModal(false)} title="Recruit Team Intelligence">
         <form onSubmit={handleAdd} className="space-y-6 text-left">
-          {/* Role picker */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {(['operator', 'conductor'] as TeamRole[]).map(role => {
-              const cfg  = ROLE_CONFIG[role];
-              const Icon = cfg.icon;
-              const sel  = addingRole === role;
-              return (
-                <button key={role} type="button" onClick={() => setAddingRole(role)}
-                  className={`relative flex flex-col items-center gap-3 p-6 rounded-2xl border-2 transition-all duration-300 ${
-                    sel
-                      ? `border-indigo-600 bg-indigo-50/50`
-                      : 'border-gray-50 bg-gray-50/30 text-gray-300 hover:border-gray-200'
-                  }`}>
-                  <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${sel ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'bg-white border border-gray-100'}`}>
-                    <Icon className="w-6 h-6" />
-                  </div>
-                  <div className="text-center">
-                    <p className={`text-[11px] font-bold uppercase tracking-widest ${sel ? 'text-indigo-600' : 'text-gray-400'}`}>{cfg.label}</p>
-                    <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-1">{cfg.description}</p>
-                  </div>
-                  {sel && <div className="absolute top-4 right-4"><BadgeCheck className="w-5 h-5 text-indigo-600" /></div>}
-                </button>
-              );
-            })}
-          </div>
-
           <div className="space-y-4">
             <div>
               <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Personnel Name</label>
@@ -572,27 +564,60 @@ const TeamManagementTab: React.FC<TeamManagementTabProps> = ({
               </div>
             </div>
 
-            {addingRole === 'operator' && (
-              <div>
-                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Strategic Deployment Zone</label>
-                {branches.length > 0 ? (
-                  <div className="relative">
-                    <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
-                    <select value={newMember.region} onChange={e => setNewMember({ ...newMember, region: e.target.value })}
-                      className="w-full pl-11 pr-10 py-3 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-bold text-gray-900 focus:ring-2 focus:ring-indigo-600 focus:bg-white outline-none appearance-none cursor-pointer" required>
-                      <option value="">Select Command Center</option>
-                      {branches.map(b => <option key={b} value={b}>{b}</option>)}
-                    </select>
-                    <ChevronRight className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 rotate-90" />
-                  </div>
-                ) : (
-                  <div className="p-4 bg-amber-50 border border-amber-100 rounded-2xl flex items-start gap-3">
-                    <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0" />
-                    <p className="text-[10px] font-bold text-amber-800 uppercase tracking-widest leading-relaxed">No branches identified. Update company architecture in settings first.</p>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Strategic Deployment Region</label>
+                  {dbRegions.length > 0 ? (
+                    <div className="relative">
+                      <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
+                      <select value={selectedRegionId} onChange={e => {
+                        const regId = e.target.value;
+                        setSelectedRegionId(regId);
+                        const regName = dbRegions.find(r => r.id === regId)?.name || '';
+                        setNewMember(prev => ({ ...prev, region: regName }));
+                      }}
+                        className="w-full pl-11 pr-10 py-3 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-bold text-gray-900 focus:ring-2 focus:ring-indigo-600 focus:bg-white outline-none appearance-none cursor-pointer" required>
+                        <option value="">Select Region</option>
+                        {dbRegions.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                      </select>
+                      <ChevronRight className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 rotate-90" />
+                    </div>
+                  ) : (
+                    <div className="p-4 bg-amber-50 border border-amber-100 rounded-2xl flex items-start gap-3">
+                      <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0" />
+                      <p className="text-[10px] font-bold text-amber-800 uppercase tracking-widest leading-relaxed">No active branches found. Please add branches in your Company Profile to assign operators to regions.</p>
+                    </div>
+                  )}
+                </div>
+
+                {dbRoutes.length > 0 && (
+                  <div>
+                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Assigned Routes</label>
+                    <div className="bg-gray-50 border border-gray-100 rounded-2xl p-4 max-h-48 overflow-y-auto space-y-2">
+                      {dbRoutes.map(route => {
+                        const checked = selectedRouteIds.includes(route.id);
+                        return (
+                          <label key={route.id} className="flex items-center gap-3 cursor-pointer p-2 rounded-xl hover:bg-white transition-colors">
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setSelectedRouteIds(prev => [...prev, route.id]);
+                                } else {
+                                  setSelectedRouteIds(prev => prev.filter(id => id !== route.id));
+                                }
+                              }}
+                              className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-gray-300"
+                            />
+                            <span className="text-xs font-bold text-gray-700 uppercase tracking-tight">{route.name || `${route.origin} → ${route.destination}`}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
               </div>
-            )}
           </div>
 
           <div className="p-4 bg-indigo-900 rounded-2xl text-white/90 relative overflow-hidden">
@@ -630,20 +655,53 @@ const TeamManagementTab: React.FC<TeamManagementTabProps> = ({
               </div>
             </div>
 
-            {editingMember.role === 'operator' && (
-              <div>
-                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Relocate Strategic Zone</label>
-                <div className="relative">
-                  <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
-                  <select value={editData.region} onChange={e => setEditData({ ...editData, region: e.target.value })}
-                    className="w-full pl-11 pr-10 py-3 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-bold text-gray-900 focus:ring-2 focus:ring-indigo-600 focus:bg-white outline-none appearance-none" required>
-                    <option value="">Select Command Center</option>
-                    {branches.map(b => <option key={b} value={b}>{b}</option>)}
-                  </select>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Relocate Strategic Region</label>
+                  <div className="relative">
+                    <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
+                    <select value={editRegionId} onChange={e => {
+                      const regId = e.target.value;
+                      setEditRegionId(regId);
+                      const regName = dbRegions.find(r => r.id === regId)?.name || '';
+                      setEditData(prev => ({ ...prev, region: regName }));
+                    }}
+                      className="w-full pl-11 pr-10 py-3 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-bold text-gray-900 focus:ring-2 focus:ring-indigo-600 focus:bg-white outline-none appearance-none cursor-pointer" required>
+                      <option value="">Select Region</option>
+                      {dbRegions.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                    </select>
+                    <ChevronRight className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 rotate-90" />
+                  </div>
                 </div>
-              </div>
-            )}
 
+                {dbRoutes.length > 0 && (
+                  <div>
+                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Assigned Routes</label>
+                    <div className="bg-gray-50 border border-gray-100 rounded-2xl p-4 max-h-48 overflow-y-auto space-y-2">
+                      {dbRoutes.map(route => {
+                        const checked = selectedRouteIds.includes(route.id);
+                        return (
+                          <label key={route.id} className="flex items-center gap-3 cursor-pointer p-2 rounded-xl hover:bg-white transition-colors">
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setSelectedRouteIds(prev => [...prev, route.id]);
+                                } else {
+                                  setSelectedRouteIds(prev => prev.filter(id => id !== route.id));
+                                }
+                              }}
+                              className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-gray-300"
+                            />
+                            <span className="text-xs font-bold text-gray-700 uppercase tracking-tight">{route.name || `${route.origin} → ${route.destination}`}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
             <div>
               <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Operational state</label>
               <div className="grid grid-cols-3 gap-2 sm:gap-3">

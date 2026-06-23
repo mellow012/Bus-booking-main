@@ -413,3 +413,133 @@ export async function setUserOperator(targetId: string, actor: { id: string; nam
     return { success: false, error: (error as Error).message };
   }
 }
+
+/**
+ * Update operator assignments (region, status, and routes) in both User and Operator tables.
+ */
+export async function updateOperatorAssignments(id: string, data: { regionId?: string | null; routeIds?: string[]; status?: string }) {
+  try {
+    // 1. Resolve operator user
+    const existingUser = await prisma.user.findUnique({
+      where: { id },
+      select: { role: true, companyId: true, email: true, firstName: true, lastName: true }
+    });
+    if (!existingUser) return { success: false, error: 'User not found' };
+
+    const companyId = existingUser.companyId;
+
+    // 2. Perform database transaction
+    await prisma.$transaction(async (tx) => {
+      // Update User table status and region (region string)
+      const userUpdate: any = {
+        updatedAt: new Date()
+      };
+      if (data.status) {
+        userUpdate.isActive = data.status === 'active';
+        if (data.status === 'active') {
+          userUpdate.setupCompleted = true;
+        }
+      }
+      
+      let regionName = null;
+      if (data.regionId) {
+        const reg = await tx.region.findUnique({ where: { id: data.regionId } });
+        if (reg) regionName = reg.name;
+      }
+      userUpdate.region = regionName;
+
+      await tx.user.update({
+        where: { id },
+        data: userUpdate
+      });
+
+      // Update Operator table record if it exists (or create it if it doesn't)
+      const operatorUpdate: any = {
+        updatedAt: new Date()
+      };
+      if (data.status) {
+        operatorUpdate.status = data.status;
+      }
+      operatorUpdate.regionId = data.regionId || null;
+
+      // Update route relationships
+      if (data.routeIds) {
+        // Disconnect from all routes first
+        await tx.operator.update({
+          where: { id },
+          data: {
+            routes: {
+              set: [] // clears all routes
+            }
+          }
+        });
+
+        // Connect new routes
+        operatorUpdate.routes = {
+          connect: data.routeIds.map(rid => ({ id: rid }))
+        };
+      }
+
+      await tx.operator.upsert({
+        where: { id },
+        update: operatorUpdate,
+        create: {
+          id,
+          uid: id,
+          companyId: companyId || '',
+          companyName: '', // can be populated or empty
+          email: existingUser.email || '',
+          name: `${existingUser.firstName} ${existingUser.lastName}`.trim() || 'Operator',
+          role: existingUser.role || 'operator',
+          status: data.status || 'active',
+          regionId: data.regionId || null,
+          routes: data.routeIds && data.routeIds.length > 0 ? {
+            connect: data.routeIds.map(rid => ({ id: rid }))
+          } : undefined
+        }
+      });
+
+      // Sync route assignedOperatorIds/assignedConductorIds arrays
+      if (companyId) {
+        const allRoutes = await tx.route.findMany({
+          where: { companyId }
+        });
+
+        for (const route of allRoutes) {
+          const isAssigned = data.routeIds?.includes(route.id);
+          
+          if (existingUser.role === 'operator') {
+            let updatedIds = route.assignedOperatorIds || [];
+            if (isAssigned) {
+              updatedIds = Array.from(new Set([...updatedIds, id]));
+            } else {
+              updatedIds = updatedIds.filter(x => x !== id);
+            }
+            await tx.route.update({
+              where: { id: route.id },
+              data: { assignedOperatorIds: updatedIds }
+            });
+          } else if (existingUser.role === 'conductor') {
+            let updatedIds = route.assignedConductorIds || [];
+            if (isAssigned) {
+              updatedIds = Array.from(new Set([...updatedIds, id]));
+            } else {
+              updatedIds = updatedIds.filter(x => x !== id);
+            }
+            await tx.route.update({
+              where: { id: route.id },
+              data: { assignedConductorIds: updatedIds }
+            });
+          }
+        }
+      }
+    });
+
+    revalidatePath('/company/admin');
+    revalidatePath('/company/operator/dashboard');
+    return { success: true };
+  } catch (error: any) {
+    console.error('Error updating operator assignments:', error);
+    return { success: false, error: error.message };
+  }
+}

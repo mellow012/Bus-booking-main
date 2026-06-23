@@ -1,11 +1,17 @@
 "use client";
 
-import { FC, useState, useMemo } from "react";
-import { Plus, Edit3, Trash2, Search, MapPin, Navigation, Clock, CreditCard, Sparkles, Zap, ChevronRight, Activity, Map, ArrowRight } from "lucide-react";
+import { FC, useState, useMemo, useEffect } from "react";
+import { Plus, Edit3, Trash2, Search, MapPin, Navigation, Clock, CreditCard, Sparkles, Zap, ChevronRight, Activity, Map, ArrowRight, Globe } from "lucide-react";
 import * as dbActions from "@/lib/actions/db.actions";
 import Modal from "@/components/Modals";
 import { Button } from "@/components/ui/button";
 import { Route } from "@/types";
+
+interface CompanyRegion {
+  id: string;
+  name: string;
+  isActive: boolean;
+}
 
 interface RoutesTabProps {
   routes: Route[];
@@ -21,6 +27,15 @@ const RoutesTab: FC<RoutesTabProps> = ({ routes, setRoutes, companyId, setError,
   const [editRoute, setEditRoute] = useState<Route | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
+  const [regions, setRegions] = useState<CompanyRegion[]>([]);
+
+  useEffect(() => {
+    if (!companyId) return;
+    fetch(`/api/admin/coo/regions?companyId=${companyId}&limit=100`, { credentials: 'same-origin' })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data?.regions) setRegions(data.regions.filter((r: CompanyRegion) => r.isActive)); })
+      .catch(() => {});
+  }, [companyId]);
 
   const [newRoute, setNewRoute] = useState({
     origin: "",
@@ -29,6 +44,7 @@ const RoutesTab: FC<RoutesTabProps> = ({ routes, setRoutes, companyId, setError,
     duration: 0,
     stops: [] as { id: string; name: string; distanceFromOrigin: number; order: number }[],
     isActive: true,
+    regionId: '' as string | undefined,
   });
 
   const filteredRoutes = useMemo(() =>
@@ -55,7 +71,7 @@ const RoutesTab: FC<RoutesTabProps> = ({ routes, setRoutes, companyId, setError,
       if (!result.success) throw new Error(result.error);
       setRoutes([...routes, result.data as Route]);
       setShowAddModal(false);
-      setNewRoute({ origin: "", destination: "", baseFare: 0, duration: 0, stops: [], isActive: true });
+      setNewRoute({ origin: "", destination: "", baseFare: 0, duration: 0, stops: [], isActive: true, regionId: '' });
       setSuccess("Route created successfully!");
     } catch (err: any) {
       setError(err.message);
@@ -163,7 +179,9 @@ const RoutesTab: FC<RoutesTabProps> = ({ routes, setRoutes, companyId, setError,
                 <div className="mb-8">
                   <div className="flex items-center gap-3 mb-1">
                     <div className="w-1.5 h-1.5 rounded-full bg-indigo-600" />
-                    <p className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest">Main Corridor</p>
+                    <p className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest">
+                      {regions.find(r => r.id === (route as any).regionId)?.name || 'Unassigned Branch'}
+                    </p>
                   </div>
                   <h3 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight uppercase leading-tight group-hover:text-indigo-600 transition-colors">
                     {route.origin} <span className="text-gray-300 mx-1">→</span> {route.destination}
@@ -244,6 +262,20 @@ const RoutesTab: FC<RoutesTabProps> = ({ routes, setRoutes, companyId, setError,
             </div>
           </div>
 
+          {regions.length > 0 && (
+            <div>
+              <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Branch (Region)</label>
+              <select
+                value={newRoute.regionId || ''}
+                onChange={e => setNewRoute({ ...newRoute, regionId: e.target.value || undefined })}
+                className="w-full px-4 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-indigo-600 outline-none text-sm font-bold appearance-none"
+              >
+                <option value="">— No Branch —</option>
+                {regions.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+              </select>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
             <div>
               <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Base Equity (MWK)</label>
@@ -306,6 +338,20 @@ const RoutesTab: FC<RoutesTabProps> = ({ routes, setRoutes, companyId, setError,
               />
             </div>
           </div>
+
+          {regions.length > 0 && (
+            <div>
+              <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Branch (Region)</label>
+              <select
+                value={(editRoute as any)?.regionId || ''}
+                onChange={e => setEditRoute(prev => prev ? { ...prev, regionId: e.target.value || undefined } as any : null)}
+                className="w-full px-4 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-indigo-600 outline-none text-sm font-bold appearance-none"
+              >
+                <option value="">— No Branch —</option>
+                {regions.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+              </select>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
             <div>

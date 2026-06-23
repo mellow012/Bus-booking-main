@@ -6,12 +6,21 @@ import { logger } from '@/lib/logger';
 export async function GET(req: NextRequest) {
   try {
     const user = await getCurrentUser(req);
-    if (!user || !['chief_of_operations', 'superadmin'].includes(user.role || '')) {
+    const isCOOOrSuper = ['chief_of_operations', 'superadmin'].includes(user?.role || '');
+    const isCompanyAdmin = user?.role === 'company_admin';
+    if (!user || (!isCOOOrSuper && !isCompanyAdmin)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const { searchParams } = new URL(req.url);
-    const companyId = searchParams.get('companyId');
+    let companyId = searchParams.get('companyId');
+
+    if (isCompanyAdmin) {
+      if (!user.companyId) {
+        return NextResponse.json({ error: 'No company assigned' }, { status: 403 });
+      }
+      companyId = user.companyId;
+    }
     const regionId = searchParams.get('regionId');
     const routeId = searchParams.get('routeId');
     const scheduleId = searchParams.get('scheduleId');

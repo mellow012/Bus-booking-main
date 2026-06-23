@@ -23,8 +23,8 @@ export function useAdminDashboard() {
   });
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const [dashboardData, setDashboardData] = useState<{ company: Company | null; schedules: Schedule[]; routes: Route[]; buses: Bus[]; bookings: Booking[]; reports: any[] }>({
-    company: null, schedules: [], routes: [], buses: [], bookings: [], reports: [],
+  const [dashboardData, setDashboardData] = useState<{ company: Company | null; schedules: Schedule[]; routes: Route[]; buses: Bus[]; bookings: Booking[]; reports: any[]; operators: any[] }>({
+    company: null, schedules: [], routes: [], buses: [], bookings: [], reports: [], operators: [],
   });
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -90,16 +90,18 @@ export function useAdminDashboard() {
         return; 
       }
       
-      const [schedules, routes, buses, reports] = await Promise.all([
+      const [schedules, routes, buses, reports, operatorsRes] = await Promise.all([
         fetchCollectionData('Schedule', companyId),
         fetchCollectionData('Route', companyId),
         fetchCollectionData('Bus', companyId),
         fetchCollectionData('DailyReport', companyId),
+        supabase.from('profiles').select('*').eq('companyId', companyId).eq('role', 'operator').order('createdAt', { ascending: false }),
       ]);
+      const operators = operatorsRes.data || [];
       setDashboardData(prev => ({
         ...prev,
         company: { ...companyData, createdAt: new Date(companyData.createdAt), updatedAt: new Date(companyData.updatedAt) } as Company,
-        schedules, routes, buses, reports,
+        schedules, routes, buses, reports, operators,
       }));
     } catch (err: any) { showAlert('error', err.message || 'Failed to load dashboard data'); }
     finally { setLoading(false); }

@@ -94,19 +94,29 @@ export async function POST(request: NextRequest): Promise<NextResponse<ApiRespon
       }
     });
 
+    let emailFailed = false;
     // Re-send the email
-    await sendOperatorInviteEmail(
-      trimmedEmail,
-      name?.trim() || 'Team Member',
-      companyName,
-      inviteLink,
-      operatorId,
-      role
-    );
+    try {
+      await sendOperatorInviteEmail(
+        trimmedEmail,
+        name?.trim() || 'Team Member',
+        companyName,
+        inviteLink,
+        operatorId,
+        role
+      );
+    } catch (emailError: any) {
+      emailFailed = true;
+      console.error('Failed to resend email:', emailError);
+    }
 
     return NextResponse.json({
       success: true,
-      message: `Invitation resent to ${trimmedEmail}`,
+      message: emailFailed
+        ? `Recruitment setup link regenerated, but the invitation email could not be sent (Resend API key is invalid/expired). Please copy and share the link manually.`
+        : `Invitation resent to ${trimmedEmail}`,
+      inviteLink,
+      emailFailed,
     });
 
   } catch (error: any) {

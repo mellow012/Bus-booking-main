@@ -87,6 +87,32 @@ export async function POST(req: NextRequest) {
       },
     });
 
+    if (updates.branches && Array.isArray(updates.branches)) {
+      const existingRegions = await prisma.region.findMany({ where: { companyId } });
+      const branchNames = updates.branches as string[];
+      
+      for (const region of existingRegions) {
+        if (!branchNames.includes(region.name)) {
+          await prisma.region.update({ where: { id: region.id }, data: { isActive: false } });
+        }
+      }
+
+      for (const branchName of branchNames) {
+        const existing = existingRegions.find(r => r.name === branchName);
+        if (!existing) {
+          await prisma.region.create({
+            data: {
+              name: branchName,
+              companyId: companyId,
+              isActive: true,
+            }
+          });
+        } else if (!existing.isActive) {
+          await prisma.region.update({ where: { id: existing.id }, data: { isActive: true } });
+        }
+      }
+    }
+
     return NextResponse.json({ success: true, company: result });
 
   } catch (error: any) {

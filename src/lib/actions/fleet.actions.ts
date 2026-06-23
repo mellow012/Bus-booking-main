@@ -83,7 +83,7 @@ export async function deleteBus(id: string) {
 export async function createRoute(data: Partial<Route>) {
   try {
     const {
-      id, companyId, name, origin, destination, distance, duration,
+      id, companyId, regionId, name, origin, destination, distance, duration,
       baseFare, pricePerKm, stops, isActive, status,
       assignedOperatorIds, assignedConductorIds
     } = data;
@@ -92,6 +92,7 @@ export async function createRoute(data: Partial<Route>) {
       data: {
         id,
         companyId: companyId!,
+        regionId,
         name: name!,
         origin: origin!,
         destination: destination!,

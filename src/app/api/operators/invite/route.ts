@@ -15,6 +15,8 @@ interface InviteTeamMemberRequest {
   companyName: string;
   invitedBy: string;
   region?: string;
+  regionId?: string;
+  routeIds?: string[];
 }
 
 interface ApiResponse {
@@ -31,7 +33,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<ApiRespon
     const body: InviteTeamMemberRequest = await request.json();
     console.log('Invite API received:', body);
 
-    const { name, email, companyId, companyName, invitedBy, region } = body;
+    const { name, email, companyId, companyName, invitedBy, region, regionId, routeIds } = body;
     const role: TeamRole = VALID_ROLES.includes(body.role as TeamRole) ? (body.role as TeamRole) : 'operator';
 
     // 1. Validation
@@ -52,7 +54,6 @@ export async function POST(request: NextRequest): Promise<NextResponse<ApiRespon
     const adminClient = createAdminClient();
 
     // 2. Check for existing user in Supabase
-    // Using listUsers instead of getUserByEmail because listUsers is more reliable for "checking existence" without erroring
     const { data: { users }, error: listError } = await adminClient.auth.admin.listUsers();
     if (listError) throw listError;
     
@@ -65,8 +66,6 @@ export async function POST(request: NextRequest): Promise<NextResponse<ApiRespon
     }
 
     // 3. Create Supabase Auth User
-    // IMPORTANT: We embed the role in user_metadata so it is available in the
-    // Supabase JWT and can be read by the middleware for RBAC without a DB call.
     const { data: { user: userRecord }, error: createError } = await adminClient.auth.admin.createUser({
       email: trimmedEmail,
       email_confirm: false,
@@ -85,6 +84,17 @@ export async function POST(request: NextRequest): Promise<NextResponse<ApiRespon
     let operatorId: string;
     try {
       const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+        // Resolve regionId if region string is provided
+        let finalRegionId = regionId;
+        if (!finalRegionId && region?.trim()) {
+          const matchedRegion = await tx.region.findFirst({
+            where: { name: { equals: region.trim(), mode: 'insensitive' }, companyId }
+          });
+          if (matchedRegion) {
+            finalRegionId = matchedRegion.id;
+          }
+        }
+
         // Create user record (Operator/Conductor are just Users with roles)
         const user = await tx.user.create({
           data: {
@@ -105,6 +115,52 @@ export async function POST(request: NextRequest): Promise<NextResponse<ApiRespon
             updatedAt: new Date(),
           },
         });
+
+        // Also create operator record for linking routes/schedules
+        await tx.operator.create({
+          data: {
+            id: userRecord.id,
+            uid: userRecord.id,
+            companyId,
+            companyName,
+            email: trimmedEmail,
+            name: name.trim(),
+            role,
+            status: 'active',
+            regionId: finalRegionId || null,
+            invitationSent: true,
+            invitationSentAt: new Date(),
+            createdBy: invitedBy,
+            routes: routeIds && routeIds.length > 0 ? {
+              connect: routeIds.map((id: string) => ({ id }))
+            } : undefined
+          }
+        });
+
+        // Sync route assignedOperatorIds/assignedConductorIds arrays
+        if (routeIds && routeIds.length > 0) {
+          for (const routeId of routeIds) {
+            const route = await tx.route.findUnique({
+              where: { id: routeId },
+              select: { assignedOperatorIds: true, assignedConductorIds: true }
+            });
+            if (route) {
+              if (role === 'operator') {
+                const updatedIds = Array.from(new Set([...(route.assignedOperatorIds || []), userRecord.id]));
+                await tx.route.update({
+                  where: { id: routeId },
+                  data: { assignedOperatorIds: updatedIds }
+                });
+              } else if (role === 'conductor') {
+                const updatedIds = Array.from(new Set([...(route.assignedConductorIds || []), userRecord.id]));
+                await tx.route.update({
+                  where: { id: routeId },
+                  data: { assignedConductorIds: updatedIds }
+                });
+              }
+            }
+          }
+        }
 
         return user;
       });
@@ -143,26 +199,36 @@ export async function POST(request: NextRequest): Promise<NextResponse<ApiRespon
     redirectUrl.searchParams.append('token_hash', tokenHash);
 
     const inviteLink = redirectUrl.toString();
+    let emailFailed = false;
 
     // 6. Send email
-    await sendOperatorInviteEmail(
-      trimmedEmail,
-      name.trim(),
-      companyName,
-      inviteLink,
-      operatorId,
-      role
-    );
+    try {
+      await sendOperatorInviteEmail(
+        trimmedEmail,
+        name.trim(),
+        companyName,
+        inviteLink,
+        operatorId,
+        role
+      );
+    } catch (emailError: any) {
+      emailFailed = true;
+      await logger.logWarning('auth', `Invite email delivery failed for ${trimmedEmail}: ${emailError.message || emailError}`);
+    }
 
-    await logger.logSuccess('auth', `Team member invited: ${role} (${trimmedEmail})`, {
+    await logger.logSuccess('auth', `Team member invited: ${role} (${trimmedEmail}) (Email failed: ${emailFailed})`, {
       action: 'invite_team_member',
-      metadata: { role, companyId, operatorId },
+      metadata: { role, companyId, operatorId, emailFailed },
     });
 
     return NextResponse.json({
       success: true,
-      message: `${role === 'conductor' ? 'Conductor' : 'Operator'} invitation sent successfully!`,
+      message: emailFailed 
+        ? `${role === 'conductor' ? 'Conductor' : 'Operator'} recruited successfully in system, but the invitation email could not be sent (Resend API key is invalid/expired). Please copy and share the invitation link manually.`
+        : `${role === 'conductor' ? 'Conductor' : 'Operator'} invitation sent successfully!`,
       operatorId,
+      inviteLink,
+      emailFailed,
     });
 
   } catch (error: any) {

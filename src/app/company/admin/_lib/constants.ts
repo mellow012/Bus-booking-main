@@ -4,7 +4,7 @@
  */
 import {
   DollarSign, Users, Calendar, MapPin, User, Settings,
-  Bell, LayoutDashboard, PieChart, Bus as BusIcon, MessageSquare,
+  Bell, LayoutDashboard, PieChart, Bus as BusIcon, MessageSquare, Globe,
 } from 'lucide-react';
 import { Company, Booking, Schedule } from '@/types';
 
@@ -12,6 +12,7 @@ import { Company, Booking, Schedule } from '@/types';
 
 export const TABS = [
   { id: 'overview'      as const, label: 'Overview',       icon: LayoutDashboard },
+  { id: 'regions'       as const, label: 'Regions',        icon: Globe },
   { id: 'schedules'     as const, label: 'Schedules',      icon: Calendar },
   { id: 'routes'        as const, label: 'Routes',         icon: MapPin },
   { id: 'buses'         as const, label: 'Buses',          icon: BusIcon },
@@ -27,13 +28,13 @@ export const TABS = [
 ] as const;
 
 export const CATEGORIES = [
-  { id: 'overview',  label: 'Dashboard',      icon: LayoutDashboard, subTabs: ['overview'] },
-  { id: 'team',      label: 'Operators',       icon: Users,           subTabs: ['operators'] },
-  { id: 'fleet',     label: 'Routes & Buses',  icon: BusIcon,         subTabs: ['schedules', 'routes', 'buses'] },
-  { id: 'sales',     label: 'Bookings',        icon: Users,           subTabs: ['bookings', 'charters'] },
-  { id: 'payments',  label: 'Payments',        icon: DollarSign,      subTabs: ['payments'] },
-  { id: 'reports',   label: 'Reports',         icon: PieChart,        subTabs: ['reports'] },
-  { id: 'config',    label: 'Settings',        icon: Settings,        subTabs: ['profile', 'settings', 'notifications'] },
+  { id: 'overview',  label: 'Dashboard',       icon: LayoutDashboard, subTabs: ['overview'] },
+  { id: 'team',      label: 'Operators',        icon: Users,           subTabs: ['operators'] },
+  { id: 'fleet',     label: 'Routes & Fleet',   icon: BusIcon,         subTabs: ['regions', 'routes', 'schedules', 'buses'] },
+  { id: 'sales',     label: 'Bookings',         icon: Users,           subTabs: ['bookings', 'charters'] },
+  { id: 'payments',  label: 'Payments',         icon: DollarSign,      subTabs: ['payments'] },
+  { id: 'reports',   label: 'Reports',          icon: PieChart,        subTabs: ['reports'] },
+  { id: 'config',    label: 'Settings',         icon: Settings,        subTabs: ['profile', 'settings', 'notifications'] },
 ] as const;
 
 export const BUS_TYPES    = ['AC', 'Non-AC', 'Sleeper', 'Semi-Sleeper', 'Luxury', 'Economy', 'Minibus'] as const;

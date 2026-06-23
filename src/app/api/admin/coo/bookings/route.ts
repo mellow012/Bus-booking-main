@@ -6,7 +6,9 @@ import { logger } from '@/lib/logger';
 export async function GET(req: NextRequest) {
   try {
     const user = await getCurrentUser(req);
-    if (!user || !['chief_of_operations', 'superadmin'].includes(user.role || '')) {
+    const isCOOOrSuper = ['chief_of_operations', 'superadmin'].includes(user?.role || '');
+    const isCompanyAdmin = user?.role === 'company_admin';
+    if (!user || (!isCOOOrSuper && !isCompanyAdmin)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -14,12 +16,19 @@ export async function GET(req: NextRequest) {
     const page = Math.max(1, parseInt(searchParams.get('page') ?? '1', 10));
     const limit = Math.min(100, parseInt(searchParams.get('limit') ?? '25', 10));
     const status = searchParams.get('status')?.toLowerCase();
-    const companyId = searchParams.get('companyId');
+    let companyId = searchParams.get('companyId');
     const regionId = searchParams.get('regionId');
     const routeId = searchParams.get('routeId');
     const scheduleId = searchParams.get('scheduleId');
     const from = searchParams.get('from');
     const to = searchParams.get('to');
+
+    if (isCompanyAdmin) {
+      if (!user.companyId) {
+        return NextResponse.json({ error: 'No company assigned' }, { status: 403 });
+      }
+      companyId = user.companyId;
+    }
 
     const where: any = {};
     if (status) where.bookingStatus = status;
