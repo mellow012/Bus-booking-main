@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
-  MapPin, Bus as BusIcon, Calendar, DollarSign, ChevronRight, ChevronDown,
-  PlusCircle, X, Edit, Trash2, AlertCircle, Loader2, Route as RouteIcon
+  MapPin, Bus as BusIcon, Calendar, ChevronRight, ChevronDown,
+  PlusCircle, X, AlertCircle, Loader2, Route as RouteIcon, BadgeCheck, Users,
 } from 'lucide-react';
 import { Route, Bus, Schedule, Booking } from '@/types';
 import { BUS_TYPES, BUS_STATUSES, CAPACITY_LIMITS } from './_lib/constants';
@@ -15,18 +15,15 @@ interface RegionsTabProps {
 type ModalType = 'addRoute' | 'addBus' | 'addSchedule' | null;
 
 export default function RegionsTab({ dashboard }: RegionsTabProps) {
-  const { dashboardData, addItem, fetchInitialData, showAlert } = dashboard;
-  const { company, routes, buses, schedules, operators, bookings } = dashboardData;
+  const { dashboardData, addItem, showAlert } = dashboard;
+  const { routes, buses, schedules, operators, bookings } = dashboardData;
   const allBranches = dashboardData.regions || [];
 
   const searchQuery = dashboard.searchQuery?.toLowerCase() || '';
 
-  // Filter branches by name, and routes within by name/origin/destination
   const branches = allBranches.filter((branch: any) => {
     if (!searchQuery) return true;
-    // Match branch name
     if (branch.name?.toLowerCase().includes(searchQuery)) return true;
-    // Match any route within this branch
     const branchRoutes = routes.filter((r: Route) => r.regionId === branch.id);
     return branchRoutes.some((r: Route) =>
       r.name?.toLowerCase().includes(searchQuery) ||
@@ -35,38 +32,54 @@ export default function RegionsTab({ dashboard }: RegionsTabProps) {
     );
   });
 
-  const [expandedBranch, setExpandedBranch] = useState<string | null>(null);
+  const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null);
   const [expandedRoute, setExpandedRoute] = useState<string | null>(null);
-  const [expandedSchedule, setExpandedSchedule] = useState<string | null>(null);
 
-  // Modal state
   const [activeModal, setActiveModal] = useState<ModalType>(null);
   const [modalContext, setModalContext] = useState<{ branchId?: string; routeId?: string }>({});
   const [saving, setSaving] = useState(false);
 
-  // Form states
   const [routeForm, setRouteForm] = useState({ name: '', origin: '', destination: '', distance: '', duration: '', baseFare: '' });
   const [busForm, setBusForm] = useState({ licensePlate: '', busType: 'Economy' as string, capacity: '45', status: 'active' });
-  const [scheduleForm, setScheduleForm] = useState({ busId: '', departureDate: '', departureTime: '', arrivalDate: '', arrivalTime: '', price: '', availableSeats: '' });
+  const [scheduleForm, setScheduleForm] = useState({ routeId: '', busId: '', departureDate: '', departureTime: '', arrivalDate: '', arrivalTime: '', price: '', availableSeats: '' });
 
-  const toggleBranch = (id: string) => {
-    setExpandedBranch(expandedBranch === id ? null : id);
+  const selectedBranch = branches.find((b: any) => b.id === selectedBranchId) || null;
+  const selectedBranchRoutes = useMemo(
+    () => (selectedBranchId ? routes.filter((r: Route) => r.regionId === selectedBranchId) : []),
+    [routes, selectedBranchId]
+  );
+
+  // Upcoming trips across every route in the selected branch, soonest first
+  const branchUpcomingTrips = useMemo(() => {
+    if (!selectedBranchId) return [];
+    const routeIds = new Set(selectedBranchRoutes.map((r: Route) => r.id));
+    const now = Date.now();
+    return schedules
+      .filter((s: Schedule) => routeIds.has(s.routeId) && new Date(s.departureDateTime).getTime() >= now && s.status !== 'archived')
+      .sort((a: Schedule, b: Schedule) => new Date(a.departureDateTime).getTime() - new Date(b.departureDateTime).getTime())
+      .slice(0, 8);
+  }, [schedules, selectedBranchId, selectedBranchRoutes]);
+
+  const selectBranch = (id: string) => {
+    setSelectedBranchId(prev => (prev === id ? null : id));
     setExpandedRoute(null);
-    setExpandedSchedule(null);
   };
 
-  const toggleRoute = (id: string) => {
-    setExpandedRoute(expandedRoute === id ? null : id);
-    setExpandedSchedule(null);
+  const toggleRoute = (id: string) => setExpandedRoute(expandedRoute === id ? null : id);
+
+  const resetForms = () => {
+    setRouteForm({ name: '', origin: '', destination: '', distance: '', duration: '', baseFare: '' });
+    setBusForm({ licensePlate: '', busType: 'Economy', capacity: '45', status: 'active' });
+    setScheduleForm({ routeId: '', busId: '', departureDate: '', departureTime: '', arrivalDate: '', arrivalTime: '', price: '', availableSeats: '' });
   };
 
   const openModal = (type: ModalType, context: typeof modalContext = {}) => {
     setActiveModal(type);
     setModalContext(context);
-    // Reset forms
-    setRouteForm({ name: '', origin: '', destination: '', distance: '', duration: '', baseFare: '' });
-    setBusForm({ licensePlate: '', busType: 'Economy', capacity: '45', status: 'active' });
-    setScheduleForm({ busId: '', departureDate: '', departureTime: '', arrivalDate: '', arrivalTime: '', price: '', availableSeats: '' });
+    resetForms();
+    if (type === 'addSchedule' && context.routeId) {
+      setScheduleForm(p => ({ ...p, routeId: context.routeId! }));
+    }
   };
 
   const handleAddRoute = async () => {
@@ -110,6 +123,8 @@ export default function RegionsTab({ dashboard }: RegionsTabProps) {
   };
 
   const handleAddSchedule = async () => {
+    const routeId = modalContext.routeId || scheduleForm.routeId;
+    if (!routeId) { showAlert('error', 'Please select a route.'); return; }
     if (!scheduleForm.busId || !scheduleForm.departureDate || !scheduleForm.departureTime || !scheduleForm.price) {
       showAlert('error', 'Please fill in bus, departure date/time, and price.');
       return;
@@ -119,12 +134,12 @@ export default function RegionsTab({ dashboard }: RegionsTabProps) {
       const departureDateTime = new Date(`${scheduleForm.departureDate}T${scheduleForm.departureTime}`);
       const arrivalDateTime = scheduleForm.arrivalDate && scheduleForm.arrivalTime
         ? new Date(`${scheduleForm.arrivalDate}T${scheduleForm.arrivalTime}`)
-        : new Date(departureDateTime.getTime() + 3 * 60 * 60 * 1000); // Default 3h later
+        : new Date(departureDateTime.getTime() + 3 * 60 * 60 * 1000);
 
       const selectedBus = buses.find((b: Bus) => b.id === scheduleForm.busId);
 
       await addItem('Schedule', {
-        routeId: modalContext.routeId!,
+        routeId,
         busId: scheduleForm.busId,
         departureDateTime: departureDateTime.toISOString(),
         arrivalDateTime: arrivalDateTime.toISOString(),
@@ -138,178 +153,233 @@ export default function RegionsTab({ dashboard }: RegionsTabProps) {
     finally { setSaving(false); }
   };
 
+  const unassignedRoutes = routes.filter((r: Route) =>
+    !r.regionId && (!searchQuery || r.name?.toLowerCase().includes(searchQuery) || r.origin?.toLowerCase().includes(searchQuery) || r.destination?.toLowerCase().includes(searchQuery))
+  );
+
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h2 className="text-xl font-bold tracking-tight text-gray-900 flex items-center gap-2">
             <MapPin className="w-6 h-6 text-indigo-600" />
-            Operational Regions &amp; Cascade
+            Branches &amp; Routes
           </h2>
           <p className="mt-1 text-sm text-gray-500">
-            Drill down: Branch → Routes → Schedules → Bookings. Manage routes, buses, and schedules here.
+            Select a branch to manage its routes, buses, and schedules.
           </p>
         </div>
         <div className="flex gap-2">
           <button onClick={() => openModal('addBus')} className="inline-flex items-center gap-2 rounded-lg bg-white border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 shadow-sm">
             <BusIcon className="h-4 w-4" /> Add Bus
           </button>
+          <button
+            onClick={() => selectedBranchId && openModal('addSchedule', { branchId: selectedBranchId })}
+            disabled={!selectedBranchId}
+            title={!selectedBranchId ? 'Select a branch first' : undefined}
+            className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 shadow-sm disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-indigo-600"
+          >
+            <Calendar className="h-4 w-4" /> Create Schedule
+          </button>
         </div>
       </div>
 
-      {/* Branch List */}
-      <div className="space-y-4">
-        {branches.length === 0 ? (
-          <div className="py-12 text-center bg-white rounded-2xl border border-dashed border-gray-200">
-            <MapPin className="w-10 h-10 text-gray-300 mx-auto mb-3" />
-            <h3 className="text-lg font-bold text-gray-900 mb-1">No Branches Yet</h3>
-            <p className="text-gray-500 max-w-md mx-auto">Add branches in the Operators &amp; Branches tab first, then come back here to add routes and schedules.</p>
-          </div>
-        ) : (
-          branches.map((branch: any) => {
-            const isBranchExpanded = expandedBranch === branch.id;
+      {/* Branch Grid */}
+      {branches.length === 0 ? (
+        <div className="py-12 text-center bg-white rounded-2xl border border-dashed border-gray-200">
+          <MapPin className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+          <h3 className="text-lg font-bold text-gray-900 mb-1">No Branches Yet</h3>
+          <p className="text-gray-500 max-w-md mx-auto">Add branches in the Operators &amp; Branches tab first, then come back here to add routes and schedules.</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {branches.map((branch: any) => {
             const branchRoutes = routes.filter((r: Route) => r.regionId === branch.id);
             const branchOperators = operators.filter((o: any) => o.regionId === branch.id);
+            const isSelected = selectedBranchId === branch.id;
 
             return (
-              <div key={branch.id} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-                {/* Branch Header */}
-                <div 
-                  onClick={() => toggleBranch(branch.id)}
-                  className="p-4 flex items-center justify-between cursor-pointer hover:bg-gray-50 transition-colors"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-indigo-50 rounded-lg flex items-center justify-center text-indigo-600">
-                      <MapPin className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <h3 className="font-bold text-gray-900 text-lg">{branch.name}</h3>
-                      <p className="text-sm text-gray-500">{branchRoutes.length} Routes • {branchOperators.length} Operators</p>
-                    </div>
+              <button
+                key={branch.id}
+                onClick={() => selectBranch(branch.id)}
+                className={`text-left bg-white rounded-xl border p-4 transition-all shadow-sm ${isSelected ? 'border-indigo-600 ring-2 ring-indigo-600 ring-opacity-20' : 'border-gray-200 hover:border-indigo-200 hover:shadow-md'
+                  }`}
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <div className="w-10 h-10 bg-indigo-50 rounded-lg flex items-center justify-center text-indigo-600">
+                    <MapPin className="w-5 h-5" />
                   </div>
-                  {isBranchExpanded ? <ChevronDown className="w-5 h-5 text-gray-400" /> : <ChevronRight className="w-5 h-5 text-gray-400" />}
+                  {branch.isActive !== undefined && (
+                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide ${branch.isActive ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-400'
+                      }`}>
+                      {branch.isActive && <BadgeCheck className="w-3 h-3" />}
+                      {branch.isActive ? 'Active' : 'Inactive'}
+                    </span>
+                  )}
                 </div>
-
-                {/* Branch Content (Routes) */}
-                {isBranchExpanded && (
-                  <div className="bg-gray-50 border-t border-gray-100 p-4 space-y-4">
-                    {branchRoutes.length === 0 ? (
-                      <div className="text-center py-6">
-                        <AlertCircle className="w-8 h-8 text-gray-300 mx-auto mb-2" />
-                        <p className="text-sm text-gray-500">No routes in this branch yet.</p>
-                      </div>
-                    ) : (
-                      branchRoutes.map((route: Route) => {
-                        const isRouteExpanded = expandedRoute === route.id;
-                        const routeSchedules = schedules.filter((s: Schedule) => s.routeId === route.id);
-                        const routeBookings = bookings.filter((b: Booking) => b.routeId === route.id);
-                        const routeRevenue = routeBookings.filter((b: Booking) => b.paymentStatus === 'paid').reduce((acc: number, b: Booking) => acc + (b.totalAmount || 0), 0);
-                        
-                        return (
-                          <div key={route.id} className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm">
-                            <div 
-                              onClick={() => toggleRoute(route.id)}
-                              className="p-4 flex items-center justify-between cursor-pointer hover:bg-indigo-50/30 transition-colors"
-                            >
-                              <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 bg-emerald-50 rounded-lg flex items-center justify-center text-emerald-600">
-                                  <RouteIcon className="w-4 h-4" />
-                                </div>
-                                <div>
-                                  <h4 className="font-semibold text-gray-900">{route.name}</h4>
-                                  <p className="text-xs text-gray-500">{route.origin} → {route.destination} • {routeSchedules.length} Schedules • {routeBookings.length} Bookings</p>
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-3">
-                                <span className="text-sm font-bold text-green-600">MWK {routeRevenue.toLocaleString()}</span>
-                                {isRouteExpanded ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
-                              </div>
-                            </div>
-
-                            {/* Route Content (Schedules) */}
-                            {isRouteExpanded && (
-                              <div className="p-4 border-t border-gray-100 bg-gray-50/50 space-y-3">
-                                {routeSchedules.length === 0 ? (
-                                  <p className="text-sm text-gray-500 text-center py-4">No schedules created for this route yet.</p>
-                                ) : (
-                                  routeSchedules.map((schedule: Schedule) => {
-                                    const bus = buses.find((b: Bus) => b.id === schedule.busId);
-                                    const sBookings = bookings.filter((b: Booking) => b.scheduleId === schedule.id);
-                                    const sRevenue = sBookings.filter((b: Booking) => b.paymentStatus === 'paid').reduce((acc: number, b: Booking) => acc + (b.totalAmount || 0), 0);
-                                    
-                                    return (
-                                      <div key={schedule.id} className="bg-white p-3 rounded-lg border border-gray-200 flex flex-col md:flex-row md:items-center justify-between gap-3">
-                                        <div>
-                                          <div className="flex items-center gap-2 mb-1">
-                                            <Calendar className="w-4 h-4 text-indigo-500" />
-                                            <span className="font-medium text-sm text-gray-900">
-                                              {new Date(schedule.departureDateTime).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
-                                            </span>
-                                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide ${
-                                              schedule.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
-                                            }`}>
-                                              {schedule.tripStatus || schedule.status}
-                                            </span>
-                                          </div>
-                                          <div className="flex items-center gap-2 text-xs text-gray-500">
-                                            <BusIcon className="w-3 h-3" />
-                                            <span>{bus ? `${bus.licensePlate} (${bus.capacity} seats)` : 'No Bus'}</span>
-                                            <span>• MWK {schedule.price?.toLocaleString()} per seat</span>
-                                          </div>
-                                        </div>
-                                        
-                                        <div className="flex gap-4 text-sm bg-gray-50 px-4 py-2 rounded-lg border border-gray-100">
-                                          <div className="text-center">
-                                            <div className="font-bold text-gray-900">{sBookings.length}</div>
-                                            <div className="text-[10px] text-gray-500 uppercase">Bookings</div>
-                                          </div>
-                                          <div className="w-px bg-gray-200"></div>
-                                          <div className="text-center">
-                                            <div className="font-bold text-green-600">MWK {sRevenue.toLocaleString()}</div>
-                                            <div className="text-[10px] text-gray-500 uppercase">Revenue</div>
-                                          </div>
-                                        </div>
-                                      </div>
-                                    );
-                                  })
-                                )}
-                                
-                                <button 
-                                  onClick={() => openModal('addSchedule', { routeId: route.id })}
-                                  className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 bg-indigo-50 px-3 py-1.5 rounded-lg flex items-center gap-1 w-fit"
-                                >
-                                  <PlusCircle className="w-3 h-3" /> Add Schedule
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })
-                    )}
-                    
-                    <button 
-                      onClick={() => openModal('addRoute', { branchId: branch.id })}
-                      className="text-xs font-semibold text-emerald-600 hover:text-emerald-800 bg-emerald-50 px-3 py-1.5 rounded-lg flex items-center gap-1 w-fit"
-                    >
-                      <PlusCircle className="w-3 h-3" /> Add Route to {branch.name}
-                    </button>
-                  </div>
-                )}
-              </div>
+                <h3 className="font-bold text-gray-900 text-lg truncate">{branch.name}</h3>
+                <p className="text-sm text-gray-500 mt-1">{branchRoutes.length} Routes • {branchOperators.length} Operators</p>
+              </button>
             );
-          })
-        )}
-      </div>
+          })}
+        </div>
+      )}
+
+      {/* Selected branch details */}
+      {selectedBranch && (
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden animate-in fade-in slide-in-from-top-2 duration-300">
+          <div className="p-5 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 bg-indigo-600 rounded-lg flex items-center justify-center text-white">
+                <MapPin className="w-4 h-4" />
+              </div>
+              <div>
+                <h3 className="font-bold text-gray-900">{selectedBranch.name}</h3>
+                <p className="text-xs text-gray-500">{selectedBranchRoutes.length} routes in this branch</p>
+              </div>
+            </div>
+            <button
+              onClick={() => openModal('addRoute', { branchId: selectedBranch.id })}
+              className="text-xs font-semibold text-emerald-600 hover:text-emerald-800 bg-emerald-50 px-3 py-1.5 rounded-lg flex items-center gap-1"
+            >
+              <PlusCircle className="w-3 h-3" /> Add Route
+            </button>
+          </div>
+
+          <div className="p-5 space-y-3">
+            {selectedBranchRoutes.length === 0 ? (
+              <div className="text-center py-6">
+                <AlertCircle className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+                <p className="text-sm text-gray-500">No routes in this branch yet.</p>
+              </div>
+            ) : (
+              selectedBranchRoutes.map((route: Route) => {
+                const isRouteExpanded = expandedRoute === route.id;
+                const routeSchedules = schedules.filter((s: Schedule) => s.routeId === route.id);
+                const routeBookings = bookings.filter((b: Booking) => b.routeId === route.id);
+                const routeRevenue = routeBookings.filter((b: Booking) => b.paymentStatus === 'paid').reduce((acc: number, b: Booking) => acc + (b.totalAmount || 0), 0);
+
+                return (
+                  <div key={route.id} className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm">
+                    <div
+                      onClick={() => toggleRoute(route.id)}
+                      className="p-4 flex items-center justify-between cursor-pointer hover:bg-indigo-50/30 transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 bg-emerald-50 rounded-lg flex items-center justify-center text-emerald-600">
+                          <RouteIcon className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <h4 className="font-semibold text-gray-900">{route.name}</h4>
+                          <p className="text-xs text-gray-500">{route.origin} → {route.destination} • {routeSchedules.length} Schedules • {routeBookings.length} Bookings</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="text-sm font-bold text-green-600">MWK {routeRevenue.toLocaleString()}</span>
+                        {isRouteExpanded ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
+                      </div>
+                    </div>
+
+                    {isRouteExpanded && (
+                      <div className="p-4 border-t border-gray-100 bg-gray-50/50 space-y-3">
+                        {routeSchedules.length === 0 ? (
+                          <p className="text-sm text-gray-500 text-center py-4">No schedules created for this route yet.</p>
+                        ) : (
+                          routeSchedules.map((schedule: Schedule) => {
+                            const bus = buses.find((b: Bus) => b.id === schedule.busId);
+                            const sBookings = bookings.filter((b: Booking) => b.scheduleId === schedule.id);
+                            const sRevenue = sBookings.filter((b: Booking) => b.paymentStatus === 'paid').reduce((acc: number, b: Booking) => acc + (b.totalAmount || 0), 0);
+
+                            return (
+                              <div key={schedule.id} className="bg-white p-3 rounded-lg border border-gray-200 flex flex-col md:flex-row md:items-center justify-between gap-3">
+                                <div>
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <Calendar className="w-4 h-4 text-indigo-500" />
+                                    <span className="font-medium text-sm text-gray-900">
+                                      {new Date(schedule.departureDateTime).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
+                                    </span>
+                                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide ${schedule.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
+                                      }`}>
+                                      {schedule.tripStatus || schedule.status}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-2 text-xs text-gray-500">
+                                    <BusIcon className="w-3 h-3" />
+                                    <span>{bus ? `${bus.licensePlate} (${bus.capacity} seats)` : 'No Bus'}</span>
+                                    <span>• MWK {schedule.price?.toLocaleString()} per seat</span>
+                                  </div>
+                                </div>
+
+                                <div className="flex gap-4 text-sm bg-gray-50 px-4 py-2 rounded-lg border border-gray-100">
+                                  <div className="text-center">
+                                    <div className="font-bold text-gray-900">{sBookings.length}</div>
+                                    <div className="text-[10px] text-gray-500 uppercase">Bookings</div>
+                                  </div>
+                                  <div className="w-px bg-gray-200"></div>
+                                  <div className="text-center">
+                                    <div className="font-bold text-green-600">MWK {sRevenue.toLocaleString()}</div>
+                                    <div className="text-[10px] text-gray-500 uppercase">Revenue</div>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })
+                        )}
+
+                        <button
+                          onClick={() => openModal('addSchedule', { branchId: selectedBranch.id, routeId: route.id })}
+                          className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 bg-indigo-50 px-3 py-1.5 rounded-lg flex items-center gap-1 w-fit"
+                        >
+                          <PlusCircle className="w-3 h-3" /> Add Schedule
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          {/* Recently Scheduled / Upcoming Trips — scoped to this branch */}
+          <div className="p-5 border-t border-gray-100 bg-gray-50/30">
+            <h4 className="text-sm font-bold text-gray-900 mb-3 flex items-center gap-2">
+              <Calendar className="w-4 h-4 text-indigo-500" /> Upcoming Trips in {selectedBranch.name}
+            </h4>
+            {branchUpcomingTrips.length === 0 ? (
+              <p className="text-sm text-gray-500">No upcoming trips scheduled in this branch.</p>
+            ) : (
+              <div className="space-y-2">
+                {branchUpcomingTrips.map((schedule: Schedule) => {
+                  const route = routes.find((r: Route) => r.id === schedule.routeId);
+                  const bus = buses.find((b: Bus) => b.id === schedule.busId);
+                  return (
+                    <div key={schedule.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-white px-4 py-2.5 rounded-lg border border-gray-100">
+                      <div className="flex items-center gap-3">
+                        <RouteIcon className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                        <span className="text-sm font-semibold text-gray-900">{route ? `${route.origin} → ${route.destination}` : 'Unknown route'}</span>
+                        <span className="text-xs text-gray-400">{bus?.licensePlate || 'No bus'}</span>
+                      </div>
+                      <span className="text-xs font-medium text-gray-500">
+                        {new Date(schedule.departureDateTime).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Unassigned Routes */}
-      {routes.filter((r: Route) => !r.regionId && (!searchQuery || r.name?.toLowerCase().includes(searchQuery) || r.origin?.toLowerCase().includes(searchQuery) || r.destination?.toLowerCase().includes(searchQuery))).length > 0 && (
+      {unassignedRoutes.length > 0 && (
         <div className="bg-amber-50 rounded-xl border border-amber-200 p-4">
           <h3 className="font-bold text-amber-900 mb-2 flex items-center gap-2">
             <AlertCircle className="w-5 h-5" /> Unassigned Routes
           </h3>
           <p className="text-sm text-amber-700 mb-3">These routes are not assigned to any branch.</p>
           <div className="space-y-2">
-            {routes.filter((r: Route) => !r.regionId && (!searchQuery || r.name?.toLowerCase().includes(searchQuery) || r.origin?.toLowerCase().includes(searchQuery) || r.destination?.toLowerCase().includes(searchQuery))).map((route: Route) => (
+            {unassignedRoutes.map((route: Route) => (
               <div key={route.id} className="bg-white p-3 rounded-lg border border-amber-100 flex justify-between items-center">
                 <div>
                   <span className="font-medium text-gray-900">{route.name}</span>
@@ -327,13 +397,12 @@ export default function RegionsTab({ dashboard }: RegionsTabProps) {
           <div className="bg-white rounded-2xl w-full max-w-lg shadow-xl animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
             <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
               <h2 className="text-lg font-bold text-gray-900">
-                {activeModal === 'addRoute' ? 'Add New Route' : activeModal === 'addBus' ? 'Add New Bus' : 'Add New Schedule'}
+                {activeModal === 'addRoute' ? 'Add New Route' : activeModal === 'addBus' ? 'Add New Bus' : 'Create Schedule'}
               </h2>
               <button onClick={() => setActiveModal(null)} className="p-2 hover:bg-gray-100 rounded-full text-gray-500"><X className="w-5 h-5" /></button>
             </div>
             <div className="p-6 space-y-4">
 
-              {/* Route Form */}
               {activeModal === 'addRoute' && (
                 <>
                   <div>
@@ -373,7 +442,6 @@ export default function RegionsTab({ dashboard }: RegionsTabProps) {
                 </>
               )}
 
-              {/* Bus Form */}
               {activeModal === 'addBus' && (
                 <>
                   <div>
@@ -406,9 +474,20 @@ export default function RegionsTab({ dashboard }: RegionsTabProps) {
                 </>
               )}
 
-              {/* Schedule Form */}
               {activeModal === 'addSchedule' && (
                 <>
+                  {!modalContext.routeId && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Route *</label>
+                      <select value={scheduleForm.routeId} onChange={e => setScheduleForm(p => ({ ...p, routeId: e.target.value }))}
+                        className="block w-full rounded-lg border-gray-300 shadow-sm sm:text-sm px-3 py-2 border">
+                        <option value="">Select a route</option>
+                        {(modalContext.branchId ? routes.filter((r: Route) => r.regionId === modalContext.branchId) : routes).map((r: Route) => (
+                          <option key={r.id} value={r.id}>{r.name || `${r.origin} → ${r.destination}`}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Bus *</label>
                     <select value={scheduleForm.busId} onChange={e => {

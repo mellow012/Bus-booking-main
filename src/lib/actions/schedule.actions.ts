@@ -3,6 +3,7 @@
 import prisma from '../prisma';
 import { revalidatePath } from 'next/cache';
 import { Schedule, ScheduleStatus, TripStatus } from '@/types';
+import { serverCache } from '../cache';
 
 /**
  * --- Schedules ---
@@ -32,6 +33,7 @@ export async function createSchedule(data: Partial<Schedule> & {
         tripStatus: (data.tripStatus as TripStatus) || 'scheduled',
       },
     });
+    serverCache.invalidate('schedules');
     revalidatePath('/company/operator/dashboard');
     return { success: true, data: (schedule as any) as Schedule };
   } catch (error: unknown) {
@@ -52,6 +54,7 @@ export async function updateSchedule(id: string, data: Partial<Schedule>) {
         updatedAt: new Date(),
       }
     });
+    serverCache.invalidate('schedules');
     revalidatePath('/company/conductor/dashboard');
     revalidatePath('/company/operator/dashboard');
     return { success: true, data: (schedule as any) as Schedule };
@@ -64,6 +67,7 @@ export async function updateSchedule(id: string, data: Partial<Schedule>) {
 export async function deleteSchedule(id: string) {
   try {
     await prisma.schedule.delete({ where: { id } });
+    serverCache.invalidate('schedules');
     revalidatePath('/company/conductor/dashboard');
     revalidatePath('/company/operator/dashboard');
     return { success: true };
@@ -72,6 +76,7 @@ export async function deleteSchedule(id: string) {
     return { success: false, error: (error as Error).message };
   }
 }
+
 
 /**
  * --- Schedule Templates ---
