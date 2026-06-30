@@ -74,6 +74,7 @@ export default function AdminDashboard() {
         statistics={dashboard.statistics}
         searchQuery={dashboard.searchQuery}
         setSearchQuery={dashboard.setSearchQuery}
+        isBusy={dashboard.isBusy}
         NotificationBellComponent={NotificationBell}
       >
         {renderActiveTab()}

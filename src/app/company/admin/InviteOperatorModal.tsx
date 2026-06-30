@@ -21,9 +21,11 @@ interface InviteOperatorModalProps {
   isOpen: boolean;
   onClose: () => void;
   branches?: any[];
+  companyId?: string;
+  companyName?: string;
 }
 
-export default function InviteOperatorModal({ isOpen, onClose, branches = [] }: InviteOperatorModalProps) {
+export default function InviteOperatorModal({ isOpen, onClose, branches = [], companyId = '', companyName = '' }: InviteOperatorModalProps) {
   const queryClient = useQueryClient();
   const {
     register,
@@ -36,10 +38,15 @@ export default function InviteOperatorModal({ isOpen, onClose, branches = [] }: 
 
   const mutation = useMutation({
     mutationFn: async (data: InviteFormData) => {
-      const response = await fetch('/api/company/operators/invite', {
+      const response = await fetch('/api/operators/invite', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
+        body: JSON.stringify({
+          ...data,
+          companyId,
+          companyName,
+          invitedBy: companyId || 'admin',
+        }),
       });
       if (!response.ok) {
         const errorData = await response.json();

@@ -35,6 +35,7 @@ export function useAdminDashboard() {
     company: null, schedules: [], routes: [], buses: [], bookings: [], reports: [], operators: [], regions: [],
   });
   const [loading, setLoading] = useState(true);
+  const [isBusy, setIsBusy] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchFocused, setSearchFocused] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
@@ -161,6 +162,7 @@ export function useAdminDashboard() {
       setDashboardData(prev => ({ ...prev, [key]: value })), []);
 
   const addItem = useCallback(async (table: string, data: any): Promise<string | null> => {
+    setIsBusy(true);
     try {
       const processed = { ...data, companyId };
       let result: any;
@@ -172,7 +174,12 @@ export function useAdminDashboard() {
       showAlert('success', `${table} added successfully`);
       await fetchInitialData();
       return result.data!.id;
-    } catch (err: any) { showAlert('error', err.message || `Failed to add ${table}`); return null; }
+    } catch (err: any) {
+      showAlert('error', err.message || `Failed to add ${table}`);
+      return null;
+    } finally {
+      setIsBusy(false);
+    }
   }, [companyId, showAlert, fetchInitialData]);
 
   useEffect(() => {
@@ -204,6 +211,8 @@ export function useAdminDashboard() {
     statistics, paymentSettings, availableTabs, isValidUser,
     // actions
     fetchInitialData, fetchCollectionData, updateDashboardData, addItem,
+    // global activity
+    isBusy, setIsBusy,
     // alerts
     alert, showAlert, clearAlert,
   } as const;

@@ -11,6 +11,7 @@ interface DashboardHeaderProps {
   searchQuery: string;
   setSearchQuery: (query: string) => void;
   onHelpClick?: () => void;
+  isBusy?: boolean;
   NotificationBellComponent?: React.ComponentType<{ userId: string; className?: string }>;
 }
 
@@ -22,6 +23,7 @@ export default function DashboardHeader({
   searchQuery,
   setSearchQuery,
   onHelpClick,
+  isBusy,
   NotificationBellComponent,
 }: DashboardHeaderProps) {
   // Safe Fallback rendering of notification bell
@@ -79,6 +81,13 @@ export default function DashboardHeader({
         >
           <HelpCircle className="w-5 h-5" />
         </button>
+
+        {isBusy && (
+          <div className="flex items-center gap-2 rounded-full bg-indigo-50 border border-indigo-100 px-3 py-1 text-xs font-semibold text-indigo-700">
+            <span className="h-2.5 w-2.5 rounded-full animate-pulse bg-indigo-600" />
+            Saving...
+          </div>
+        )}
 
         {renderNotificationBell()}
 

@@ -25,6 +25,7 @@ interface AdminLayoutProps {
   statistics: any;
   searchQuery: string;
   setSearchQuery: (query: string) => void;
+  isBusy?: boolean;
   NotificationBellComponent?: React.ComponentType<{ userId: string; className?: string }>;
 }
 
@@ -43,6 +44,7 @@ export default function AdminLayout({
   statistics,
   searchQuery,
   setSearchQuery,
+  isBusy,
   NotificationBellComponent
 }: AdminLayoutProps) {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
@@ -96,6 +98,7 @@ export default function AdminLayout({
           searchQuery={searchQuery}
           setSearchQuery={setSearchQuery}
           onHelpClick={handleHelpClick}
+          isBusy={isBusy}
           NotificationBellComponent={NotificationBellComponent}
         />
 

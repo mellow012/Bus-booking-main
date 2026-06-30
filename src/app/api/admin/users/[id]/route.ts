@@ -76,4 +76,47 @@ export async function PATCH(req: NextRequest, context: any) {
   }
 }
 
+export async function DELETE(req: NextRequest, context: any) {
+  const paramsObj = context?.params && typeof context.params.then === 'function' ? await context.params : context?.params;
+  try {
+    const user = await getCurrentUser(req);
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    const targetId = paramsObj?.id;
+    if (!['superadmin', 'company_admin'].includes(user.role ?? '')) {
+      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+    }
+
+    const target = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { id: targetId },
+          { uid: targetId }
+        ]
+      }
+    });
+    if (!target) return NextResponse.json({ error: 'User not found' }, { status: 404 });
+
+    if (user.role === 'company_admin' && user.companyId && target.companyId !== user.companyId) {
+      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.operator.deleteMany({ where: { id: target.id } });
+      await tx.user.delete({ where: { id: target.id } });
+    });
+
+    return NextResponse.json({ success: true });
+  } catch (err: any) {
+    console.error('/api/admin/users/[id] DELETE error:', err);
+    try {
+      const user = await getCurrentUser(req);
+      if (user) {
+        await logFailedAction(user.id, `${user.firstName || ''} ${user.lastName || ''}`.trim(), user.role || '', user.companyId || '', 'delete_user', 'user', paramsObj?.id, err.message || 'error');
+      }
+    } catch {}
+    return NextResponse.json({ error: err.message || 'Failed to delete user' }, { status: 500 });
+  }
+}
+
 export async function GET() { return NextResponse.json({ error: 'Method not allowed' }, { status: 405 }); }

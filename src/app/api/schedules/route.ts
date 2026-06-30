@@ -74,8 +74,8 @@ async function querySchedules(params: {
   const pageOffset = (page - 1) * limit;
 
   // Round grace period to nearest 5 mins to improve cache alignment
-  const now = Date.now();
-  const roundedNow = Math.floor(now / (5 * 60 * 1000)) * (5 * 60 * 1000);
+  const nowTimestamp = Date.now();
+  const roundedNow = Math.floor(nowTimestamp / (5 * 60 * 1000)) * (5 * 60 * 1000);
   const gracePeriod = new Date(roundedNow - 15 * 60 * 1000);
 
   // Build where clause
@@ -85,6 +85,9 @@ async function querySchedules(params: {
     company: { status: 'active' },
     route: { isActive: true },
   };
+
+  const now = new Date();
+  const recentDepartureCutoff = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
   if (from) {
     where.route.origin = { contains: from, mode: 'insensitive' };
@@ -101,7 +104,8 @@ async function querySchedules(params: {
     }
     if (endDate) where.departureDateTime.lte = new Date(endDate);
   } else if (!date) {
-    where.departureDateTime = { gte: gracePeriod };
+    where.departureDateTime = { gte: recentDepartureCutoff };
+    where.arrivalDateTime = { gt: now };
   }
 
   if (date) {

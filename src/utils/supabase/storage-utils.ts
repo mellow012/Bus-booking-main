@@ -7,24 +7,33 @@ import { createClient } from "./client";
  */
 export async function uploadLogo(file: File, companyId: string): Promise<string> {
   const supabase = createClient();
-  const fileExt = file.name.split(".").pop();
-  const fileName = `${companyId}/${Date.now()}.${fileExt}`;
-  const filePath = fileName;
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
 
-  const { error } = await supabase.storage
+  if (authError) {
+    console.warn('[uploadLogo] Unable to read authenticated user:', authError);
+  }
+
+  const ownerId = user?.id || companyId;
+  const fileExt = file.name.split('.').pop() || 'jpg';
+  const filePath = `${ownerId}/${Date.now()}.${fileExt}`;
+
+  const { data, error } = await supabase.storage
     .from("logos")
     .upload(filePath, file, {
       cacheControl: "3600",
-      upsert: true,
+      upsert: false,
+      contentType: file.type || undefined,
     });
 
   if (error) {
-    throw error;
+    console.error('[uploadLogo] Supabase upload error:', error, { filePath, fileType: file.type });
+    const message = error.message || error.msg || JSON.stringify(error);
+    throw new Error(`Logo upload failed: ${message}`);
   }
 
-  const { data: { publicUrl } } = supabase.storage
+  const { data: publicData } = supabase.storage
     .from("logos")
     .getPublicUrl(filePath);
 
-  return publicUrl;
+  return publicData.publicUrl;
 }

@@ -36,13 +36,16 @@ export async function GET(request: NextRequest) {
     const sortBy = searchParams.get('sortBy') || 'time'; // time, price_asc, price_desc, seats
     const pageOffset = (page - 1) * limit;
 
+    const now = new Date();
+    const recentDepartureCutoff = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
     // Build where clause
     const where: any = {
       status: 'active',
       availableSeats: { gt: 0 },
-      // By default we check arrivalDateTime, but smart logic will handle segments
-      arrivalDateTime: { gt: new Date() },
       company: { status: 'active' }, // Only show schedules from active companies
+      departureDateTime: { gte: recentDepartureCutoff },
+      arrivalDateTime: { gt: now },
     };
 
     if (origin || destination) {

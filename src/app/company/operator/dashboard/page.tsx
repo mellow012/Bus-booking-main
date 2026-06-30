@@ -69,6 +69,11 @@ export default function OperatorDashboardPage() {
             {dashboard.successMessage}
           </div>
         )}
+        {dashboard.operatorInfo && dashboard.userProfile?.role === 'company_admin' && (
+          <div className="mb-4 rounded-2xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-900">
+            Viewing operator dashboard for <span className="font-semibold">{dashboard.operatorInfo.name || dashboard.operatorInfo.email}</span>.
+          </div>
+        )}
 
         <OperatorSubNav
           tabs={OPERATOR_CATEGORIES}

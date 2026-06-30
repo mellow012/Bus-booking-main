@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
-  MapPin, Bus as BusIcon, Calendar, ChevronRight, ChevronDown,
+  MapPin, Bus as BusIcon, Calendar,
   PlusCircle, X, AlertCircle, Loader2, Route as RouteIcon, BadgeCheck, Users,
 } from 'lucide-react';
 import { Route, Bus, Schedule, Booking } from '@/types';
@@ -33,7 +33,8 @@ export default function RegionsTab({ dashboard }: RegionsTabProps) {
   });
 
   const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null);
-  const [expandedRoute, setExpandedRoute] = useState<string | null>(null);
+  const [scheduleFilterDate, setScheduleFilterDate] = useState<string>('');
+  const [schedulePageByRoute, setSchedulePageByRoute] = useState<Record<string, number>>({});
 
   const [activeModal, setActiveModal] = useState<ModalType>(null);
   const [modalContext, setModalContext] = useState<{ branchId?: string; routeId?: string }>({});
@@ -62,10 +63,12 @@ export default function RegionsTab({ dashboard }: RegionsTabProps) {
 
   const selectBranch = (id: string) => {
     setSelectedBranchId(prev => (prev === id ? null : id));
-    setExpandedRoute(null);
+    setScheduleFilterDate('');
   };
 
-  const toggleRoute = (id: string) => setExpandedRoute(expandedRoute === id ? null : id);
+  useEffect(() => {
+    setSchedulePageByRoute({});
+  }, [selectedBranchId, scheduleFilterDate]);
 
   const resetForms = () => {
     setRouteForm({ name: '', origin: '', destination: '', distance: '', duration: '', baseFare: '' });
@@ -254,86 +257,162 @@ export default function RegionsTab({ dashboard }: RegionsTabProps) {
               </div>
             ) : (
               selectedBranchRoutes.map((route: Route) => {
-                const isRouteExpanded = expandedRoute === route.id;
-                const routeSchedules = schedules.filter((s: Schedule) => s.routeId === route.id);
+                const routeSchedules = schedules
+                  .filter((s: Schedule) => s.routeId === route.id)
+                  .sort((a: Schedule, b: Schedule) => {
+                    const aTime = new Date(a.departureDateTime).getTime();
+                    const bTime = new Date(b.departureDateTime).getTime();
+                    const now = Date.now();
+                    const aRank = aTime < now ? 1 : 0;
+                    const bRank = bTime < now ? 1 : 0;
+                    if (aRank !== bRank) return aRank - bRank;
+                    return aTime - bTime;
+                  });
                 const routeBookings = bookings.filter((b: Booking) => b.routeId === route.id);
                 const routeRevenue = routeBookings.filter((b: Booking) => b.paymentStatus === 'paid').reduce((acc: number, b: Booking) => acc + (b.totalAmount || 0), 0);
+                const currentSchedules = routeSchedules.filter((schedule: Schedule) => {
+                  const departure = new Date(schedule.departureDateTime).getTime();
+                  const arrival = schedule.arrivalDateTime ? new Date(schedule.arrivalDateTime).getTime() : departure + 3 * 60 * 60 * 1000;
+                  return Date.now() >= departure && Date.now() <= arrival;
+                });
+                const upcomingSchedules = routeSchedules.filter((schedule: Schedule) => new Date(schedule.departureDateTime).getTime() > Date.now());
 
                 return (
-                  <div key={route.id} className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm">
-                    <div
-                      onClick={() => toggleRoute(route.id)}
-                      className="p-4 flex items-center justify-between cursor-pointer hover:bg-indigo-50/30 transition-colors"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 bg-emerald-50 rounded-lg flex items-center justify-center text-emerald-600">
-                          <RouteIcon className="w-4 h-4" />
+                  <div key={route.id} className="bg-white rounded-lg border border-gray-200 shadow-sm">
+                    <div className="p-4">
+                      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                        <div className="flex items-start gap-3">
+                          <div className="w-8 h-8 bg-emerald-50 rounded-lg flex items-center justify-center text-emerald-600 shrink-0">
+                            <RouteIcon className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <h4 className="font-semibold text-gray-900">{route.name}</h4>
+                            <p className="text-xs text-gray-500">{route.origin} → {route.destination} • {routeSchedules.length} Schedules • {routeBookings.length} Bookings</p>
+                          </div>
                         </div>
-                        <div>
-                          <h4 className="font-semibold text-gray-900">{route.name}</h4>
-                          <p className="text-xs text-gray-500">{route.origin} → {route.destination} • {routeSchedules.length} Schedules • {routeBookings.length} Bookings</p>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-sm font-bold text-green-600">MWK {routeRevenue.toLocaleString()}</span>
+                          <button
+                            onClick={() => openModal('addSchedule', { branchId: selectedBranch.id, routeId: route.id })}
+                            className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 bg-indigo-50 px-3 py-1.5 rounded-lg flex items-center gap-1"
+                          >
+                            <PlusCircle className="w-3 h-3" /> Add Schedule
+                          </button>
                         </div>
                       </div>
-                      <div className="flex items-center gap-3">
-                        <span className="text-sm font-bold text-green-600">MWK {routeRevenue.toLocaleString()}</span>
-                        {isRouteExpanded ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
-                      </div>
-                    </div>
 
-                    {isRouteExpanded && (
-                      <div className="p-4 border-t border-gray-100 bg-gray-50/50 space-y-3">
+                      <div className="mt-4 rounded-xl border border-gray-100 bg-gray-50/70 p-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                          <h5 className="text-sm font-semibold text-gray-900">Trips for this route</h5>
+                          <div className="flex flex-wrap gap-2 text-[11px] font-medium">
+                            <span className="rounded-full bg-emerald-100 text-emerald-700 px-2.5 py-1">Current {currentSchedules.length}</span>
+                            <span className="rounded-full bg-amber-100 text-amber-700 px-2.5 py-1">Upcoming {upcomingSchedules.length}</span>
+                          </div>
+                        </div>
+
+                        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2">
+                          <label className="text-xs font-medium text-gray-600" htmlFor={`schedule-date-${route.id}`}>Filter by date</label>
+                          <input
+                            id={`schedule-date-${route.id}`}
+                            type="date"
+                            value={scheduleFilterDate}
+                            onChange={(event) => setScheduleFilterDate(event.target.value)}
+                            className="rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                          />
+                        </div>
+
                         {routeSchedules.length === 0 ? (
                           <p className="text-sm text-gray-500 text-center py-4">No schedules created for this route yet.</p>
                         ) : (
-                          routeSchedules.map((schedule: Schedule) => {
-                            const bus = buses.find((b: Bus) => b.id === schedule.busId);
-                            const sBookings = bookings.filter((b: Booking) => b.scheduleId === schedule.id);
-                            const sRevenue = sBookings.filter((b: Booking) => b.paymentStatus === 'paid').reduce((acc: number, b: Booking) => acc + (b.totalAmount || 0), 0);
+                          <div className="space-y-2">
+                            {routeSchedules.filter((schedule: Schedule) => {
+                              if (!scheduleFilterDate) return true;
+                              return new Date(schedule.departureDateTime).toISOString().split('T')[0] === scheduleFilterDate;
+                            }).slice((schedulePageByRoute[route.id] || 1) - 1, (schedulePageByRoute[route.id] || 1) * 5).map((schedule: Schedule) => {
+                              const bus = buses.find((b: Bus) => b.id === schedule.busId);
+                              const sBookings = bookings.filter((b: Booking) => b.scheduleId === schedule.id);
+                              const sRevenue = sBookings.filter((b: Booking) => b.paymentStatus === 'paid').reduce((acc: number, b: Booking) => acc + (b.totalAmount || 0), 0);
+                              const departureTime = new Date(schedule.departureDateTime).getTime();
+                              const arrivalTime = schedule.arrivalDateTime ? new Date(schedule.arrivalDateTime).getTime() : departureTime + 3 * 60 * 60 * 1000;
+                              const now = Date.now();
+                              const scheduleBadge = now >= departureTime && now <= arrivalTime
+                                ? { label: 'Current', className: 'bg-emerald-100 text-emerald-700' }
+                                : now < departureTime
+                                  ? { label: 'Upcoming', className: 'bg-amber-100 text-amber-700' }
+                                  : { label: 'Completed', className: 'bg-gray-100 text-gray-600' };
 
-                            return (
-                              <div key={schedule.id} className="bg-white p-3 rounded-lg border border-gray-200 flex flex-col md:flex-row md:items-center justify-between gap-3">
-                                <div>
-                                  <div className="flex items-center gap-2 mb-1">
-                                    <Calendar className="w-4 h-4 text-indigo-500" />
-                                    <span className="font-medium text-sm text-gray-900">
-                                      {new Date(schedule.departureDateTime).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
-                                    </span>
-                                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide ${schedule.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
-                                      }`}>
-                                      {schedule.tripStatus || schedule.status}
-                                    </span>
+                              return (
+                                <div key={schedule.id} className="bg-white p-3 rounded-lg border border-gray-200 flex flex-col md:flex-row md:items-center justify-between gap-3">
+                                  <div>
+                                    <div className="flex flex-wrap items-center gap-2 mb-1">
+                                      <Calendar className="w-4 h-4 text-indigo-500" />
+                                      <span className="font-medium text-sm text-gray-900">
+                                        {new Date(schedule.departureDateTime).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
+                                      </span>
+                                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide ${scheduleBadge.className}`}>
+                                        {scheduleBadge.label}
+                                      </span>
+                                    </div>
+                                    <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500">
+                                      <BusIcon className="w-3 h-3" />
+                                      <span>{bus ? `${bus.licensePlate} (${bus.capacity} seats)` : 'No Bus'}</span>
+                                      <span>• MWK {schedule.price?.toLocaleString()} per seat</span>
+                                    </div>
                                   </div>
-                                  <div className="flex items-center gap-2 text-xs text-gray-500">
-                                    <BusIcon className="w-3 h-3" />
-                                    <span>{bus ? `${bus.licensePlate} (${bus.capacity} seats)` : 'No Bus'}</span>
-                                    <span>• MWK {schedule.price?.toLocaleString()} per seat</span>
+
+                                  <div className="flex gap-4 text-sm bg-gray-50 px-4 py-2 rounded-lg border border-gray-100">
+                                    <div className="text-center">
+                                      <div className="font-bold text-gray-900">{sBookings.length}</div>
+                                      <div className="text-[10px] text-gray-500 uppercase">Bookings</div>
+                                    </div>
+                                    <div className="w-px bg-gray-200"></div>
+                                    <div className="text-center">
+                                      <div className="font-bold text-green-600">MWK {sRevenue.toLocaleString()}</div>
+                                      <div className="text-[10px] text-gray-500 uppercase">Revenue</div>
+                                    </div>
                                   </div>
                                 </div>
-
-                                <div className="flex gap-4 text-sm bg-gray-50 px-4 py-2 rounded-lg border border-gray-100">
-                                  <div className="text-center">
-                                    <div className="font-bold text-gray-900">{sBookings.length}</div>
-                                    <div className="text-[10px] text-gray-500 uppercase">Bookings</div>
-                                  </div>
-                                  <div className="w-px bg-gray-200"></div>
-                                  <div className="text-center">
-                                    <div className="font-bold text-green-600">MWK {sRevenue.toLocaleString()}</div>
-                                    <div className="text-[10px] text-gray-500 uppercase">Revenue</div>
-                                  </div>
-                                </div>
-                              </div>
-                            );
-                          })
+                              );
+                            })}
+                          </div>
                         )}
 
-                        <button
-                          onClick={() => openModal('addSchedule', { branchId: selectedBranch.id, routeId: route.id })}
-                          className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 bg-indigo-50 px-3 py-1.5 rounded-lg flex items-center gap-1 w-fit"
-                        >
-                          <PlusCircle className="w-3 h-3" /> Add Schedule
-                        </button>
+                        {routeSchedules.filter((schedule: Schedule) => {
+                          if (!scheduleFilterDate) return true;
+                          return new Date(schedule.departureDateTime).toISOString().split('T')[0] === scheduleFilterDate;
+                        }).length > 5 && (
+                          <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2">
+                            <p className="text-xs text-gray-500">
+                              Showing page {(schedulePageByRoute[route.id] || 1)} of {Math.ceil(routeSchedules.filter((schedule: Schedule) => {
+                                if (!scheduleFilterDate) return true;
+                                return new Date(schedule.departureDateTime).toISOString().split('T')[0] === scheduleFilterDate;
+                              }).length / 5)}
+                            </p>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => setSchedulePageByRoute((current) => ({ ...current, [route.id]: Math.max(1, (current[route.id] || 1) - 1) }))}
+                                disabled={(schedulePageByRoute[route.id] || 1) === 1}
+                                className="rounded-md border border-gray-300 px-2.5 py-1 text-xs font-medium text-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                Previous
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setSchedulePageByRoute((current) => ({ ...current, [route.id]: (current[route.id] || 1) + 1 }))}
+                                disabled={(schedulePageByRoute[route.id] || 1) * 5 >= routeSchedules.filter((schedule: Schedule) => {
+                                  if (!scheduleFilterDate) return true;
+                                  return new Date(schedule.departureDateTime).toISOString().split('T')[0] === scheduleFilterDate;
+                                }).length}
+                                className="rounded-md border border-gray-300 px-2.5 py-1 text-xs font-medium text-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                Next
+                              </button>
+                            </div>
+                          </div>
+                        )}
                       </div>
-                    )}
+                    </div>
                   </div>
                 );
               })
@@ -402,6 +481,21 @@ export default function RegionsTab({ dashboard }: RegionsTabProps) {
               <button onClick={() => setActiveModal(null)} className="p-2 hover:bg-gray-100 rounded-full text-gray-500"><X className="w-5 h-5" /></button>
             </div>
             <div className="p-6 space-y-4">
+
+              {activeModal === 'addBranch' && (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Branch Name *</label>
+                    <input type="text" value={branchForm.name} onChange={e => setBranchForm(p => ({ ...p, name: e.target.value }))}
+                      placeholder="e.g., Lilongwe" className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border" />
+                  </div>
+                  <div className="flex justify-end">
+                    <button type="button" onClick={handleAddBranch} disabled={saving} className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-50">
+                      {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <PlusCircle className="h-4 w-4" />} Create Branch
+                    </button>
+                  </div>
+                </>
+              )}
 
               {activeModal === 'addRoute' && (
                 <>

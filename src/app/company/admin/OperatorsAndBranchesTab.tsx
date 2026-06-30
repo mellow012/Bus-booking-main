@@ -1,274 +1,390 @@
 'use client';
 
-import React, { useState } from 'react';
-import { PlusCircle, MoreVertical, Edit, Trash2, Building2, MapPin, Users } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import React, { useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { MapPin, PlusCircle, Users, Pencil, Trash2 } from 'lucide-react';
+import { useAppToast } from '@/contexts/ToastContext';
 import InviteOperatorModal from './InviteOperatorModal';
-import ConfirmDeleteModal from '../../../components/company-admin/modals/ConfirmDeleteModal';
-import EditOperatorModal from '../../../components/company-admin/modals/EditOperatorModal';
+import EditOperatorModal from './EditOperatorModal';
 
 interface OperatorsAndBranchesTabProps {
   dashboard: any;
 }
 
+type OperatorRow = {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  status: string;
+  region: string;
+  regionId?: string | null;
+};
+
 export default function OperatorsAndBranchesTab({ dashboard }: OperatorsAndBranchesTabProps) {
-  const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
-  const { dashboardData, updateDashboardData } = dashboard;
-  const operators = dashboardData.operators || [];
-  const branches = dashboardData.regions || [];
-
-  const searchQuery = dashboard.searchQuery?.toLowerCase() || '';
-
-  const filteredBranches = branches.filter((branch: any) => {
-    return (
-      branch.name?.toLowerCase().includes(searchQuery) ||
-      branch.code?.toLowerCase().includes(searchQuery)
-    );
-  });
-
-  const filteredOperators = operators.filter((operator: any) => {
-    return (
-      operator.firstName?.toLowerCase().includes(searchQuery) ||
-      operator.lastName?.toLowerCase().includes(searchQuery) ||
-      operator.email?.toLowerCase().includes(searchQuery) ||
-      operator.branch?.some((b: string) => b.toLowerCase().includes(searchQuery)) ||
-      operator.region?.toLowerCase().includes(searchQuery) ||
-      branches.find((b: any) => b.id === operator.regionId)?.name.toLowerCase().includes(searchQuery)
-    );
-  });
-
   const [isInviteModalOpen, setInviteModalOpen] = useState(false);
-  const [operatorToDelete, setOperatorToDelete] = useState<any>(null);
-  const [operatorToEdit, setOperatorToEdit] = useState<any>(null);
+  const [isBranchModalOpen, setBranchModalOpen] = useState(false);
+  const [editingBranch, setEditingBranch] = useState<any | null>(null);
+  const [selectedOperator, setSelectedOperator] = useState<OperatorRow | null>(null);
+  const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null);
+  const [isEditModalOpen, setEditModalOpen] = useState(false);
+  const [isActionLoading, setIsActionLoading] = useState(false);
+  const [branchName, setBranchName] = useState('');
+  const [isSavingBranch, setIsSavingBranch] = useState(false);
 
-  const [newBranchName, setNewBranchName] = useState('');
-  const [newBranchCode, setNewBranchCode] = useState('');
-  const [isAddingBranch, setIsAddingBranch] = useState(false);
+  const operators = useMemo<OperatorRow[]>(() => {
+    const rawOperators = dashboard?.dashboardData?.operators || [];
+    const branches = dashboard?.dashboardData?.regions || [];
 
-  const handleAddBranch = async () => {
-    if (!newBranchName.trim()) return;
+    return rawOperators.map((operator: any) => {
+      const firstName = operator.firstName || '';
+      const lastName = operator.lastName || '';
+      const derivedName = [firstName, lastName].filter(Boolean).join(' ').trim() || operator.name || operator.email || 'Unknown operator';
+      const branchName = operator.region || operator.regionName || branches.find((branch: any) => branch.id === operator.regionId)?.name || 'Unassigned';
+
+      return {
+        id: operator.id || operator.uid || operator.email || `${derivedName}-${branchName}`,
+        name: derivedName,
+        email: operator.email || '',
+        role: operator.role || 'operator',
+        status: operator.status || (operator.isActive === false ? 'inactive' : 'active'),
+        region: branchName,
+        regionId: operator.regionId || (operator.region && typeof operator.region === 'object' ? operator.region.id : null) || null,
+      };
+    });
+  }, [dashboard]);
+
+  const router = useRouter();
+  const toast = useAppToast();
+  const branches = useMemo(() => dashboard?.dashboardData?.regions || [], [dashboard]);
+  const companyId = dashboard?.dashboardData?.company?.id || '';
+  const companyName = dashboard?.dashboardData?.company?.name || '';
+
+  const filteredOperators = useMemo(() => {
+    if (!selectedBranchId) return operators;
+    return operators.filter(op => op.regionId === selectedBranchId);
+  }, [operators, selectedBranchId]);
+
+  const handleViewOperatorDashboard = (operatorId: string) => {
+    router.push(`/company/operator/dashboard?operatorId=${encodeURIComponent(operatorId)}`);
+  };
+
+  const openEditOperatorModal = (operator: OperatorRow) => {
+    setSelectedOperator(operator);
+    setEditModalOpen(true);
+  };
+
+  const closeEditOperatorModal = () => {
+    setSelectedOperator(null);
+    setEditModalOpen(false);
+  };
+
+  const confirmDeleteOperator = async (operator: OperatorRow) => {
+    setIsActionLoading(true);
+    dashboard.setIsBusy?.(true);
     try {
-      const companyId = dashboardData.company?.id;
-      if (!companyId) throw new Error("Company ID missing");
-
-      // We use supabase directly since we're in a client component and the hook uses it
-      const { data, error } = await supabase.from('Region').insert({
-        companyId,
-        name: newBranchName.trim(),
-        code: newBranchCode.trim() || null,
-        isActive: true
-      }).select().single();
-      
-      if (error) throw error;
-
-      const updatedBranches = [...branches, data];
-      // Optimistic UI update
-      updateDashboardData('regions', updatedBranches);
-
-      setNewBranchName('');
-      setNewBranchCode('');
-      setIsAddingBranch(false);
-      dashboard.showAlert('success', 'Branch added successfully');
+      const response = await fetch(`/api/admin/users/${operator.id}`, { method: 'DELETE' });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data?.error || 'Failed to delete operator');
+      }
+      if (data?.error) {
+        throw new Error(data.error);
+      }
+      await dashboard?.fetchInitialData?.();
+      toast.success('Operator deleted', `${operator.name} was removed successfully.`);
+      dashboard?.showAlert?.('success', `${operator.name} deleted successfully.`);
     } catch (err: any) {
-      dashboard.showAlert('error', 'Failed to add branch');
+      toast.error('Delete failed', err?.message || 'Failed to delete operator.');
+      dashboard?.showAlert?.('error', err?.message || 'Failed to delete operator');
+    } finally {
+      setIsActionLoading(false);
+      dashboard.setIsBusy?.(false);
     }
   };
 
-  const handleConfirmDelete = async () => {
-    if (operatorToDelete) {
-      try {
-        await fetch(`/api/company/operators/${operatorToDelete.id}`, { method: 'DELETE' });
-        dashboard.fetchInitialData();
-        setOperatorToDelete(null);
-        dashboard.showAlert('success', 'Operator deleted');
-      } catch (e) {
-        dashboard.showAlert('error', 'Failed to delete operator');
+  const handleDeleteOperator = (operator: OperatorRow) => {
+    let toastId = '';
+    toastId = toast.addToast(
+      'Confirm deletion',
+      `Remove ${operator.name} from the company? This cannot be undone.`,
+      'warning',
+      0,
+      {
+        label: 'Confirm',
+        onClick: async () => {
+          toast.removeToast(toastId);
+          await confirmDeleteOperator(operator);
+        },
       }
+    );
+  };
+
+  const resetBranchModal = () => {
+    setBranchModalOpen(false);
+    setEditingBranch(null);
+    setBranchName('');
+  };
+
+  const openAddBranchModal = () => {
+    setEditingBranch(null);
+    setBranchName('');
+    setBranchModalOpen(true);
+  };
+
+  const openEditBranchModal = (branch: any) => {
+    setEditingBranch(branch);
+    setBranchName(branch.name || '');
+    setBranchModalOpen(true);
+  };
+
+  const handleBranchSelect = (branchId: string) => {
+    setSelectedBranchId(prev => prev === branchId ? null : branchId);
+  };
+
+  const handleSaveBranch = async () => {
+    const trimmedName = branchName.trim();
+    if (!trimmedName) return;
+
+    setIsSavingBranch(true);
+    dashboard.setIsBusy?.(true);
+    try {
+      const currentBranches = (dashboard?.dashboardData?.regions || []).map((branch: any) => ({
+        id: branch.id,
+        name: branch.name?.trim() || '',
+      })).filter((branch: any) => branch.name);
+
+      const duplicateExists = currentBranches.some((branch: any) =>
+        branch.id !== editingBranch?.id && branch.name.toLowerCase() === trimmedName.toLowerCase()
+      );
+
+      if (duplicateExists) {
+        dashboard?.showAlert?.('error', 'A branch with that name already exists.');
+        setIsSavingBranch(false);
+        return;
+      }
+
+      const nextBranches = editingBranch
+        ? currentBranches.map((branch: any) => (branch.id === editingBranch.id ? { ...branch, name: trimmedName } : branch))
+        : [...currentBranches, { id: undefined, name: trimmedName }];
+
+      const response = await fetch('/api/company/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          companyId,
+          updates: {
+            branches: nextBranches.map((branch: any) => ({ id: branch.id || undefined, name: branch.name })),
+          },
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Failed to save branch');
+
+      await dashboard?.fetchInitialData?.();
+      resetBranchModal();
+      toast.success('Branch saved', editingBranch ? 'Branch updated successfully.' : 'Branch created successfully.');
+      dashboard?.showAlert?.('success', editingBranch ? 'Branch updated successfully' : 'Branch created successfully');
+    } catch (err: any) {
+      toast.error('Branch save failed', err.message || 'Failed to save branch.');
+      dashboard?.showAlert?.('error', err.message || 'Failed to save branch');
+    } finally {
+      setIsSavingBranch(false);
+      dashboard.setIsBusy?.(false);
     }
   };
 
   return (
-    <>
-      <InviteOperatorModal isOpen={isInviteModalOpen} onClose={() => { setInviteModalOpen(false); dashboard.fetchInitialData(); }} branches={branches} />
-      <EditOperatorModal isOpen={!!operatorToEdit} onClose={() => { setOperatorToEdit(null); dashboard.fetchInitialData(); }} operator={operatorToEdit} />
-      <ConfirmDeleteModal
-        isOpen={!!operatorToDelete}
-        onClose={() => setOperatorToDelete(null)}
-        onConfirm={handleConfirmDelete}
-        isDeleting={false}
-        title="Delete Operator"
-        message={`Are you sure you want to delete this operator? This action cannot be undone.`}
+    <div className="space-y-6">
+      <InviteOperatorModal
+        isOpen={isInviteModalOpen}
+        onClose={() => setInviteModalOpen(false)}
+        branches={branches}
+        companyId={companyId}
+        companyName={companyName}
       />
-
-      <div className="space-y-8 animate-in fade-in duration-500">
-
-        {/* Branches Section */}
+      <EditOperatorModal
+        isOpen={isEditModalOpen}
+        onClose={closeEditOperatorModal}
+        operator={selectedOperator}
+        companyId={companyId}
+      />
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <div className="flex justify-between items-end mb-4">
-            <div>
-              <h2 className="text-xl font-bold tracking-tight text-gray-900 flex items-center gap-2">
-                <Building2 className="w-6 h-6 text-indigo-600" />
-                Company Branches
-              </h2>
-              <p className="mt-1 text-sm text-gray-500">
-                Manage your operational jurisdictions.
-              </p>
-            </div>
-            {!isAddingBranch && (
-              <button
-                onClick={() => setIsAddingBranch(true)}
-                className="inline-flex items-center gap-2 rounded-lg bg-white border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 shadow-sm"
-              >
-                <PlusCircle className="h-4 w-4" />
-                Add Branch
-              </button>
-            )}
+          <h2 className="text-2xl font-bold tracking-tight text-gray-900">Operators & Branches</h2>
+          <p className="mt-1 text-sm text-gray-600">
+            Review the operators linked to this company and manage the branches available to them.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={openAddBranchModal}
+            className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-700 shadow-sm hover:bg-gray-50"
+          >
+            <MapPin className="h-5 w-5" />
+            Add Branch
+          </button>
+          <button
+            type="button"
+            onClick={() => setInviteModalOpen(true)}
+            className="inline-flex items-center gap-2 rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500"
+          >
+            <PlusCircle className="h-5 w-5" />
+            Invite Operator
+          </button>
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
+        <div className="border-b border-gray-100 bg-gray-50/70 px-4 py-3 sm:px-6">
+          <div className="flex items-center gap-2 text-sm font-semibold text-gray-900">
+            <MapPin className="h-4 w-4 text-indigo-600" />
+            Available branches
           </div>
-
-          {isAddingBranch && (
-            <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm mb-6 flex flex-wrap gap-3 items-center">
-              <input
-                type="text"
-                placeholder="Branch name (e.g., Lilongwe)"
-                value={newBranchName}
-                onChange={(e) => setNewBranchName(e.target.value)}
-                className="block flex-1 min-w-[200px] rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border"
-              />
-              <input
-                type="text"
-                placeholder="Branch Code (Optional)"
-                value={newBranchCode}
-                onChange={(e) => setNewBranchCode(e.target.value)}
-                className="block flex-1 min-w-[150px] rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border"
-              />
-              <button
-                onClick={handleAddBranch}
-                className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500"
-              >
-                Save
-              </button>
-              <button
-                onClick={() => setIsAddingBranch(false)}
-                className="rounded-lg bg-gray-100 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-200"
-              >
-                Cancel
-              </button>
-            </div>
-          )}
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredBranches.map((branch: any) => (
-              <div key={branch.id} className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm flex items-center justify-between group">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-indigo-50 rounded-lg flex items-center justify-center text-indigo-600">
-                    <MapPin className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-gray-900">{branch.name}</h3>
-                    <p className="text-xs text-gray-500">{operators.filter((o: any) => o.regionId === branch.id || o.branch?.includes(branch.name)).length} Operators assigned</p>
+        </div>
+        {branches.length === 0 ? (
+          <div className="px-6 py-10 text-center text-sm text-gray-500">No branches have been created yet.</div>
+        ) : (
+          <div className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-3">
+            {branches.map((branch: any) => {
+              const isSelected = selectedBranchId === branch.id;
+              return (
+                <div
+                  key={branch.id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => handleBranchSelect(branch.id)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      handleBranchSelect(branch.id);
+                    }
+                  }}
+                  className={`group text-left rounded-xl border px-4 py-3 transition ${isSelected ? 'border-indigo-600 bg-indigo-50 shadow-sm' : 'border-gray-200 bg-gray-50 hover:border-indigo-300 hover:bg-white'}`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className={`font-medium ${isSelected ? 'text-indigo-900' : 'text-gray-900'}`}>{branch.name}</div>
+                      <div className="mt-1 text-xs text-gray-500">{branch.code || 'Branch'}</div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={(event) => { event.stopPropagation(); openEditBranchModal(branch); }}
+                      className="text-sm font-semibold text-indigo-600 hover:text-indigo-700"
+                    >
+                      Edit
+                    </button>
                   </div>
                 </div>
-              </div>
-            ))}
-            {filteredBranches.length === 0 && !isAddingBranch && (
-              <div className="col-span-full py-8 text-center bg-gray-50 rounded-xl border border-dashed border-gray-200">
-                <p className="text-gray-500">{searchQuery ? 'No branches found matching search.' : 'No branches added yet.'}</p>
-              </div>
-            )}
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
+        <div className="border-b border-gray-100 bg-gray-50/70 px-4 py-3 sm:px-6">
+          <div className="flex items-center gap-2 text-sm font-semibold text-gray-900">
+            <Users className="h-4 w-4 text-indigo-600" />
+            Company operators
           </div>
         </div>
 
-        {/* Operators Section */}
-        <div>
-          <div className="flex justify-between items-end mb-4">
-            <div>
-              <h2 className="text-xl font-bold tracking-tight text-gray-900 flex items-center gap-2">
-                <Users className="w-6 h-6 text-indigo-600" />
-                Operators
-              </h2>
-              <p className="mt-1 text-sm text-gray-500">
-                Manage your operators and their assigned branches.
-              </p>
-            </div>
-            <button
-              onClick={() => setInviteModalOpen(true)}
-              className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500"
-            >
-              <PlusCircle className="h-4 w-4" />
-              Invite Operator
-            </button>
+        {filteredOperators.length === 0 ? (
+          <div className="px-6 py-10 text-center text-sm text-gray-500">
+            {selectedBranchId ? 'No operators assigned to this branch yet.' : 'No operators have been linked to this company yet.'}
           </div>
-
-          <div className="overflow-hidden shadow-sm ring-1 ring-black ring-opacity-5 rounded-xl">
+        ) : (
+          <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
+              <thead className="bg-white">
                 <tr>
-                  <th scope="col" className="py-3.5 pl-6 pr-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Name</th>
-                  <th scope="col" className="px-3 py-3.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Branch / Region</th>
-                  <th scope="col" className="px-3 py-3.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
-                  <th scope="col" className="relative py-3.5 pl-3 pr-6"><span className="sr-only">Actions</span></th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 sm:px-6">Name</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 sm:px-6">Role</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 sm:px-6">Status</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 sm:px-6">Branch</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 sm:px-6">Action</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200 bg-white">
-                {filteredOperators.map((operator: any) => (
+              <tbody className="divide-y divide-gray-100 bg-white">
+                {filteredOperators.map((operator) => (
                   <tr key={operator.id} className="hover:bg-gray-50">
-                    <td className="whitespace-nowrap py-4 pl-6 pr-3 text-sm">
-                      <div className="font-bold text-gray-900">{operator.firstName} {operator.lastName}</div>
-                      <div className="text-gray-500">{operator.email}</div>
+                    <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-900 sm:px-6">
+                      <div className="font-medium">{operator.name}</div>
+                      <div className="text-xs text-gray-500">{operator.email}</div>
                     </td>
-                    <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-900">
-                      {branches.find((b: any) => b.id === operator.regionId)?.name || operator.branch?.join(', ') || operator.region || 'Not assigned'}
-                    </td>
-                    <td className="whitespace-nowrap px-3 py-4 text-sm">
-                      <span className={`px-2 py-1 rounded-full text-xs font-semibold ${operator.isActive !== false ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                        {operator.isActive !== false ? 'Active' : 'Inactive'}
+                    <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-600 sm:px-6">{operator.role}</td>
+                    <td className="whitespace-nowrap px-4 py-3 text-sm sm:px-6">
+                      <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${operator.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-700'}`}>
+                        {operator.status}
                       </span>
                     </td>
-                    <td className="relative whitespace-nowrap py-4 pl-3 pr-6 text-right text-sm font-medium">
-                      <div className="relative inline-block text-left">
-                        <button
-                          onClick={() => setOpenDropdownId(openDropdownId === operator.id ? null : operator.id)}
-                          className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
-                        >
-                          <MoreVertical className="h-5 w-5" />
-                        </button>
-                        {openDropdownId === operator.id && (
-                          <>
-                            <div className="fixed inset-0 z-10" onClick={() => setOpenDropdownId(null)}></div>
-                            <div className="absolute right-0 z-20 mt-2 w-40 origin-top-right rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none">
-                              <div className="py-1">
-                                <button
-                                  onClick={() => { setOperatorToEdit(operator); setOpenDropdownId(null); }}
-                                  className="flex w-full items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                                >
-                                  <Edit className="mr-3 h-4 w-4 text-gray-400" /> Edit
-                                </button>
-                                <button
-                                  onClick={() => { setOperatorToDelete(operator); setOpenDropdownId(null); }}
-                                  className="flex w-full items-center px-4 py-2 text-sm text-red-700 hover:bg-red-50"
-                                >
-                                  <Trash2 className="mr-3 h-4 w-4 text-red-400" /> Delete
-                                </button>
-                              </div>
-                            </div>
-                          </>
-                        )}
-                      </div>
+                    <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-600 sm:px-6">{operator.region}</td>
+                    <td className="whitespace-nowrap px-4 py-3 text-right sm:px-6 space-x-2">
+                      <button
+                        type="button"
+                        onClick={() => handleViewOperatorDashboard(operator.id)}
+                        disabled={isActionLoading}
+                        className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition disabled:opacity-50"
+                      >
+                        View
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => openEditOperatorModal(operator)}
+                        disabled={isActionLoading}
+                        className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition disabled:opacity-50"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteOperator(operator)}
+                        disabled={isActionLoading}
+                        className="inline-flex items-center gap-1 rounded-md bg-red-600 px-3 py-2 text-xs font-semibold text-white hover:bg-red-500 transition disabled:opacity-50"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        Delete
+                      </button>
                     </td>
                   </tr>
                 ))}
-                {filteredOperators.length === 0 && (
-                  <tr>
-                    <td colSpan={4} className="py-8 text-center text-sm text-gray-500">
-                      {searchQuery ? 'No operators found matching search.' : 'No operators found. Invite one to get started.'}
-                    </td>
-                  </tr>
-                )}
               </tbody>
             </table>
           </div>
-        </div>
+        )}
       </div>
-    </>
+
+      {isBranchModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-900">{editingBranch ? 'Update branch' : 'Add branch'}</h3>
+              <button type="button" onClick={resetBranchModal} className="text-sm text-gray-500 hover:text-gray-700">Close</button>
+            </div>
+            <div className="mt-4 space-y-4">
+              <label className="block text-sm font-medium text-gray-700">
+                Branch name
+                <input
+                  value={branchName}
+                  onChange={(event) => setBranchName(event.target.value)}
+                  className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none ring-0 focus:border-indigo-500"
+                  placeholder="e.g. CBD"
+                />
+              </label>
+            </div>
+            <div className="mt-6 flex justify-end gap-2">
+              <button type="button" onClick={resetBranchModal} className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">Cancel</button>
+              <button type="button" onClick={handleSaveBranch} disabled={isSavingBranch || !branchName.trim()} className="rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60">
+                {isSavingBranch ? 'Saving...' : editingBranch ? 'Save changes' : 'Create branch'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { Company, Schedule, Route, Bus, Booking, Operator } from '@/types';
@@ -9,6 +9,8 @@ import { Company, Schedule, Route, Bus, Booking, Operator } from '@/types';
 export function useOperatorDashboard() {
   const { user, userProfile, loading: authLoading, signOut } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const operatorIdParam = searchParams.get('operatorId') || undefined;
 
   const [loading, setLoading] = useState(true);
   const [globalError, setGlobalError] = useState('');
@@ -28,14 +30,22 @@ export function useOperatorDashboard() {
     try {
       if (!silent) setLoading(true);
 
-      // 1. Fetch Operator record to get assigned routes
-      const { data: opData, error: opError } = await supabase
+      // 1. Fetch Operator record to get assigned routes.
+      // Company admins can view a specific operator's dashboard via ?operatorId=...
+      const opQuery = supabase
         .from('Operator')
-        .select('*, routes(*)')
-        .eq('uid', user.id)
-        .maybeSingle();
+        .select('*, routes(*)');
+
+      const operatorQuery = userProfile?.role === 'company_admin' && operatorIdParam
+        ? opQuery.eq('id', operatorIdParam)
+        : opQuery.eq('uid', user.id);
+
+      const { data: opData, error: opError } = await operatorQuery.maybeSingle();
 
       if (opError) throw opError;
+      if (userProfile?.role === 'company_admin' && operatorIdParam && !opData) {
+        throw new Error('Selected operator not found.');
+      }
 
       let routesList: Route[] = [];
       let routeIds: string[] = [];
@@ -139,12 +149,16 @@ export function useOperatorDashboard() {
       }
 
     } catch (err: any) {
-      console.error('Fetch error in useOperatorDashboard:', err);
+      if (err?.message) {
+        console.error('Fetch error in useOperatorDashboard:', err.message, err);
+      } else {
+        console.error('Fetch error in useOperatorDashboard:', err);
+      }
       if (!silent) setGlobalError('Operational sync interrupted.');
     } finally {
       if (!silent) setLoading(false);
     }
-  }, [user, companyId, authLoading, userProfile]);
+  }, [user, companyId, authLoading, userProfile, operatorIdParam]);
 
   useEffect(() => {
     if (authLoading) return;

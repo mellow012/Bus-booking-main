@@ -30,22 +30,28 @@ type EditOperatorModalProps = {
   isOpen: boolean;
   onClose: () => void;
   operator: OperatorData | null;
+  companyId?: string;
 }
 
-const useRegions = () => {
+const useRegions = (companyId?: string) => {
   return useQuery<Region[], Error>({
-    queryKey: ['regions'],
+    queryKey: ['regions', companyId],
     queryFn: async () => {
-      const response = await fetch('/api/company/regions');
+      const url = new URL('/api/admin/coo/regions', window.location.origin);
+      url.searchParams.set('limit', '100');
+      if (companyId) url.searchParams.set('companyId', companyId);
+      const response = await fetch(url.toString());
       if (!response.ok) throw new Error('Failed to fetch regions');
-      return response.json();
+      const data = await response.json();
+      return data.regions || [];
     },
+    enabled: !!companyId,
   });
 };
 
-export default function EditOperatorModal({ isOpen, onClose, operator }: EditOperatorModalProps) {
+export default function EditOperatorModal({ isOpen, onClose, operator, companyId }: EditOperatorModalProps) {
   const queryClient = useQueryClient();
-  const { data: regions, isLoading: isLoadingRegions } = useRegions();
+  const { data: regions, isLoading: isLoadingRegions } = useRegions(companyId);
 
   const {
     register,
@@ -69,7 +75,7 @@ export default function EditOperatorModal({ isOpen, onClose, operator }: EditOpe
   const mutation = useMutation({
     mutationFn: async (data: EditFormData) => {
       if (!operator) throw new Error('No operator selected');
-      const response = await fetch(`/api/company/operators/${operator.id}`, {
+      const response = await fetch(`/api/admin/users/${operator.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),

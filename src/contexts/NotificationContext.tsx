@@ -63,9 +63,11 @@ export const NotificationProvider: React.FC<{ children: ReactNode; userId?: stri
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isLoading, setIsLoading]         = useState(true);
   const [error, setError]                 = useState<string | null>(null);
+  const pollIntervalRef = useRef<number | null>(null);
 
-  const fetchNotifications = useCallback(async () => {
+  const fetchNotifications = useCallback(async (force = false) => {
     if (!userId) return;
+    if (!force && document.visibilityState !== 'visible') return;
 
     try {
       const response = await fetch('/api/notifications/list?userId=' + userId);
@@ -99,7 +101,14 @@ export const NotificationProvider: React.FC<{ children: ReactNode; userId?: stri
     setIsLoading(true);
 
     // Initial load
-    fetchNotifications();
+    fetchNotifications(true);
+
+    // Polling to keep notification state fresh
+    if (pollIntervalRef.current) {
+      window.clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
+    }
+    pollIntervalRef.current = window.setInterval(() => fetchNotifications(), 8000);
 
     // Set up Supabase Realtime
     const supabase = createClient();
@@ -109,12 +118,6 @@ export const NotificationProvider: React.FC<{ children: ReactNode; userId?: stri
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'Notification', filter: `userId=eq.${userId}` },
         (payload) => {
-          // If tab is hidden, we'll sync everything when they come back
-          // but for toast notifications, we might still want it? 
-          // User asked to "prevent refresh", usually meaning data refresh.
-          // Let's stick to the pattern: only update state if visible.
-          if (document.visibilityState !== 'visible') return;
-          
           const newNotification = payload.new as Notification;
           setNotifications((prev) => [newNotification, ...prev]);
           import('react-hot-toast').then(({ default: toast }) => {
@@ -132,6 +135,10 @@ export const NotificationProvider: React.FC<{ children: ReactNode; userId?: stri
     return () => {
       supabase.removeChannel(channel);
       document.removeEventListener('visibilitychange', handleVisibility);
+      if (pollIntervalRef.current) {
+        window.clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
     };
   }, [userId, fetchNotifications]);
 
@@ -308,11 +315,22 @@ export const NotificationBell: React.FC<{ userId: string; className?: string }> 
                   }`} />
 
                   <div className="flex-1 min-w-0">
-                    <p className={`text-sm font-medium truncate ${
-                      !n.isRead ? 'text-gray-900' : 'text-gray-600'
-                    }`}>
-                      {n.title}
-                    </p>
+                    <div className="flex items-center justify-between gap-3">
+                      <p className={`text-sm font-medium truncate ${
+                        !n.isRead ? 'text-gray-900' : 'text-gray-600'
+                      }`}>
+                        {n.title}
+                      </p>
+                      <span className={`text-[10px] font-bold uppercase tracking-[0.12em] rounded-full px-2 py-0.5 ${
+                        n.type === 'booking' ? 'bg-blue-100 text-blue-700' :
+                        n.type === 'payment' ? 'bg-emerald-100 text-emerald-700' :
+                        n.type === 'schedule' ? 'bg-violet-100 text-violet-700' :
+                        n.type === 'cancellation' || n.type === 'cancellation_requested' ? 'bg-rose-100 text-rose-700' :
+                        n.type === 'promotion' ? 'bg-yellow-100 text-yellow-700' :
+                        n.type === 'alert' ? 'bg-orange-100 text-orange-700' :
+                        'bg-gray-100 text-gray-600'
+                      }`}>{n.type.replace('_', ' ')}</span>
+                    </div>
                     <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{n.message}</p>
                     <p className="text-xs text-gray-400 mt-1">
                       {new Date(n.createdAt).toLocaleString()}

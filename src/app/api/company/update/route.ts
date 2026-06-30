@@ -88,26 +88,55 @@ export async function POST(req: NextRequest) {
 
     if (updates.branches && Array.isArray(updates.branches)) {
       const existingRegions = await prisma.region.findMany({ where: { companyId } });
-      const branchNames = updates.branches as string[];
-      
+      const desiredBranches = updates.branches as Array<string | { id?: string; name: string }>;
+      const desiredNames = desiredBranches.map((branch) => (typeof branch === 'string' ? branch : branch.name)?.trim()).filter(Boolean);
+
       for (const region of existingRegions) {
-        if (!branchNames.includes(region.name)) {
+        const shouldKeep = desiredBranches.some((branch) => {
+          if (typeof branch === 'string') {
+            return branch.trim() === region.name;
+          }
+          return branch.id === region.id || branch.name?.trim() === region.name;
+        });
+
+        if (!shouldKeep) {
           await prisma.region.update({ where: { id: region.id }, data: { isActive: false } });
         }
       }
 
-      for (const branchName of branchNames) {
-        const existing = existingRegions.find(r => r.name === branchName);
+      for (const branch of desiredBranches) {
+        const branchName = (typeof branch === 'string' ? branch : branch.name)?.trim();
+        if (!branchName) continue;
+
+        const existingById = typeof branch === 'object' && branch.id ? existingRegions.find((region) => region.id === branch.id) : null;
+        const existingByName = existingRegions.find((region) => region.name === branchName);
+        const existing = existingById || existingByName;
+
         if (!existing) {
           await prisma.region.create({
             data: {
               name: branchName,
-              companyId: companyId,
+              companyId,
               isActive: true,
-            }
+            },
           });
-        } else if (!existing.isActive) {
-          await prisma.region.update({ where: { id: existing.id }, data: { isActive: true } });
+          continue;
+        }
+
+        if (existing.name !== branchName || !existing.isActive) {
+          await prisma.region.update({
+            where: { id: existing.id },
+            data: {
+              name: branchName,
+              isActive: true,
+            },
+          });
+        }
+      }
+
+      for (const region of existingRegions) {
+        if (!desiredNames.includes(region.name)) {
+          await prisma.region.update({ where: { id: region.id }, data: { isActive: false } });
         }
       }
     }
