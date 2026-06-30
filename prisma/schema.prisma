@@ -86,7 +86,6 @@ model Company {
   planType             String             @default("basic")
   maxBuses             Int                @default(6)
   maxRoutes            Int                @default(3)
-  branches             Json?
   contactSettings      Json?
   paymentSettings      Json?
   notificationSettings Json?
@@ -166,8 +165,7 @@ model Route {
   stops               Json?
   isActive            Boolean            @default(true)
   status              String             @default("active")
-  assignedOperatorIds String[]           @default([])
-  assignedConductorIds String[]          @default([])
+
   createdAt           DateTime           @default(now())
   updatedAt           DateTime           @updatedAt
   groupRequests       GroupRequest[]

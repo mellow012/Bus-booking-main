@@ -1,6 +1,7 @@
 'use client';
 
-import { X, ChevronRight, ChevronLeft, LogOut, Bus as BusIcon } from 'lucide-react';
+import { X, ChevronRight, ChevronLeft, LogOut, Bus as BusIcon, Eye } from 'lucide-react';
+import Link from 'next/link';
 import { Company } from '@/types';
 import { CATEGORIES, CategoryType } from '../_lib/constants';
 
@@ -106,7 +107,7 @@ export default function DashboardSidebar({
                   </span>
                 )}
 
-                {showLabel && cat.id === 'fleet' && statistics.missedSchedules > 0 && (
+                {showLabel && cat.id === 'regions' && statistics.missedSchedules > 0 && (
                   <span className="bg-amber-500 text-white text-[10px] font-black px-1.5 py-0.5 rounded-full border-2 border-white">
                     {statistics.missedSchedules}
                   </span>
@@ -126,6 +127,26 @@ export default function DashboardSidebar({
               </button>
             );
           })}
+
+          {/* Operator View */}
+          <div className="pt-3 mt-3 border-t border-gray-50">
+            <Link
+              href="/company/operator/dashboard"
+              className={`w-full flex items-center group transition-all duration-200 relative rounded-xl h-11 text-indigo-600 hover:bg-indigo-50
+                ${isCollapsed && !isMobileOpen ? 'justify-center px-0' : 'px-4 space-x-3'}`}
+            >
+              <Eye className="w-5 h-5 flex-shrink-0 group-hover:scale-110 transition-transform" />
+              {(!isCollapsed || isMobileOpen) && (
+                <span className="text-[13px] font-bold animate-in slide-in-from-left-2 duration-300">Operator View</span>
+              )}
+              {isCollapsed && !isMobileOpen && (
+                <div className="absolute left-[72px] top-1/2 -translate-y-1/2 bg-indigo-600 text-white text-[11px] font-bold py-1.5 px-3 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
+                  Operator View
+                  <div className="absolute left-[-4px] top-1/2 -translate-y-1/2 w-2 h-2 bg-indigo-600 rotate-45" />
+                </div>
+              )}
+            </Link>
+          </div>
 
           {/* Sign Out */}
           <div className="pt-4 mt-4 border-t border-gray-50 flex flex-col gap-1">

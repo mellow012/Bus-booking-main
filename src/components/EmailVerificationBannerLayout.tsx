@@ -86,11 +86,9 @@ export const EmailVerificationBannerLayout: React.FC = () => {
     return <EmailVerificationPrompt email={user.email} showBanner={true} />;
   }
 
-  if (!profileDismissed && user.emailVerified && (!userProfile || (userProfile.role === 'customer' && !userProfile.setupCompleted))) {
+  if (!profileDismissed && user.emailVerified && userProfile && !userProfile.setupCompleted) {
     const handleDismiss = () => {
-      if (user?.id) {
-        localStorage.setItem(`profile_banner_dismissed_${user.id}`, 'true');
-      }
+      localStorage.setItem(`profile_banner_dismissed_${user.id}`, 'true');
       setProfileDismissed(true);
     };
 

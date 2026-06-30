@@ -24,7 +24,13 @@ export async function updateTripLifecycle(params: {
     const schedule = await prisma.schedule.findUnique({
       where: { id: scheduleId },
       include: {
-        route: true,
+        route: {
+          include: {
+            operators: {
+              select: { uid: true }
+            }
+          }
+        },
         bus: true,
       }
     });
@@ -97,8 +103,7 @@ export async function updateTripLifecycle(params: {
     });
 
     // 5. Notify Operators and Admins
-    // We notify assigned operators first, otherwise notify all company ops/admins
-    let recipients: string[] = (schedule.route as any).assignedOperatorIds || [];
+    let recipients: string[] = schedule.route.operators.map((op: any) => op.uid).filter(Boolean);
     
     if (recipients.length === 0) {
       const companyStaff = await prisma.user.findMany({

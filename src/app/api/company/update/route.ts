@@ -77,7 +77,6 @@ export async function POST(req: NextRequest) {
         description:          updates.description          ?? undefined,
         phone:                updates.phone                ?? undefined,
         address:              updates.address              ?? undefined,
-        branches:             updates.branches             ?? undefined,
         operatingHours:       updates.operatingHours       ?? undefined,
         paymentSettings:      finalPaymentSettings         ?? undefined,
         notificationSettings: finalNotificationSettings      ?? undefined,

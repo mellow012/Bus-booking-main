@@ -137,30 +137,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<ApiRespon
           }
         });
 
-        // Sync route assignedOperatorIds/assignedConductorIds arrays
-        if (routeIds && routeIds.length > 0) {
-          for (const routeId of routeIds) {
-            const route = await tx.route.findUnique({
-              where: { id: routeId },
-              select: { assignedOperatorIds: true, assignedConductorIds: true }
-            });
-            if (route) {
-              if (role === 'operator') {
-                const updatedIds = Array.from(new Set([...(route.assignedOperatorIds || []), userRecord.id]));
-                await tx.route.update({
-                  where: { id: routeId },
-                  data: { assignedOperatorIds: updatedIds }
-                });
-              } else if (role === 'conductor') {
-                const updatedIds = Array.from(new Set([...(route.assignedConductorIds || []), userRecord.id]));
-                await tx.route.update({
-                  where: { id: routeId },
-                  data: { assignedConductorIds: updatedIds }
-                });
-              }
-            }
-          }
-        }
+
 
         return user;
       });

@@ -499,40 +499,6 @@ export async function updateOperatorAssignments(id: string, data: { regionId?: s
         }
       });
 
-      // Sync route assignedOperatorIds/assignedConductorIds arrays
-      if (companyId) {
-        const allRoutes = await tx.route.findMany({
-          where: { companyId }
-        });
-
-        for (const route of allRoutes) {
-          const isAssigned = data.routeIds?.includes(route.id);
-          
-          if (existingUser.role === 'operator') {
-            let updatedIds = route.assignedOperatorIds || [];
-            if (isAssigned) {
-              updatedIds = Array.from(new Set([...updatedIds, id]));
-            } else {
-              updatedIds = updatedIds.filter(x => x !== id);
-            }
-            await tx.route.update({
-              where: { id: route.id },
-              data: { assignedOperatorIds: updatedIds }
-            });
-          } else if (existingUser.role === 'conductor') {
-            let updatedIds = route.assignedConductorIds || [];
-            if (isAssigned) {
-              updatedIds = Array.from(new Set([...updatedIds, id]));
-            } else {
-              updatedIds = updatedIds.filter(x => x !== id);
-            }
-            await tx.route.update({
-              where: { id: route.id },
-              data: { assignedConductorIds: updatedIds }
-            });
-          }
-        }
-      }
     });
 
     revalidatePath('/company/admin');

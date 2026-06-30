@@ -55,6 +55,7 @@ export default function BookBus() {
     bookingForSelf, toggleBookingForSelf,
     dupNameModalOpen, setDupNameModalOpen, pendingPassengerSubmit, setPendingPassengerSubmit,
     promoCode, setPromoCode, appliedPromo, setAppliedPromo, isValidatingPromo,
+    wantsReturnTrip, setWantsReturnTrip, returnDate, setReturnDate,
     holdSeats, releaseSeats, fetchBookingData,
     handleSeatSelection, handlePassengerFieldChange, handleAgeBlur, handlePassengerSubmit, proceedToConfirm,
     confirmBooking, goBackToSeats, goBackToPassengers, validatePromoCode, stopName,
@@ -342,6 +343,10 @@ export default function BookBus() {
           isValidatingPromo={isValidatingPromo}
           validatePromoCode={validatePromoCode}
           setAppliedPromo={setAppliedPromo}
+          wantsReturnTrip={wantsReturnTrip}
+          setWantsReturnTrip={setWantsReturnTrip}
+          returnDate={returnDate}
+          setReturnDate={setReturnDate}
           bookingLoading={bookingLoading}
           passengerForms={passengerForms}
           goBackToPassengers={goBackToPassengers}

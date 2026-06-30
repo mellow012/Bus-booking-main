@@ -148,7 +148,7 @@ export function useOperatorDashboard() {
 
   useEffect(() => {
     if (authLoading) return;
-    if (!user || userProfile?.role !== 'operator') {
+    if (!user || (userProfile?.role !== 'operator' && userProfile?.role !== 'company_admin')) {
       router.push('/login');
       return;
     }
@@ -223,12 +223,23 @@ export function useOperatorDashboard() {
     };
   }, [schedules, bookings, buses]);
 
+  const showAlert = useCallback((type: 'success' | 'error' | 'info', message: string) => {
+    if (type === 'error') {
+      setGlobalError(message);
+      setTimeout(() => setGlobalError(''), 4000);
+    } else {
+      setSuccessMessage(message);
+      setTimeout(() => setSuccessMessage(''), 4000);
+    }
+  }, []);
+
   return {
     user,
     userProfile,
     authLoading,
     signOut,
     loading,
+    isLoading: loading,
     globalError,
     setGlobalError,
     successMessage,
@@ -241,6 +252,7 @@ export function useOperatorDashboard() {
     liveLocation,
     stats,
     fetchInitialData,
+    showAlert,
   };
 }
 

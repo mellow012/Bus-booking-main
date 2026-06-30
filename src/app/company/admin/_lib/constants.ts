@@ -23,18 +23,18 @@ export const TABS = [
   { id: 'profile'       as const, label: 'Profile',        icon: User },
   { id: 'settings'      as const, label: 'Settings',       icon: Settings },
   { id: 'payments'      as const, label: 'Payments',       icon: DollarSign },
+  { id: 'revenue'       as const, label: 'Revenue',        icon: DollarSign },
   { id: 'messages'      as const, label: 'Signals',        icon: MessageSquare },
   { id: 'notifications' as const, label: 'Notifications',  icon: Bell },
 ] as const;
 
 export const CATEGORIES = [
-  { id: 'overview',  label: 'Dashboard',       icon: LayoutDashboard, subTabs: ['overview'] },
-  { id: 'team',      label: 'Operators',        icon: Users,           subTabs: ['operators'] },
-  { id: 'fleet',     label: 'Routes & Fleet',   icon: BusIcon,         subTabs: ['regions', 'routes', 'schedules', 'buses'] },
-  { id: 'sales',     label: 'Bookings',         icon: Users,           subTabs: ['bookings', 'charters'] },
-  { id: 'payments',  label: 'Payments',         icon: DollarSign,      subTabs: ['payments'] },
-  { id: 'reports',   label: 'Reports',          icon: PieChart,        subTabs: ['reports'] },
-  { id: 'config',    label: 'Settings',         icon: Settings,        subTabs: ['profile', 'settings', 'notifications'] },
+  { id: 'overview',  label: 'Overview',             icon: LayoutDashboard, subTabs: ['overview'] },
+  { id: 'team',      label: 'Operators & Branches', icon: Users,           subTabs: ['operators'] },
+  { id: 'regions',   label: 'Regions',              icon: Globe,           subTabs: ['regions'] },
+  { id: 'sales',     label: 'Bookings',             icon: Users,           subTabs: ['bookings'] },
+  { id: 'revenue',   label: 'Revenue',              icon: DollarSign,      subTabs: ['revenue'] },
+  { id: 'config',    label: 'Profile',              icon: User,            subTabs: ['profile'] },
 ] as const;
 
 export const BUS_TYPES    = ['AC', 'Non-AC', 'Sleeper', 'Semi-Sleeper', 'Luxury', 'Economy', 'Minibus'] as const;

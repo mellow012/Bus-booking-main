@@ -7,7 +7,7 @@ import * as dbActions from '@/lib/actions/db.actions';
 import { useAuth } from '@/contexts/AuthContext';
 import { Company, Schedule, Route, Bus, Booking } from '@/types';
 import { useAlert, useRealtimeBookings } from './useDashboard';
-import { getAvailableTabs } from '../_lib/constants';
+import { getAvailableTabs, CATEGORIES } from '../_lib/constants';
 
 export function useAdminDashboard() {
   const { user, userProfile, loading: authLoading, signOut } = useAuth();
@@ -23,8 +23,16 @@ export function useAdminDashboard() {
   });
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const [dashboardData, setDashboardData] = useState<{ company: Company | null; schedules: Schedule[]; routes: Route[]; buses: Bus[]; bookings: Booking[]; reports: any[]; operators: any[] }>({
-    company: null, schedules: [], routes: [], buses: [], bookings: [], reports: [], operators: [],
+
+  const handleCategoryChange = useCallback((cat: string) => {
+    setActiveCategory(cat);
+    const category = CATEGORIES.find(c => c.id === cat);
+    if (category && category.subTabs.length > 0) {
+      setActiveTab(category.subTabs[0]);
+    }
+  }, []);
+  const [dashboardData, setDashboardData] = useState<{ company: Company | null; schedules: Schedule[]; routes: Route[]; buses: Bus[]; bookings: Booking[]; reports: any[]; operators: any[]; regions: any[] }>({
+    company: null, schedules: [], routes: [], buses: [], bookings: [], reports: [], operators: [], regions: [],
   });
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -90,22 +98,63 @@ export function useAdminDashboard() {
         return; 
       }
       
-      const [schedules, routes, buses, reports, operatorsRes] = await Promise.all([
+      const [schedules, routes, buses, reports, regions, operatorsRes] = await Promise.all([
         fetchCollectionData('Schedule', companyId),
         fetchCollectionData('Route', companyId),
         fetchCollectionData('Bus', companyId),
         fetchCollectionData('DailyReport', companyId),
-        supabase.from('profiles').select('*').eq('companyId', companyId).eq('role', 'operator').order('createdAt', { ascending: false }),
+        fetchCollectionData('Region', companyId),
+        supabase.from('User').select('*').eq('companyId', companyId).in('role', ['operator', 'conductor']).order('createdAt', { ascending: false }),
       ]);
       const operators = operatorsRes.data || [];
       setDashboardData(prev => ({
         ...prev,
         company: { ...companyData, createdAt: new Date(companyData.createdAt), updatedAt: new Date(companyData.updatedAt) } as Company,
-        schedules, routes, buses, reports, operators,
+        schedules, routes, buses, reports, regions, operators,
       }));
     } catch (err: any) { showAlert('error', err.message || 'Failed to load dashboard data'); }
     finally { setLoading(false); }
   }, [companyId, authLoading, showAlert, fetchCollectionData]);
+
+  // Global search filtering
+  const filteredDashboardData = useMemo(() => {
+    if (!searchQuery.trim()) return dashboardData;
+    const query = searchQuery.toLowerCase();
+    
+    return {
+      ...dashboardData,
+      schedules: dashboardData.schedules.filter(s => 
+        s.departureLocation?.toLowerCase().includes(query) ||
+        s.arrivalLocation?.toLowerCase().includes(query) ||
+        s.tripNotes?.toLowerCase().includes(query)
+      ),
+      routes: dashboardData.routes.filter(r => 
+        r.name?.toLowerCase().includes(query) ||
+        r.origin?.toLowerCase().includes(query) ||
+        r.destination?.toLowerCase().includes(query)
+      ),
+      buses: dashboardData.buses.filter(b => 
+        b.licensePlate?.toLowerCase().includes(query) ||
+        b.busType?.toLowerCase().includes(query)
+      ),
+      bookings: dashboardData.bookings.filter(b => 
+        b.bookingReference?.toLowerCase().includes(query) ||
+        b.contactEmail?.toLowerCase().includes(query) ||
+        b.contactPhone?.toLowerCase().includes(query) ||
+        (b.passengerDetails as any[])?.some(p => p.name?.toLowerCase().includes(query))
+      ),
+      operators: dashboardData.operators.filter(op => 
+        op.firstName?.toLowerCase().includes(query) ||
+        op.lastName?.toLowerCase().includes(query) ||
+        op.email?.toLowerCase().includes(query) ||
+        op.phone?.toLowerCase().includes(query)
+      ),
+      regions: dashboardData.regions.filter(reg => 
+        reg.name?.toLowerCase().includes(query) ||
+        reg.code?.toLowerCase().includes(query)
+      )
+    };
+  }, [dashboardData, searchQuery]);
 
   const updateDashboardData = useCallback(
     <T extends keyof typeof dashboardData>(key: T, value: any) =>
@@ -145,10 +194,10 @@ export function useAdminDashboard() {
     // auth & user
     user, userProfile, authLoading, signOut,
     // UI state
-    activeTab, setActiveTab, activeCategory, setActiveCategory, categorySubTabs, setCategorySubTabs,
+    activeTab, setActiveTab, activeCategory, setActiveCategory: handleCategoryChange, categorySubTabs, setCategorySubTabs,
     isMobileOpen, setIsMobileOpen, isCollapsed, setIsCollapsed,
     // data
-    dashboardData, setDashboardData, loading, searchQuery, setSearchQuery, searchFocused, setSearchFocused, searchRef,
+    dashboardData: filteredDashboardData, setDashboardData, loading, searchQuery, setSearchQuery, searchFocused, setSearchFocused, searchRef,
     // realtime/bookings
     bookings, setBookings, realtimeStatus,
     // helpers

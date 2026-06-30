@@ -41,35 +41,8 @@ export async function GET(req: NextRequest) {
       prisma.region.count({ where }),
     ]);
 
-    // Self-healing / Sync logic: If no regions exist for this company but branches are defined in Company table
-    if (total === 0 && companyId) {
-      const company = await prisma.company.findUnique({
-        where: { id: companyId },
-        select: { branches: true }
-      });
-      if (company && company.branches) {
-        const branchNames = parseBranches(company.branches);
-        if (branchNames.length > 0) {
-          // Create the active regions
-          await Promise.all(
-            branchNames.map(branchName =>
-              prisma.region.create({
-                data: {
-                  name: branchName,
-                  companyId: companyId,
-                  isActive: true,
-                }
-              })
-            )
-          );
-          // Re-fetch
-          [regions, total] = await Promise.all([
-            prisma.region.findMany({ where, orderBy: { updatedAt: 'desc' }, skip, take: limit, include: { company: true } }),
-            prisma.region.count({ where }),
-          ]);
-        }
-      }
-    }
+
+
 
     await logger.logSuccess('api', `COO GET /api/admin/coo/regions returned ${regions.length} rows`, { metadata: { userId: user.id } });
     return NextResponse.json({ regions, total, page, limit });

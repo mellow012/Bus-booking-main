@@ -84,8 +84,7 @@ export async function createRoute(data: Partial<Route>) {
   try {
     const {
       id, companyId, regionId, name, origin, destination, distance, duration,
-      baseFare, pricePerKm, stops, isActive, status,
-      assignedOperatorIds, assignedConductorIds
+      baseFare, pricePerKm, stops, isActive, status
     } = data;
 
     const route = await prisma.route.create({
@@ -103,9 +102,7 @@ export async function createRoute(data: Partial<Route>) {
         stops: stops as any,
         isActive: isActive ?? true,
         status: status ?? 'active',
-        assignedOperatorIds: assignedOperatorIds || [],
-        assignedConductorIds: assignedConductorIds || [],
-      } as any
+      }
     });
     revalidatePath('/company/operator/dashboard');
     return { success: true, data: route as unknown as Route };
@@ -120,6 +117,7 @@ export async function updateRoute(id: string, data: Partial<Route>) {
     const {
       id: _, createdAt, updatedAt, companyId,
       assignedOperators, associatedBusIds, metadata,
+      assignedOperatorIds, assignedConductorIds,
       ...updatableData
     } = data as any;
 

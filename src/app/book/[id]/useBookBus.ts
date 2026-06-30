@@ -50,6 +50,9 @@ export default function useBookBus() {
   const [appliedPromo, setAppliedPromo] = useState<any>(null);
   const [isValidatingPromo, setIsValidatingPromo] = useState(false);
 
+  const [wantsReturnTrip, setWantsReturnTrip] = useState(false);
+  const [returnDate, setReturnDate] = useState("");
+
   // ── REFINEMENT: MEMOIZED AVAILABLE DESTINATIONS ───────────────────────────
   const availableDestinations = useMemo(() => {
     const origin = normalisedStops.find((s) => s.id === originStopId);
@@ -272,6 +275,7 @@ export default function useBookBus() {
             originStopId, destinationStopId, originStopName: stopName(originStopId), destinationStopName: stopName(destinationStopId),
           })),
           promoCode: appliedPromo?.code,
+          returnDate: wantsReturnTrip ? returnDate : undefined,
         }),
       });
 
@@ -331,6 +335,7 @@ export default function useBookBus() {
     bookingForSelf, toggleBookingForSelf,
     dupNameModalOpen, setDupNameModalOpen, pendingPassengerSubmit, setPendingPassengerSubmit,
     promoCode, setPromoCode, appliedPromo, setAppliedPromo, isValidatingPromo,
+    wantsReturnTrip, setWantsReturnTrip, returnDate, setReturnDate,
     // helpers/handlers
     holdSeats, releaseSeats, fetchBookingData,
     handleOriginChange, handleSeatSelection, handlePassengerFieldChange, handleAgeBlur, handlePassengerSubmit, proceedToConfirm,

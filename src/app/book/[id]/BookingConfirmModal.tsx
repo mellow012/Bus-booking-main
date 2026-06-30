@@ -26,6 +26,10 @@ export interface BookingConfirmModalProps {
   isValidatingPromo: boolean;
   validatePromoCode: () => Promise<void> | void;
   setAppliedPromo: (p: any) => void;
+  wantsReturnTrip: boolean;
+  setWantsReturnTrip: (v: boolean) => void;
+  returnDate: string;
+  setReturnDate: (v: string) => void;
   bookingLoading: boolean;
   passengerForms: PassengerFormState[];
   goBackToPassengers: () => void;
@@ -36,8 +40,10 @@ export default function BookingConfirmModal({
   isOpen, onClose, schedule, originStopId, destinationStopId, stopName,
   formatDate, formatTime, selectedSeats, displayPrice, passengers,
   appliedPromo, promoCode, setPromoCode, isValidatingPromo, validatePromoCode,
-  setAppliedPromo, bookingLoading, passengerForms, goBackToPassengers, confirmBooking,
+  setAppliedPromo, wantsReturnTrip, setWantsReturnTrip, returnDate, setReturnDate, bookingLoading, passengerForms, goBackToPassengers, confirmBooking,
 }: BookingConfirmModalProps) {
+  const finalBaseFare = wantsReturnTrip ? (displayPrice * passengers) * 2 : (displayPrice * passengers);
+  const finalTotalAmount = finalBaseFare - (appliedPromo?.discount || 0);
   return (
     <Modal
       isOpen={isOpen}
@@ -72,8 +78,8 @@ export default function BookingConfirmModal({
             <p className="text-xs text-gray-500 mb-0.5">Price Summary</p>
             <div className="space-y-1">
               <div className="flex justify-between items-center text-sm">
-                <span className="text-gray-600">Base Fare ({passengers}x)</span>
-                <span className="font-semibold text-gray-900">MWK {(displayPrice * passengers).toLocaleString()}</span>
+                <span className="text-gray-600">Base Fare ({passengers}x {wantsReturnTrip ? 'Round Trip' : 'One Way'})</span>
+                <span className="font-semibold text-gray-900">MWK {finalBaseFare.toLocaleString()}</span>
               </div>
               {appliedPromo && (
                 <div className="flex justify-between items-center text-sm">
@@ -84,11 +90,39 @@ export default function BookingConfirmModal({
               <div className="pt-1 border-t border-blue-100 mt-1 flex justify-between items-center">
                 <span className="font-bold text-gray-900">Total Amount</span>
                 <span className="text-xl font-black text-blue-600">
-                  MWK {((displayPrice * passengers) - (appliedPromo?.discount || 0)).toLocaleString()}
+                  MWK {finalTotalAmount.toLocaleString()}
                 </span>
               </div>
             </div>
           </div>
+        </div>
+
+        {/* Return Trip Option */}
+        <div className="p-4 bg-gray-50 border border-gray-100 rounded-xl space-y-3">
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input 
+              type="checkbox" 
+              checked={wantsReturnTrip}
+              onChange={(e) => setWantsReturnTrip(e.target.checked)}
+              className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+            />
+            <span className="font-semibold text-sm text-gray-900">Add Return Trip (Pay upfront)</span>
+          </label>
+          {wantsReturnTrip && (
+            <div className="pl-7 space-y-2">
+              <Label htmlFor="returnDate" className="text-xs font-semibold text-gray-600">Return Date</Label>
+              <Input
+                id="returnDate"
+                type="date"
+                value={returnDate}
+                onChange={(e) => setReturnDate(e.target.value)}
+                min={new Date().toISOString().split('T')[0]}
+                required={wantsReturnTrip}
+                className="w-full sm:w-1/2"
+              />
+              <p className="text-xs text-gray-500">Your return date will be recorded and you will be charged for both trips now.</p>
+            </div>
+          )}
         </div>
 
         {/* Promo Code Input */}

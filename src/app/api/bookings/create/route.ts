@@ -38,6 +38,7 @@ interface CreateBookingRequest {
   originStopId?:      string;
   destinationStopId?: string;
   promoCode?:         string;
+  returnDate?:        string;
 }
 
 /** Generate a short human-readable booking reference, e.g. BK-A3F9X2 */
@@ -130,7 +131,7 @@ export async function POST(req: NextRequest) {
       scheduleId, routeId, companyId,
       seatNumbers, passengerDetails,
       originStopId, destinationStopId,
-      promoCode
+      promoCode, returnDate
     } = body;
 
     if (!scheduleId || !routeId || !companyId) {
@@ -227,6 +228,10 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    if (returnDate) {
+      baseFare = baseFare * 2;
+    }
+
     let totalAmount = baseFare * passengerCount;
     let discountAmount = 0;
     let appliedPromo = null;
@@ -310,6 +315,7 @@ export async function POST(req: NextRequest) {
           paymentStatus: 'pending',
           passengerDetails: normalisedPassengers as any,
           seatNumbers: seatNumbers as any,
+          metadata: returnDate ? { returnDate } : undefined,
           bookingDate:   new Date(),
         }
       });
