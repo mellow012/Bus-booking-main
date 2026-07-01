@@ -59,6 +59,18 @@ interface EnhancedSchedule {
 
 type SortBy = 'time' | 'price_asc' | 'price_desc' | 'seats';
 
+function getLocalDayRange(date: string, tzOffsetMinutes: number) {
+  const [year, month, day] = date.split('-').map(Number);
+  const startUtc = new Date(Date.UTC(year, month - 1, day, 0) + tzOffsetMinutes * 60 * 1000);
+  const endUtc = new Date(startUtc.getTime() + 24 * 60 * 60 * 1000 - 1);
+  return { startUtc, endUtc };
+}
+
+function getLocalDateString(now: Date, tzOffsetMinutes: number) {
+  const localTime = new Date(now.getTime() - tzOffsetMinutes * 60 * 1000);
+  return localTime.toISOString().split('T')[0];
+}
+
 /** Core DB query — separated so it can be called for cache misses and background revalidation */
 async function querySchedules(params: {
   from: string;
@@ -67,6 +79,7 @@ async function querySchedules(params: {
   startDate: string;
   endDate: string;
   sortBy: SortBy;
+  tzOffset?: number;
   page: number;
   limit: number;
 }) {
@@ -109,9 +122,19 @@ async function querySchedules(params: {
   }
 
   if (date) {
-    const todayStr = new Date().toISOString().split('T')[0];
-    const startOfDay = new Date(`${date}T00:00:00Z`);
-    const endOfDay = new Date(`${date}T23:59:59Z`);
+    const todayStr = typeof params.tzOffset === 'number' && !Number.isNaN(params.tzOffset)
+      ? getLocalDateString(new Date(), params.tzOffset)
+      : new Date().toISOString().split('T')[0];
+
+    let startOfDay = new Date(`${date}T00:00:00Z`);
+    let endOfDay = new Date(`${date}T23:59:59Z`);
+
+    if (typeof params.tzOffset === 'number' && !Number.isNaN(params.tzOffset)) {
+      const range = getLocalDayRange(date, params.tzOffset);
+      startOfDay = range.startUtc;
+      endOfDay = range.endUtc;
+    }
+
     where.departureDateTime = {
       gte: date === todayStr ? new Date(Date.now() - 15 * 60 * 1000) : startOfDay,
       lte: endOfDay,
@@ -230,6 +253,9 @@ export async function GET(request: NextRequest) {
 
     const searchParams = request.nextUrl.searchParams;
 
+    const tzOffsetRaw = searchParams.get('tzOffset');
+    const tzOffset = tzOffsetRaw ? parseInt(tzOffsetRaw, 10) : NaN;
+
     const params = {
       from: searchParams.get('from')?.toLowerCase().trim() || '',
       to: searchParams.get('to')?.toLowerCase().trim() || '',
@@ -237,6 +263,7 @@ export async function GET(request: NextRequest) {
       startDate: searchParams.get('startDate') || '',
       endDate: searchParams.get('endDate') || '',
       sortBy: (searchParams.get('sortBy') || 'time') as SortBy,
+      tzOffset: Number.isNaN(tzOffset) ? undefined : tzOffset,
       page: Math.max(1, parseInt(searchParams.get('page') || '1')),
       limit: Math.min(parseInt(searchParams.get('limit') || String(DEFAULT_LIMIT)), MAX_LIMIT),
     };
@@ -289,8 +316,6 @@ export async function GET(request: NextRequest) {
 
     // 2. Cache MISS — query the database
     const result = await querySchedules(params);
-
-    // Store in cache
     serverCache.set(cacheKey, result, CACHE_FRESH_MS, CACHE_STALE_MS);
 
     return NextResponse.json(

@@ -50,6 +50,18 @@ export const useRealtimeBookings = (
   useEffect(() => {
     if (!companyId?.trim()) return;
 
+    const processBooking = (raw: any): Booking => ({
+      ...raw,
+      paymentMethod:
+        (raw as any).Payment?.[0]?.paymentType ||
+        (raw as any).Payment?.[0]?.provider ||
+        raw.paymentMethod ||
+        (raw.paymentStatus === 'paid' ? 'cash' : 'Not specified'),
+      transactionId: (raw as any).Payment?.[0]?.transactionId || raw.transactionId,
+      createdAt: raw.createdAt ? new Date(raw.createdAt) : new Date(),
+      updatedAt: raw.updatedAt ? new Date(raw.updatedAt) : new Date(),
+    }) as Booking;
+
     const fetchBookings = async () => {
       if (!companyId?.trim() || document.visibilityState !== 'visible') return;
       const { data, error } = await supabase
@@ -60,17 +72,7 @@ export const useRealtimeBookings = (
         .limit(100);
 
       if (!error && data) {
-        const processed = data.map(d => ({
-          ...d,
-          paymentMethod:
-            (d as any).Payment?.[0]?.paymentType ||
-            (d as any).Payment?.[0]?.provider ||
-            (d as any).paymentMethod ||
-            (d.paymentStatus === 'paid' ? 'cash' : 'Not specified'),
-          transactionId: (d as any).Payment?.[0]?.transactionId || (d as any).transactionId,
-          createdAt: new Date(d.createdAt),
-          updatedAt: new Date(d.updatedAt),
-        })) as Booking[];
+        const processed = data.map(processBooking);
 
         setBookings(prev => {
           if (prev.length > 0 && processed.length > prev.length && activeTab === 'bookings') {
@@ -88,6 +90,33 @@ export const useRealtimeBookings = (
       }
     };
 
+    const applyRealtimeUpdate = (payload: any) => {
+      const eventType = payload?.eventType?.toUpperCase?.();
+      const newRow = payload?.new ? processBooking(payload.new) : null;
+      const oldRow = payload?.old ? processBooking(payload.old) : null;
+
+      setBookings(prev => {
+        if (eventType === 'INSERT' && newRow) {
+          if (activeTab === 'bookings' && !prev.some(b => b.id === newRow.id)) {
+            showAlert('info', `New booking received from ${newRow.passengerDetails?.[0]?.name || 'customer'}`);
+          }
+          return [newRow, ...prev.filter(b => b.id !== newRow.id)].slice(0, 100);
+        }
+
+        if (eventType === 'UPDATE' && newRow) {
+          return prev.map(b => (b.id === newRow.id ? newRow : b));
+        }
+
+        if (eventType === 'DELETE' && oldRow) {
+          return prev.filter(b => b.id !== oldRow.id);
+        }
+
+        return prev;
+      });
+
+      setRealtimeStatus({ isConnected: true, lastUpdate: new Date(), pendingUpdates: 0 });
+    };
+
     fetchBookings();
 
     const channel = supabase
@@ -95,7 +124,7 @@ export const useRealtimeBookings = (
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'Booking', filter: `companyId=eq.${companyId.trim()}` },
-        () => { fetchBookings(); }
+        (payload) => { applyRealtimeUpdate(payload); }
       )
       .subscribe();
 

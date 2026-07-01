@@ -5,7 +5,7 @@ import DashboardSidebar from './DashboardSidebar';
 import DashboardHeader from './DashboardHeader';
 import DashboardSubNav from './DashboardSubNav';
 import { Company } from '@/types';
-import { CategoryType, TabType, TabObject } from '../_lib/constants';
+import { CATEGORIES, CategoryType, TabType, TabObject } from '../_lib/constants';
 import { driver } from 'driver.js';
 import 'driver.js/dist/driver.css';
 
@@ -50,10 +50,7 @@ export default function AdminLayout({
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
 
-  // Find active category label for header title
-  const categoryLabel = activeCategory 
-    ? activeCategory.charAt(0).toUpperCase() + activeCategory.slice(1) 
-    : 'Dashboard';
+  const categoryLabel = CATEGORIES.find((category) => category.id === activeCategory)?.label || 'Dashboard';
 
   const handleHelpClick = () => {
     const tour = driver({
@@ -61,7 +58,7 @@ export default function AdminLayout({
       steps: [
         { element: '#tour-overview', popover: { title: 'Overview', description: 'See a high-level summary of your operations.', side: 'right' } },
         { element: '#tour-team', popover: { title: 'Operators & Branches', description: 'Manage your staff and company branches.', side: 'right' } },
-        { element: '#tour-regions', popover: { title: 'Regions', description: 'View the cascade of branches, routes, and schedules.', side: 'right' } },
+        { element: '#tour-regions', popover: { title: 'Branches', description: 'View the cascade of branches, routes, and schedules.', side: 'right' } },
         { element: '#tour-sales', popover: { title: 'Bookings', description: 'Manage and track all customer bookings.', side: 'right' } },
         { element: '#tour-revenue', popover: { title: 'Revenue', description: 'View financial performance.', side: 'right' } },
         { element: '#tour-config', popover: { title: 'Profile', description: 'Configure company settings and preferences.', side: 'right' } },
@@ -95,6 +92,7 @@ export default function AdminLayout({
           onMenuClick={() => setIsMobileOpen(true)}
           user={user}
           userProfile={userProfile}
+          company={company}
           searchQuery={searchQuery}
           setSearchQuery={setSearchQuery}
           onHelpClick={handleHelpClick}

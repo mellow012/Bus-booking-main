@@ -10,7 +10,7 @@ export function useOperatorDashboard() {
   const { user, userProfile, loading: authLoading, signOut } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const operatorIdParam = searchParams.get('operatorId') || undefined;
+  const operatorIdParam = searchParams?.get('operatorId') || undefined;
 
   const [loading, setLoading] = useState(true);
   const [globalError, setGlobalError] = useState('');
@@ -73,13 +73,13 @@ export function useOperatorDashboard() {
         setAssignedRoutes(routesList);
       }
 
-      // 2. Clear old schedules (Auto-archive older runs)
-      const generalCutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      // 2. Auto-archive completed/finished trips after 3 hours on the company side.
+      const archiveCutoff = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString();
       await supabase.from('Schedule')
         .update({ isArchived: true })
         .eq('companyId', companyId)
         .eq('isArchived', false)
-        .lt('arrivalDateTime', generalCutoff);
+        .or(`tripCompletedAt.lt.${archiveCutoff},arrivalDateTime.lt.${archiveCutoff}`);
 
       // 3. Fetch schedules scoped to these routes
       let schedulesList: Schedule[] = [];

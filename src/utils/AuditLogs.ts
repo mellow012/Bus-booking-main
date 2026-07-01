@@ -26,6 +26,8 @@ export type AuditAction =
   | 'login'
   | 'logout'
   | 'access_dashboard'
+  | 'update_user_role'
+  | 'delete_user'
   | 'export_data';
 
 export interface AuditLog {

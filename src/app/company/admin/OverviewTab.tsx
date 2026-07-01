@@ -261,7 +261,7 @@ export default function OverviewTab({ dashboard }: OverviewTabProps) {
                   {routes.length === 0 ? (
                     <div className="py-6 text-center text-gray-500">
                       <MapPin className="w-10 h-10 mx-auto mb-2 text-gray-300" />
-                      <p>No routes created yet. Add routes in the Regions tab.</p>
+                      <p>No routes created yet. Add routes in the Branches tab.</p>
                     </div>
                   ) : (
                     routes.map((route: Route) => {

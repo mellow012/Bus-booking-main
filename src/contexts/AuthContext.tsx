@@ -154,28 +154,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             .catch((err) => console.error('[AuthContext] Auto-activate failed:', err));
         }
 
-        const needsMetadataSync = (!data.firstName || !data.phone) && (meta?.first_name || meta?.phone);
-        if (needsMetadataSync) {
-          fetch('/api/auth/profile', {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json', 'x-csrf-token': getCookie('__csrf_token') || '' },
-            body: JSON.stringify({
-              firstName: data.firstName || meta?.first_name || '',
-              lastName: data.lastName || meta?.last_name || '',
-              phone: data.phone || meta?.phone || '',
-            }),
+        if (mergedRole === 'company_admin' && data.companyId) {
+          fetch('/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ companyId: data.companyId, action: 'activate_company' }),
           })
-                .then(async (res) => {
-                  const cType = res.headers.get('content-type');
-                  if (res.ok && cType?.includes('application/json')) {
-                    const { data: updatedData } = await res.json();
-                    if (updatedData) {
-                      const r = normalizeRole(updatedData.role) ?? normalizeRole(meta?.role) ?? updatedData.role ?? 'customer';
-                      setUserProfile({ ...updatedData, role: r } as UserProfile);
-                    }
-                  }
-                })
-            .catch((err) => console.error('[AuthContext] Metadata sync failed:', err));
+            .then(async (res) => {
+              if (!res.ok) {
+                const text = await res.text();
+                console.warn('[AuthContext] activateCompanyOnLogin failed:', res.status, text);
+              }
+            })
+            .catch((err) => console.error('[AuthContext] activateCompanyOnLogin failed:', err));
         }
       } else {
         // Automatically initialize profile layout fallback configurations if user entry doesn't exist

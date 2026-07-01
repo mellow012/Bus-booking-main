@@ -1,12 +1,10 @@
 'use client';
 
 import React from 'react';
-import { NotificationBell } from '@/contexts/NotificationContext';
-import { Menu as MenuIcon, Bell, User, Search, HelpCircle } from 'lucide-react';
+import { Bell, User, Search, HelpCircle } from 'lucide-react';
 
 interface OperatorHeaderProps {
   title: string;
-  onMenuClick: () => void;
   user: any;
   userProfile: any;
   searchQuery: string;
@@ -17,7 +15,6 @@ interface OperatorHeaderProps {
 
 export default function OperatorHeader({
   title,
-  onMenuClick,
   user,
   userProfile,
   searchQuery,
@@ -40,12 +37,6 @@ export default function OperatorHeader({
   return (
     <header className="h-20 bg-white border-b border-gray-100 px-6 sm:px-8 flex items-center justify-between sticky top-0 z-40">
       <div className="flex items-center gap-4">
-        <button
-          onClick={onMenuClick}
-          className="lg:hidden p-2.5 hover:bg-gray-50 rounded-xl transition-colors border border-gray-100"
-        >
-          <MenuIcon className="w-6 h-6 text-gray-600" />
-        </button>
         <h2 className="text-xl sm:text-2xl font-extrabold tracking-tight text-gray-900 capitalize flex items-center gap-2">
           {title}
         </h2>

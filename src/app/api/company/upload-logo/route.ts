@@ -46,12 +46,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: uploadError.message || 'Logo upload failed' }, { status: 500 });
     }
 
-    const { data: publicData, error: publicError } = await admin.storage
+    const { data: publicData } = await admin.storage
       .from('logos')
       .getPublicUrl(filePath);
 
-    if (publicError || !publicData?.publicUrl) {
-      console.error('[api/company/upload-logo] Failed to build public URL', publicError, { filePath, companyId });
+    if (!publicData?.publicUrl) {
+      console.error('[api/company/upload-logo] Failed to build public URL', { filePath, companyId });
       return NextResponse.json({ error: 'Failed to retrieve logo URL' }, { status: 500 });
     }
 

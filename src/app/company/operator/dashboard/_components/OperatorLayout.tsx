@@ -7,6 +7,7 @@ import 'driver.js/dist/driver.css';
 
 interface OperatorLayoutProps {
   children: React.ReactNode;
+  title?: string;
   user?: any;
   userProfile?: any;
   searchQuery?: string;
@@ -15,7 +16,7 @@ interface OperatorLayoutProps {
 }
 
 export default function OperatorLayout({ 
-  children, user, userProfile, searchQuery = '', setSearchQuery = () => {}, NotificationBellComponent
+  children, title = 'Operator Dashboard', user, userProfile, searchQuery = '', setSearchQuery = () => {}, NotificationBellComponent
 }: OperatorLayoutProps) {
   const handleHelpClick = () => {
     const tour = driver({
@@ -35,8 +36,7 @@ export default function OperatorLayout({
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       <OperatorHeader 
-        title="Operator Dashboard"
-        onMenuClick={() => {}}
+        title={title}
         user={user}
         userProfile={userProfile}
         searchQuery={searchQuery}

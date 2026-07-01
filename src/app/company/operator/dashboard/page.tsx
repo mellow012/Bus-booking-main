@@ -49,8 +49,11 @@ export default function OperatorDashboardPage() {
     }
   };
 
+  const activeTabLabel = OPERATOR_CATEGORIES.find((tab) => tab.id === activeTab)?.label || 'Operator Dashboard';
+
   return (
     <OperatorLayout
+      title={activeTabLabel}
       user={dashboard.user}
       userProfile={dashboard.userProfile}
       searchQuery={searchQuery}

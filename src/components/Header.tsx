@@ -38,7 +38,7 @@ const Header: React.FC = () => {
   const pathname = usePathname() || '';
   const t        = useTranslations('nav');
 
-  const isAuthPage = pathname?.includes('/login') || pathname?.includes('/register') || pathname?.includes('/forgot-password');
+  const isAuthPage = pathname?.includes('/login') || pathname?.includes('/register') || pathname?.includes('/forgot-password') || pathname?.includes('/reset-password') || pathname?.includes('/verify-email');
 
   const [isMenuOpen,     setIsMenuOpen]     = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
@@ -149,7 +149,7 @@ const Header: React.FC = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-6">
         <div className={`flex justify-between items-center py-0 ${
           isAuthPage 
-            ? 'min-h-[64px] sm:min-h-[80px] md:min-h-[100px] lg:min-h-[120px]' 
+            ? 'min-h-[48px] sm:min-h-[56px] md:min-h-[64px] lg:min-h-[72px]' 
             : 'min-h-[48px] sm:min-h-[56px] md:min-h-[64px] lg:min-h-[80px]'
         }`}>
 
@@ -158,8 +158,8 @@ const Header: React.FC = () => {
             <div className="relative shrink-0">
               <div className={`${
                 isAuthPage 
-                  ? 'h-16 sm:h-24 md:h-28 lg:h-32' // Aggressive logo scaling for auth pages
-                  : 'h-12 sm:h-14 md:h-16 lg:h-20' // Standard size
+                  ? 'h-12 sm:h-14 md:h-16 lg:h-18' 
+                  : 'h-10 sm:h-12 md:h-14 lg:h-16' 
               } flex items-center justify-center transition-all duration-300 group-hover:scale-105`}>
                 <img
                   src="/tibhukebus_logo_transparent.png"

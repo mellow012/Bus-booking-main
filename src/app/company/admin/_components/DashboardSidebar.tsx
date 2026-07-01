@@ -1,7 +1,6 @@
 'use client';
 
-import { X, ChevronRight, ChevronLeft, LogOut, Bus as BusIcon, Eye } from 'lucide-react';
-import Link from 'next/link';
+import { X, ChevronRight, ChevronLeft, LogOut, Bus as BusIcon } from 'lucide-react';
 import { Company } from '@/types';
 import { CATEGORIES, CategoryType } from '../_lib/constants';
 
@@ -47,9 +46,17 @@ export default function DashboardSidebar({
         <div className={`flex items-center p-6 mb-2 ${isCollapsed && !isMobileOpen ? 'justify-center border-b border-gray-50' : 'justify-between'}`}>
           {(!isCollapsed || isMobileOpen) ? (
             <div className="flex items-center space-x-3 overflow-hidden animate-in fade-in duration-300">
-              <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg shadow-indigo-100">
-                <BusIcon className="w-5 h-5 text-white" />
-              </div>
+              {company?.logo ? (
+                <img
+                  src={company.logo}
+                  alt={`${company?.name || 'Company'} logo`}
+                  className="w-10 h-10 rounded-xl object-cover border border-gray-200 shadow-sm"
+                />
+              ) : (
+                <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg shadow-indigo-100">
+                  <BusIcon className="w-5 h-5 text-white" />
+                </div>
+              )}
               <div className="min-w-0">
                 <h1 className="font-bold text-indigo-900 text-[15px] leading-tight truncate">
                   {company?.name || 'Kinetic Admin'}
@@ -57,6 +64,12 @@ export default function DashboardSidebar({
                 <p className="text-[10px] text-gray-400 font-bold tracking-wider uppercase">Platform</p>
               </div>
             </div>
+          ) : company?.logo ? (
+            <img
+              src={company.logo}
+              alt={`${company?.name || 'Company'} logo`}
+              className="w-10 h-10 rounded-xl object-cover border border-gray-200 shadow-sm animate-in zoom-in duration-300"
+            />
           ) : (
             <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg shadow-indigo-100 animate-in zoom-in duration-300">
               <BusIcon className="w-5 h-5 text-white" />
@@ -148,26 +161,6 @@ export default function DashboardSidebar({
             </button>
           </div>
         </nav>
-
-        {/* Mini Profile */}
-        {(!isCollapsed || isMobileOpen) && (
-          <div className="p-4 bg-gray-50/50 m-3 rounded-2xl animate-in fade-in duration-500">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-[11px] font-black text-white">
-                {company?.name?.[0] || 'K'}
-              </div>
-              <div className="min-w-0">
-                <p className="text-[12px] font-bold text-gray-900 truncate">V.1.0 Stable</p>
-                <div className="flex items-center gap-1 justify-between w-full">
-                  <div className="flex items-center gap-1">
-                    <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-                    <p className="text-[10px] font-bold text-gray-500">Live</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
       </aside>
     </>
   );

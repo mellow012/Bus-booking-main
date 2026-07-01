@@ -78,8 +78,9 @@ export default function useSchedules(initialSchedules: any[], initialCompanies: 
       if (searchFrom) queryParams.append('from', searchFrom);
       if (searchTo) queryParams.append('to', searchTo);
       if (searchDate) queryParams.append('date', searchDate);
-      queryParams.append('sortBy', 'departureDateTime');
+      queryParams.append('sortBy', 'time');
       queryParams.append('limit', '150');
+      queryParams.append('tzOffset', String(new Date().getTimezoneOffset()));
 
       const schedulesRes = await fetch(`/api/schedules?${queryParams}`);
       if (!schedulesRes.ok) throw new Error("Failed to load schedules");
@@ -113,13 +114,15 @@ export default function useSchedules(initialSchedules: any[], initialCompanies: 
       if (searchTo) newParams.set('to', searchTo);
       if (searchDate) newParams.set('date', searchDate);
       newParams.set('passengers', passengers.toString());
+      newParams.set('tzOffset', String(new Date().getTimezoneOffset()));
       router.replace(`/schedules?${newParams.toString()}`, { scroll: false });
 
     } catch (err: any) {
-      // Error already surfaced to UI via setError
       setError("Unable to find schedules. Please try again.");
-    } finally { setSearching(false); }
-  }, [searchFrom, searchTo, searchDate, passengers, router]);
+    } finally {
+      setSearching(false);
+    }
+  }, [searchFrom, searchTo, searchDate, passengers, router, activeFilter, sortBy, selectedCompany, selectedTimeSlot, selectedTerminal, selectedCategory]);
 
   useEffect(() => {
     if (schedules.length > 0) {

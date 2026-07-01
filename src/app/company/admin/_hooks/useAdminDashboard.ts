@@ -17,10 +17,6 @@ export function useAdminDashboard() {
 
   const [activeTab, setActiveTab] = useState<string>('overview');
   const [activeCategory, setActiveCategory] = useState<string>('overview');
-  const [categorySubTabs, setCategorySubTabs] = useState<Record<string, string>>({
-    overview: 'overview', fleet: 'schedules', sales: 'bookings',
-    team: 'operators', payments: 'payments', reports: 'reports', config: 'profile',
-  });
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
 
@@ -37,8 +33,6 @@ export function useAdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [isBusy, setIsBusy] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchFocused, setSearchFocused] = useState(false);
-  const searchRef = useRef<HTMLDivElement>(null);
 
   const companyId = userProfile?.companyId?.trim() || '';
   const { bookings, setBookings, realtimeStatus } = useRealtimeBookings(companyId, showAlert, activeTab as any);
@@ -201,10 +195,10 @@ export function useAdminDashboard() {
     // auth & user
     user, userProfile, authLoading, signOut,
     // UI state
-    activeTab, setActiveTab, activeCategory, setActiveCategory: handleCategoryChange, categorySubTabs, setCategorySubTabs,
+    activeTab, setActiveTab, activeCategory, setActiveCategory: handleCategoryChange,
     isMobileOpen, setIsMobileOpen, isCollapsed, setIsCollapsed,
     // data
-    dashboardData: filteredDashboardData, setDashboardData, loading, searchQuery, setSearchQuery, searchFocused, setSearchFocused, searchRef,
+    dashboardData: filteredDashboardData, setDashboardData, loading, searchQuery, setSearchQuery,
     // realtime/bookings
     bookings, setBookings, realtimeStatus,
     // helpers

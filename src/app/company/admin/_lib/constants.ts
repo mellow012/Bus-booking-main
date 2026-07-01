@@ -12,7 +12,7 @@ import { Company, Booking, Schedule } from '@/types';
 
 export const TABS = [
   { id: 'overview'      as const, label: 'Overview',       icon: LayoutDashboard },
-  { id: 'regions'       as const, label: 'Regions',        icon: Globe },
+  { id: 'regions'       as const, label: 'Branches',       icon: Globe },
   { id: 'schedules'     as const, label: 'Schedules',      icon: Calendar },
   { id: 'routes'        as const, label: 'Routes',         icon: MapPin },
   { id: 'buses'         as const, label: 'Buses',          icon: BusIcon },
@@ -31,7 +31,7 @@ export const TABS = [
 export const CATEGORIES = [
   { id: 'overview',  label: 'Overview',             icon: LayoutDashboard, subTabs: ['overview'] },
   { id: 'team',      label: 'Operators & Branches', icon: Users,           subTabs: ['operators'] },
-  { id: 'regions',   label: 'Regions',              icon: Globe,           subTabs: ['regions'] },
+  { id: 'regions',   label: 'Branches',             icon: Globe,           subTabs: ['regions'] },
   { id: 'sales',     label: 'Bookings',             icon: Users,           subTabs: ['bookings'] },
   { id: 'revenue',   label: 'Revenue',              icon: DollarSign,      subTabs: ['revenue'] },
   { id: 'config',    label: 'Profile',              icon: User,            subTabs: ['profile'] },

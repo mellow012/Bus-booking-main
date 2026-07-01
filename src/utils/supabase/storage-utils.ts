@@ -27,7 +27,7 @@ export async function uploadLogo(file: File, companyId: string): Promise<string>
 
   if (error) {
     console.error('[uploadLogo] Supabase upload error:', error, { filePath, fileType: file.type });
-    const message = error.message || error.msg || JSON.stringify(error);
+    const message = error.message || JSON.stringify(error);
     throw new Error(`Logo upload failed: ${message}`);
   }
 

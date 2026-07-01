@@ -14,6 +14,20 @@ export default async function SchedulesPage({
   const from = (params.from as string)?.toLowerCase().trim() || '';
   const to = (params.to as string)?.toLowerCase().trim() || '';
   const searchDate = params.date as string || '';
+  const tzOffset = typeof params.tzOffset === 'string' ? parseInt(params.tzOffset, 10) : NaN;
+  const hasValidTzOffset = !Number.isNaN(tzOffset);
+
+  const getLocalDayRange = (date: string, offset: number) => {
+    const [year, month, day] = date.split('-').map(Number);
+    const startUtc = new Date(Date.UTC(year, month - 1, day, 0) + offset * 60 * 1000);
+    const endUtc = new Date(startUtc.getTime() + 24 * 60 * 60 * 1000 - 1);
+    return { startUtc, endUtc };
+  };
+
+  const getLocalTodayString = (offset: number) => {
+    const localNow = new Date(Date.now() - offset * 60 * 1000);
+    return localNow.toISOString().split('T')[0];
+  };
 
   // 1. Fetch companies
   const companiesData = await prisma.company.findMany({
@@ -39,9 +53,14 @@ export default async function SchedulesPage({
   if (to) where.route.destination = { contains: to, mode: 'insensitive' };
 
   if (searchDate) {
-    const todayStr = new Date().toISOString().split('T')[0];
-    const startOfDay = new Date(`${searchDate}T00:00:00Z`);
-    const endOfDay = new Date(`${searchDate}T23:59:59Z`);
+    const todayStr = hasValidTzOffset ? getLocalTodayString(tzOffset) : new Date().toISOString().split('T')[0];
+    let startOfDay = new Date(`${searchDate}T00:00:00Z`);
+    let endOfDay = new Date(`${searchDate}T23:59:59Z`);
+    if (hasValidTzOffset) {
+      const range = getLocalDayRange(searchDate, tzOffset);
+      startOfDay = range.startUtc;
+      endOfDay = range.endUtc;
+    }
     where.departureDateTime = {
       gte: searchDate === todayStr ? new Date(Date.now() - 15 * 60 * 1000) : startOfDay,
       lte: endOfDay,

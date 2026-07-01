@@ -16,8 +16,16 @@ type ModalType = 'addRoute' | 'addBus' | 'addSchedule' | null;
 
 export default function RegionsTab({ dashboard }: RegionsTabProps) {
   const { dashboardData, addItem, showAlert } = dashboard;
-  const { routes, buses, schedules, operators, bookings } = dashboardData;
-  const allBranches = dashboardData.regions || [];
+  const typedDashboardData = dashboardData as {
+    routes: Route[];
+    buses: Bus[];
+    schedules: Schedule[];
+    operators: any[];
+    bookings: Booking[];
+    regions: any[];
+  };
+  const { routes, buses, schedules, operators, bookings } = typedDashboardData;
+  const allBranches = typedDashboardData.regions || [];
 
   const searchQuery = dashboard.searchQuery?.toLowerCase() || '';
 
@@ -40,6 +48,14 @@ export default function RegionsTab({ dashboard }: RegionsTabProps) {
   const [modalContext, setModalContext] = useState<{ branchId?: string; routeId?: string }>({});
   const [saving, setSaving] = useState(false);
 
+  type BranchUpcomingTrip = {
+    schedule: Schedule;
+    route: Route;
+    branch: any;
+    departure: number;
+    arrival: number;
+  };
+
   const [routeForm, setRouteForm] = useState({ name: '', origin: '', destination: '', distance: '', duration: '', baseFare: '' });
   const [busForm, setBusForm] = useState({ licensePlate: '', busType: 'Economy' as string, capacity: '45', status: 'active' });
   const [scheduleForm, setScheduleForm] = useState({ routeId: '', busId: '', departureDate: '', departureTime: '', arrivalDate: '', arrivalTime: '', price: '', availableSeats: '' });
@@ -56,10 +72,27 @@ export default function RegionsTab({ dashboard }: RegionsTabProps) {
     const routeIds = new Set(selectedBranchRoutes.map((r: Route) => r.id));
     const now = Date.now();
     return schedules
-      .filter((s: Schedule) => routeIds.has(s.routeId) && new Date(s.departureDateTime).getTime() >= now && s.status !== 'archived')
+      .filter((s: Schedule) => routeIds.has(s.routeId) && new Date(s.departureDateTime).getTime() >= now && s.status !== 'archived' && !s.isArchived)
       .sort((a: Schedule, b: Schedule) => new Date(a.departureDateTime).getTime() - new Date(b.departureDateTime).getTime())
       .slice(0, 8);
   }, [schedules, selectedBranchId, selectedBranchRoutes]);
+
+  const allBranchUpcomingTrips = useMemo<BranchUpcomingTrip[]>(() => {
+    const now = Date.now();
+    return schedules
+      .map((schedule: Schedule): BranchUpcomingTrip | null => {
+        const route = routes.find((r: Route) => r.id === schedule.routeId);
+        const branch = route ? allBranches.find((b: any) => b.id === route.regionId) : null;
+        if (!route || !branch || !route.regionId) return null;
+        const departure = new Date(schedule.departureDateTime).getTime();
+        const arrival = schedule.arrivalDateTime ? new Date(schedule.arrivalDateTime).getTime() : departure + 3 * 60 * 60 * 1000;
+        if (arrival < now || schedule.status === 'archived' || schedule.isArchived) return null;
+        return { schedule, route, branch, departure, arrival };
+      })
+      .filter((item): item is BranchUpcomingTrip => item !== null)
+      .sort((a, b) => a.departure - b.departure)
+      .slice(0, 8);
+  }, [schedules, routes, allBranches]);
 
   const selectBranch = (id: string) => {
     setSelectedBranchId(prev => (prev === id ? null : id));
@@ -195,19 +228,36 @@ export default function RegionsTab({ dashboard }: RegionsTabProps) {
           <p className="text-gray-500 max-w-md mx-auto">Add branches in the Operators &amp; Branches tab first, then come back here to add routes and schedules.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {branches.map((branch: any) => {
-            const branchRoutes = routes.filter((r: Route) => r.regionId === branch.id);
-            const branchOperators = operators.filter((o: any) => o.regionId === branch.id);
-            const isSelected = selectedBranchId === branch.id;
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {branches.map((branch: any) => {
+              const branchRoutes = routes.filter((r: Route) => r.regionId === branch.id);
+              const branchOperators = operators.filter((o: any) => o.regionId === branch.id);
+              const branchRouteIds = new Set(branchRoutes.map((r: Route) => r.id));
+              const now = Date.now();
+              const branchTrips = schedules
+                .filter((s: Schedule) => branchRouteIds.has(s.routeId) && s.status !== 'archived' && !s.isArchived)
+                .map((s: Schedule) => {
+                  const departure = new Date(s.departureDateTime).getTime();
+                  const arrival = s.arrivalDateTime ? new Date(s.arrivalDateTime).getTime() : departure + 3 * 60 * 60 * 1000;
+                  return { schedule: s, departure, arrival };
+                });
+              const activeTrip = branchTrips.filter((trip) => now >= trip.departure && now <= trip.arrival).sort((a, b) => a.departure - b.departure)[0];
+              const upcomingTrip = branchTrips.filter((trip) => trip.departure > now).sort((a, b) => a.departure - b.departure)[0];
+              const tripSummary = activeTrip
+                ? { type: 'active' as const, count: branchTrips.filter((trip) => now >= trip.departure && now <= trip.arrival).length }
+                : upcomingTrip
+                  ? { type: 'upcoming' as const, count: branchTrips.filter((trip) => trip.departure > now).length }
+                  : null;
+              const isSelected = selectedBranchId === branch.id;
 
-            return (
-              <button
-                key={branch.id}
-                onClick={() => selectBranch(branch.id)}
-                className={`text-left bg-white rounded-xl border p-4 transition-all shadow-sm ${isSelected ? 'border-indigo-600 ring-2 ring-indigo-600 ring-opacity-20' : 'border-gray-200 hover:border-indigo-200 hover:shadow-md'
-                  }`}
-              >
+              return (
+                <button
+                  key={branch.id}
+                  onClick={() => selectBranch(branch.id)}
+                  className={`text-left bg-white rounded-xl border p-4 transition-all shadow-sm ${isSelected ? 'border-indigo-600 ring-2 ring-indigo-600 ring-opacity-20' : 'border-gray-200 hover:border-indigo-200 hover:shadow-md'
+                    }`}
+                >
                 <div className="flex items-center justify-between mb-3">
                   <div className="w-10 h-10 bg-indigo-50 rounded-lg flex items-center justify-center text-indigo-600">
                     <MapPin className="w-5 h-5" />
@@ -222,11 +272,66 @@ export default function RegionsTab({ dashboard }: RegionsTabProps) {
                 </div>
                 <h3 className="font-bold text-gray-900 text-lg truncate">{branch.name}</h3>
                 <p className="text-sm text-gray-500 mt-1">{branchRoutes.length} Routes • {branchOperators.length} Operators</p>
+
+                {tripSummary ? (
+                  <div className="mt-4 rounded-2xl bg-slate-50 p-3 text-sm text-slate-600 border border-slate-100">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-semibold text-slate-900 capitalize">{tripSummary.count} {tripSummary.type === 'active' ? 'active' : 'upcoming'} trip{tripSummary.count === 1 ? '' : 's'}</span>
+                      <span className={`text-[10px] font-bold uppercase tracking-widest rounded-full px-2.5 py-1 ${tripSummary.type === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                        {tripSummary.type === 'active' ? 'Active' : 'Upcoming'}
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="mt-4 text-xs text-slate-400">No upcoming trips in this branch.</p>
+                )}
               </button>
             );
           })}
         </div>
-      )}
+
+        {!selectedBranch && (
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">Upcoming trips across all branches</h3>
+                <p className="mt-1 text-sm text-gray-500">See the nearest active and future trips across every branch.</p>
+              </div>
+              <span className="inline-flex items-center rounded-full bg-indigo-50 px-3 py-1 text-sm font-semibold text-indigo-700">
+                {allBranchUpcomingTrips.length} trip{allBranchUpcomingTrips.length === 1 ? '' : 's'}
+              </span>
+            </div>
+
+            {allBranchUpcomingTrips.length === 0 ? (
+              <p className="text-sm text-gray-500">No active or upcoming trips are scheduled across branches yet.</p>
+            ) : (
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                {allBranchUpcomingTrips.map(({ schedule, route, branch, departure, arrival }: BranchUpcomingTrip) => {
+                  const isCurrent = Date.now() >= departure && Date.now() <= arrival;
+                  return (
+                    <div key={schedule.id} className="rounded-2xl border border-gray-200 bg-gray-50 p-4 shadow-sm">
+                      <div className="flex items-start justify-between gap-3 mb-3">
+                        <div>
+                          <p className="text-sm font-semibold text-gray-900">{route.origin} → {route.destination}</p>
+                          <p className="text-xs text-gray-500">{route.name || branch.name}</p>
+                        </div>
+                        <span className={`text-[10px] font-bold uppercase tracking-widest rounded-full px-2.5 py-1 ${isCurrent ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                          {isCurrent ? 'Current' : 'Upcoming'}
+                        </span>
+                      </div>
+                      <div className="text-sm text-gray-600 space-y-1">
+                        <p><span className="font-medium text-gray-900">Branch:</span> {branch.name}</p>
+                        <p><span className="font-medium text-gray-900">Departure:</span> {new Date(departure).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</p>
+                        <p><span className="font-medium text-gray-900">Bus:</span> {buses.find((b: Bus) => b.id === schedule.busId)?.licensePlate || 'TBD'}</p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+      </>)}
 
       {/* Selected branch details */}
       {selectedBranch && (
@@ -481,21 +586,6 @@ export default function RegionsTab({ dashboard }: RegionsTabProps) {
               <button onClick={() => setActiveModal(null)} className="p-2 hover:bg-gray-100 rounded-full text-gray-500"><X className="w-5 h-5" /></button>
             </div>
             <div className="p-6 space-y-4">
-
-              {activeModal === 'addBranch' && (
-                <>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Branch Name *</label>
-                    <input type="text" value={branchForm.name} onChange={e => setBranchForm(p => ({ ...p, name: e.target.value }))}
-                      placeholder="e.g., Lilongwe" className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border" />
-                  </div>
-                  <div className="flex justify-end">
-                    <button type="button" onClick={handleAddBranch} disabled={saving} className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-50">
-                      {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <PlusCircle className="h-4 w-4" />} Create Branch
-                    </button>
-                  </div>
-                </>
-              )}
 
               {activeModal === 'addRoute' && (
                 <>

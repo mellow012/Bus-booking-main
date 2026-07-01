@@ -13,6 +13,7 @@ import RevenueTab from './RevenueTab';
 import ProfileTab from './ProfileTab';
 import BookingsTab from './BookingsTab';
 
+import AlertMessage from '@/components/AlertMessage';
 import { NotificationBell } from '@/contexts/NotificationContext';
 import { CATEGORIES } from './_lib/constants';
 
@@ -77,6 +78,15 @@ export default function AdminDashboard() {
         isBusy={dashboard.isBusy}
         NotificationBellComponent={NotificationBell}
       >
+        {dashboard.alert && (
+          <AlertMessage
+            type={dashboard.alert.type}
+            message={dashboard.alert.message}
+            onClose={dashboard.clearAlert}
+            className="mx-auto max-w-7xl"
+            scrollIntoView
+          />
+        )}
         {renderActiveTab()}
       </AdminLayout>
     </QueryClientProvider>

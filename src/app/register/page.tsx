@@ -1,11 +1,11 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
-// use intrinsic image for logo to render at natural size
 import { useTranslations } from 'next-intl';
 import { EmailVerificationPrompt } from '@/components/EmailVerificationPrompt';
 import {
@@ -238,23 +238,26 @@ export default function Register() {
       {/* Show verification prompt banner once registration succeeds */}
       {userEmail && <EmailVerificationPrompt email={userEmail} showBanner={true} />}
 
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
-        <div className={`sm:mx-auto sm:w-full sm:max-w-md ${isSubmitting ? 'hidden' : ''}`}>
-          <div className="flex justify-center">
-            <div className="flex items-center justify-center transition-transform duration-300 hover:scale-105">
-              <img
+      <div className="min-h-screen flex flex-col items-center pt-28 sm:pt-32 lg:pt-36 pb-8 bg-gradient-to-br from-gray-50 to-gray-100 sm:px-6 lg:px-8 overflow-y-auto">
+        <div className={`w-full max-w-md pt-2 ${isSubmitting ? 'hidden' : ''}`}>
+          <div className="flex justify-center pb-1">
+            <div className="flex items-center justify-center transition-transform duration-300 hover:scale-105 max-h-16 sm:max-h-18 md:max-h-20">
+              <Image
                 src="/tibhukebus_logo_transparent.png"
                 alt="TibhukeBus Logo"
-                className="max-w-full h-auto object-contain"
+                width={120}
+                height={48}
+                className="w-auto h-auto object-contain"
+                priority
               />
             </div>
           </div>
-          <h1 className="mt-2 text-center text-4xl font-extrabold text-gray-900 tracking-tight">
+          <h1 className="text-center text-2xl font-extrabold text-gray-900 tracking-tight">
             {t('title')}
           </h1>
         </div>
 
-        <div className={`mt-8 sm:mx-auto sm:w-full sm:max-w-md ${isSubmitting ? 'hidden' : ''}`}>
+        <div className={`mt-4 w-full max-w-md ${isSubmitting ? 'hidden' : ''}`}>
           <div className="bg-white py-10 px-6 shadow-xl rounded-2xl sm:px-12">
             <form className="space-y-5" onSubmit={handleSubmit} noValidate>
 
@@ -294,6 +297,7 @@ export default function Register() {
                       value={formData.fullName}
                       onChange={handleInputChange}
                       onBlur={() => handleBlur('fullName')}
+                      onFocus={(e) => e.currentTarget.scrollIntoView({ behavior: 'smooth', block: 'center' })}
                       className={getInputClassName('fullName')}
                       placeholder="Enter your full name"
                       disabled={isSubmitting || success}
@@ -315,6 +319,7 @@ export default function Register() {
                       value={formData.phone}
                       onChange={handleInputChange}
                       onBlur={() => handleBlur('phone')}
+                      onFocus={(e) => e.currentTarget.scrollIntoView({ behavior: 'smooth', block: 'center' })}
                       className={getInputClassName('phone')}
                       placeholder="+265 999 123 456"
                       disabled={isSubmitting || success}
@@ -338,6 +343,7 @@ export default function Register() {
                     value={formData.email}
                     onChange={handleInputChange}
                     onBlur={() => handleBlur('email')}
+                    onFocus={(e) => e.currentTarget.scrollIntoView({ behavior: 'smooth', block: 'center' })}
                     className={getInputClassName('email')}
                     placeholder={t('emailPlaceholder')}
                     disabled={isSubmitting || success}
@@ -361,6 +367,7 @@ export default function Register() {
                     value={formData.password}
                     onChange={handleInputChange}
                     onBlur={() => handleBlur('password')}
+                    onFocus={(e) => e.currentTarget.scrollIntoView({ behavior: 'smooth', block: 'center' })}
                     className={getInputClassName('password')}
                     placeholder={t('passwordPlaceholder')}
                     disabled={isSubmitting || success}
@@ -393,6 +400,7 @@ export default function Register() {
                     value={formData.confirmPassword}
                     onChange={handleInputChange}
                     onBlur={() => handleBlur('confirmPassword')}
+                    onFocus={(e) => e.currentTarget.scrollIntoView({ behavior: 'smooth', block: 'center' })}
                     className={getInputClassName('confirmPassword')}
                     placeholder={t('confirmPasswordPlaceholder')}
                     disabled={isSubmitting || success}

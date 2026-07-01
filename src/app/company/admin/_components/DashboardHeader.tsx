@@ -8,6 +8,7 @@ interface DashboardHeaderProps {
   onMenuClick: () => void;
   user: any;
   userProfile: any;
+  company?: any;
   searchQuery: string;
   setSearchQuery: (query: string) => void;
   onHelpClick?: () => void;
@@ -20,6 +21,7 @@ export default function DashboardHeader({
   onMenuClick,
   user,
   userProfile,
+  company,
   searchQuery,
   setSearchQuery,
   onHelpClick,
@@ -47,9 +49,22 @@ export default function DashboardHeader({
         >
           <Menu className="w-5 h-5" />
         </button>
-        <h2 className="text-lg font-bold text-gray-900 hidden sm:block">
-          {title}
-        </h2>
+        <div className="flex items-center gap-3">
+          {company?.logo ? (
+            <img
+              src={company.logo}
+              alt={`${company.name || 'Company'} logo`}
+              className="w-10 h-10 rounded-full object-cover border border-gray-200"
+            />
+          ) : (
+            <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold border border-gray-200">
+              {company?.name?.[0] || 'C'}
+            </div>
+          )}
+          <h2 className="text-lg font-bold text-gray-900 hidden sm:block">
+            {title}
+          </h2>
+        </div>
       </div>
 
       <div className="flex items-center gap-3 sm:gap-4 flex-1 justify-end">

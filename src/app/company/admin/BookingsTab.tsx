@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Users, FileText, Bus as BusIcon, Calendar, Clock, Download, ChevronRight, AlertCircle, Printer } from 'lucide-react';
 import { Booking, Schedule, Bus, Route } from '@/types';
 import jsPDF from 'jspdf';
@@ -14,13 +14,26 @@ export default function BookingsTab({ dashboard }: BookingsTabProps) {
   const { dashboardData } = dashboard;
   const { schedules, bookings, buses, routes } = dashboardData;
   const searchQuery = dashboard.searchQuery?.toLowerCase() || '';
+  const [selectedDate, setSelectedDate] = useState('');
 
-  // Filter schedules to only those happening today or in the future
+  // Filter schedules to only those happening today or in the future by default.
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
 
+  const scheduleMatchesDate = (schedule: Schedule) => {
+    if (!selectedDate) return true;
+    const selected = new Date(selectedDate);
+    selected.setHours(0, 0, 0, 0);
+    const departure = new Date(schedule.departureDateTime);
+    departure.setHours(0, 0, 0, 0);
+    return departure.getTime() === selected.getTime();
+  };
+
   const allActiveSchedules = schedules
-    .filter((s: Schedule) => new Date(s.departureDateTime) >= todayStart)
+    .filter((s: Schedule) => {
+      if (selectedDate) return scheduleMatchesDate(s);
+      return new Date(s.departureDateTime) >= todayStart && s.status !== 'completed';
+    })
     .sort((a: Schedule, b: Schedule) => new Date(a.departureDateTime).getTime() - new Date(b.departureDateTime).getTime());
 
   // Apply search filter to schedules
@@ -39,8 +52,14 @@ export default function BookingsTab({ dashboard }: BookingsTabProps) {
   });
 
   const [selectedScheduleId, setSelectedScheduleId] = useState<string | null>(
-    activeSchedules.length > 0 ? activeSchedules[0].id : null
+    allActiveSchedules.length > 0 ? allActiveSchedules[0].id : null
   );
+
+  useEffect(() => {
+    if (!allActiveSchedules.some((s: Schedule) => s.id === selectedScheduleId)) {
+      setSelectedScheduleId(allActiveSchedules.length > 0 ? allActiveSchedules[0].id : null);
+    }
+  }, [allActiveSchedules, selectedScheduleId]);
 
   const handleGenerateManifest = (scheduleId: string) => {
     try {
@@ -113,6 +132,14 @@ export default function BookingsTab({ dashboard }: BookingsTabProps) {
     }
   };
 
+  const scheduleLabel = selectedDate
+    ? `Trips on ${new Date(selectedDate).toLocaleDateString()}`
+    : 'Active & Upcoming Trips';
+
+  const scheduleHelpText = selectedDate
+    ? 'Showing trips for the selected date. Archived completed trips are only visible when filtering by a specific date.'
+    : 'Default showing upcoming trips only. Completed trips are archived and not shown by default.';
+
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       <div>
@@ -121,7 +148,7 @@ export default function BookingsTab({ dashboard }: BookingsTabProps) {
           Bookings &amp; Trip Manifests
         </h2>
         <p className="mt-1 text-sm text-gray-500">
-          Manage daily bookings grouped by active trips. Select a schedule to view its passengers and generate a manifest.
+          Manage bookings by upcoming trips and search by date. Use the date filter to locate archived trips on a specific day.
         </p>
       </div>
 
@@ -129,15 +156,39 @@ export default function BookingsTab({ dashboard }: BookingsTabProps) {
         <div className="py-16 text-center bg-white rounded-2xl border border-dashed border-gray-200">
           <Calendar className="w-12 h-12 text-gray-300 mx-auto mb-3" />
           <h3 className="text-lg font-bold text-gray-900 mb-1">No Active Trips</h3>
-          <p className="text-gray-500 max-w-md mx-auto">There are no upcoming schedules or bookings. Create a schedule in the Regions tab to start receiving bookings.</p>
+          <p className="text-gray-500 max-w-md mx-auto">There are no upcoming schedules or bookings. Create a schedule in the Branches tab to start receiving bookings.</p>
         </div>
       ) : (
         <div className="flex flex-col lg:flex-row gap-6">
           
           {/* Left Column: List of Schedules */}
           <div className="lg:w-1/3 space-y-4">
-            <h3 className="font-bold text-gray-900">Active &amp; Upcoming Trips</h3>
-            {activeSchedules.length === 0 ? (
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h3 className="font-bold text-gray-900">{scheduleLabel}</h3>
+                <p className="text-sm text-gray-500">{scheduleHelpText}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <label htmlFor="date-filter" className="sr-only">Filter by date</label>
+                <input
+                  id="date-filter"
+                  type="date"
+                  value={selectedDate}
+                  onChange={(e) => setSelectedDate(e.target.value)}
+                  className="w-full sm:w-auto rounded-2xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                />
+                {selectedDate && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedDate('')}
+                    className="rounded-2xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+            </div>
+            {allActiveSchedules.length === 0 ? (
               <div className="p-4 bg-white rounded-xl border border-gray-200 text-center text-gray-500 text-sm">
                 <AlertCircle className="w-6 h-6 mx-auto mb-2 text-gray-300" />
                 No active schedules found for today or upcoming.

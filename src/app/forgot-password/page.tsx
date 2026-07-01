@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
@@ -120,15 +121,22 @@ export default function ForgotPassword() {
   // Success view
   if (success) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
-        <div className="sm:mx-auto sm:w-full sm:max-w-md">
-          <div className="flex justify-center">
-            <div className="w-16 h-16 bg-green-500 rounded-full flex items-center justify-center shadow-lg">
-              <CheckCircleIcon className="w-10 h-10 text-white" />
+      <div className="min-h-screen flex flex-col items-center pt-28 sm:pt-32 lg:pt-36 pb-8 bg-gradient-to-br from-gray-50 to-gray-100 sm:px-6 lg:px-8 overflow-y-auto">
+        <div className="w-full max-w-md pt-2">
+          <div className="flex justify-center pb-1">
+            <div className="flex items-center justify-center transition-transform duration-300 hover:scale-105 max-h-16 sm:max-h-18 md:max-h-20">
+              <Image
+                src="/tibhukebus_logo_transparent.png"
+                alt="TibhukeBus Logo"
+                width={120}
+                height={48}
+                className="w-auto h-auto object-contain"
+                priority
+              />
             </div>
           </div>
           
-          <h1 className="mt-6 text-center text-4xl font-extrabold text-gray-900 tracking-tight">
+          <h1 className="mt-4 text-center text-3xl font-extrabold text-gray-900 tracking-tight">
             Check your email
           </h1>
           <p className="mt-2 text-center text-sm text-gray-600">
@@ -188,15 +196,22 @@ export default function ForgotPassword() {
 
   // Form view
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
-      <div className="sm:mx-auto sm:w-full sm:max-w-md">
+    <div className="min-h-screen flex flex-col items-center pt-28 sm:pt-32 lg:pt-36 pb-8 bg-gradient-to-br from-gray-50 to-gray-100 sm:px-6 lg:px-8 overflow-y-auto">
+      <div className="w-full max-w-md pt-2">
         {/* Logo */}
-        <div className="flex justify-center">
-          <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center shadow-lg">
-            <span className="text-white font-bold text-3xl">B</span>
+        <div className="flex justify-center pb-1">
+          <div className="flex items-center justify-center transition-transform duration-300 hover:scale-105 max-h-16 sm:max-h-18 md:max-h-20">
+            <Image
+              src="/tibhukebus_logo_transparent.png"
+              alt="TibhukeBus Logo"
+              width={120}
+              height={48}
+              className="w-auto h-auto object-contain"
+              priority
+            />
           </div>
         </div>
-        
+
         {/* Header */}
         <h1 className="mt-6 text-center text-4xl font-extrabold text-gray-900 tracking-tight">
           Reset your password
@@ -255,6 +270,7 @@ export default function ForgotPassword() {
                   value={email}
                   onChange={handleEmailChange}
                   onBlur={handleBlur}
+                  onFocus={(e) => e.currentTarget.scrollIntoView({ behavior: 'smooth', block: 'center' })}
                   className={getInputClassName()}
                   placeholder="Enter your email address"
                   disabled={isSubmitting}

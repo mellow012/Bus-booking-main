@@ -75,15 +75,15 @@ export default function ResetPasswordPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
-      <div className="sm:mx-auto sm:w-full sm:max-w-md">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex flex-col items-center pt-28 sm:pt-32 lg:pt-36 pb-8 sm:px-6 lg:px-8">
+      <div className="sm:w-full sm:max-w-md">
         {/* Brand Logo consistent with Register page */}
         <div className="flex justify-center">
-          <div className="flex items-center justify-center transition-transform duration-300 hover:scale-105">
+          <div className="flex items-center justify-center transition-transform duration-300 hover:scale-105 max-h-16">
             <img
               src="/tibhukebus_logo_transparent.png"
               alt="TibhukeBus Logo"
-              className="max-w-full h-auto object-contain"
+              className="h-14 w-auto object-contain"
             />
           </div>
         </div>
