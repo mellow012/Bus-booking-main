@@ -86,12 +86,21 @@ export async function POST(request: NextRequest): Promise<NextResponse<ApiRespon
       const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
         // Resolve regionId if region string is provided
         let finalRegionId = regionId;
-        if (!finalRegionId && region?.trim()) {
+        let finalRegionName = region?.trim() || null;
+
+        if (!finalRegionId && finalRegionName) {
           const matchedRegion = await tx.region.findFirst({
-            where: { name: { equals: region.trim(), mode: 'insensitive' }, companyId }
+            where: { name: { equals: finalRegionName, mode: 'insensitive' }, companyId }
           });
           if (matchedRegion) {
             finalRegionId = matchedRegion.id;
+          }
+        }
+
+        if (finalRegionId && !finalRegionName) {
+          const matchedRegion = await tx.region.findUnique({ where: { id: finalRegionId } });
+          if (matchedRegion) {
+            finalRegionName = matchedRegion.name;
           }
         }
 
@@ -110,7 +119,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<ApiRespon
             invitationSent: true,
             invitationSentAt: new Date(),
             createdBy: invitedBy,
-            region: region || null,
+            region: finalRegionName,
             createdAt: new Date(),
             updatedAt: new Date(),
           },

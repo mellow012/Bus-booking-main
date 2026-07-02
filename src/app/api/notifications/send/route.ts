@@ -46,8 +46,19 @@ export async function POST(request: NextRequest) {
     }
 
     // Parse and validate request body
-    const body = await request.json();
-    const { recipientIds, title, body: messageBody, data, icon, clickAction } = notificationSchema.parse(body);
+    const rawBody = await request.json();
+    const normalizedBody = rawBody.recipientIds
+      ? rawBody
+      : {
+          recipientIds: rawBody.userId ? [rawBody.userId] : [],
+          title: rawBody.title,
+          body: rawBody.message ?? rawBody.body,
+          data: rawBody.data,
+          icon: rawBody.icon,
+          clickAction: rawBody.actionUrl ?? rawBody.clickAction,
+        };
+
+    const { recipientIds, title, body: messageBody, data, icon, clickAction, type = 'system', priority = 'medium' } = notificationSchema.parse(normalizedBody);
 
     // Log the notification send attempt
     await logger.logSuccess('notification', 'Starting notification broadcast', {
@@ -72,8 +83,8 @@ export async function POST(request: NextRequest) {
           userId: u.id,
           title,
           message: messageBody,
-          type: body.type || 'system',
-          priority: body.priority || 'medium',
+          type,
+          priority,
           actionUrl: clickAction || null,
           data: data || {},
         }))

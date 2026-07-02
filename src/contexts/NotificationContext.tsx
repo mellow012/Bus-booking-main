@@ -370,18 +370,18 @@ export async function sendNotification({
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      userId,
-      type,
+      recipientIds: [userId],
       title,
-      message,
+      body: message,
       data: cleanData,
-      actionUrl: actionUrl ?? null,
+      clickAction: actionUrl ?? null,
       priority,
     }),
   });
 
   if (!response.ok) {
-    throw new Error(`Failed to send notification: ${response.status}`);
+    const body = await response.text().catch(() => '');
+    throw new Error(`Failed to send notification: ${response.status} ${body}`);
   }
 }
 

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { Fragment, useEffect } from 'react';
+import React, { Fragment, useEffect, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -21,7 +21,7 @@ interface OperatorData {
 const editOperatorSchema = z.object({
   role: z.enum(['operator', 'conductor']),
   status: z.enum(['active', 'inactive', 'suspended', 'invited']),
-  region: z.string().nullable().optional(),
+  regionId: z.string().nullable().optional(),
 });
 
 type EditFormData = z.infer<typeof editOperatorSchema>;
@@ -62,15 +62,21 @@ export default function EditOperatorModal({ isOpen, onClose, operator, companyId
     resolver: zodResolver(editOperatorSchema),
   });
 
+  const regionMatchId = React.useMemo(() => {
+    if (!operator?.regionId || !regions) return '';
+    const match = regions.find((r) => r.id === operator.regionId);
+    return match?.id || '';
+  }, [operator?.regionId, regions]);
+
   useEffect(() => {
     if (operator) {
       reset({
         role: operator.role as 'operator' | 'conductor',
         status: operator.status as 'active' | 'inactive' | 'suspended' | 'invited',
-        region: operator.regionId || '',
+        regionId: operator.regionId || regionMatchId || '',
       });
     }
-  }, [operator, reset]);
+  }, [operator, regionMatchId, reset]);
 
   const mutation = useMutation({
     mutationFn: async (data: EditFormData) => {
@@ -78,7 +84,10 @@ export default function EditOperatorModal({ isOpen, onClose, operator, companyId
       const response = await fetch(`/api/admin/users/${operator.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
+        body: JSON.stringify({
+          ...data,
+          regionId: data.regionId,
+        }),
       });
       if (!response.ok) {
         const errorData = await response.json();
@@ -118,12 +127,12 @@ export default function EditOperatorModal({ isOpen, onClose, operator, companyId
                     {errors.status && <p className="mt-1 text-sm text-red-600">{errors.status.message}</p>}
                   </div>
                   <div>
-                    <label htmlFor="region" className="block text-sm font-medium text-gray-700">Region</label>
-                    <select id="region" {...register('region')} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm sm:text-sm" disabled={isLoadingRegions}>
+                    <label htmlFor="regionId" className="block text-sm font-medium text-gray-700">Region</label>
+                    <select id="regionId" {...register('regionId')} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm sm:text-sm" disabled={isLoadingRegions}>
                       <option value="">No Region</option>
                       {regions?.map(region => <option key={region.id} value={region.id}>{region.name}</option>)}
                     </select>
-                    {errors.region && <p className="mt-1 text-sm text-red-600">{errors.region.message}</p>}
+                    {errors.regionId && <p className="mt-1 text-sm text-red-600">{errors.regionId.message}</p>}
                   </div>
                   {mutation.isError && <p className="text-sm text-red-600">Error: {mutation.error.message}</p>}
                   <div className="mt-5 sm:mt-6">

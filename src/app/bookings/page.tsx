@@ -363,20 +363,42 @@ const BookingsPage: React.FC = () => {
     const flwStatus = searchParams?.get('status');
     const successP = searchParams?.get('success');
     const cancelled = searchParams?.get('cancelled');
+    const errorCode = searchParams?.get('error');
 
-    if (successP === 'true' && !pv) { setSuccess('Action completed!'); setTimeout(() => setSuccess(''), 5000); }
+    const errorMessages: Record<string, string> = {
+      payment_failed: 'Payment failed. Please try again or contact support.',
+      verification_failed: 'Payment verification failed. Please try again later.',
+      booking_not_found: 'Payment completed but booking could not be located. Contact support.',
+      server_error: 'Server error while verifying payment. Please try again.',
+    };
+
+    if (errorCode) {
+      setError(errorMessages[errorCode] || `Payment error: ${errorCode}`);
+      setTimeout(() => setError(''), 8000);
+    }
+
+    if (successP === 'true' && !pv) {
+      setSuccess('Action completed!');
+      setTimeout(() => setSuccess(''), 5000);
+    }
 
     if (cancelled === 'true' || flwStatus === 'cancelled') {
       setError('Payment was cancelled. You can try again anytime.');
       setTimeout(() => setError(''), 6000);
     }
 
-    if (pv === 'true' && provider && txRef) {
-      if (flwStatus !== 'cancelled') {
-        verifyPaymentStatus(provider, txRef, transactionId);
+    if (pv === 'true' && provider) {
+      if (txRef) {
+        if (flwStatus !== 'cancelled') {
+          verifyPaymentStatus(provider, txRef, transactionId);
+        }
+      } else if (flwStatus === 'success') {
+        setSuccess('Payment successfully completed.');
+        setTimeout(() => setSuccess(''), 6000);
       }
+
       const clean = new URL(window.location.href);
-      ['payment_verify', 'provider', 'tx_ref', 'transaction_id', 'status', 'cancelled', 'success']
+      ['payment_verify', 'provider', 'tx_ref', 'transaction_id', 'status', 'cancelled', 'success', 'error']
         .forEach((k) => clean.searchParams.delete(k));
       window.history.replaceState({}, '', clean.toString());
     }

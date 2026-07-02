@@ -3,6 +3,7 @@ import { getCurrentUser } from '@/lib/auth-utils';
 import { prisma } from '@/lib/prisma';
 import { logAudit, logFailedAction } from '@/utils/AuditLogs';
 import { checkAdminLimit } from '@/lib/rateLimit';
+import { updateOperatorAssignments } from '@/lib/actions/user.actions';
 
 export async function PATCH(req: NextRequest, context: any) {
   const paramsObj = context?.params && typeof context.params.then === 'function' ? await context.params : context?.params;
@@ -44,6 +45,17 @@ export async function PATCH(req: NextRequest, context: any) {
       data: ( { role: newRole, sessionVersion: { increment: 1 }, updatedAt: new Date() } as any ),
       select: { id: true, email: true, firstName: true, lastName: true, role: true, companyId: true }
     });
+
+    if (body.status || body.regionId || body.routeIds) {
+      const result = await updateOperatorAssignments(target.id, {
+        regionId: body.regionId ?? null,
+        status: body.status,
+        routeIds: body.routeIds,
+      });
+      if (!result.success) {
+        return NextResponse.json({ error: result.error || 'Failed to update operator assignments' }, { status: 500 });
+      }
+    }
 
     try {
       await logAudit({

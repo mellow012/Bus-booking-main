@@ -14,15 +14,23 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const txRef  = searchParams.get("tx_ref");
   const status = searchParams.get("status");
+  const jsonResponse = searchParams.get("json") === "true" || req.headers.get("accept")?.includes("application/json");
 
-  console.log("[paychangu/verify] tx_ref:", txRef, "status:", status);
+  console.log("[paychangu/verify] tx_ref:", txRef, "status:", status, "json:", jsonResponse);
+
+  const redirectToError = (code: string) => {
+    if (jsonResponse) {
+      return NextResponse.json({ success: false, status: "failed", message: code }, { status: 400 });
+    }
+    return NextResponse.redirect(`${appUrl}/bookings?error=${code}`);
+  };
 
   if (!txRef) {
-    return NextResponse.redirect(`${appUrl}/bookings?error=payment_failed`);
+    return redirectToError("payment_failed");
   }
 
   if (status && !SUCCESS_STATUSES.includes(status.toLowerCase())) {
-    return NextResponse.redirect(`${appUrl}/bookings?error=payment_failed`);
+    return redirectToError("payment_failed");
   }
 
   try {
@@ -60,12 +68,18 @@ export async function GET(req: NextRequest) {
     console.log("[paychangu/verify] PayChangu response:", verifyRes.status, rawText.slice(0, 300));
 
     if (!verifyRes.ok) {
+      if (jsonResponse) {
+        return NextResponse.json({ success: false, status: "failed", message: "verification_failed" }, { status: 400 });
+      }
       return NextResponse.redirect(`${appUrl}/bookings?error=verification_failed`);
     }
 
     let result: any;
     try { result = JSON.parse(rawText); }
     catch {
+      if (jsonResponse) {
+        return NextResponse.json({ success: false, status: "failed", message: "verification_failed" }, { status: 400 });
+      }
       return NextResponse.redirect(`${appUrl}/bookings?error=verification_failed`);
     }
 
@@ -89,6 +103,9 @@ export async function GET(req: NextRequest) {
           updatedAt: new Date(),
         }
       });
+      if (jsonResponse) {
+        return NextResponse.json({ success: false, status: "failed", message: "verification_failed" }, { status: 400 });
+      }
       return NextResponse.redirect(`${appUrl}/bookings?error=verification_failed`);
     }
 
@@ -110,6 +127,10 @@ export async function GET(req: NextRequest) {
         updatedAt: new Date(),
       }
     });
+
+    if (jsonResponse) {
+      return NextResponse.json({ success: true, status: "paid", message: "Payment verified" });
+    }
 
     return NextResponse.redirect(
       `${appUrl}/bookings?payment_verify=true&provider=paychangu&status=success`

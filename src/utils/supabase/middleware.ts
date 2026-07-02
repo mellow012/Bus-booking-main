@@ -4,6 +4,24 @@ import { COOKIE_NAME, createSessionCookieValue, parseSessionCookieValue } from '
 import { normalizeRole } from '@/lib/roles';
 import { logger } from '@/lib/logger';
 
+const forceCrossSiteCookies = process.env.NODE_ENV === 'production';
+
+function normalizeCookieOptions(name: string, options?: Record<string, any>) {
+  const normalized = { ...(options ?? {}) };
+  const isAuthCookie = name === COOKIE_NAME || name.startsWith('sb-') || name.includes('supabase');
+
+  if (isAuthCookie) {
+    if (forceCrossSiteCookies) {
+      normalized.sameSite = 'none';
+      normalized.secure = true;
+    } else {
+      normalized.sameSite = normalized.sameSite ?? 'lax';
+    }
+  }
+
+  return normalized;
+}
+
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
 
@@ -21,7 +39,7 @@ export async function updateSession(request: NextRequest) {
           );
           supabaseResponse = NextResponse.next({ request });
           cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options)
+            supabaseResponse.cookies.set(name, value, normalizeCookieOptions(name, options))
           );
         },
       },
@@ -61,7 +79,7 @@ export async function updateSession(request: NextRequest) {
       const session_version: number | null = null;
       try {
         const cookieValue = await createSessionCookieValue({ userId: String(user.id as any), role, session_version });
-        supabaseResponse.cookies.set(COOKIE_NAME, cookieValue, { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production', path: '/' });
+        supabaseResponse.cookies.set(COOKIE_NAME, cookieValue, normalizeCookieOptions(COOKIE_NAME, { httpOnly: true, secure: process.env.NODE_ENV === 'production', path: '/' }));
       } catch (err) {
         await logger.logError('auth', 'Failed to set session cookie', err);
       }

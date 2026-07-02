@@ -3,9 +3,10 @@
 import React, { useState } from 'react';
 import { 
   Building2, MapPin, DollarSign, Users, 
-  Bus as BusIcon, CalendarDays, ChevronRight, AlertCircle, X, Rocket, Clock, TrendingUp
+  Bus as BusIcon, CalendarDays, ChevronRight, AlertCircle, X, Rocket, Clock, TrendingUp, Loader2, Check, Bell, Eye
 } from 'lucide-react';
-import { Company, Schedule, Route, Booking } from '@/types';
+import { Company, Schedule, Route, Booking, Bus } from '@/types';
+import * as dbActions from '@/lib/actions/db.actions';
 import EmptyState from '@/components/ui/EmptyState';
 
 interface OverviewTabProps {
@@ -18,6 +19,91 @@ export default function OverviewTab({ dashboard }: OverviewTabProps) {
   const branches = dashboardData.regions || [];
 
   const [activeModal, setActiveModal] = useState<'branches' | 'routes' | 'revenue' | 'bookings' | null>(null);
+  const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [reminderLoading, setReminderLoading] = useState<string | null>(null);
+
+  const handleOpenBooking = (booking: Booking) => setSelectedBooking(booking);
+  const closeBooking = () => setSelectedBooking(null);
+
+  const handleConfirmBooking = async (bookingId: string) => {
+    setActionLoading(bookingId);
+    try {
+      const result = await dbActions.updateBooking(bookingId, {
+        bookingStatus: 'confirmed',
+        confirmedDate: new Date(),
+      });
+      if (!result.success) throw new Error(result.error || 'Failed to confirm booking');
+      dashboard.fetchInitialData?.();
+      dashboard.showAlert('success', 'Booking confirmed successfully.');
+      if (selectedBooking?.id === bookingId) {
+        setSelectedBooking({ ...selectedBooking, bookingStatus: 'confirmed', confirmedDate: new Date() });
+      }
+    } catch (err: any) {
+      console.error('Confirm booking error:', err);
+      dashboard.showAlert('error', err.message || 'Failed to confirm booking.');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleCancelBooking = async (bookingId: string) => {
+    if (!window.confirm('Cancel this booking?')) return;
+    setActionLoading(bookingId);
+    try {
+      const result = await dbActions.updateBooking(bookingId, {
+        bookingStatus: 'cancelled',
+        cancellationDate: new Date(),
+      });
+      if (!result.success) throw new Error(result.error || 'Failed to cancel booking');
+      dashboard.fetchInitialData?.();
+      dashboard.showAlert('success', 'Booking cancelled successfully.');
+      if (selectedBooking?.id === bookingId) {
+        setSelectedBooking({ ...selectedBooking, bookingStatus: 'cancelled', cancellationDate: new Date() });
+      }
+    } catch (err: any) {
+      console.error('Cancel booking error:', err);
+      dashboard.showAlert('error', err.message || 'Failed to cancel booking.');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleSendReminder = async (booking: Booking) => {
+    setReminderLoading(booking.id);
+    try {
+      if (!booking.userId || !booking.contactEmail) {
+        dashboard.showAlert('warning', 'No email available to send reminder.');
+        return;
+      }
+      await dbActions.createNotification({
+        userId: booking.userId,
+        type: 'payment_reminder',
+        title: 'Payment Reminder',
+        message: 'Please complete payment for your booking to confirm your seat.',
+        data: { bookingId: booking.id },
+      });
+      const emailRes = await fetch('/api/notifications/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({
+          recipientIds: [booking.userId],
+          title: 'Payment Reminder — TibhukeBus',
+          body: `Your booking ${booking.bookingReference} is awaiting payment. Please complete payment to confirm your seat.`,
+          data: { bookingId: booking.id, type: 'payment_reminder' },
+          clickAction: '/bookings',
+        }),
+      });
+      if (!emailRes.ok) throw new Error('Failed to send email reminder');
+      dashboard.showAlert('success', 'Payment reminder sent successfully.');
+    } catch (err: any) {
+      console.error('Reminder error:', err);
+      dashboard.showAlert('error', err.message || 'Failed to send reminder.');
+    } finally {
+      setReminderLoading(null);
+    }
+  };
 
   // Stats calculation
   const paidBookings = bookings.filter((b: Booking) => b.paymentStatus === 'paid');
@@ -32,6 +118,32 @@ export default function OverviewTab({ dashboard }: OverviewTabProps) {
   });
 
   const closeModal = () => setActiveModal(null);
+
+  const selectedBookingSchedule = selectedBooking
+    ? schedules.find((s: Schedule) => s.id === selectedBooking.scheduleId)
+    : undefined;
+  const selectedBookingRoute = selectedBookingSchedule
+    ? routes.find((r: Route) => r.id === selectedBookingSchedule.routeId)
+    : selectedBooking
+    ? routes.find((r: Route) => r.id === selectedBooking.routeId)
+    : undefined;
+  const selectedBookingBus = selectedBookingSchedule
+    ? buses.find((bus: Bus) => bus.id === selectedBookingSchedule.busId)
+    : undefined;
+  const selectedBookingDepartureTime = selectedBookingSchedule?.departureDateTime
+    ? new Date(selectedBookingSchedule.departureDateTime)
+    : undefined;
+  const selectedBookingRouteLabel = selectedBookingRoute
+    ? `${selectedBookingRoute.origin} → ${selectedBookingRoute.destination}`
+    : selectedBookingSchedule
+    ? `${selectedBookingSchedule.departureLocation} → ${selectedBookingSchedule.arrivalLocation}`
+    : selectedBooking?.routeId || 'N/A';
+  const selectedBookingBusLabel = selectedBookingBus
+    ? `${selectedBookingBus.licensePlate}${selectedBookingBus.busType ? ` (${selectedBookingBus.busType})` : ''}`
+    : 'Unassigned';
+  const selectedBookingSeatLabel = selectedBooking?.seatNumbers?.length
+    ? selectedBooking.seatNumbers.join(', ')
+    : selectedBooking?.passengerDetails?.map((p) => p.seatNumber).filter(Boolean).join(', ') || 'Auto assigned';
 
   // Newly boarded: if nothing exists, show onboarding prompt
   const isNewlyBoarded = branches.length === 0 && routes.length === 0 && bookings.length === 0;
@@ -194,6 +306,7 @@ export default function OverviewTab({ dashboard }: OverviewTabProps) {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
@@ -209,6 +322,48 @@ export default function OverviewTab({ dashboard }: OverviewTabProps) {
                       }`}>
                         {b.paymentStatus}
                       </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-1">
+                      <button
+                        type="button"
+                        onClick={() => handleOpenBooking(b)}
+                        className="inline-flex items-center rounded-full border border-gray-200 bg-white px-2.5 py-1 text-xs text-gray-600 hover:bg-gray-50"
+                      >
+                        <Eye className="mr-1 h-3.5 w-3.5" /> View
+                      </button>
+                      {b.bookingStatus === 'pending' && (
+                        <button
+                          type="button"
+                          onClick={() => handleConfirmBooking(b.id)}
+                          disabled={actionLoading === b.id}
+                          className="inline-flex items-center rounded-full bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+                        >
+                          {actionLoading === b.id ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <Check className="mr-1 h-3.5 w-3.5" />}
+                          Confirm
+                        </button>
+                      )}
+                      {(b.bookingStatus === 'pending' || b.bookingStatus === 'confirmed') && (
+                        <button
+                          type="button"
+                          onClick={() => handleCancelBooking(b.id)}
+                          disabled={actionLoading === b.id}
+                          className="inline-flex items-center rounded-full bg-rose-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-rose-700 disabled:opacity-50"
+                        >
+                          <X className="mr-1 h-3.5 w-3.5" />
+                          Cancel
+                        </button>
+                      )}
+                      {b.paymentStatus !== 'paid' && (
+                        <button
+                          type="button"
+                          onClick={() => handleSendReminder(b)}
+                          disabled={reminderLoading === b.id}
+                          className="inline-flex items-center rounded-full border border-indigo-200 bg-white px-2.5 py-1 text-xs font-semibold text-indigo-700 hover:bg-indigo-50 disabled:opacity-50"
+                        >
+                          {reminderLoading === b.id ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <Bell className="mr-1 h-3.5 w-3.5" />}
+                          Reminder
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}

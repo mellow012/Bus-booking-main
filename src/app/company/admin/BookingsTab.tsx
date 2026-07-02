@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Users, FileText, Bus as BusIcon, Calendar, Clock, Download, ChevronRight, AlertCircle, Printer } from 'lucide-react';
+import { Users, FileText, Bus as BusIcon, Calendar, Clock, Download, ChevronRight, AlertCircle, Printer, Loader2, Check, X, Bell, Eye } from 'lucide-react';
 import { Booking, Schedule, Bus, Route } from '@/types';
+import * as dbActions from '@/lib/actions/db.actions';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -15,6 +16,91 @@ export default function BookingsTab({ dashboard }: BookingsTabProps) {
   const { schedules, bookings, buses, routes } = dashboardData;
   const searchQuery = dashboard.searchQuery?.toLowerCase() || '';
   const [selectedDate, setSelectedDate] = useState('');
+  const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [reminderLoading, setReminderLoading] = useState<string | null>(null);
+
+  const handleOpenBooking = (booking: Booking) => setSelectedBooking(booking);
+  const handleCloseBooking = () => setSelectedBooking(null);
+
+  const handleConfirmBooking = async (bookingId: string) => {
+    setActionLoading(bookingId);
+    try {
+      const result = await dbActions.updateBooking(bookingId, {
+        bookingStatus: 'confirmed',
+        confirmedDate: new Date(),
+      });
+      if (!result.success) throw new Error(result.error || 'Failed to confirm booking');
+      dashboard.fetchInitialData?.();
+      dashboard.showAlert('success', 'Booking confirmed successfully.');
+      if (selectedBooking?.id === bookingId) {
+        setSelectedBooking({ ...selectedBooking, bookingStatus: 'confirmed', confirmedDate: new Date() });
+      }
+    } catch (err: any) {
+      console.error('Confirm booking error:', err);
+      dashboard.showAlert('error', err.message || 'Failed to confirm booking.');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleCancelBooking = async (bookingId: string) => {
+    if (!window.confirm('Cancel this booking?')) return;
+    setActionLoading(bookingId);
+    try {
+      const result = await dbActions.updateBooking(bookingId, {
+        bookingStatus: 'cancelled',
+        cancellationDate: new Date(),
+      });
+      if (!result.success) throw new Error(result.error || 'Failed to cancel booking');
+      dashboard.fetchInitialData?.();
+      dashboard.showAlert('success', 'Booking cancelled successfully.');
+      if (selectedBooking?.id === bookingId) {
+        setSelectedBooking({ ...selectedBooking, bookingStatus: 'cancelled', cancellationDate: new Date() });
+      }
+    } catch (err: any) {
+      console.error('Cancel booking error:', err);
+      dashboard.showAlert('error', err.message || 'Failed to cancel booking.');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleSendReminder = async (booking: Booking) => {
+    setReminderLoading(booking.id);
+    try {
+      if (!booking.userId || !booking.contactEmail) {
+        dashboard.showAlert('warning', 'No email available to send reminder.');
+        return;
+      }
+      await dbActions.createNotification({
+        userId: booking.userId,
+        type: 'payment_reminder',
+        title: 'Payment Reminder',
+        message: 'Please complete payment for your booking to confirm your seat.',
+        data: { bookingId: booking.id },
+      });
+      const emailRes = await fetch('/api/notifications/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({
+          recipientIds: [booking.userId],
+          title: 'Payment Reminder — TibhukeBus',
+          body: `Your booking ${booking.bookingReference} is awaiting payment. Please complete payment to confirm your seat.`,
+          data: { bookingId: booking.id, type: 'payment_reminder' },
+          clickAction: '/bookings',
+        }),
+      });
+      if (!emailRes.ok) throw new Error('Failed to send email reminder');
+      dashboard.showAlert('success', 'Payment reminder sent successfully.');
+    } catch (err: any) {
+      console.error('Reminder error:', err);
+      dashboard.showAlert('error', err.message || 'Failed to send reminder');
+    } finally {
+      setReminderLoading(null);
+    }
+  };
 
   // Filter schedules to only those happening today or in the future by default.
   const todayStart = new Date();
@@ -47,7 +133,11 @@ export default function BookingsTab({ dashboard }: BookingsTabProps) {
       route?.origin?.toLowerCase().includes(searchQuery) ||
       route?.destination?.toLowerCase().includes(searchQuery) ||
       bus?.licensePlate?.toLowerCase().includes(searchQuery) ||
-      tripBookings.some((b: Booking) => b.passengerDetails?.[0]?.name?.toLowerCase().includes(searchQuery) || b.bookingReference?.toLowerCase().includes(searchQuery))
+      tripBookings.some((b: Booking) => {
+        const passengerName = b.passengerDetails?.[0]?.name?.toLowerCase();
+        const reference = b.bookingReference?.toLowerCase();
+        return (passengerName?.includes(searchQuery) ?? false) || (reference?.includes(searchQuery) ?? false);
+      })
     );
   });
 
@@ -60,6 +150,32 @@ export default function BookingsTab({ dashboard }: BookingsTabProps) {
       setSelectedScheduleId(allActiveSchedules.length > 0 ? allActiveSchedules[0].id : null);
     }
   }, [allActiveSchedules, selectedScheduleId]);
+
+  const selectedBookingSchedule = selectedBooking
+    ? schedules.find((schedule: Schedule) => schedule.id === selectedBooking.scheduleId)
+    : undefined;
+  const selectedBookingRoute = selectedBookingSchedule
+    ? routes.find((route: Route) => route.id === selectedBookingSchedule.routeId)
+    : selectedBooking
+    ? routes.find((route: Route) => route.id === selectedBooking.routeId)
+    : undefined;
+  const selectedBookingBus = selectedBookingSchedule
+    ? buses.find((bus: Bus) => bus.id === selectedBookingSchedule.busId)
+    : undefined;
+  const selectedBookingDepartureTime = selectedBookingSchedule?.departureDateTime
+    ? new Date(selectedBookingSchedule.departureDateTime)
+    : undefined;
+  const selectedBookingRouteLabel = selectedBookingRoute
+    ? `${selectedBookingRoute.origin} → ${selectedBookingRoute.destination}`
+    : selectedBookingSchedule
+    ? `${selectedBookingSchedule.departureLocation} → ${selectedBookingSchedule.arrivalLocation}`
+    : selectedBooking?.routeId || 'N/A';
+  const selectedBookingBusLabel = selectedBookingBus
+    ? `${selectedBookingBus.licensePlate}${selectedBookingBus.busType ? ` (${selectedBookingBus.busType})` : ''}`
+    : 'Unassigned';
+  const selectedBookingSeatLabel = selectedBooking?.seatNumbers?.length
+    ? selectedBooking.seatNumbers.join(', ')
+    : selectedBooking?.passengerDetails?.map((p) => p.seatNumber).filter(Boolean).join(', ') || 'Auto assigned';
 
   const handleGenerateManifest = (scheduleId: string) => {
     try {
@@ -330,34 +446,44 @@ export default function BookingsTab({ dashboard }: BookingsTabProps) {
                       </div>
                     ) : (
                       <div className="space-y-3">
-                        {tripBookings.map((booking: Booking, idx: number) => (
-                          <div key={booking.id} className="p-4 rounded-xl border border-gray-100 hover:border-indigo-100 hover:bg-indigo-50/30 transition-all flex items-center justify-between">
-                            <div className="flex items-center gap-4">
-                              <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center font-bold text-gray-600 text-sm">
-                                {idx + 1}
+                        {tripBookings.map((booking: Booking, idx: number) => {
+                          const isSelectedBooking = selectedBooking?.id === booking.id;
+                          return (
+                            <div
+                              key={booking.id}
+                              role="button"
+                              tabIndex={0}
+                              onClick={() => handleOpenBooking(booking)}
+                              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleOpenBooking(booking); }}
+                              className={`p-4 rounded-xl border transition-all flex items-center justify-between cursor-pointer ${
+                                isSelectedBooking ? 'border-indigo-300 bg-indigo-50/60 shadow-sm' : 'border-gray-100 hover:border-indigo-100 hover:bg-indigo-50/30'
+                              }`}
+                            >
+                              <div className="flex items-center gap-4">
+                                <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center font-bold text-gray-600 text-sm">
+                                  {idx + 1}
+                                </div>
+                                <div>
+                                  <div className="font-bold text-gray-900">{booking.passengerDetails?.[0]?.name || 'Unknown'}</div>
+                                  <div className="text-xs text-gray-500 flex gap-2">
+                                    <span>Ref: {booking.bookingReference}</span>
+                                    <span>•</span>
+                                    <span>Seats: {booking.seatNumbers?.join(', ') || 'Auto'}</span>
+                                    {booking.contactPhone && <><span>•</span><span>{booking.contactPhone}</span></>}
+                                  </div>
+                                </div>
                               </div>
-                              <div>
-                                <div className="font-bold text-gray-900">{booking.passengerDetails?.[0]?.name || 'Unknown'}</div>
-                                <div className="text-xs text-gray-500 flex gap-2">
-                                  <span>Ref: {booking.bookingReference}</span>
-                                  <span>•</span>
-                                  <span>Seats: {booking.seatNumbers?.join(', ') || 'Auto'}</span>
-                                  {booking.contactPhone && <><span>•</span><span>{booking.contactPhone}</span></>}
+                              <div className="text-right space-y-1">
+                                <div className={`inline-flex items-center gap-1 text-xs font-semibold rounded-full px-2 py-1 ${booking.paymentStatus === 'paid' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                                  {booking.paymentStatus.toUpperCase()}
+                                </div>
+                                <div className="text-xs text-gray-400">
+                                  MWK {booking.totalAmount?.toLocaleString()}
                                 </div>
                               </div>
                             </div>
-                            <div className="text-right">
-                              <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                                booking.paymentStatus === 'paid' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
-                              }`}>
-                                {booking.paymentStatus.toUpperCase()}
-                              </span>
-                              <div className="text-xs text-gray-400 mt-1">
-                                MWK {booking.totalAmount?.toLocaleString()}
-                              </div>
-                            </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
                   </div>
@@ -372,6 +498,115 @@ export default function BookingsTab({ dashboard }: BookingsTabProps) {
             )}
           </div>
           
+        </div>
+      )}
+
+      {selectedBooking && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-3xl rounded-3xl bg-white border border-gray-200 shadow-2xl overflow-hidden">
+            <div className="flex items-center justify-between p-5 border-b border-gray-100">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-indigo-600">Booking Details</p>
+                <h3 className="mt-2 text-xl font-bold text-gray-900">{selectedBooking.bookingReference}</h3>
+                <p className="text-sm text-gray-500 mt-1">Passenger: {selectedBooking.passengerDetails?.[0]?.name || 'Unknown'}</p>
+              </div>
+              <button onClick={handleCloseBooking} className="rounded-full p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="grid gap-4 p-6 md:grid-cols-2">
+              <div className="space-y-4">
+                <div className="rounded-3xl border border-gray-100 bg-gray-50 p-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-gray-500">Trip</p>
+                  <p className="mt-3 text-sm font-semibold text-gray-900">{selectedBookingRouteLabel}</p>
+                  <p className="text-sm text-gray-500 mt-2">
+                    {selectedBookingDepartureTime
+                      ? selectedBookingDepartureTime.toLocaleString()
+                      : 'Departure not available'}
+                  </p>
+                  <p className="text-sm text-gray-500">
+                    Bus: {selectedBookingBusLabel}
+                  </p>
+                  <p className="mt-2 text-sm text-gray-500">Seat(s): {selectedBookingSeatLabel}</p>
+                </div>
+                <div className="rounded-3xl border border-gray-100 bg-gray-50 p-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-gray-500">Customer</p>
+                  <p className="mt-3 text-sm font-semibold text-gray-900">{selectedBooking.passengerDetails?.[0]?.name || 'Guest'}</p>
+                  <p className="text-sm text-gray-500">{selectedBooking.contactEmail || 'No email'}</p>
+                  <p className="text-sm text-gray-500">{selectedBooking.contactPhone || 'No phone'}</p>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div className="rounded-3xl border border-gray-100 bg-gray-50 p-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-gray-500">Booking status</p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <span className="rounded-full bg-indigo-100 px-3 py-1 text-xs font-semibold text-indigo-700">{selectedBooking.bookingStatus}</span>
+                    <span className={`rounded-full px-3 py-1 text-xs font-semibold ${selectedBooking.paymentStatus === 'paid' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                      {selectedBooking.paymentStatus}
+                    </span>
+                  </div>
+                  <p className="mt-3 text-sm text-gray-500">Seats: {selectedBooking.seatNumbers?.join(', ') || 'Auto assigned'}</p>
+                  <p className="mt-2 text-sm text-gray-500">Amount: MWK {selectedBooking.totalAmount?.toLocaleString()}</p>
+                </div>
+                <div className="rounded-3xl border border-gray-100 bg-gray-50 p-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-gray-500">Passenger details</p>
+                  <div className="mt-3 space-y-3 text-sm text-gray-700">
+                    {selectedBooking.passengerDetails?.map((passenger, index) => (
+                      <div key={index} className="rounded-2xl bg-white p-3 border border-gray-100">
+                        <p className="font-semibold text-gray-900">{passenger.name}</p>
+                        <p className="text-xs text-gray-500">Seat: {passenger.seatNumber || 'N/A'}</p>
+                        {passenger.contactNumber && <p className="text-xs text-gray-500">Phone: {passenger.contactNumber}</p>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-3 p-6 border-t border-gray-100 bg-gray-50 md:flex-row md:items-center md:justify-between">
+              <div className="space-y-2">
+                <p className="text-sm font-semibold text-gray-900">Actions</p>
+                <p className="text-sm text-gray-500">Use the controls below to confirm, cancel, or remind the passenger.</p>
+              </div>
+              <div className="flex flex-col gap-3 sm:flex-row">
+                {selectedBooking.bookingStatus === 'pending' && (
+                  <button
+                    type="button"
+                    onClick={() => handleConfirmBooking(selectedBooking.id)}
+                    disabled={actionLoading === selectedBooking.id}
+                    className="inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+                  >
+                    {actionLoading === selectedBooking.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}
+                    Confirm
+                  </button>
+                )}
+                {(selectedBooking.bookingStatus === 'pending' || selectedBooking.bookingStatus === 'confirmed') && (
+                  <button
+                    type="button"
+                    onClick={() => handleCancelBooking(selectedBooking.id)}
+                    disabled={actionLoading === selectedBooking.id}
+                    className="inline-flex items-center justify-center rounded-2xl bg-rose-600 px-5 py-3 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-50"
+                  >
+                    {actionLoading === selectedBooking.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <X className="mr-2 h-4 w-4" />}
+                    Cancel
+                  </button>
+                )}
+                {selectedBooking.paymentStatus !== 'paid' && (
+                  <button
+                    type="button"
+                    onClick={() => handleSendReminder(selectedBooking)}
+                    disabled={reminderLoading === selectedBooking.id}
+                    className="inline-flex items-center justify-center rounded-2xl border border-indigo-200 bg-white px-5 py-3 text-sm font-semibold text-indigo-700 hover:bg-indigo-50 disabled:opacity-50"
+                  >
+                    {reminderLoading === selectedBooking.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Bell className="mr-2 h-4 w-4" />}
+                    Send Reminder
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>

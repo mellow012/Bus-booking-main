@@ -68,7 +68,7 @@ export async function POST(req: NextRequest) {
       description,
       tx_ref:       customTxRef,
       callback_url: `${appUrl}/api/payments/paychangu/webhook`,
-      return_url:   `${appUrl}/api/payments/paychangu/verify?tx_ref=${customTxRef}`,
+      return_url:   `${appUrl}/api/payments/paychangu/return?tx_ref=${customTxRef}`,
     };
 
     // ── Direct fetch ───────────────────────────────────────────────────────────

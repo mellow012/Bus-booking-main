@@ -136,7 +136,7 @@ export const useBookingsList = () => {
     if (bookings.length === 0) setLoading(true);
     setError('');
     try {
-      const response = await fetch('/api/bookings?page=1&limit=100');
+      const response = await fetch('/api/bookings?page=1&limit=100', { credentials: 'include' });
       let json: any = null;
       try { json = await response.json(); } catch (e) {
         // ignore JSON parse errors
@@ -349,7 +349,7 @@ export const useBookingsList = () => {
     try {
       let res: Response;
       if (provider === 'paychangu') {
-        const params = new URLSearchParams({ provider, tx_ref: txRef });
+        const params = new URLSearchParams({ provider, tx_ref: txRef, json: 'true' });
         res = await fetch(`/api/payments/paychangu/verify?${params}`);
       } else if (provider === 'flutterwave') {
         const params = new URLSearchParams({ tx_ref: txRef });
