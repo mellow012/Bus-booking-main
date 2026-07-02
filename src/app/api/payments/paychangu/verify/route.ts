@@ -18,19 +18,20 @@ export async function GET(req: NextRequest) {
 
   console.log("[paychangu/verify] tx_ref:", txRef, "status:", status, "json:", jsonResponse);
 
-  const redirectToError = (code: string) => {
+  const buildErrorRedirect = (code: string, extra: Record<string, string> = {}) => {
     if (jsonResponse) {
-      return NextResponse.json({ success: false, status: "failed", message: code }, { status: 400 });
+      return NextResponse.json({ success: false, status: "failed", message: code, ...extra }, { status: 400 });
     }
-    return NextResponse.redirect(`${appUrl}/bookings?error=${code}`);
+    const qs = new URLSearchParams({ error: code, ...extra });
+    return NextResponse.redirect(`${appUrl}/bookings?${qs.toString()}`);
   };
 
   if (!txRef) {
-    return redirectToError("payment_failed");
+    return buildErrorRedirect("payment_failed", { reason: "missing_tx_ref" });
   }
 
   if (status && !SUCCESS_STATUSES.includes(status.toLowerCase())) {
-    return redirectToError("payment_failed");
+    return buildErrorRedirect("payment_failed", { reason: status.toLowerCase() });
   }
 
   try {
@@ -68,19 +69,16 @@ export async function GET(req: NextRequest) {
     console.log("[paychangu/verify] PayChangu response:", verifyRes.status, rawText.slice(0, 300));
 
     if (!verifyRes.ok) {
-      if (jsonResponse) {
-        return NextResponse.json({ success: false, status: "failed", message: "verification_failed" }, { status: 400 });
-      }
-      return NextResponse.redirect(`${appUrl}/bookings?error=verification_failed`);
+      const reason = `paychangu_http_${verifyRes.status}`;
+      console.error("[paychangu/verify] HTTP error", verifyRes.status, rawText.slice(0, 500));
+      return buildErrorRedirect("verification_failed", { reason });
     }
 
     let result: any;
     try { result = JSON.parse(rawText); }
     catch {
-      if (jsonResponse) {
-        return NextResponse.json({ success: false, status: "failed", message: "verification_failed" }, { status: 400 });
-      }
-      return NextResponse.redirect(`${appUrl}/bookings?error=verification_failed`);
+      console.error("[paychangu/verify] Non-JSON response:", rawText.slice(0, 500));
+      return buildErrorRedirect("verification_failed", { reason: "invalid_response" });
     }
 
     const verified =
@@ -103,10 +101,7 @@ export async function GET(req: NextRequest) {
           updatedAt: new Date(),
         }
       });
-      if (jsonResponse) {
-        return NextResponse.json({ success: false, status: "failed", message: "verification_failed" }, { status: 400 });
-      }
-      return NextResponse.redirect(`${appUrl}/bookings?error=verification_failed`);
+      return buildErrorRedirect("verification_failed", { reason: "not_verified" });
     }
 
     // ── Mark paid ─────────────────────────────────────────────────────────────
@@ -137,7 +132,7 @@ export async function GET(req: NextRequest) {
     );
 
   } catch (error: any) {
-    console.error("[paychangu/verify] Unhandled error:", error);
-    return NextResponse.redirect(`${appUrl}/bookings?error=server_error`);
+    console.error("[paychangu/verify] Unhandled error:", error?.message ?? error);
+    return buildErrorRedirect("server_error", { reason: "internal_exception" });
   }
 }
