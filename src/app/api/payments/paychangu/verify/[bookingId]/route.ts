@@ -122,9 +122,22 @@ export async function GET(
         },
       });
 
-      // Create payment record
-      await tx.payment.create({
-        data: {
+      // Upsert payment record to avoid duplicate paymentId errors
+      await tx.payment.upsert({
+        where: { paymentId: refToVerify },
+        update: {
+          bookingId: bookingId,
+          amount: booking.totalAmount,
+          currency: booking.currency,
+          customerEmail: booking.contactEmail,
+          customerPhone: booking.contactPhone,
+          status: "completed",
+          provider: "paychangu",
+          txRef: refToVerify,
+          metadata: result.data || {},
+          updatedAt: new Date(),
+        },
+        create: {
           paymentId: refToVerify,
           bookingId: bookingId,
           amount: booking.totalAmount,
