@@ -120,6 +120,7 @@ const Header: React.FC = () => {
     isCustomer &&
     (!userProfile?.setupCompleted || !userProfile?.phone?.trim() || (!userProfile?.firstName?.trim() && !userProfile?.lastName?.trim()))
   );
+  const handleProfileNavigate = () => router.push('/profile');
 
   const adminRoute = isSuperAdmin ? '/admin' : isCompanyAdmin ? '/company/admin' : isOperator ? '/company/operator/dashboard' : null;
   const adminLabel = isOperator ? t('operatorPanel') : t('adminPanel');
@@ -191,15 +192,11 @@ const Header: React.FC = () => {
             <LanguageSwitcher />
 
             {user && (
-              <div className="relative hidden md:block" ref={userMenuRef}>
-                <button onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-                  className="flex items-center space-x-3 p-2 rounded-xl hover:bg-gray-100 transition-all duration-200 group">
-                  <div className="relative">
-                    <UserAvatar user={user} userProfile={userProfile} />
-                    {needsProfileAttention && (
-                      <span className="absolute top-0 right-0 w-2.5 h-2.5 bg-emerald-500 rounded-full border border-white" />
-                    )}
-                  </div>
+              <div className="relative hidden md:flex items-center space-x-2" ref={userMenuRef}>
+                <button
+                  onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+                  className="flex items-center space-x-3 p-2 rounded-xl hover:bg-gray-100 transition-all duration-200 group"
+                >
                   <div className="hidden md:block text-left">
                     <div className="text-sm font-semibold text-gray-900 group-hover:text-blue-600">{displayName}</div>
                     <div className="text-xs text-gray-500 capitalize">
@@ -207,6 +204,18 @@ const Header: React.FC = () => {
                     </div>
                   </div>
                   <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform duration-200 ${isUserMenuOpen ? 'rotate-180' : ''}`} />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleProfileNavigate}
+                  className="relative rounded-full p-1 hover:bg-gray-100 transition-all duration-200"
+                  aria-label="View profile"
+                >
+                  <UserAvatar user={user} userProfile={userProfile} />
+                  {needsProfileAttention && (
+                    <span className="absolute top-0 right-0 w-2.5 h-2.5 bg-emerald-500 rounded-full border border-white" />
+                  )}
                 </button>
 
                 {isUserMenuOpen && (

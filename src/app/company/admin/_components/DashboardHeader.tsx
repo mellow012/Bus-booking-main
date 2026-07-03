@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { useRouter } from 'next/navigation';
 import { Menu, Bell, User, Search, HelpCircle } from 'lucide-react';
 
 interface DashboardHeaderProps {
@@ -28,10 +29,13 @@ export default function DashboardHeader({
   isBusy,
   NotificationBellComponent,
 }: DashboardHeaderProps) {
+  const router = useRouter();
+  const notificationUserId = userProfile?.id ?? user?.id;
+
   // Safe Fallback rendering of notification bell
   const renderNotificationBell = () => {
-    if (NotificationBellComponent && user?.id) {
-      return <NotificationBellComponent userId={user.id} />;
+    if (NotificationBellComponent && notificationUserId) {
+      return <NotificationBellComponent userId={notificationUserId} />;
     }
     return (
       <button className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-50 rounded-xl transition-all border border-transparent" aria-label="Notifications">
@@ -106,11 +110,16 @@ export default function DashboardHeader({
 
         {renderNotificationBell()}
 
-        <div className="h-8 w-8 bg-indigo-100 rounded-full flex items-center justify-center border border-indigo-200 ml-2 shadow-sm">
+        <button
+          type="button"
+          onClick={() => router.push('/profile')}
+          className="h-8 w-8 bg-indigo-100 rounded-full flex items-center justify-center border border-indigo-200 ml-2 shadow-sm transition hover:bg-indigo-200"
+          aria-label="View profile"
+        >
           <span className="text-sm font-bold text-indigo-700 uppercase">
             {userProfile?.firstName?.[0] || user?.email?.[0] || 'A'}
           </span>
-        </div>
+        </button>
       </div>
     </header>
   );

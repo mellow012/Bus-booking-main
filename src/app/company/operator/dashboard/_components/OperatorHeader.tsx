@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { useRouter } from 'next/navigation';
 import { Bell, User, Search, HelpCircle } from 'lucide-react';
 
 interface OperatorHeaderProps {
@@ -22,10 +23,13 @@ export default function OperatorHeader({
   onHelpClick,
   NotificationBellComponent,
 }: OperatorHeaderProps) {
+  const router = useRouter();
+  const notificationUserId = userProfile?.id ?? user?.id;
+
   // Safe Fallback rendering of notification bell
   const renderNotificationBell = () => {
-    if (NotificationBellComponent && user?.id) {
-      return <NotificationBellComponent userId={user.id} />;
+    if (NotificationBellComponent && notificationUserId) {
+      return <NotificationBellComponent userId={notificationUserId} />;
     }
     return (
       <button className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-50 rounded-xl transition-all border border-transparent">
@@ -81,9 +85,14 @@ export default function OperatorHeader({
 
           {renderNotificationBell()}
           
-          <div className="w-10 h-10 bg-indigo-50 rounded-full flex items-center justify-center font-bold text-indigo-700 border border-indigo-100 shadow-sm uppercase ml-2">
+          <button
+            type="button"
+            onClick={() => router.push('/profile')}
+            className="w-10 h-10 bg-indigo-50 rounded-full flex items-center justify-center font-bold text-indigo-700 border border-indigo-100 shadow-sm uppercase ml-2 transition hover:bg-indigo-100"
+            aria-label="View profile"
+          >
             {userProfile?.firstName?.[0] || user?.email?.[0] || 'U'}
-          </div>
+          </button>
         </div>
       </div>
     </header>
