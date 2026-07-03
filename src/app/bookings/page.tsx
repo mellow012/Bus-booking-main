@@ -99,6 +99,33 @@ const BookingCard = memo<{
           </div>
         </div>
 
+        {booking.returnSegment ? (
+          <div className="mb-4 p-4 bg-blue-50 border border-blue-100 rounded-xl">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-sm font-semibold text-blue-800">Return trip</p>
+                <p className="text-xs text-blue-600">{resolveStopName(booking.returnSegment.originStopId, undefined, booking.returnSegment.route, booking.returnSegment.route.origin || 'N/A')} → {resolveStopName(booking.returnSegment.destinationStopId, undefined, booking.returnSegment.route, booking.returnSegment.route.destination || 'N/A')}</p>
+              </div>
+              <div className="text-right text-sm text-blue-700">{formatDate(booking.returnSegment.schedule.departureDateTime)}</div>
+            </div>
+            <div className="grid grid-cols-2 gap-4 mt-3 text-sm text-gray-700">
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-slate-400">Departs</div>
+                <div className="font-semibold">{formatTime(booking.returnSegment.schedule.departureDateTime)}</div>
+              </div>
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-slate-400">Arrives</div>
+                <div className="font-semibold">{formatTime(booking.returnSegment.schedule.arrivalDateTime)}</div>
+              </div>
+            </div>
+          </div>
+        ) : booking.returnDate ? (
+          <div className="mb-4 px-4 py-3 bg-blue-50 border border-blue-100 rounded-lg text-sm text-blue-800">
+            <div className="font-semibold">Return trip booked</div>
+            <div className="mt-1 text-sm">Return date: {formatDate(booking.returnDate)}</div>
+          </div>
+        ) : null}
+
         {isSegment && (
           <div className="mb-4 px-3 py-2 bg-orange-50 border border-orange-100 rounded-lg text-xs text-orange-700">
             Full route: {booking.route?.origin} → {booking.route?.destination}
@@ -389,12 +416,7 @@ const BookingsPage: React.FC = () => {
 
     if (pv === 'true' && provider) {
       if (txRef) {
-        if (flwStatus !== 'cancelled') {
-          verifyPaymentStatus(provider, txRef, transactionId);
-        }
-      } else if (flwStatus === 'success') {
-        setSuccess('Payment successfully completed.');
-        setTimeout(() => setSuccess(''), 6000);
+        verifyPaymentStatus(provider, txRef, transactionId);
       }
 
       const clean = new URL(window.location.href);

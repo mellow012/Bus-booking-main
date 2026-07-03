@@ -141,7 +141,7 @@ export const notificationSchema = z.object({
   recipientIds: z.array(authUidSchema).min(1, 'At least one recipient required'),
   title: z.string().min(1, 'Title required').max(200),
   body: z.string().min(1, 'Body required').max(4096),
-  type: z.enum(['booking', 'payment', 'schedule', 'system', 'promotion', 'alert', 'cancellation', 'cancellation_requested', 'trip_update']).optional().default('system'),
+  type: z.enum(['booking', 'payment', 'payment_reminder', 'schedule', 'system', 'promotion', 'alert', 'cancellation', 'cancellation_requested', 'trip_update']).optional().default('system'),
   priority: z.enum(['low', 'medium', 'high', 'urgent']).optional().default('medium'),
   data: z.record(z.string(), z.unknown()).optional(),
   icon: z.string().url('Invalid icon URL').optional(),

@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { TicketPercent, Loader2, CreditCard } from "lucide-react";
-import type { Schedule } from "@/types";
+import type { Schedule, Route } from "@/types";
 import type { PassengerFormState } from "./InlinePassengerForm";
 
 export interface BookingConfirmModalProps {
@@ -32,17 +32,22 @@ export interface BookingConfirmModalProps {
   setReturnDate: (v: string) => void;
   bookingLoading: boolean;
   passengerForms: PassengerFormState[];
+  selectedReturnSeats: string[];
+  returnSchedule: Schedule | null;
+  returnRoute: Route | null;
   goBackToPassengers: () => void;
   confirmBooking: () => Promise<void> | void;
 }
 
 export default function BookingConfirmModal({
   isOpen, onClose, schedule, originStopId, destinationStopId, stopName,
-  formatDate, formatTime, selectedSeats, displayPrice, passengers,
+  formatDate, formatTime, selectedSeats, selectedReturnSeats, returnSchedule, returnRoute, displayPrice, passengers,
   appliedPromo, promoCode, setPromoCode, isValidatingPromo, validatePromoCode,
   setAppliedPromo, wantsReturnTrip, setWantsReturnTrip, returnDate, setReturnDate, bookingLoading, passengerForms, goBackToPassengers, confirmBooking,
 }: BookingConfirmModalProps) {
-  const finalBaseFare = wantsReturnTrip ? (displayPrice * passengers) * 2 : (displayPrice * passengers);
+  const outboundAmount = displayPrice * passengers;
+  const returnAmount = wantsReturnTrip && returnSchedule ? (returnSchedule.price || 0) * passengers : 0;
+  const finalBaseFare = outboundAmount + returnAmount;
   const finalTotalAmount = finalBaseFare - (appliedPromo?.discount || 0);
   return (
     <Modal
@@ -118,8 +123,12 @@ export default function BookingConfirmModal({
                 onChange={(e) => setReturnDate(e.target.value)}
                 min={new Date().toISOString().split('T')[0]}
                 required={wantsReturnTrip}
+                aria-describedby={wantsReturnTrip && !returnDate ? 'returnDateError' : undefined}
                 className="w-full sm:w-1/2"
               />
+              {!returnDate ? (
+                <p id="returnDateError" className="text-xs text-rose-600 font-medium">Please choose your return date to continue.</p>
+              ) : null}
               <p className="text-xs text-gray-500">Your return date will be recorded and you will be charged for both trips now.</p>
             </div>
           )}
@@ -163,6 +172,27 @@ export default function BookingConfirmModal({
           </div>
         )}
 
+        {wantsReturnTrip && returnSchedule ? (
+          <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Return Trip</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm text-slate-700">
+              <div>
+                <p className="font-semibold">{returnRoute?.origin} → {returnRoute?.destination}</p>
+                <p>{formatDate(returnSchedule.departureDateTime)} · {formatTime(returnSchedule.departureDateTime)}</p>
+                <p className="text-xs text-slate-500">Return seats: {selectedReturnSeats.join(', ')}</p>
+              </div>
+              <div className="text-right">
+                <p className="font-semibold">MWK {(returnSchedule.price || 0).toLocaleString()} per seat</p>
+                <p className="text-xs text-slate-500">Total: MWK {(returnAmount).toLocaleString()}</p>
+              </div>
+            </div>
+          </div>
+        ) : wantsReturnTrip ? (
+          <div className="p-4 bg-rose-50 rounded-xl border border-rose-100 text-sm text-rose-700">
+            Please complete return schedule and seat selection before submitting.
+          </div>
+        ) : null}
+
         <div>
           <p className="text-sm font-semibold text-gray-700 mb-2">Passengers</p>
           <div className="space-y-2">
@@ -187,7 +217,7 @@ export default function BookingConfirmModal({
           <Button
             onClick={confirmBooking}
             className="flex-1 bg-blue-600 text-white hover:bg-blue-700"
-            disabled={bookingLoading}
+            disabled={bookingLoading || (wantsReturnTrip && !returnDate)}
           >
             {bookingLoading
               ? <span className="flex items-center justify-center gap-2">

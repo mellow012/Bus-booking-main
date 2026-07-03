@@ -88,13 +88,39 @@ export async function GET(
       );
     }
 
+    function parseSeatArray(value: unknown): string[] {
+      if (Array.isArray(value)) return value.filter((seat): seat is string => typeof seat === 'string');
+      if (typeof value === 'string') {
+        try {
+          const parsed = JSON.parse(value);
+          if (Array.isArray(parsed)) return parsed.filter((seat): seat is string => typeof seat === 'string');
+        } catch {
+          return [];
+        }
+      }
+      return [];
+    }
+
+    const activeReservations = await prisma.seatReservation.findMany({
+      where: {
+        scheduleId,
+        status: 'reserved',
+        expiresAt: { gt: new Date() },
+      },
+    });
+
+    const reservedSeats = activeReservations.flatMap((reservation) =>
+      parseSeatArray(reservation.seatNumbers)
+    );
+
     return NextResponse.json({
       schedule: {
         id: schedule.id,
         departureDateTime: schedule.departureDateTime,
         arrivalDateTime: schedule.arrivalDateTime,
         availableSeats: schedule.availableSeats,
-        bookedSeats: Array.isArray(schedule.bookedSeats) ? schedule.bookedSeats : [],
+        bookedSeats: parseSeatArray(schedule.bookedSeats),
+        reservedSeats,
         price: schedule.price,
         baseFare: schedule.baseFare,
         segmentPrices: schedule.segmentPrices || {},

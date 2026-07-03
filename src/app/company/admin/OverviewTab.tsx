@@ -214,23 +214,20 @@ export default function OverviewTab({ dashboard }: OverviewTabProps) {
         </div>
 
         {/* Revenue Card */}
-        <div 
-          onClick={() => setActiveModal('revenue')}
-          className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm hover:shadow-md transition-all cursor-pointer group relative overflow-hidden"
-        >
-          <div className="absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-10 transition-opacity">
+        <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm transition-all relative overflow-hidden">
+          <div className="absolute top-0 right-0 p-6 opacity-10">
             <DollarSign className="w-16 h-16 text-blue-600" />
           </div>
           <div className="flex items-center justify-between mb-4">
             <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600">
               <DollarSign className="w-6 h-6" />
             </div>
-            <ChevronRight className="w-5 h-5 text-gray-300 group-hover:text-blue-600 transition-colors" />
+            <ChevronRight className="w-5 h-5 text-gray-300" />
           </div>
           <h3 className="text-gray-500 font-medium mb-1">Total Revenue</h3>
           <div className="text-3xl font-bold text-gray-900">MWK {totalRevenue.toLocaleString()}</div>
           <p className="text-sm text-green-600 mt-2 font-medium flex items-center gap-1">
-            <TrendingUp className="w-3 h-3" /> View Branch Breakdown
+            <TrendingUp className="w-3 h-3" /> Branch revenue summary
           </p>
         </div>
 

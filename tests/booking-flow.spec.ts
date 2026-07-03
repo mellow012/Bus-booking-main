@@ -85,18 +85,9 @@ test.describe('TibhukeBus Booking Flow', () => {
     await page.click('button:has-text("Continue to Review"), button:has-text("Proceed to Pay")');
 
     // 8. Payment
-    await page.waitForURL(url => url.href.includes('paychangu.com') || url.href.includes('flutterwave.com'), { timeout: 60000 });
-
-    const url = page.url();
-    if (url.includes('flutterwave')) {
-      await page.fill('#cardnumber', '5531886652142950');
-      await page.fill('#expiry', '0932');
-      await page.fill('#cvv', '564');
-      await page.click('button[type="submit"]');
-    } else if (url.includes('paychangu')) {
-      await page.fill('input[placeholder*="Mobile Number"]', '999999999');
-      await page.click('button:has-text("Confirm Payment")');
-    }
+    await page.waitForURL(url => url.href.includes('paychangu.com'), { timeout: 60000 });
+    await page.fill('input[placeholder*="Mobile Number"]', '999999999');
+    await page.click('button:has-text("Confirm Payment")');
 
     // 9. Success
     await page.waitForURL(/\/bookings|\/ticket/, { timeout: 90000 });

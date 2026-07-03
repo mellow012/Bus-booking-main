@@ -5,9 +5,20 @@ import { useAppToast } from '@/contexts/ToastContext';
 import { Booking, Schedule, Bus, Route, Company, UserProfile } from '@/types';
 
 // PaymentProvider type
-export type PaymentProvider = 'flutterwave' | 'paychangu' | 'cash' | 'local_bank';
+export type PaymentProvider = 'paychangu' | 'cash' | 'local_bank';
 
 // BookingWithDetails mirrors the shape used by the UI layer
+export interface BookingSegmentWithDetails {
+  id: string;
+  scheduleId: string;
+  originStopId?: string;
+  destinationStopId?: string;
+  seatNumbers?: string[];
+  date?: Date;
+  schedule: Schedule;
+  route: Route;
+}
+
 export interface BookingWithDetails extends Booking {
   schedule: Schedule;
   bus: Bus;
@@ -19,6 +30,8 @@ export interface BookingWithDetails extends Booking {
   originStopName?: string;
   destinationStopName?: string;
   pricePerPerson?: number;
+  segments?: BookingSegmentWithDetails[];
+  returnSegment?: BookingSegmentWithDetails;
 }
 
 export interface SearchFilters {
@@ -42,6 +55,25 @@ export function resolveStopName(
     if (f) return f.name;
   }
   return fallback;
+}
+
+function normalizeText(value: string | undefined, fallback = ''): string {
+  if (!value) return fallback;
+  let text = value;
+  try {
+    text = decodeURIComponent(text.replace(/\+/g, ' '));
+  } catch {
+    // Keep original text when it's not URL encoded.
+  }
+  return text
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&#(\d+);/g, (_, dec) => String.fromCharCode(Number(dec)))
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => String.fromCharCode(Number.parseInt(hex, 16)))
+    .trim() || fallback;
 }
 
 export const useBookingsList = () => {
@@ -147,50 +179,82 @@ export const useBookingsList = () => {
       }
       const { data: apiBookings } = json || {};
 
-      const details: BookingWithDetails[] = apiBookings.map((b: any) => ({
-        id: b.id,
-        bookingReference: b.bookingReference,
-        userId: b.userId,
-        scheduleId: b.scheduleId,
-        companyId: b.schedule?.company?.id || b.companyId,
-        numberOfSeats: Array.isArray(b.passengerDetails) ? b.passengerDetails.length : 0,
-        totalAmount: b.totalAmount,
-        bookingStatus: b.bookingStatus,
-        paymentStatus: b.paymentStatus,
-        createdAt: new Date(b.createdAt),
-        updatedAt: new Date(b.updatedAt),
-        seatNumbers: b.seatNumbers || [],
-        passengerDetails: b.passengerDetails || [],
-        originStopId: b.originStopId,
-        destinationStopId: b.destinationStopId,
-        originStopName: b.originStopName,
-        destinationStopName: b.destinationStopName,
-        schedule: {
-          id: b.scheduleId,
-          departureDateTime: new Date(b.schedule?.departureDateTime),
-          arrivalDateTime: new Date(b.schedule?.arrivalDateTime),
-          price: b.totalAmount && Array.isArray(b.passengerDetails) && b.passengerDetails.length > 0 ? Math.floor(b.totalAmount / b.passengerDetails.length) : 0,
-          availableSeats: b.schedule?.availableSeats || 0,
-          date: b.schedule?.departureDateTime,
-        } as any,
-        route: {
-          id: b.schedule?.route?.id || '',
-          origin: b.schedule?.route?.origin || 'Unknown',
-          destination: b.schedule?.route?.destination || 'Unknown',
-          distance: b.schedule?.route?.distance || 0,
-          stops: b.schedule?.route?.stops || [],
-        } as any,
-        bus: {
-          id: b.schedule?.bus?.id || '',
-          busNumber: b.schedule?.bus?.licensePlate || 'N/A',
-          busType: b.schedule?.bus?.busType || 'N/A',
-          licensePlate: b.schedule?.bus?.licensePlate || 'N/A',
-        } as any,
-        company: {
-          id: b.schedule?.company?.id || '',
-          name: b.schedule?.company?.name || 'Unknown',
-        } as any,
-      }));
+      const details: BookingWithDetails[] = apiBookings.map((b: any) => {
+        const mappedSegments: BookingSegmentWithDetails[] = Array.isArray(b.segments)
+          ? b.segments.map((segment: any) => ({
+              id: segment.id,
+              scheduleId: segment.scheduleId,
+              originStopId: segment.originStopId,
+              destinationStopId: segment.destinationStopId,
+              seatNumbers: Array.isArray(segment.seatNumbers) ? segment.seatNumbers : [],
+              date: segment.date ? new Date(segment.date) : undefined,
+              schedule: {
+                id: segment.schedule?.id || '',
+                departureDateTime: new Date(segment.schedule?.departureDateTime),
+                arrivalDateTime: new Date(segment.schedule?.arrivalDateTime),
+                price: segment.schedule?.price || 0,
+                availableSeats: segment.schedule?.availableSeats || 0,
+                date: segment.schedule?.departureDateTime,
+              } as any,
+              route: {
+                id: segment.schedule?.route?.id || '',
+                origin: normalizeText(segment.schedule?.route?.origin, 'Unknown'),
+                destination: normalizeText(segment.schedule?.route?.destination, 'Unknown'),
+                distance: segment.schedule?.route?.distance || 0,
+                stops: segment.schedule?.route?.stops || [],
+              } as any,
+            }))
+          : [];
+
+        return {
+          id: b.id,
+          bookingReference: b.bookingReference,
+          userId: b.userId,
+          scheduleId: b.scheduleId,
+          companyId: b.schedule?.company?.id || b.companyId,
+          numberOfSeats: Array.isArray(b.passengerDetails) ? b.passengerDetails.length : 0,
+          totalAmount: b.totalAmount,
+          bookingStatus: b.bookingStatus,
+          paymentStatus: b.paymentStatus,
+          createdAt: new Date(b.createdAt),
+          updatedAt: new Date(b.updatedAt),
+          seatNumbers: b.seatNumbers || [],
+          passengerDetails: b.passengerDetails || [],
+          originStopId: b.originStopId,
+          destinationStopId: b.destinationStopId,
+          originStopName: b.originStopName,
+          destinationStopName: b.destinationStopName,
+          schedule: {
+            id: b.scheduleId,
+            departureDateTime: new Date(b.schedule?.departureDateTime),
+            arrivalDateTime: new Date(b.schedule?.arrivalDateTime),
+            price: b.totalAmount && Array.isArray(b.passengerDetails) && b.passengerDetails.length > 0 ? Math.floor(b.totalAmount / b.passengerDetails.length) : 0,
+            availableSeats: b.schedule?.availableSeats || 0,
+            date: b.schedule?.departureDateTime,
+          } as any,
+          route: {
+            id: b.schedule?.route?.id || '',
+            origin: normalizeText(b.schedule?.route?.origin, 'Unknown'),
+            destination: normalizeText(b.schedule?.route?.destination, 'Unknown'),
+            distance: b.schedule?.route?.distance || 0,
+            stops: b.schedule?.route?.stops || [],
+          } as any,
+          bus: {
+            id: b.schedule?.bus?.id || '',
+            busNumber: normalizeText(b.schedule?.bus?.licensePlate, 'N/A'),
+            busType: normalizeText(b.schedule?.bus?.busType, 'N/A'),
+            licensePlate: normalizeText(b.schedule?.bus?.licensePlate, 'N/A'),
+          } as any,
+          company: {
+            id: b.schedule?.company?.id || '',
+            name: normalizeText(b.schedule?.company?.name, 'Unknown'),
+            logo: normalizeText(b.schedule?.company?.logo, ''),
+          } as any,
+          segments: mappedSegments,
+          returnSegment: mappedSegments.length > 1 ? mappedSegments[1] : undefined,
+          returnDate: b.returnDate ? new Date(b.returnDate) : (typeof b.metadata?.returnDate === 'string' ? new Date(b.metadata.returnDate) : undefined),
+        };
+      });
 
       const valid = details.filter((b) => !isBookingExpired(b));
       setBookings(valid);
@@ -266,30 +330,168 @@ export const useBookingsList = () => {
     setActionLoading(`download_${booking.id}`);
     try {
       const [{ default: PDF }, { default: QR }] = await Promise.all([import('jspdf'), import('qrcode')]);
-      const pdf = new PDF(); let y = 30; const lh = 8;
-      const boarding = resolveStopName(booking.originStopId, booking.originStopName, booking.route, booking.route.origin);
-      const alighting = resolveStopName(booking.destinationStopId, booking.destinationStopName, booking.route, booking.route.destination);
-      const isSeg = boarding !== booking.route.origin || alighting !== booking.route.destination;
-      const line = (l: string, v: string, b = false) => { pdf.setFont('helvetica', b ? 'bold' : 'normal'); pdf.text(`${l}: ${v}`, 20, y); y += lh; };
-      pdf.setFontSize(20); pdf.setFont('helvetica', 'bold'); pdf.text('Bus Ticket', 20, 20); pdf.setFontSize(12); pdf.setFont('helvetica', 'normal');
+      const pdf = new PDF(); let y = 50; const lh = 8;
+      const boarding = normalizeText(resolveStopName(booking.originStopId, booking.originStopName, booking.route, booking.route.origin));
+      const alighting = normalizeText(resolveStopName(booking.destinationStopId, booking.destinationStopName, booking.route, booking.route.destination));
+      const normalizedOrigin = normalizeText(booking.route.origin, 'Unknown');
+      const normalizedDestination = normalizeText(booking.route.destination, 'Unknown');
+      const fullRoute = `${normalizedOrigin} -> ${normalizedDestination}`;
+      const isSeg = boarding !== normalizedOrigin || alighting !== normalizedDestination;
+      const accentColor = '#1d4ed8';
+      const primaryTextColor = '#0f172a';
+      const secondaryTextColor = '#475569';
+
+      pdf.setFillColor('#eff6ff');
+      pdf.setDrawColor('#bfdbfe');
+      pdf.rect(15, 10, 180, 30, 'F');
+      pdf.setFontSize(20); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(accentColor);
+      pdf.text('Bus Ticket', 20, 26);
+      pdf.setFontSize(12); pdf.setTextColor(primaryTextColor);
+      pdf.setFont('helvetica', 'normal');
+      pdf.text(`Booking Reference: ${booking.bookingReference || booking.id.slice(-8)}`, 20, 34);
+      pdf.setDrawColor('#bfdbfe');
+      pdf.line(15, 42, 195, 42);
+      pdf.setFillColor('#f8fbff');
+      pdf.rect(15, 44, 180, 222, 'F');
+      pdf.setDrawColor('#dbeafe');
+      pdf.line(15, 44, 195, 44);
+      y = 52;
+
+      const line = (l: string, v: string, b = false) => {
+        pdf.setFont('helvetica', b ? 'bold' : 'normal');
+        pdf.setTextColor(b ? accentColor : secondaryTextColor);
+        pdf.text(`${l}: ${v}`, 20, y);
+        y += lh;
+      };
+
+      const loadLogoDataUrl = async (logoUrl: string): Promise<{ dataUrl: string; width: number; height: number } | null> => {
+        try {
+          const response = await fetch(logoUrl, { mode: 'cors' });
+          if (!response.ok) return null;
+          const blob = await response.blob();
+          const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.onload = () => resolve(img);
+            img.onerror = () => reject(new Error('Image load failed'));
+            img.src = URL.createObjectURL(blob);
+          });
+          const canvas = document.createElement('canvas');
+          canvas.width = image.width;
+          canvas.height = image.height;
+          const context = canvas.getContext('2d');
+          if (!context) return null;
+          context.drawImage(image, 0, 0);
+          const dataUrl = canvas.toDataURL('image/png');
+          URL.revokeObjectURL(image.src);
+          return { dataUrl, width: image.width, height: image.height };
+        } catch {
+          return null;
+        }
+      };
+
+      if (booking.company.logo) {
+        const logoAsset = await loadLogoDataUrl(booking.company.logo);
+        if (logoAsset) {
+          const maxWidth = 42;
+          const maxHeight = 24;
+          const ratio = Math.min(maxWidth / logoAsset.width, maxHeight / logoAsset.height, 1);
+          const logoWidth = logoAsset.width * ratio;
+          const logoHeight = logoAsset.height * ratio;
+          const logoY = 10 + (30 - logoHeight) / 2;
+          pdf.addImage(logoAsset.dataUrl, 'PNG', 165, logoY, logoWidth, logoHeight);
+        }
+      }
+
       line('Booking Reference', booking.bookingReference || booking.id.slice(-8), true);
-      line('Company', booking.company.name); line('Full Route', `${booking.route.origin} → ${booking.route.destination}`);
-      if (isSeg) { y += 2; pdf.setFont('helvetica', 'bold'); pdf.text('--- PASSENGER SEGMENT ---', 20, y); y += lh; pdf.setFont('helvetica', 'normal'); line('Boarding', boarding, true); line('Alighting', alighting, true); y += 2; }
-      else { line('Boarding', boarding); line('Alighting', alighting); }
-      line('Date', formatDate(booking.schedule.departureDateTime)); line('Departure', formatTime(booking.schedule.departureDateTime));
-      line('Arrival (Est.)', formatTime(booking.schedule.arrivalDateTime)); line('Bus', `${booking.bus.busType} (${booking.bus.licensePlate || 'N/A'})`); line('Seats', booking.seatNumbers.join(', '));
-      y += 4; pdf.text('Passengers:', 20, y); y += lh;
+      line('Company', normalizeText(booking.company.name, 'Unknown'));
+      line('Full Route', fullRoute);
+      if (isSeg) {
+        y += 2;
+        pdf.setFont('helvetica', 'bold');
+        pdf.text('--- PASSENGER SEGMENT ---', 20, y);
+        y += lh;
+        pdf.setFont('helvetica', 'normal');
+        line('Boarding', boarding, true);
+        line('Alighting', alighting, true);
+        y += 2;
+      } else {
+        line('Boarding', boarding);
+        line('Alighting', alighting);
+      }
+      line('Date', formatDate(booking.schedule.departureDateTime));
+      line('Departure', formatTime(booking.schedule.departureDateTime));
+      line('Arrival (Est.)', formatTime(booking.schedule.arrivalDateTime));
+      line('Bus', `${booking.bus.busType} (${booking.bus.licensePlate || 'N/A'})`);
+      line('Seats', booking.seatNumbers.join(', '));
+
+      if (booking.returnSegment) {
+        y += 4;
+        pdf.setFont('helvetica', 'bold');
+        pdf.text('Return Trip', 20, y);
+        y += lh;
+        pdf.setFont('helvetica', 'normal');
+        const returnRoute = booking.returnSegment.route;
+        const returnOrigin = normalizeText(resolveStopName(booking.returnSegment.originStopId, undefined, returnRoute, returnRoute.origin));
+        const returnDestination = normalizeText(resolveStopName(booking.returnSegment.destinationStopId, undefined, returnRoute, returnRoute.destination));
+        line('Return Route', `${returnOrigin} -> ${returnDestination}`);
+        line('Return Date', formatDate(booking.returnSegment.schedule.departureDateTime));
+        line('Return Departure', formatTime(booking.returnSegment.schedule.departureDateTime));
+        line('Return Arrival', formatTime(booking.returnSegment.schedule.arrivalDateTime));
+      } else if (booking.returnDate) {
+        line('Return Date', formatDate(booking.returnDate));
+      }
+
+      y += 4;
+      pdf.text('Passengers:', 20, y);
+      y += lh;
       booking.passengerDetails.forEach((p) => { pdf.text(`• ${p.name} (Age: ${p.age}, Seat: ${p.seatNumber})`, 25, y); y += lh; });
-      y += 4; line('Total', `MWK ${booking.totalAmount.toLocaleString()}`, true);
+      y += 4;
+      line('Total', `MWK ${booking.totalAmount.toLocaleString()}`, true);
       if (booking.pricePerPerson && booking.passengerDetails.length > 1) line('Breakdown', `MWK ${booking.pricePerPerson.toLocaleString()} × ${booking.passengerDetails.length}`);
       line('Payment', (booking as any).paymentMethod === 'cash_on_boarding' ? 'Cash on Boarding' : booking.paymentStatus.charAt(0).toUpperCase() + booking.paymentStatus.slice(1));
       if (includeQR) {
         const qr = await QR.toDataURL(JSON.stringify({ bookingId: booking.id, boarding, alighting, seats: booking.seatNumbers, amount: booking.totalAmount }), { width: 200 });
-        pdf.addImage(qr, 'PNG', 140, 30, 50, 50); pdf.setFontSize(8); pdf.text('Scan to verify', 150, 85);
+        pdf.addImage(qr, 'PNG', 140, 30, 50, 50);
+        pdf.setFontSize(8);
+        pdf.text('Scan to verify', 150, 85);
       }
-      pdf.save(`ticket_${booking.bookingReference || booking.id.slice(-8)}.pdf`); setSuccess('Ticket downloaded!');
+
+      const footerY = 282;
+      pdf.setDrawColor('#dbeafe');
+      pdf.line(15, footerY - 6, 195, footerY - 6);
+      pdf.setFontSize(9);
+      pdf.setTextColor('#475569');
+      const footerText = 'Powered by TibhukeBus';
+      const badgeLogo = await loadLogoDataUrl('/tibhukebus_logo_transparent.png');
+      let footerX = 20;
+      if (badgeLogo) {
+        const maxWidth = 18;
+        const maxHeight = 10;
+        const ratio = Math.min(maxWidth / badgeLogo.width, maxHeight / badgeLogo.height, 1);
+        const logoWidth = badgeLogo.width * ratio;
+        const logoHeight = badgeLogo.height * ratio;
+        const textWidth = pdf.getTextWidth(footerText);
+        const totalWidth = textWidth + 6 + logoWidth;
+        footerX = (210 - totalWidth) / 2;
+        pdf.text(footerText, footerX, footerY);
+        pdf.addImage(badgeLogo.dataUrl, 'PNG', footerX + textWidth + 6, footerY - logoHeight + 4, logoWidth, logoHeight);
+      } else {
+        const textWidth = pdf.getTextWidth(footerText);
+        footerX = (210 - textWidth) / 2;
+        pdf.text(footerText, footerX, footerY);
+      }
+
+      pdf.setFontSize(8);
+      pdf.setTextColor('#94a3b8');
+      pdf.text('Contact: +265 997 56 12 92 | +265 993 23 23 73', 20, footerY + 6);
+
+      pdf.save(`ticket_${booking.bookingReference || booking.id.slice(-8)}.pdf`);
+      setSuccess('Ticket downloaded!');
       toast.success('Ticket Downloaded', 'Your bus ticket has been saved as a PDF.');
-    } catch { setError('Failed to generate PDF.'); }
+    } catch {
+      setError('Failed to generate PDF.');
+    }
     finally { setActionLoading(null); }
   }, [formatDate, formatTime, toast]);
 
@@ -329,15 +531,15 @@ export const useBookingsList = () => {
         setTimeout(() => setSuccess(''), 6000); fetchBookings(); return;
       }
 
-      const apiRoute = selectedProvider === 'paychangu' ? '/api/payments/paychangu/charge' : '/api/payments/flutterwave/charge';
-      const res = await fetch(apiRoute, {
+      const res = await fetch('/api/payments/paychangu/charge', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ bookingId: selectedBooking.id, paymentProvider: selectedProvider, customerDetails: { email: userDetails.email.toLowerCase().trim(), name: userDetails.name.trim(), phone: userDetails.phone.trim() }, metadata: { route: `${selectedBooking.route.origin}-${selectedBooking.route.destination}`, departure: selectedBooking.schedule.departureDateTime instanceof Date ? selectedBooking.schedule.departureDateTime.toISOString() : new Date(selectedBooking.schedule.departureDateTime as unknown as string).toISOString(), passengerCount: String(selectedBooking.passengerDetails.length), seatNumbers: selectedBooking.seatNumbers.join(','), subMethod: selectedSubId } }),
       });
       const result = await res.json(); if (!res.ok) throw new Error(result.error || result.message || 'Payment session failed');
       if (result.success && result.checkoutUrl) {
-        setConfirmModalOpen(false); const providerName = selectedProvider === 'paychangu' ? 'PayChangu' : 'Flutterwave';
-        setSuccess(`Redirecting to ${providerName}…`); toast.loading('Redirecting', `Taking you to ${providerName} for secure payment…`);
+        setConfirmModalOpen(false);
+        setSuccess('Redirecting to PayChangu…');
+        toast.loading('Redirecting', 'Taking you to PayChangu for secure payment…');
         setTimeout(() => { window.location.href = result.checkoutUrl; }, 1200);
       } else throw new Error(result.error || 'Invalid server response');
     } catch (err: unknown) { setError(`Payment failed: ${err instanceof Error ? err.message : String(err)}`); }
@@ -351,10 +553,6 @@ export const useBookingsList = () => {
       if (provider === 'paychangu') {
         const params = new URLSearchParams({ provider, tx_ref: txRef, json: 'true' });
         res = await fetch(`/api/payments/paychangu/verify?${params}`);
-      } else if (provider === 'flutterwave') {
-        const params = new URLSearchParams({ tx_ref: txRef });
-        if (transactionId) params.append('transaction_id', transactionId);
-        res = await fetch(`/api/payments/flutterwave/verify?${params}`);
       } else { setError('Unknown payment provider'); return; }
 
       const result = await res.json(); if (!res.ok) throw new Error(result.error || 'Verification failed');

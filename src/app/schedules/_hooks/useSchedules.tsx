@@ -26,6 +26,7 @@ export default function useSchedules(initialSchedules: any[], initialCompanies: 
   const [searchFrom, setSearchFrom] = useState(searchParams?.get('from') || "");
   const [searchTo, setSearchTo] = useState(searchParams?.get('to') || "");
   const [searchDate, setSearchDate] = useState(searchParams?.get('date') || "");
+  const [returnDate, setReturnDate] = useState(searchParams?.get('returnDate') || "");
   const [passengers, setPassengers] = useState(parseInt(searchParams?.get('passengers') || "1"));
 
   const [activeFilter, setActiveFilter] = useState("all");
@@ -50,7 +51,7 @@ export default function useSchedules(initialSchedules: any[], initialCompanies: 
     return d.toISOString().split('T')[0];
   }, []);
   const isFutureDateSearch = Boolean(searchDate && searchDate > todayDate);
-  const hasActiveSearch = Boolean(searchFrom || searchTo || searchDate);
+const hasActiveSearch = Boolean(searchFrom || searchTo || searchDate || returnDate);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -78,6 +79,7 @@ export default function useSchedules(initialSchedules: any[], initialCompanies: 
       if (searchFrom) queryParams.append('from', searchFrom);
       if (searchTo) queryParams.append('to', searchTo);
       if (searchDate) queryParams.append('date', searchDate);
+      if (returnDate) queryParams.append('returnDate', returnDate);
       queryParams.append('sortBy', 'time');
       queryParams.append('limit', '150');
       queryParams.append('tzOffset', String(new Date().getTimezoneOffset()));
@@ -113,6 +115,7 @@ export default function useSchedules(initialSchedules: any[], initialCompanies: 
       if (searchFrom) newParams.set('from', searchFrom);
       if (searchTo) newParams.set('to', searchTo);
       if (searchDate) newParams.set('date', searchDate);
+      if (returnDate) newParams.set('returnDate', returnDate);
       newParams.set('passengers', passengers.toString());
       newParams.set('tzOffset', String(new Date().getTimezoneOffset()));
       router.replace(`/schedules?${newParams.toString()}`, { scroll: false });
@@ -227,6 +230,6 @@ export default function useSchedules(initialSchedules: any[], initialCompanies: 
     popularRoutes, popularRoutesScrollRef, handlePopularRoutesScroll, terminals,
     handleGoBack, handleBooking, handleSearch,
     filteredSchedules, paginatedSchedules, recommendedSchedules, regularSchedules, totalPages,
-    userCity, todayDate, tomorrowDateStr, isFutureDateSearch, hasActiveSearch,
+    returnDate, setReturnDate, userCity, todayDate, tomorrowDateStr, isFutureDateSearch, hasActiveSearch,
   } as const;
 }

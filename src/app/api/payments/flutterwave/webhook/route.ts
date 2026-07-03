@@ -20,6 +20,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
+import { sendNotificationToUser } from '@/lib/notificationService';
 
 export async function POST(req: NextRequest) {
   try {
@@ -110,6 +111,19 @@ export async function POST(req: NextRequest) {
               updatedAt: new Date(),
             }
           });
+
+          try {
+            await sendNotificationToUser(booking.userId, {
+              title: 'Payment received',
+              body: `Your payment for booking ${booking.bookingReference} was successful.`,
+              type: 'payment',
+              priority: 'high',
+              clickAction: `/bookings/${booking.id}`,
+              data: { bookingId: booking.id },
+            });
+          } catch (sendError) {
+            console.warn('[flutterwave/webhook] Notification send failed:', sendError);
+          }
         } else if (flwStatus === "failed" || flwStatus === "cancelled") {
           await prisma.booking.update({
             where: { id: booking.id },
@@ -126,6 +140,19 @@ export async function POST(req: NextRequest) {
               updatedAt: new Date(),
             }
           });
+
+          try {
+            await sendNotificationToUser(booking.userId, {
+              title: 'Payment failed',
+              body: `Your payment for booking ${booking.bookingReference} could not be completed. Please try again.`,
+              type: 'payment',
+              priority: 'high',
+              clickAction: `/bookings/${booking.id}`,
+              data: { bookingId: booking.id },
+            });
+          } catch (sendError) {
+            console.warn('[flutterwave/webhook] Notification send failed:', sendError);
+          }
         }
         // "pending" — do nothing; wait for the final event
       }

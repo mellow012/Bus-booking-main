@@ -17,7 +17,6 @@ export type PaymentMethod =
   | 'cash_on_boarding';
 
 export type PaymentProvider =
-  | 'flutterwave'   // replaces paychangu
   | 'paychangu'
   | 'local_bank'
   | 'cash';         // cash_on_boarding — no gateway involved
@@ -33,10 +32,9 @@ export interface Payment extends BaseEntity {
   method:    PaymentMethod;
   provider:  PaymentProvider;
 
-  // ── Flutterwave-specific ─────────────────────────────────────────────────
-  flutterwaveTxRef?:         string;  // tx_ref we generate — used to look up booking in webhook
-  flutterwaveFlwRef?:        string;  // flw_ref Flutterwave assigns — required for refunds
-  flutterwaveTransactionId?: number;  // numeric ID — required for verify + refund API calls
+  // ── PayChangu-specific ─────────────────────────────────────────────────
+  paychanguTxRef?:         string;  // tx_ref generated for PayChangu payments
+  paychanguResponse?:      Record<string, unknown>;
 
   // ── General ──────────────────────────────────────────────────────────────
   transactionId?:        string;

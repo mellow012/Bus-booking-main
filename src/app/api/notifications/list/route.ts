@@ -26,6 +26,11 @@ export async function GET(request: NextRequest) {
     }
 
     const requestedUserId = request.nextUrl.searchParams.get('userId');
+    const page = Math.max(1, parseInt(request.nextUrl.searchParams.get('page') || '1', 10));
+    const limit = Math.min(
+      Math.max(1, parseInt(request.nextUrl.searchParams.get('limit') || String(DEFAULT_LIMIT), 10)),
+      MAX_LIMIT
+    );
 
     // Security check: ensure user can only see their own notifications
     // (unless they are a superadmin or similar authorized role)
@@ -42,31 +47,31 @@ export async function GET(request: NextRequest) {
     }
 
     const userId = requestedUserId || user.id;
+    const skip = (page - 1) * limit;
 
     // ── Fetch notifications ──────────────────────────────────────────────────
-    const limit = Math.min(
-      parseInt(request.nextUrl.searchParams.get('limit') || String(DEFAULT_LIMIT)),
-      MAX_LIMIT
-    );
-
-    const notifications = await prisma.notification.findMany({
-      where: { userId },
-      orderBy: { createdAt: 'desc' },
-      take: limit,
-      select: {
-        id: true,
-        userId: true,
-        type: true,
-        title: true,
-        message: true,
-        data: true,
-        actionUrl: true,
-        priority: true,
-        isRead: true,
-        readAt: true,
-        createdAt: true,
-      },
-    });
+    const [notifications, totalCount] = await Promise.all([
+      prisma.notification.findMany({
+        where: { userId },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+        select: {
+          id: true,
+          userId: true,
+          type: true,
+          title: true,
+          message: true,
+          data: true,
+          actionUrl: true,
+          priority: true,
+          isRead: true,
+          readAt: true,
+          createdAt: true,
+        },
+      }),
+      prisma.notification.count({ where: { userId } }),
+    ]);
 
     return NextResponse.json({
       success: true,
@@ -84,6 +89,8 @@ export async function GET(request: NextRequest) {
         createdAt: n.createdAt,
       })),
       count: notifications.length,
+      total: totalCount,
+      hasMore: skip + notifications.length < totalCount,
     });
   } catch (error: any) {
     await logger.logError('notification', 'Failed to fetch notifications', error, {

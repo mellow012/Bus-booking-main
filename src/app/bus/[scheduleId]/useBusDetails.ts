@@ -111,6 +111,7 @@ export default function useBusDetails() {
       routeId: schedule.route.id,
       companyId: schedule.companyId || schedule.company.id,
       seatNumbers: seats,
+      segments: [{ scheduleId, seatNumbers: seats }],
       passengerDetails: passengers,
     };
 

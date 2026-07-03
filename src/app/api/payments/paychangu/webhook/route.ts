@@ -8,6 +8,7 @@ import { prisma } from '@/lib/prisma';
 import type { Prisma } from '@prisma/client';
 import crypto from 'crypto';
 import { logger } from '@/lib/logger';
+import { sendNotificationToUser } from '@/lib/notificationService';
 
 const APP_URL = (process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000').replace(/\/$/, '');
 
@@ -177,6 +178,30 @@ export async function POST(req: NextRequest) {
         data: updatePaymentData,
       });
     });
+
+    try {
+      if (paymentStatus === 'paid') {
+        await sendNotificationToUser(booking.userId, {
+          title: 'Payment received',
+          body: `Your payment for booking ${booking.bookingReference} was successful.`,
+          type: 'payment',
+          priority: 'high',
+          clickAction: `/bookings/${booking.id}`,
+          data: { bookingId: booking.id },
+        });
+      } else if (paymentStatus === 'failed') {
+        await sendNotificationToUser(booking.userId, {
+          title: 'Payment failed',
+          body: `Your payment for booking ${booking.bookingReference} could not be completed. Please try again.`,
+          type: 'payment',
+          priority: 'high',
+          clickAction: `/bookings/${booking.id}`,
+          data: { bookingId: booking.id },
+        });
+      }
+    } catch (sendError) {
+      console.warn('[paychangu/webhook] Notification send failed:', sendError);
+    }
 
     await logger.logPayment(
       `[paychangu/webhook] Payment ${paymentStatus} for booking ${booking.id}`,

@@ -8,6 +8,7 @@ interface SeatSelectionProps {
   passengers: number;
   onSeatSelection: (seats: string[]) => void;
   selectedSeats?: string[];
+  reservedSeats?: string[];
   disabled?: boolean;
   className?: string;
   originStopId: string;
@@ -33,6 +34,7 @@ const SeatSelection: React.FC<SeatSelectionProps> = ({
   passengers,
   onSeatSelection,
   selectedSeats = [],
+  reservedSeats = [],
   disabled = false,
   className = '',
   originStopId,
@@ -69,19 +71,36 @@ const SeatSelection: React.FC<SeatSelectionProps> = ({
     return seats;
   }, [bus.capacity, layoutConfig]);
 
+  function normalizeSeatArray(value: unknown): string[] {
+    if (Array.isArray(value)) return value.filter((seat): seat is string => typeof seat === 'string');
+    if (typeof value === 'string') {
+      try {
+        const parsed = JSON.parse(value);
+        if (Array.isArray(parsed)) return parsed.filter((seat): seat is string => typeof seat === 'string');
+      } catch {
+        return [];
+      }
+    }
+    return [];
+  }
+
   // ── Booked seats ───────────────────────────────────────────────────────────
   const bookedSeats = useMemo(
-    () => new Set(schedule.bookedSeats || []),
+    () => new Set(normalizeSeatArray(schedule.bookedSeats)),
     [schedule.bookedSeats]
   );
 
-  // FIX 1: Simple booked check — no segment range gate that was blocking all seats
-  const isSeatBooked = useCallback(
+  const reservedSeatsSet = useMemo(
+    () => new Set(normalizeSeatArray(reservedSeats)),
+    [reservedSeats]
+  );
+
+  const isSeatUnavailable = useCallback(
     (seat: string | null) => {
       if (!seat) return true;
-      return bookedSeats.has(seat);
+      return bookedSeats.has(seat) || reservedSeatsSet.has(seat);
     },
-    [bookedSeats]
+    [bookedSeats, reservedSeatsSet]
   );
 
   // ── Sync external prop ─────────────────────────────────────────────────────
@@ -99,7 +118,7 @@ const SeatSelection: React.FC<SeatSelectionProps> = ({
   // ── Seat click ─────────────────────────────────────────────────────────────
   const handleSeatClick = useCallback(
     (seat: string) => {
-      if (disabled || isSeatBooked(seat)) return;
+      if (disabled || isSeatUnavailable(seat)) return;
 
       setInternalSelectedSeats((prev: string[]) => {
         if (prev.includes(seat)) {
@@ -122,7 +141,7 @@ const SeatSelection: React.FC<SeatSelectionProps> = ({
         return [...prev, seat];
       });
     },
-    [disabled, isSeatBooked, passengers]
+    [disabled, isSeatUnavailable, passengers]
   );
 
   // FIX 2: Removed the useEffect that was calling onSeatSelection reactively.
@@ -135,12 +154,13 @@ const SeatSelection: React.FC<SeatSelectionProps> = ({
   const getSeatStatus = useCallback(
     (seat: string | null) => {
       if (!seat) return 'empty';
-      if (isSeatBooked(seat)) return 'booked';
+      if (bookedSeats.has(seat)) return 'booked';
+      if (reservedSeatsSet.has(seat)) return 'reserved';
       if (internalSelectedSeats.includes(seat)) return 'selected';
       if (hoveredSeat === seat) return 'hovered';
       return 'available';
     },
-    [isSeatBooked, internalSelectedSeats, hoveredSeat]
+    [bookedSeats, internalSelectedSeats, hoveredSeat, reservedSeatsSet]
   );
 
   const getSeatClassName = useCallback((status: string) => {
@@ -149,6 +169,8 @@ const SeatSelection: React.FC<SeatSelectionProps> = ({
     switch (status) {
       case 'booked':
         return `${base} bg-gray-200 text-gray-500 border-gray-300 cursor-not-allowed opacity-75`;
+      case 'reserved':
+        return `${base} bg-amber-100 text-amber-700 border-amber-200 cursor-not-allowed opacity-90`;
       case 'selected':
         return `${base} bg-gradient-to-br from-blue-500 to-blue-600 text-white border-blue-600 shadow-lg transform scale-105`;
       case 'hovered':
@@ -163,12 +185,16 @@ const SeatSelection: React.FC<SeatSelectionProps> = ({
   const getSeatAriaLabel = useCallback((seat: string | null, status: string) => {
     if (!seat) return undefined;
     const statusText =
-      { booked: 'unavailable', selected: 'selected', available: 'available for selection' }[
-        status
-      ] || 'unknown';
+      {
+        booked: 'unavailable',
+        reserved: 'temporarily reserved',
+        selected: 'selected',
+        available: 'available for selection',
+      }[status] || 'unknown';
     return `Seat ${seat}, ${statusText}`;
   }, []);
 
+  const reservedSeatsCount = reservedSeatsSet.size;
   const selectionProgress = Math.min((internalSelectedSeats.length / passengers) * 100, 100);
   const remaining = passengers - internalSelectedSeats.length;
 
@@ -288,7 +314,7 @@ const SeatSelection: React.FC<SeatSelectionProps> = ({
                             onClick={() => handleSeatClick(seat)}
                             onMouseEnter={() => setHoveredSeat(seat)}
                             onMouseLeave={() => setHoveredSeat(null)}
-                            disabled={status === 'booked' || disabled}
+                            disabled={status === 'booked' || status === 'reserved' || disabled}
                             aria-label={getSeatAriaLabel(seat, status)}
                             aria-pressed={status === 'selected'}
                           >
@@ -322,7 +348,7 @@ const SeatSelection: React.FC<SeatSelectionProps> = ({
                             onClick={() => handleSeatClick(seat)}
                             onMouseEnter={() => setHoveredSeat(seat)}
                             onMouseLeave={() => setHoveredSeat(null)}
-                            disabled={status === 'booked' || disabled}
+                            disabled={status === 'booked' || status === 'reserved' || disabled}
                             aria-label={getSeatAriaLabel(seat, status)}
                             aria-pressed={status === 'selected'}
                           >
@@ -343,7 +369,7 @@ const SeatSelection: React.FC<SeatSelectionProps> = ({
       </div>
 
       {/* Legend */}
-      <div className="flex items-center justify-center space-x-6 mb-6">
+      <div className="flex items-center justify-center space-x-6 mb-6 flex-wrap">
         <div className="flex items-center space-x-2">
           <div className="w-4 h-4 bg-white border-2 border-blue-200 rounded-md" />
           <span className="text-sm text-gray-600">Available</span>
@@ -356,12 +382,17 @@ const SeatSelection: React.FC<SeatSelectionProps> = ({
           <div className="w-4 h-4 bg-gray-200 border-2 border-gray-300 rounded-md" />
           <span className="text-sm text-gray-600">Booked</span>
         </div>
+        <div className="flex items-center space-x-2">
+          <div className="w-4 h-4 bg-amber-100 border-2 border-amber-200 rounded-md" />
+          <span className="text-sm text-gray-600">Reserved</span>
+        </div>
       </div>
 
       {/* Footer stats */}
-      <div className="flex items-center justify-between text-sm text-gray-500 pb-4 border-b mb-6">
-        <span>{seatLayout.flat().filter(Boolean).length - bookedSeats.size} seats available</span>
+      <div className="flex items-center justify-between text-sm text-gray-500 pb-4 border-b mb-6 flex-wrap gap-4">
+        <span>{seatLayout.flat().filter(Boolean).length - bookedSeats.size - reservedSeatsCount} seats available</span>
         <span>{bookedSeats.size} seats booked</span>
+        <span>{reservedSeatsCount} seats reserved</span>
       </div>
 
       {/* FIX 2: Explicit Continue button — onSeatSelection only fires here, not reactively */}

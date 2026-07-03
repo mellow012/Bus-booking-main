@@ -23,9 +23,6 @@ const envSchema = z.object({
   // ─── Payments ──────────────────────────────────────────────────────────────
   PAYCHANGU_SECRET_KEY:               z.string().min(1, 'PAYCHANGU_SECRET_KEY is required'),
   NEXT_PUBLIC_PAYCHANGU_PUBLIC_KEY:   z.string().min(1, 'NEXT_PUBLIC_PAYCHANGU_PUBLIC_KEY is required'),
-  FLW_SECRET_KEY:                     z.string().min(1).optional(),
-  FLW_PUBLIC_KEY:                     z.string().min(1).optional(),
-  FLW_ENCRYPTION_KEY:                 z.string().min(1).optional(),
 
   // ─── Encryption ────────────────────────────────────────────────────────────
   MASTER_ENCRYPTION_KEY: z.string().length(64, 'MASTER_ENCRYPTION_KEY must be a 64-character hex string'),

@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { Company, Schedule, Route, Bus, Booking, Operator } from '@/types';
+import { bookingMatchesSchedule } from '@/lib/booking-utils';
 
 export function useOperatorDashboard() {
   const { user, userProfile, loading: authLoading, signOut } = useAuth();
@@ -30,11 +31,10 @@ export function useOperatorDashboard() {
     try {
       if (!silent) setLoading(true);
 
-      // 1. Fetch Operator record to get assigned routes.
-      // Company admins can view a specific operator's dashboard via ?operatorId=...
+      // 1. Fetch Operator record first. Company admins can view a specific operator via ?operatorId=...
       const opQuery = supabase
         .from('Operator')
-        .select('*, routes(*)');
+        .select('id, uid, companyId, companyName, email, name, regionId, status, role');
 
       const operatorQuery = userProfile?.role === 'company_admin' && operatorIdParam
         ? opQuery.eq('id', operatorIdParam)
@@ -52,8 +52,26 @@ export function useOperatorDashboard() {
 
       if (opData) {
         setOperatorInfo(opData);
-        routesList = (opData.routes || []) as Route[];
-        routeIds = routesList.map(r => r.id);
+
+        const { data: operatorRoutes, error: operatorRoutesError } = await supabase
+          .from('_OperatorRoutes')
+          .select('B')
+          .eq('A', opData.id);
+
+        if (operatorRoutesError) throw operatorRoutesError;
+
+        routeIds = (operatorRoutes || []).map((row: any) => row.B);
+
+        if (routeIds.length > 0) {
+          const { data: routesData, error: routesError } = await supabase
+            .from('Route')
+            .select('*')
+            .in('id', routeIds);
+
+          if (routesError) throw routesError;
+          routesList = (routesData || []) as Route[];
+        }
+
         setAssignedRoutes(routesList);
       } else {
         // Fallback: If no Operator record exists yet, fetch routes by company and region matching User table
@@ -79,7 +97,8 @@ export function useOperatorDashboard() {
         .update({ isArchived: true })
         .eq('companyId', companyId)
         .eq('isArchived', false)
-        .or(`tripCompletedAt.lt.${archiveCutoff},arrivalDateTime.lt.${archiveCutoff}`);
+        .not('tripCompletedAt', 'is', null)
+        .lt('tripCompletedAt', archiveCutoff);
 
       // 3. Fetch schedules scoped to these routes
       let schedulesList: Schedule[] = [];
@@ -208,8 +227,7 @@ export function useOperatorDashboard() {
       )
     );
 
-    const todayTripIds = todayTrips.map(t => t.id);
-    const todayBookings = bookings.filter(b => b.bookingStatus !== 'cancelled' && todayTripIds.includes(b.scheduleId));
+    const todayBookings = bookings.filter(b => b.bookingStatus !== 'cancelled' && todayTrips.some((trip) => bookingMatchesSchedule(b, trip.id)));
 
     const revenueToday = todayBookings.filter(b => b.paymentStatus === 'paid').reduce((acc, b) => acc + (b.totalAmount || 0), 0);
     const seatsBooked = todayBookings.reduce((acc, b) => acc + (b.seatNumbers?.length || 1), 0);
@@ -224,7 +242,7 @@ export function useOperatorDashboard() {
     const liveTrip = schedules.find(s => ['boarding', 'in_transit', 'arrived'].includes(s.tripStatus || '')) ||
       todayTrips.filter(t => t.departureDateTime > new Date()).sort((a, b) => a.departureDateTime.getTime() - b.departureDateTime.getTime())[0];
 
-    const liveTripBookings = liveTrip ? bookings.filter(b => b.scheduleId === liveTrip.id && b.bookingStatus !== 'cancelled') : [];
+    const liveTripBookings = liveTrip ? bookings.filter(b => bookingMatchesSchedule(b, liveTrip.id) && b.bookingStatus !== 'cancelled') : [];
 
     return {
       todayTripsCount: todayTrips.length,

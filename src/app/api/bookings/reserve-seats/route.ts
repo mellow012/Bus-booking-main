@@ -2,7 +2,20 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth-utils';
 import prisma from '@/lib/prisma';
 
-const SEAT_HOLD_DURATION = 10 * 60 * 1000; // 10 minutes
+const SEAT_HOLD_DURATION = 5 * 60 * 1000; // 5 minutes
+
+function parseSeatNumbers(value: unknown): string[] {
+  if (Array.isArray(value)) return value.filter((seat): seat is string => typeof seat === 'string');
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) return parsed.filter((seat): seat is string => typeof seat === 'string');
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
 
 /**
  * POST /api/bookings/reserve-seats
@@ -16,9 +29,10 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { scheduleId, seatNumbers } = body;
+    const { scheduleId } = body;
+    const seatNumbers = parseSeatNumbers(body.seatNumbers);
 
-    if (!scheduleId || !Array.isArray(seatNumbers) || seatNumbers.length === 0) {
+    if (!scheduleId || seatNumbers.length === 0) {
       return NextResponse.json(
         { error: 'Missing requirements: scheduleId and seatNumbers array' },
         { status: 400 }
@@ -26,8 +40,14 @@ export async function POST(req: NextRequest) {
     }
 
     // Get user and verify role
-    const userRecord = await prisma.user.findUnique({
-      where: { uid: user.id },
+    // Look up the user profile by either database `id` or legacy `uid`
+    const userRecord = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { id: user.id },
+          { uid: user.id },
+        ],
+      },
     });
 
     if (!userRecord) {
@@ -76,15 +96,38 @@ export async function POST(req: NextRequest) {
 
     // Check if seats are already booked
     const bookedSeats = Array.isArray(schedule.bookedSeats) ? schedule.bookedSeats : [];
-    const conflictingSeats = seatNumbers.filter(seat =>
-      bookedSeats.includes(seat)
-    );
+    const conflictingBookedSeats = seatNumbers.filter(seat => bookedSeats.includes(seat));
 
-    if (conflictingSeats.length > 0) {
+    if (conflictingBookedSeats.length > 0) {
       return NextResponse.json(
         {
           error: 'One or more seats are already booked',
-          conflictingSeats,
+          conflictingSeats: conflictingBookedSeats,
+        },
+        { status: 400 }
+      );
+    }
+
+    // Check for active reservations on the same schedule
+    const activeReservations = await prisma.seatReservation.findMany({
+      where: {
+        scheduleId,
+        status: 'reserved',
+        expiresAt: { gt: new Date() },
+      },
+    });
+    const reservedSeats = activeReservations.flatMap((reservation) =>
+      parseSeatNumbers(reservation.seatNumbers)
+    );
+    const conflictingReservedSeats = seatNumbers.filter(
+      (seat) => reservedSeats.includes(seat)
+    );
+
+    if (conflictingReservedSeats.length > 0) {
+      return NextResponse.json(
+        {
+          error: 'One or more seats are already reserved by another customer',
+          conflictingSeats: conflictingReservedSeats,
         },
         { status: 400 }
       );
@@ -96,7 +139,7 @@ export async function POST(req: NextRequest) {
       data: {
         scheduleId,
         userId: user.id,
-        seatNumbers: JSON.stringify(seatNumbers),
+        seatNumbers,
         status: 'reserved',
         expiresAt,
       },

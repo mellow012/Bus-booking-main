@@ -15,6 +15,7 @@ import { createClient } from '@/utils/supabase/client';
 export type NotificationType =
   | 'booking'
   | 'payment'
+  | 'payment_reminder'
   | 'schedule'
   | 'system'
   | 'promotion'

@@ -107,7 +107,7 @@ test.describe('Customer Journey', () => {
 
     // Gateway
     await page.waitForURL(
-      url => url.href.includes('paychangu.com') || url.href.includes('flutterwave.com'),
+      url => url.href.includes('paychangu.com'),
       { timeout: 60_000 }
     );
     console.log('[payment] gateway:', page.url());

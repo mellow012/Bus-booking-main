@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useOperatorDashboard } from './_hooks/useOperatorDashboard';
 import OperatorLayout from './_components/OperatorLayout';
 import OperatorSubNav from './_components/OperatorSubNav';
@@ -16,9 +17,24 @@ import RevenueTab from './tabs/RevenueTab';
 import ProfileTab from './tabs/ProfileTab';
 
 export default function OperatorDashboardPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const dashboard = useOperatorDashboard();
-  const [activeTab, setActiveTab] = useState('home');
+  const queryTab = searchParams?.get('tab');
+  const [activeTab, setActiveTab] = useState(queryTab || 'home');
   const [searchQuery, setSearchQuery] = useState('');
+
+  useEffect(() => {
+    const currentTab = searchParams?.get('tab') || 'home';
+    if (currentTab && currentTab !== activeTab) {
+      setActiveTab(currentTab);
+    }
+  }, [searchParams, activeTab]);
+
+  const updateTab = (tabId: string) => {
+    setActiveTab(tabId);
+    router.replace(`/company/operator/dashboard?tab=${encodeURIComponent(tabId)}`);
+  };
 
   // Augment dashboard with searchQuery so tabs can access it
   const dashboardWithSearch = { ...dashboard, searchQuery };
@@ -81,7 +97,7 @@ export default function OperatorDashboardPage() {
         <OperatorSubNav
           tabs={OPERATOR_CATEGORIES}
           activeTab={activeTab}
-          onTabChange={setActiveTab}
+          onTabChange={updateTab}
         />
         <div className="mt-8">
           {renderActiveTab()}
