@@ -79,11 +79,12 @@ async function querySchedules(params: {
   startDate: string;
   endDate: string;
   sortBy: SortBy;
+  companyId?: string;
   tzOffset?: number;
   page: number;
   limit: number;
 }) {
-  const { from, to, date, startDate, endDate, sortBy, page, limit } = params;
+  const { from, to, date, startDate, endDate, sortBy, companyId, page, limit } = params;
   const pageOffset = (page - 1) * limit;
 
   // Round grace period to nearest 5 mins to improve cache alignment
@@ -98,6 +99,10 @@ async function querySchedules(params: {
     company: { status: 'active' },
     route: { isActive: true },
   };
+
+  if (companyId) {
+    where.companyId = companyId;
+  }
 
   const now = new Date();
   const recentDepartureCutoff = new Date(now.getTime() - 24 * 60 * 60 * 1000);
@@ -263,6 +268,7 @@ export async function GET(request: NextRequest) {
       startDate: searchParams.get('startDate') || '',
       endDate: searchParams.get('endDate') || '',
       sortBy: (searchParams.get('sortBy') || 'time') as SortBy,
+      companyId: searchParams.get('companyId') || undefined,
       tzOffset: Number.isNaN(tzOffset) ? undefined : tzOffset,
       page: Math.max(1, parseInt(searchParams.get('page') || '1')),
       limit: Math.min(parseInt(searchParams.get('limit') || String(DEFAULT_LIMIT)), MAX_LIMIT),

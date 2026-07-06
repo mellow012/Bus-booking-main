@@ -354,6 +354,8 @@
     tripNotes?: string;
     conductorUid?: string;
 
+    reservedSeats?: string[];
+
     createdBy?: string;
     assignedOperatorIds?: string[];
     assignedConductorIds?: string[];
@@ -446,12 +448,13 @@
     paymentInitiatedAt?: Date;
     paymentCompletedAt?: Date;
     paymentMethod?: 'card' | 'mobile_money' | 'bank_transfer' | 'cash' | 'cash_on_boarding';
-    paymentProvider?: 'flutterwave' | 'paychangu' | 'local_bank' | 'cash';
+    paymentProvider?: 'paychangu' | 'local_bank' | 'cash';
     transactionId?: string;
     transactionReference?: string;
 
     paychanguReference?: string;
     paychanguNetwork?: 'AIRTEL' | 'TNM';
+    returnDate?: Date;
 
     createdBy?: string;
     updatedBy?: string;

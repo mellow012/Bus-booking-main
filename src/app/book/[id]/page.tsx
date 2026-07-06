@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, useEffect } from "react";
 import SeatSelection from "@/components/SeatSelection";
 import AlertMessage from '@/components/AlertMessage';
 import BackButton from '@/components/BackButton';
@@ -43,29 +43,47 @@ export default function BookBus() {
     schedule, bus, route, company,
     passengers,
     selectedSeats, setSelectedSeats,
+    selectedReturnSeats, setSelectedReturnSeats,
     passengerForms, setPassengerForms,
     currentStep, setCurrentStep,
     reservationId,
+    returnReservationId,
     confirmedBookingId, serverTotalAmount, serverCurrency,
     normalisedStops, originStopId, setOriginStopId, destinationStopId, setDestinationStopId,
     availableDestinations, handleOriginChange,
     displayPrice,
+    wantsReturnTrip, setWantsReturnTrip, returnDate, setReturnDate,
+    outboundLocked, savedOutboundSeats,
+    returnSchedules, returnScheduleLoading, returnScheduleError,
+    returnDateOptions, returnDateOptionsLoading,
+    selectedReturnScheduleId, returnSchedule, returnBus, returnRoute,
     loading, bookingLoading, error, setError, passengerError, success, setSuccess,
     confirmModalOpen, setConfirmModalOpen,
     bookingForSelf, toggleBookingForSelf,
     dupNameModalOpen, setDupNameModalOpen, pendingPassengerSubmit, setPendingPassengerSubmit,
     promoCode, setPromoCode, appliedPromo, setAppliedPromo, isValidatingPromo,
-    wantsReturnTrip, setWantsReturnTrip, returnDate, setReturnDate,
-    holdSeats, releaseSeats, fetchBookingData,
-    handleSeatSelection, handlePassengerFieldChange, handleAgeBlur, handlePassengerSubmit, proceedToConfirm,
+    fetchBookingData,
+    handleSeatSelection, handleSelectReturnSchedule, handleReturnSeatSelection, handlePassengerFieldChange, handleAgeBlur, handlePassengerSubmit, proceedToConfirm,
     confirmBooking, goBackToSeats, goBackToPassengers, validatePromoCode, stopName,
   } = useBookBus();
+
+  const returnSectionRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    // When round-trip enabled and outbound was locked (user had chosen outbound seats),
+    // bring the return schedule/seat selection into view so the user can continue smoothly.
+    if (wantsReturnTrip && outboundLocked) {
+      // prefer return schedule section if rendered, otherwise top of return area
+      const el = returnSectionRef.current;
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [wantsReturnTrip, outboundLocked, returnSchedule]);
 
   // ── Render: loading ────────────────────────────────────────────────────────
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 pt-28 sm:pt-32 lg:pt-36">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="animate-pulse space-y-6">
             <Card><CardContent className="p-6">
@@ -83,7 +101,7 @@ export default function BookBus() {
 
   if (!schedule || !bus || !route || !company) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4 pt-28 sm:pt-32 lg:pt-36">
         <Card className="w-full max-w-md"><CardContent className="p-8 text-center">
           <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
           <h2 className="text-2xl font-bold text-gray-900 mb-4">Booking Not Available</h2>
@@ -103,10 +121,12 @@ export default function BookBus() {
   const alightingStopName = destinationStopId ? stopName(destinationStopId) : route.destination;
   const isPartialSegment  = originStopId !== "__origin__" || destinationStopId !== "__destination__";
 
+  const formattedReturnDate = returnDate ? new Date(returnDate).toLocaleDateString() : '';
+
   // ── Main render ────────────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 pt-28 sm:pt-32 lg:pt-36">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
 
         {/* ── Boarding & Alighting Stop Selector ── */}
@@ -238,10 +258,150 @@ export default function BookBus() {
                 bus={bus} schedule={schedule} passengers={passengers}
                 onSeatSelection={handleSeatSelection}
                 selectedSeats={selectedSeats}
+                disabled={outboundLocked}
                 originStopId={originStopId}
                 destinationStopId={destinationStopId}
                 route={route}
+                reservedSeats={schedule.reservedSeats || []}
               />
+
+              {outboundLocked && savedOutboundSeats && (
+                <div className="mt-3 p-3 rounded-lg bg-yellow-50 border border-amber-100 text-amber-800 text-sm">
+                  Outbound seats locked: <span className="font-semibold">{savedOutboundSeats.join(', ')}</span>. To change outbound seats, uncheck "Add return trip".
+                </div>
+              )}
+
+              <Card className="mt-6 border border-blue-100 shadow-sm">
+                <CardContent className="space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div>
+                      <h3 className="text-base font-semibold text-gray-900">Return trip</h3>
+                      <p className="text-sm text-gray-500">Add a return schedule from {route.destination} back to {route.origin}.</p>
+                    </div>
+                    <label className="inline-flex items-center gap-2 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={wantsReturnTrip}
+                        onChange={(e) => setWantsReturnTrip(e.target.checked)}
+                        className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                      <span className="text-sm font-medium text-gray-700">Add return trip</span>
+                    </label>
+                  </div>
+
+                  {wantsReturnTrip && (
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <p className="text-sm font-medium text-gray-700">Return date</p>
+                        <p className="text-sm text-gray-500">Select one of the available return dates for this bus/company combination.</p>
+                      </div>
+
+                      {returnDateOptionsLoading ? (
+                        <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4 text-sm text-blue-700">Searching available return dates...</div>
+                      ) : returnDateOptions.length > 0 ? (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+                          {returnDateOptions.map((option) => {
+                            const isSelected = returnDate === option.date;
+                            return (
+                              <button
+                                key={option.date}
+                                type="button"
+                                onClick={() => setReturnDate(option.date)}
+                                className={`w-full rounded-2xl border p-4 text-left transition ${isSelected ? 'border-blue-600 bg-blue-50 shadow-sm' : 'border-gray-200 bg-white hover:border-blue-300'}`}
+                              >
+                                <div className="flex items-center justify-between gap-3">
+                                  <div>
+                                    <p className="font-semibold text-gray-900">{option.formatted}</p>
+                                    <p className="text-xs text-gray-500">{option.count} available trip{option.count > 1 ? 's' : ''}</p>
+                                  </div>
+                                  {isSelected && <span className="inline-flex items-center rounded-full bg-blue-600 text-white px-2 py-1 text-[11px] font-semibold">Selected</span>}
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div className="rounded-2xl border border-rose-100 bg-rose-50 p-4 text-sm text-rose-700">
+                          {returnScheduleError || 'No return trip dates available for this company and route in the next week.'}
+                        </div>
+                      )}
+
+                      {returnDate && (
+                        <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4 text-sm text-blue-700">
+                          Selected return date: <span className="font-semibold text-blue-900">{formattedReturnDate}</span>
+                        </div>
+                      )}
+
+                      {returnDate && returnScheduleLoading && (
+                        <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4 text-sm text-blue-700">Searching return schedules for {formattedReturnDate}...</div>
+                      )}
+
+                      {returnDate && !returnScheduleLoading && returnScheduleError && (
+                        <div className="rounded-2xl border border-rose-100 bg-rose-50 p-4 text-sm text-rose-700">
+                          {returnScheduleError}
+                        </div>
+                      )}
+
+                      {returnDate && !returnScheduleLoading && returnSchedules.length > 0 && (
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <p className="text-sm font-semibold text-gray-900">Select a return schedule</p>
+                            <span className="text-sm text-gray-500">{returnSchedules.length} option{returnSchedules.length > 1 ? 's' : ''}</span>
+                          </div>
+                          <div className="grid grid-cols-1 gap-3">
+                            {returnSchedules.map((returnOption: any) => {
+                              const isSelected = selectedReturnScheduleId === returnOption.id;
+                              return (
+                                <button
+                                  key={returnOption.id}
+                                  type="button"
+                                  onClick={() => handleSelectReturnSchedule(returnOption.id)}
+                                  className={`w-full rounded-2xl border p-4 text-left transition ${isSelected ? 'border-blue-600 bg-blue-50 shadow-sm' : 'border-gray-200 bg-white hover:border-blue-300'}`}
+                                >
+                                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                                    <div>
+                                      <p className="font-semibold text-gray-900">{returnOption.origin} → {returnOption.destination}</p>
+                                      <p className="text-sm text-gray-500">{new Date(returnOption.departureDateTime).toLocaleTimeString([], { hour: '2-digit', minute:'2-digit' })} — {new Date(returnOption.arrivalDateTime).toLocaleTimeString([], { hour: '2-digit', minute:'2-digit' })}</p>
+                                    </div>
+                                    <div className="text-right">
+                                      <p className="text-sm font-semibold text-gray-900">MWK {returnOption.price?.toLocaleString()}</p>
+                                      <p className="text-xs text-gray-500">{returnOption.availableSeats} seats left</p>
+                                    </div>
+                                  </div>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {returnSchedule && (
+                        <div ref={returnSectionRef} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+                            <div>
+                              <p className="text-sm font-semibold text-slate-900">Return schedule selected</p>
+                              <p className="text-sm text-slate-600">{returnSchedule.departureLocation} → {returnSchedule.arrivalLocation}</p>
+                            </div>
+                            <span className="inline-flex items-center rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700 border border-slate-200">MWK {returnSchedule.price?.toLocaleString()}</span>
+                          </div>
+
+                          <SeatSelection
+                            bus={returnBus!} schedule={returnSchedule} passengers={passengers}
+                            onSeatSelection={handleReturnSeatSelection}
+                            selectedSeats={selectedReturnSeats}
+                            originStopId="__origin__"
+                            destinationStopId="__destination__"
+                            route={returnRoute!}
+                            reservedSeats={returnSchedule.reservedSeats || []}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+              </CardContent>
+              </Card>
+
               {error && (
                 <AlertMessage
                   type="error"
@@ -335,6 +495,9 @@ export default function BookBus() {
           formatDate={formatDate}
           formatTime={formatTime}
           selectedSeats={selectedSeats}
+          selectedReturnSeats={selectedReturnSeats}
+          returnSchedule={returnSchedule}
+          returnRoute={returnRoute}
           displayPrice={displayPrice}
           passengers={passengers}
           appliedPromo={appliedPromo}

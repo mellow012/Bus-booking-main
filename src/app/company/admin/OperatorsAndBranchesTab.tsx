@@ -4,6 +4,7 @@ import React, { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { MapPin, PlusCircle, Users, Pencil, Trash2 } from 'lucide-react';
 import { useAppToast } from '@/contexts/ToastContext';
+import { supabase } from '@/lib/supabase';
 import InviteOperatorModal from './InviteOperatorModal';
 import EditOperatorModal from './EditOperatorModal';
 
@@ -19,6 +20,7 @@ type OperatorRow = {
   status: string;
   region: string;
   regionId?: string | null;
+  routeIds?: string[];
 };
 
 export default function OperatorsAndBranchesTab({ dashboard }: OperatorsAndBranchesTabProps) {
@@ -31,6 +33,10 @@ export default function OperatorsAndBranchesTab({ dashboard }: OperatorsAndBranc
   const [isActionLoading, setIsActionLoading] = useState(false);
   const [branchName, setBranchName] = useState('');
   const [isSavingBranch, setIsSavingBranch] = useState(false);
+  const [isRouteAssignmentModalOpen, setRouteAssignmentModalOpen] = useState(false);
+  const [routeAssignmentOperator, setRouteAssignmentOperator] = useState<OperatorRow | null>(null);
+  const [selectedRouteIds, setSelectedRouteIds] = useState<string[]>([]);
+  const [isSavingRouteAssignment, setIsSavingRouteAssignment] = useState(false);
 
   const operators = useMemo<OperatorRow[]>(() => {
     const rawOperators = dashboard?.dashboardData?.operators || [];
@@ -41,6 +47,11 @@ export default function OperatorsAndBranchesTab({ dashboard }: OperatorsAndBranc
       const lastName = operator.lastName || '';
       const derivedName = [firstName, lastName].filter(Boolean).join(' ').trim() || operator.name || operator.email || 'Unknown operator';
       const branchName = operator.region || operator.regionName || branches.find((branch: any) => branch.id === operator.regionId)?.name || 'Unassigned';
+      const existingRouteIds = Array.isArray(operator.routes)
+        ? operator.routes
+            .map((route: any) => route?.id || route?.routeId)
+            .filter(Boolean)
+        : [];
 
       return {
         id: operator.id || operator.uid || operator.email || `${derivedName}-${branchName}`,
@@ -50,6 +61,7 @@ export default function OperatorsAndBranchesTab({ dashboard }: OperatorsAndBranc
         status: operator.status || (operator.isActive === false ? 'inactive' : 'active'),
         region: branchName,
         regionId: operator.regionId || (operator.region && typeof operator.region === 'object' ? operator.region.id : null) || null,
+        routeIds: existingRouteIds,
       };
     });
   }, [dashboard]);
@@ -57,6 +69,7 @@ export default function OperatorsAndBranchesTab({ dashboard }: OperatorsAndBranc
   const router = useRouter();
   const toast = useAppToast();
   const branches = useMemo(() => dashboard?.dashboardData?.regions || [], [dashboard]);
+  const availableRoutes = useMemo(() => dashboard?.dashboardData?.routes || [], [dashboard]);
   const companyId = dashboard?.dashboardData?.company?.id || '';
   const companyName = dashboard?.dashboardData?.company?.name || '';
 
@@ -140,6 +153,72 @@ export default function OperatorsAndBranchesTab({ dashboard }: OperatorsAndBranc
 
   const handleBranchSelect = (branchId: string) => {
     setSelectedBranchId(prev => prev === branchId ? null : branchId);
+  };
+
+  const openAssignRoutesModal = async (operator: OperatorRow) => {
+    setRouteAssignmentOperator(operator);
+    setSelectedRouteIds([]);
+    setRouteAssignmentModalOpen(true);
+
+    try {
+      const { data, error } = await supabase
+        .from('_OperatorRoutes')
+        .select('B')
+        .eq('A', operator.id);
+
+      if (error) throw error;
+
+      const routeIds = (data || []).map((row: any) => row.B).filter(Boolean);
+      setSelectedRouteIds(routeIds);
+    } catch (err) {
+      console.error('Error loading assigned routes:', err);
+      setSelectedRouteIds(operator.routeIds || []);
+    }
+  };
+
+  const closeAssignRoutesModal = () => {
+    setRouteAssignmentOperator(null);
+    setSelectedRouteIds([]);
+    setRouteAssignmentModalOpen(false);
+  };
+
+  const toggleRouteSelection = (routeId: string) => {
+    setSelectedRouteIds((prev) =>
+      prev.includes(routeId) ? prev.filter((id) => id !== routeId) : [...prev, routeId]
+    );
+  };
+
+  const handleSaveRouteAssignment = async () => {
+    if (!routeAssignmentOperator) return;
+
+    setIsSavingRouteAssignment(true);
+    dashboard.setIsBusy?.(true);
+    try {
+      const response = await fetch(`/api/admin/users/${routeAssignmentOperator.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          role: routeAssignmentOperator.role,
+          status: routeAssignmentOperator.status,
+          regionId: routeAssignmentOperator.regionId || null,
+          routeIds: selectedRouteIds,
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Failed to update route assignments');
+
+      await dashboard?.fetchInitialData?.();
+      toast.success('Routes updated', `${routeAssignmentOperator.name} now has ${selectedRouteIds.length} assigned route${selectedRouteIds.length === 1 ? '' : 's'}.`);
+      dashboard?.showAlert?.('success', 'Route assignments updated successfully');
+      closeAssignRoutesModal();
+    } catch (err: any) {
+      toast.error('Route assignment failed', err.message || 'Failed to update route assignments.');
+      dashboard?.showAlert?.('error', err.message || 'Failed to update route assignments');
+    } finally {
+      setIsSavingRouteAssignment(false);
+      dashboard.setIsBusy?.(false);
+    }
   };
 
   const handleSaveBranch = async () => {
@@ -333,6 +412,14 @@ export default function OperatorsAndBranchesTab({ dashboard }: OperatorsAndBranc
                       </button>
                       <button
                         type="button"
+                        onClick={() => openAssignRoutesModal(operator)}
+                        disabled={isActionLoading}
+                        className="inline-flex items-center gap-1 rounded-md border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 transition disabled:opacity-50"
+                      >
+                        Routes
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => openEditOperatorModal(operator)}
                         disabled={isActionLoading}
                         className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition disabled:opacity-50"
@@ -357,6 +444,51 @@ export default function OperatorsAndBranchesTab({ dashboard }: OperatorsAndBranc
           </div>
         )}
       </div>
+
+      {isRouteAssignmentModalOpen && routeAssignmentOperator && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4">
+          <div className="w-full max-w-2xl rounded-2xl bg-white p-6 shadow-xl">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Assign routes</h3>
+                <p className="mt-1 text-sm text-gray-600">{routeAssignmentOperator.name}</p>
+              </div>
+              <button type="button" onClick={closeAssignRoutesModal} className="text-sm text-gray-500 hover:text-gray-700">Close</button>
+            </div>
+            <div className="mt-4 space-y-4">
+              {availableRoutes.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-6 text-sm text-gray-500">No routes are available for this company yet.</div>
+              ) : (
+                <div className="max-h-72 space-y-2 overflow-y-auto rounded-xl border border-gray-200 p-3">
+                  {availableRoutes.map((route: any) => {
+                    const isChecked = selectedRouteIds.includes(route.id);
+                    return (
+                      <label key={route.id} className="flex cursor-pointer items-start gap-3 rounded-lg border border-transparent px-2 py-2 hover:border-gray-200 hover:bg-gray-50">
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => toggleRouteSelection(route.id)}
+                          className="mt-1 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                        />
+                        <div>
+                          <div className="text-sm font-medium text-gray-900">{route.name || `${route.origin} → ${route.destination}`}</div>
+                          <div className="text-xs text-gray-500">{route.origin} → {route.destination}</div>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+            <div className="mt-6 flex justify-end gap-2">
+              <button type="button" onClick={closeAssignRoutesModal} className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">Cancel</button>
+              <button type="button" onClick={handleSaveRouteAssignment} disabled={isSavingRouteAssignment} className="rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60">
+                {isSavingRouteAssignment ? 'Saving...' : 'Save routes'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {isBranchModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4">

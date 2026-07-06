@@ -1,14 +1,16 @@
 'use client';
 
-import React, { useState } from 'react';
-import { User, Settings, Save, MapPin } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { User, Save, MapPin } from 'lucide-react';
+import { resolveProfileSource } from '../_lib/profile-data';
 
 interface ProfileTabProps {
   dashboard: any;
 }
 
 export default function ProfileTab({ dashboard }: ProfileTabProps) {
-  const { userProfile: profile } = dashboard;
+  const resolvedProfile = useMemo(() => resolveProfileSource(dashboard), [dashboard]);
+  const profile = resolvedProfile.profile;
 
   const [formData, setFormData] = useState({
     firstName: profile?.firstName || '',
@@ -16,12 +18,25 @@ export default function ProfileTab({ dashboard }: ProfileTabProps) {
     phone: profile?.phoneNumber || '',
   });
 
+  useEffect(() => {
+    setFormData({
+      firstName: profile?.firstName || '',
+      lastName: profile?.lastName || '',
+      phone: profile?.phoneNumber || '',
+    });
+  }, [profile?.firstName, profile?.lastName, profile?.phoneNumber]);
+
   const [isSaving, setIsSaving] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
+
+  const profileHeading = resolvedProfile.isViewingOperator ? 'Operator Profile' : 'My Profile';
+  const profileDescription = resolvedProfile.isViewingOperator
+    ? 'Viewing the selected operator profile.'
+    : 'Manage your personal information.';
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -45,10 +60,10 @@ export default function ProfileTab({ dashboard }: ProfileTabProps) {
       <div>
         <h2 className="text-xl font-bold tracking-tight text-gray-900 flex items-center gap-2">
           <User className="w-6 h-6 text-indigo-600" />
-          My Profile
+          {profileHeading}
         </h2>
         <p className="mt-1 text-sm text-gray-500">
-          Manage your personal information.
+          {profileDescription}
         </p>
       </div>
 

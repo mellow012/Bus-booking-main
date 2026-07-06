@@ -197,17 +197,31 @@ const TeamManagementTab: React.FC<TeamManagementTabProps> = ({
     setEditRegionId('');
     
     try {
-      const { data: opData } = await supabase
+      const { data: opData, error: opError } = await supabase
         .from('Operator')
-        .select('regionId, routes(id)')
+        .select('regionId')
         .eq('id', m.id)
         .maybeSingle();
 
+      if (opError) {
+        throw opError;
+      }
+
       if (opData) {
         setEditRegionId(opData.regionId || '');
-        if (opData.routes) {
-          setSelectedRouteIds((opData.routes as any[]).map((r: any) => r.id));
-        }
+      }
+
+      const { data: operatorRoutes, error: operatorRoutesError } = await supabase
+        .from('_OperatorRoutes')
+        .select('B')
+        .eq('A', m.id);
+
+      if (operatorRoutesError) {
+        throw operatorRoutesError;
+      }
+
+      if (operatorRoutes) {
+        setSelectedRouteIds((operatorRoutes as any[]).map((r: any) => r.B));
       }
     } catch (err) {
       console.error('Error fetching operator assignments:', err);

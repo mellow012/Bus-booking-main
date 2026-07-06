@@ -1,5 +1,6 @@
 import React from 'react';
 import { Clock, DollarSign, Users, BusIcon, MapPin, Map, Factory } from 'lucide-react';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 
 // --- Local Data Types (Defined here to replace external imports) ---
 
@@ -127,10 +128,7 @@ export default function App({ results: initialResults, loading, searchCriteria }
   if (loading) {
     return (
       <div className="bg-white rounded-xl shadow-xl p-8 max-w-4xl mx-auto my-8">
-        <div className="flex items-center justify-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-4 border-blue-600"></div>
-          <span className="ml-4 text-lg font-medium text-gray-700">Searching for available buses...</span>
-        </div>
+        <LoadingSpinner className="text-blue-600" label="Searching for available buses..." size="lg" />
       </div>
     );
   }

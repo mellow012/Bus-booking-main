@@ -4,22 +4,24 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { getCurrentUser } from '@/lib/auth-utils';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
-import { z } from 'zod';
-
-const schema = z.object({
-  userId: z.string().min(1),
-});
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { userId } = schema.parse(body);
+    const user = await getCurrentUser(request);
+    if (!user) {
+      return NextResponse.json({ success: false, error: 'Unauthorized', message: 'Missing or invalid authentication session' }, { status: 401 });
+    }
+
+    const body = await request.json().catch(() => ({} as any));
+    const requestedUserId = body?.userId;
+    const targetUserId = user.role === 'superadmin' && requestedUserId ? requestedUserId : user.id;
 
     const result = await prisma.notification.updateMany({
       where: {
-        userId,
+        userId: targetUserId,
         isRead: false,
       },
       data: {
@@ -29,7 +31,7 @@ export async function POST(request: NextRequest) {
     });
 
     await logger.logSuccess('notification', 'Marked all notifications as read', {
-      userId,
+      userId: targetUserId,
       action: 'mark_all_read',
       metadata: {
         count: result.count,
@@ -42,13 +44,6 @@ export async function POST(request: NextRequest) {
       count: result.count,
     });
   } catch (error: any) {
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { success: false, error: 'Validation error', details: error.issues },
-        { status: 400 }
-      );
-    }
-
     await logger.logError('notification', 'Failed to mark all notifications as read', error, {
       action: 'mark_all_read_error',
     });

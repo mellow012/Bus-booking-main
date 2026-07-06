@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { Users, FileText, Bus as BusIcon, Calendar, Clock, Download, ChevronRight, AlertCircle, Printer, Loader2, Check, X, Bell, Eye } from 'lucide-react';
 import { Booking, Schedule, Bus, Route } from '@/types';
+import { bookingMatchesSchedule } from '@/lib/booking-utils';
 import * as dbActions from '@/lib/actions/db.actions';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -127,7 +128,7 @@ export default function BookingsTab({ dashboard }: BookingsTabProps) {
     if (!searchQuery) return true;
     const route = routes.find((r: Route) => r.id === s.routeId);
     const bus = buses.find((b: Bus) => b.id === s.busId);
-    const tripBookings = bookings.filter((b: Booking) => b.scheduleId === s.id);
+    const tripBookings = bookings.filter((b: Booking) => bookingMatchesSchedule(b, s.id));
     return (
       route?.name?.toLowerCase().includes(searchQuery) ||
       route?.origin?.toLowerCase().includes(searchQuery) ||
@@ -184,7 +185,7 @@ export default function BookingsTab({ dashboard }: BookingsTabProps) {
 
       const route = routes.find((r: Route) => r.id === schedule.routeId);
       const bus = buses.find((b: Bus) => b.id === schedule.busId);
-      const tripBookings = bookings.filter((b: Booking) => b.scheduleId === scheduleId && b.bookingStatus !== 'cancelled');
+      const tripBookings = bookings.filter((b: Booking) => bookingMatchesSchedule(b, scheduleId) && b.bookingStatus !== 'cancelled')
 
       const doc = new jsPDF();
       
@@ -314,7 +315,7 @@ export default function BookingsTab({ dashboard }: BookingsTabProps) {
                 {activeSchedules.map((schedule: Schedule) => {
                   const route = routes.find((r: Route) => r.id === schedule.routeId);
                   const bus = buses.find((b: Bus) => b.id === schedule.busId);
-                  const tripBookings = bookings.filter((b: Booking) => b.scheduleId === schedule.id && b.bookingStatus !== 'cancelled');
+                  const tripBookings = bookings.filter((b: Booking) => bookingMatchesSchedule(b, schedule.id) && b.bookingStatus !== 'cancelled');
                   const isSelected = selectedScheduleId === schedule.id;
                   const isToday = (() => {
                     const dep = new Date(schedule.departureDateTime);
@@ -388,7 +389,7 @@ export default function BookingsTab({ dashboard }: BookingsTabProps) {
               const route = routes.find((r: Route) => r.id === schedule?.routeId);
               const bus = buses.find((b: Bus) => b.id === schedule?.busId);
               const tripBookings = bookings
-                .filter((b: Booking) => b.scheduleId === selectedScheduleId && b.bookingStatus !== 'cancelled')
+                .filter((b: Booking) => bookingMatchesSchedule(b, selectedScheduleId) && b.bookingStatus !== 'cancelled')
                 .sort((a: Booking, b: Booking) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
               const paidCount = tripBookings.filter((b: Booking) => b.paymentStatus === 'paid').length;

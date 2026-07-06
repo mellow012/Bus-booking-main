@@ -131,6 +131,7 @@ export function createScheduleCacheKey(params: {
   startDate?: string;
   endDate?: string;
   sortBy?: string;
+  companyId?: string;
   tzOffset?: number;
   page?: number;
   limit?: number;
@@ -141,6 +142,7 @@ export function createScheduleCacheKey(params: {
   if (params.date) parts.push(`date:${params.date}`);
   if (params.startDate) parts.push(`sd:${params.startDate}`);
   if (params.endDate) parts.push(`ed:${params.endDate}`);
+  if (params.companyId) parts.push(`company:${params.companyId}`);
   if (typeof params.tzOffset === 'number') parts.push(`tz:${params.tzOffset}`);
   parts.push(`sort:${params.sortBy || 'time'}`);
   parts.push(`p:${params.page || 1}`);

@@ -82,6 +82,30 @@ export async function GET(req: NextRequest) {
               },
             },
           },
+          segments: {
+            include: {
+              schedule: {
+                include: {
+                  route: {
+                    select: {
+                      id: true,
+                      origin: true,
+                      destination: true,
+                      distance: true,
+                      stops: true,
+                    },
+                  },
+                  bus: {
+                    select: {
+                      id: true,
+                      licensePlate: true,
+                      busType: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
         },
         orderBy,
         skip,

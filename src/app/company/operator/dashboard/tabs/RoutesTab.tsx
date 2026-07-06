@@ -3,6 +3,7 @@
 import React from 'react';
 import { Route, Schedule, Bus } from '@/types';
 import { Map, MapPin, Calendar, Bus as BusIcon } from 'lucide-react';
+import { getVisibleAssignedRoutes } from '../_lib/route-display';
 
 interface RoutesTabProps {
   dashboard: any;
@@ -10,16 +11,7 @@ interface RoutesTabProps {
 
 export default function RoutesTab({ dashboard }: RoutesTabProps) {
   const { assignedRoutes: routes, schedules, buses, userProfile: profile } = dashboard;
-
-  // Filter routes to those assigned to the operator's branch/region
-  // For now we just show routes that match the operator's region/branches
-  const operatorBranches = profile?.branch || [];
-  const operatorRegion = profile?.region;
-  
-  const assignedRoutes = routes.filter((r: Route) => {
-    return (operatorRegion && r.regionId === operatorRegion) || 
-           (r.regionId && operatorBranches.includes(r.regionId));
-  });
+  const assignedRoutes = getVisibleAssignedRoutes(routes, profile);
 
   const searchQuery = dashboard.searchQuery?.toLowerCase() || '';
 

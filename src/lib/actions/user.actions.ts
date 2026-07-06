@@ -428,7 +428,8 @@ export async function updateOperatorAssignments(id: string, data: { regionId?: s
 
     const companyId = existingUser.companyId;
 
-    // 2. Perform database transaction
+    // 2. Perform database transaction with a longer timeout because route updates
+    // can take longer on cold or busy database connections.
     await prisma.$transaction(async (tx) => {
       // Update User table status and region (region string)
       const userUpdate: any = {
@@ -462,43 +463,63 @@ export async function updateOperatorAssignments(id: string, data: { regionId?: s
       }
       operatorUpdate.regionId = data.regionId || null;
 
-      // Update route relationships
-      if (data.routeIds) {
-        // Disconnect from all routes first
+      const existingOperator = await tx.operator.findUnique({
+        where: { id },
+        select: { id: true }
+      }) ?? await tx.operator.findUnique({
+        where: { uid: id },
+        select: { id: true }
+      });
+
+      const operatorRecordId = existingOperator?.id ?? id;
+
+      if (existingOperator) {
         await tx.operator.update({
-          where: { id },
+          where: { id: operatorRecordId },
+          data: operatorUpdate
+        });
+      } else {
+        await tx.operator.create({
+          data: {
+            id,
+            uid: id,
+            companyId: companyId || '',
+            companyName: '',
+            email: existingUser.email || '',
+            name: `${existingUser.firstName} ${existingUser.lastName}`.trim() || 'Operator',
+            role: existingUser.role || 'operator',
+            status: data.status || 'active',
+            regionId: data.regionId || null,
+          }
+        });
+      }
+
+      // Apply route relationships explicitly after the operator record exists.
+      if (Array.isArray(data.routeIds)) {
+        await tx.operator.update({
+          where: { id: operatorRecordId },
           data: {
             routes: {
-              set: [] // clears all routes
+              set: []
             }
           }
         });
 
-        // Connect new routes
-        operatorUpdate.routes = {
-          connect: data.routeIds.map(rid => ({ id: rid }))
-        };
+        if (data.routeIds.length > 0) {
+          await tx.operator.update({
+            where: { id: operatorRecordId },
+            data: {
+              routes: {
+                connect: data.routeIds.map(rid => ({ id: rid }))
+              }
+            }
+          });
+        }
       }
 
-      await tx.operator.upsert({
-        where: { id },
-        update: operatorUpdate,
-        create: {
-          id,
-          uid: id,
-          companyId: companyId || '',
-          companyName: '', // can be populated or empty
-          email: existingUser.email || '',
-          name: `${existingUser.firstName} ${existingUser.lastName}`.trim() || 'Operator',
-          role: existingUser.role || 'operator',
-          status: data.status || 'active',
-          regionId: data.regionId || null,
-          routes: data.routeIds && data.routeIds.length > 0 ? {
-            connect: data.routeIds.map(rid => ({ id: rid }))
-          } : undefined
-        }
-      });
-
+    }, {
+      timeout: 30000,
+      maxWait: 10000,
     });
 
     revalidatePath('/company/admin');

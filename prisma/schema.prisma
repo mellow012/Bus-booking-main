@@ -106,6 +106,7 @@ model Company {
   conversations        Conversation[]
   operators            Operator[]
   regions              Region[]
+  bookingSegments      BookingSegment[] @relation("BookingSegmentCompany")
 
   @@index([status])
 }
@@ -223,6 +224,7 @@ model Schedule {
   route             Route             @relation(fields: [routeId], references: [id])
   operator          Operator?         @relation("OperatorSchedules", fields: [operatorId], references: [id])
   reservations      SeatReservation[]
+  bookingSegments   BookingSegment[]  @relation("BookingSegmentSchedule")
   activities        ActivityLog[]
 
   @@index([companyId])
@@ -259,11 +261,40 @@ model Booking {
   bookedBy         String?
   originStopId     String?
   destinationStopId String?
+  returnDate       DateTime?
   metadata         Json?
+  segments         BookingSegment[] @relation("BookingSegmentBooking")
   company          Company   @relation(fields: [companyId], references: [id])
   schedule         Schedule  @relation(fields: [scheduleId], references: [id])
   user             User      @relation(fields: [userId], references: [id])
   payments         Payment[]
+}
+
+model BookingSegment {
+  id               String    @id @default(uuid())
+  bookingId        String
+  companyId        String
+  scheduleId       String
+  segmentIndex     Int
+  date             DateTime
+  seatNumbers      Json
+  passengerCount   Int
+  price            Int
+  currency         String    @default("MWK")
+  originStopId     String?
+  destinationStopId String?
+  metadata         Json?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  booking          Booking   @relation("BookingSegmentBooking", fields: [bookingId], references: [id])
+  schedule         Schedule  @relation("BookingSegmentSchedule", fields: [scheduleId], references: [id])
+  company          Company   @relation("BookingSegmentCompany", fields: [companyId], references: [id])
+  reservations     SeatReservation[] @relation("SeatReservationBookingSegment")
+
+  @@index([bookingId])
+  @@index([scheduleId])
+  @@index([companyId])
 }
 
 model Payment {
@@ -332,15 +363,17 @@ model ChatMessage {
 }
 
 model SeatReservation {
-  id          String   @id @default(uuid())
-  scheduleId  String
-  userId      String
-  seatNumbers Json
-  status      String   @default("reserved")
-  expiresAt   DateTime
-  createdAt   DateTime @default(now())
-  schedule    Schedule @relation(fields: [scheduleId], references: [id])
-  user        User     @relation(fields: [userId], references: [id])
+  id              String   @id @default(uuid())
+  scheduleId      String
+  userId          String
+  seatNumbers     Json
+  status          String   @default("reserved")
+  expiresAt       DateTime
+  createdAt       DateTime @default(now())
+  bookingSegmentId String?
+  schedule        Schedule @relation(fields: [scheduleId], references: [id])
+  user            User     @relation(fields: [userId], references: [id])
+  bookingSegment  BookingSegment? @relation("SeatReservationBookingSegment", fields: [bookingSegmentId], references: [id])
 }
 
 model ScheduleTemplate {

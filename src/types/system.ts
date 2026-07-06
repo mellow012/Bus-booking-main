@@ -16,6 +16,7 @@ import { UserRole } from './core';
 export type NotificationType =
   | 'booking'       // replaces 'booking_confirmed'
   | 'payment'       // replaces 'payment_received'
+  | 'payment_reminder'
   | 'schedule'      // replaces 'trip_reminder'
   | 'system'
   | 'promotion'

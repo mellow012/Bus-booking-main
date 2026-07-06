@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { Schedule, Route, Bus, Company } from '@/types';
 import AlertMessage from './AlertMessage';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
 
@@ -98,11 +99,7 @@ export default function AvailableRoutes({ limit }: AvailableRoutesProps) {
   // ── Render ──────────────────────────────────────────────────────────────────
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
-      </div>
-    );
+    return <LoadingSpinner className="text-blue-600" size="md" />;
   }
 
   return (

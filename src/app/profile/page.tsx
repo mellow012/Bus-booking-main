@@ -19,6 +19,7 @@ import ProfilePageSkeleton from '@/components/ui/ProfilePageSkeleton';
 import ConfirmationModal from '@/components/ui/ConfirmationModal';
 import OperatorProfileTab from '@/components/OperatorProfileTab';
 import { isCompanyRole, UserRole } from '@/types/core';
+import { resolveEffectiveProfileRole } from '@/lib/profile-role';
 
 interface UserProfile {
   id: string;
@@ -281,6 +282,10 @@ const ProfilePage: React.FC = () => {
   const displayedFirstName = profile?.firstName || userProfile?.firstName || '';
   const displayedLastName = profile?.lastName || userProfile?.lastName || '';
   const displayedPhone = profile?.phone || userProfile?.phone || '';
+  const effectiveRole = useMemo(
+    () => resolveEffectiveProfileRole(profile?.role, userProfile?.role ?? user?.user_metadata?.role),
+    [profile?.role, userProfile?.role, user?.user_metadata?.role],
+  );
 
   // ─── User preferences ─────────────────────────────────────────────────────
   // Preferences are now loaded from API response
@@ -724,7 +729,7 @@ const ProfilePage: React.FC = () => {
     );
   }
 
-  const isStaff = isCompanyRole(profile.role);
+  const isStaff = effectiveRole ? isCompanyRole(effectiveRole) : isCompanyRole(profile.role);
 
   if (isStaff) {
     return (
@@ -733,7 +738,7 @@ const ProfilePage: React.FC = () => {
           <div className="mb-8 flex items-center justify-between">
             <div>
               <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Staff Profile</h1>
-              <p className="text-gray-500 mt-1 uppercase text-xs font-bold tracking-widest">{profile.role} Management Console</p>
+              <p className="text-gray-500 mt-1 uppercase text-xs font-bold tracking-widest">{effectiveRole ?? profile.role} Management Console</p>
             </div>
             <BackButton
               label="Back to Dashboard"

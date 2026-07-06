@@ -42,9 +42,11 @@ const Header: React.FC = () => {
 
   const [isMenuOpen,     setIsMenuOpen]     = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const [userMenuStyle, setUserMenuStyle] = useState<{ top: number; left: number } | null>(null);
   const [isScrolled,     setIsScrolled]     = useState(false);
   const [hasPromotions,   setHasPromotions]   = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
+  const userToggleRef = useRef<HTMLButtonElement | null>(null);
 
   // ── navigation items use translations ──────────────────────────────────────
   const navigationItems = [
@@ -97,6 +99,25 @@ const Header: React.FC = () => {
     document.body.style.overflow = isMenuOpen ? 'hidden' : 'unset';
     return () => { document.body.style.overflow = 'unset'; };
   }, [isMenuOpen]);
+
+  // Position the user dropdown reliably under the toggle button using fixed positioning
+  useEffect(() => {
+    const updatePosition = () => {
+      if (!isUserMenuOpen || !userToggleRef.current) { setUserMenuStyle(null); return; }
+      const rect = userToggleRef.current.getBoundingClientRect();
+      const menuWidth = 256; // w-64
+      const margin = 8;
+      // Center the menu under the toggle button by default
+      const preferredLeft = Math.round(rect.left + (rect.width / 2) - (menuWidth / 2));
+      const clampedLeft = Math.max(margin, Math.min(preferredLeft, window.innerWidth - margin - menuWidth));
+      const top = Math.round(rect.bottom + 8);
+      setUserMenuStyle({ top, left: clampedLeft });
+    };
+    updatePosition();
+    window.addEventListener('resize', updatePosition);
+    window.addEventListener('scroll', updatePosition, true);
+    return () => { window.removeEventListener('resize', updatePosition); window.removeEventListener('scroll', updatePosition, true); };
+  }, [isUserMenuOpen]);
 
   const handleLogout = async () => {
     try { await signOut(); setIsUserMenuOpen(false); router.push('/'); }
@@ -159,7 +180,7 @@ const Header: React.FC = () => {
             <div className="relative shrink-0">
               <div className={`${
                 isAuthPage 
-                  ? 'h-12 sm:h-14 md:h-16 lg:h-18' 
+                  ? 'h-12 sm:h-14 md:h-16 lg:h-20' 
                   : 'h-10 sm:h-12 md:h-14 lg:h-16' 
               } flex items-center justify-center transition-all duration-300 group-hover:scale-105`}>
                 <img
@@ -194,7 +215,18 @@ const Header: React.FC = () => {
             {user && (
               <div className="relative hidden md:flex items-center space-x-2" ref={userMenuRef}>
                 <button
-                  onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+                  ref={userToggleRef}
+                  onClick={() => {
+                    if (!isUserMenuOpen && userToggleRef.current) {
+                      const rect = userToggleRef.current.getBoundingClientRect();
+                      const menuWidth = 256; const margin = 8;
+                      const preferredLeft = Math.round(rect.left + (rect.width / 2) - (menuWidth / 2));
+                      const clampedLeft = Math.max(margin, Math.min(preferredLeft, window.innerWidth - margin - menuWidth));
+                      const top = Math.round(rect.bottom + 8);
+                      setUserMenuStyle({ top, left: clampedLeft });
+                    }
+                    setIsUserMenuOpen((s) => !s);
+                  }}
                   className="flex items-center space-x-3 p-2 rounded-xl hover:bg-gray-100 transition-all duration-200 group"
                 >
                   <div className="hidden md:block text-left">
@@ -219,7 +251,11 @@ const Header: React.FC = () => {
                 </button>
 
                 {isUserMenuOpen && (
-                  <div className="absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-xl border border-gray-200 py-2 z-50 animate-in fade-in slide-in-from-top-5 duration-200">
+                  <div
+                    ref={userMenuRef}
+                    style={userMenuStyle ? { position: 'fixed', top: `${userMenuStyle.top}px`, left: `${userMenuStyle.left}px` } : undefined}
+                    className="w-64 bg-white rounded-2xl shadow-xl border border-gray-200 py-2 z-50 animate-in fade-in duration-200"
+                  >
                     <div className="px-4 py-3 border-b border-gray-100">
                       <div className="flex items-center space-x-3">
                         <UserAvatar user={user} userProfile={userProfile} />

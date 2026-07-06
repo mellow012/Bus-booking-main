@@ -260,12 +260,17 @@ const BookingDetailModal: FC<{
             <div className="flex items-center gap-3 font-bold text-gray-900 text-sm tracking-tight uppercase">
               <MapPin className="w-4 h-4 text-indigo-600 shrink-0" />
               {seg.from}
-              <ArrowRight className="w-4 h-4 text-gray-300 shrink-0" />
+              <ArrowRight className="w-3.5 h-3.5 text-gray-300 shrink-0" />
               {seg.to}
             </div>
             {partial && route && (
               <p className="text-[10px] font-bold text-gray-400 mt-2 uppercase tracking-widest italic">Route Bound: {route.origin} → {route.destination}</p>
             )}
+            {(booking as any).returnDate || (booking as any).metadata?.returnDate ? (
+              <p className="mt-3 text-[10px] font-bold text-amber-700 uppercase tracking-widest">
+                Return trip booked for {fmtDate(toDate((booking as any).returnDate || (booking as any).metadata?.returnDate))}
+              </p>
+            ) : null}
             {dep && (
               <div className="mt-4 flex items-center gap-4">
                 <div className="flex items-center gap-2">
@@ -570,19 +575,21 @@ const BookingsTab: FC<BookingsTabProps> = ({ schedules, routes, buses, companyId
       const sc  = schedules.find(s => s.id === b.scheduleId);
       const rt  = routes.find(r => r.id === sc?.routeId);
       const seg = passengerSegment(b, rt);
+      const returnDateValue = b.returnDate ? toDate(b.returnDate).toISOString().split('T')[0] : (b.metadata?.returnDate as string) ?? "";
       return [
         b.bookingReference ?? b.id.slice(0, 8),
         passengerName(b),
         b.passengerDetails?.[0]?.contactNumber ?? "",
         seg.from, seg.to,
         b.seatNumbers?.join(";") ?? "",
+        returnDateValue,
         b.totalAmount ?? 0,
         b.bookingStatus,
         b.paymentStatus,
         toDate(b.createdAt).toISOString(),
       ].join(",");
     });
-    const csv  = ["Ref,Name,Phone,From,To,Seats,Amount,Booking Status,Payment Status,Created", ...rows].join("\n");
+    const csv  = ["Ref,Name,Phone,From,To,Seats,Return Date,Amount,Booking Status,Payment Status,Created", ...rows].join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement("a");
@@ -802,8 +809,15 @@ const BookingsTab: FC<BookingsTabProps> = ({ schedules, routes, buses, companyId
                           </td>
 
                           <td className="px-8 py-6">
-                             <div className="flex items-center gap-2 text-xs font-bold text-gray-700 uppercase tracking-tight">
-                                {seg.from} <ArrowRight className="w-3 h-3 text-gray-300" /> {seg.to}
+                             <div className="flex flex-col gap-2 text-xs font-bold text-gray-700 uppercase tracking-tight">
+                                <div className="flex items-center gap-2">
+                                  {seg.from} <ArrowRight className="w-3 h-3 text-gray-300" /> {seg.to}
+                                </div>
+                                {(booking as any).returnDate || (booking as any).metadata?.returnDate ? (
+                                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-amber-100 text-amber-700 text-[10px] font-semibold uppercase tracking-widest">
+                                    <Calendar className="w-3 h-3" /> Return {fmtDate(toDate((booking as any).returnDate || (booking as any).metadata?.returnDate))}
+                                  </span>
+                                ) : null}
                              </div>
                           </td>
 

@@ -4,6 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { getCurrentUser } from '@/lib/auth-utils';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { z } from 'zod';
@@ -16,10 +17,28 @@ export const dynamic = 'force-dynamic';
 
 export async function POST(request: NextRequest) {
   try {
+    const user = await getCurrentUser(request);
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized', message: 'Missing or invalid authentication session' }, { status: 401 });
+    }
+
     const body = await request.json();
     const { notificationId } = schema.parse(body);
 
-    await (prisma as any).notification.update({
+    const notification = await prisma.notification.findUnique({
+      where: { id: notificationId },
+      select: { userId: true },
+    });
+
+    if (!notification) {
+      return NextResponse.json({ success: false, error: 'Notification not found' }, { status: 404 });
+    }
+
+    if (notification.userId !== user.id && user.role !== 'superadmin') {
+      return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
+    }
+
+    await prisma.notification.update({
       where: { id: notificationId },
       data: {
         isRead: true,

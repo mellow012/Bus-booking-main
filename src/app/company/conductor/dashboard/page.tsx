@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Loader2, LogOut, QrCode, Settings, X, Ticket, Menu, LayoutDashboard, MapPin, Users, DollarSign, FileText, User } from 'lucide-react';
+import { LogOut, QrCode, Settings, X, Ticket, Menu, LayoutDashboard, MapPin, Users, DollarSign, FileText, User } from 'lucide-react';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { Button } from '@/components/ui/button';
 
 import WalkOnBookingModal, { WalkOnFormData } from './_components/WalkOnBookingModal';
@@ -41,7 +42,7 @@ export default function ConductorDashboard() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   if (loading || authLoading) {
-    return <div className="min-h-screen bg-[#f8fafc] flex items-center justify-center"><Loader2 className="w-10 h-10 text-indigo-600 animate-spin" /></div>;
+    return <div className="min-h-screen bg-[#f8fafc]"><LoadingSpinner className="text-indigo-600" fullScreen /></div>;
   }
 
   const activeRoute = selectedTrip ? routes.find(r => r.id === selectedTrip.routeId) || null : null;

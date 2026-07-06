@@ -3,7 +3,7 @@
 import React, { Suspense } from "react";
 import {
   Search, MapPin, Calendar, Users, Navigation, Clock, CheckCircle, Bus as BusIcon,
-  Filter, AlertCircle, RefreshCw, Zap, TrendingUp, Loader2, ArrowRight, User, Star, X, ChevronLeft, ChevronRight
+  Filter, AlertCircle, RefreshCw, Zap, TrendingUp, ArrowRight, User, Star, X, ChevronLeft, ChevronRight
 } from "lucide-react";
 import BackButton from "@/components/BackButton";
 import { LocationAutocomplete } from "@/components/LocationAutocomplete";
@@ -16,6 +16,7 @@ import SchedulesGrid from './_components/SchedulesGrid';
 import Pagination from './_components/Pagination';
 import Image from "next/image";
 import { ScheduleCard } from "@/components/ScheduleCard";
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 
 interface EnhancedSchedule {
   id: string;
@@ -43,7 +44,7 @@ export default function SchedulesClient({ initialSchedules, initialCompanies }: 
     loading, searching, error, setError,
     schedules, setSchedules, companies, setCompanies,
     // search
-    searchFrom, setSearchFrom, searchTo, setSearchTo, searchDate, setSearchDate, passengers, setPassengers,
+    searchFrom, setSearchFrom, searchTo, setSearchTo, searchDate, setSearchDate, returnDate, setReturnDate, passengers, setPassengers,
     activeFilter, setActiveFilter, sortBy, setSortBy,
     selectedCompany, setSelectedCompany, selectedTimeSlot, setSelectedTimeSlot, selectedTerminal, setSelectedTerminal,
     selectedCategory, setSelectedCategory, showFilters, setShowFilters,
@@ -57,14 +58,7 @@ export default function SchedulesClient({ initialSchedules, initialCompanies }: 
   } = useSchedules(initialSchedules, initialCompanies as any);
 
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="flex flex-col items-center">
-          <Loader2 className="w-10 h-10 text-blue-600 animate-spin mb-4" />
-          <p className="text-gray-500 font-medium">Loading schedules...</p>
-        </div>
-      </div>
-    );
+    return <LoadingSpinner className="text-blue-600" label="Loading schedules..." fullScreen />;
   }
 
   return (
@@ -121,11 +115,11 @@ export default function SchedulesClient({ initialSchedules, initialCompanies }: 
                 />
               </div>
               <div className="col-span-1 lg:col-span-1">
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">Date</label>
+                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">Depart</label>
                 <div className="space-y-2">
                   <div className="relative">
                     <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                    <input type="date" value={searchDate} onChange={e => setSearchDate(e.target.value)} min={new Date().toISOString().split('T')[0]} className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-gray-900" placeholder="Any date" />
+                    <input type="date" value={searchDate} onChange={e => setSearchDate(e.target.value)} min={new Date().toISOString().split('T')[0]} className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-gray-900" placeholder="Depart date" />
                   </div>
                   <div className="flex gap-2">
                     <button
@@ -149,6 +143,13 @@ export default function SchedulesClient({ initialSchedules, initialCompanies }: 
                       Tomorrow
                     </button>
                   </div>
+                </div>
+              </div>
+              <div className="col-span-1 lg:col-span-1">
+                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">Return</label>
+                <div className="relative">
+                  <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  <input type="date" value={returnDate} onChange={e => setReturnDate(e.target.value)} min={new Date().toISOString().split('T')[0]} className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-gray-900" placeholder="Return date" />
                 </div>
               </div>
               <div className="col-span-1 lg:col-span-1">
