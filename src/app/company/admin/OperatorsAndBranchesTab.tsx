@@ -46,7 +46,14 @@ export default function OperatorsAndBranchesTab({ dashboard }: OperatorsAndBranc
       const firstName = operator.firstName || '';
       const lastName = operator.lastName || '';
       const derivedName = [firstName, lastName].filter(Boolean).join(' ').trim() || operator.name || operator.email || 'Unknown operator';
-      const branchName = operator.region || operator.regionName || branches.find((branch: any) => branch.id === operator.regionId)?.name || 'Unassigned';
+      const operatorRegionId = operator.regionId || (operator.region && typeof operator.region === 'object' ? operator.region.id : null) || null;
+      const operatorRegionName = typeof operator.region === 'string'
+        ? operator.region
+        : operator.regionName || (operator.region && typeof operator.region === 'object' ? operator.region.name : '');
+      const matchingBranch = branches.find((branch: any) => branch.id === operatorRegionId)
+        || (operatorRegionName ? branches.find((branch: any) => branch.name?.toLowerCase() === operatorRegionName.toLowerCase()) : undefined);
+      const branchName = matchingBranch?.name || operatorRegionName || 'Unassigned';
+      const branchId = operatorRegionId || matchingBranch?.id || null;
       const existingRouteIds = Array.isArray(operator.routes)
         ? operator.routes
             .map((route: any) => route?.id || route?.routeId)
@@ -60,7 +67,7 @@ export default function OperatorsAndBranchesTab({ dashboard }: OperatorsAndBranc
         role: operator.role || 'operator',
         status: operator.status || (operator.isActive === false ? 'inactive' : 'active'),
         region: branchName,
-        regionId: operator.regionId || (operator.region && typeof operator.region === 'object' ? operator.region.id : null) || null,
+        regionId: branchId,
         routeIds: existingRouteIds,
       };
     });

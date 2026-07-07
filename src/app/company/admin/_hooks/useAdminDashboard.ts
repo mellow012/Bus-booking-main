@@ -93,15 +93,29 @@ export function useAdminDashboard() {
         return; 
       }
       
-      const [schedules, routes, buses, reports, regions, operatorsRes] = await Promise.all([
+      const [schedules, routes, buses, reports, regions, operatorsRes, operatorAssignmentsRes] = await Promise.all([
         fetchCollectionData('Schedule', companyId),
         fetchCollectionData('Route', companyId),
         fetchCollectionData('Bus', companyId),
         fetchCollectionData('DailyReport', companyId),
         fetchCollectionData('Region', companyId),
         supabase.from('User').select('*').eq('companyId', companyId).in('role', ['operator', 'conductor']).order('createdAt', { ascending: false }),
+        supabase.from('Operator').select('id, uid, regionId').eq('companyId', companyId),
       ]);
-      const operators = operatorsRes.data || [];
+      const operatorAssignments = (operatorAssignmentsRes.data || []) as Array<{ id: string; uid?: string | null; regionId?: string | null }>;
+      const assignmentByKey = new Map<string, { regionId?: string | null }>();
+      operatorAssignments.forEach((assignment) => {
+        if (assignment.id) assignmentByKey.set(assignment.id, assignment);
+        if (assignment.uid) assignmentByKey.set(assignment.uid, assignment);
+      });
+
+      const operators = (operatorsRes.data || []).map((op: any) => {
+        const assignment = assignmentByKey.get(op.id) || assignmentByKey.get(op.uid);
+        return {
+          ...op,
+          regionId: op.regionId || assignment?.regionId || null,
+        };
+      });
       setDashboardData(prev => ({
         ...prev,
         company: { ...companyData, createdAt: new Date(companyData.createdAt), updatedAt: new Date(companyData.updatedAt) } as Company,

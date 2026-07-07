@@ -45,17 +45,18 @@ const OperatorProfileTab: React.FC<OperatorProfileTabProps> = ({
 
     const fetchOperatorData = async () => {
       try {
-        console.log('Searching for operator with uid:', userProfile.id);
+        console.log('Searching for operator with id:', userProfile.id);
 
-        // Query operators collection by uid field
+        // Query operator record by id first, then fallback to uid.
         const { data: operatorData, error: fetchError } = await (supabase as any)
-          .from('User')
-          .select('region')
-          .eq('uid', userProfile.id)
+          .from('Operator')
+          .select('regionId, region(name)')
+          .or(`id.eq.${userProfile.id},uid.eq.${userProfile.id}`)
           .single();
 
         if (!fetchError && operatorData) {
-          setOperatorRegion(operatorData.region || 'Not set');
+          const regionName = operatorData.region?.name || operatorData.regionId || 'Not set';
+          setOperatorRegion(regionName || 'Not set');
         } else {
           setOperatorRegion('Not set');
         }

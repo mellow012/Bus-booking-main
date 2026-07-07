@@ -219,8 +219,8 @@ export default function useBookBus() {
       }
 
       const data = await response.json();
-      const schedules = Array.isArray(data?.data) ? data.data : [];
-      const grouped = schedules.reduce((acc: Record<string, { count: number; formatted: string }>, item: any) => {
+      const schedules = Array.isArray(data?.data) ? (data.data as Array<{ date?: string }>) : [];
+      const grouped = schedules.reduce<Record<string, { count: number; formatted: string }>>((acc, item) => {
         if (!item?.date) return acc;
         const date = item.date;
         if (!acc[date]) {
