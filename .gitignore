@@ -1,0 +1,57 @@
+# Dependencies
+node_modules
+/.pnp
+.pnp.js
+
+# Testing
+/coverage
+/e2e/test-results
+/e2e/playwright-report
+
+# Next.js build and cache output
+/.next/
+/out/
+tsconfig.tsbuildinfo
+
+# Production
+/build
+
+# Environment files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env*.local
+
+# Debug logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Vercel
+.vercel
+
+# Firebase cache
+.firebase/
+
+# IDEs and editors
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# System Files
+.DS_Store
+Thumbs.db
+
+# Project-specific preservation/patch folders
+wip-preserve-*/
+*.patch
+
+public/Airtel Money Uganda Logo PNG Vector (PDF) Free Download.jpg
+
