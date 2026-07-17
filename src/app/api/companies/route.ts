@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { logger } from '@/lib/logger';
 
 export async function GET() {
   try {
@@ -9,8 +10,8 @@ export async function GET() {
       orderBy: { name: 'asc' }
     });
     return NextResponse.json({ success: true, data: companies });
-  } catch (error) {
-    console.error('Error fetching companies:', error);
+  } catch (error: any) {
+    await logger.logError('company', 'Error fetching companies', error);
     return NextResponse.json({ success: false, error: 'Failed to fetch companies' }, { status: 500 });
   }
 }

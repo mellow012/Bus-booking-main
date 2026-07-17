@@ -93,11 +93,19 @@ async function querySchedules(params: {
   const gracePeriod = new Date(roundedNow - 15 * 60 * 1000);
 
   // Build where clause
+  const routeFilter: any = { isActive: true };
+  if (from) {
+    routeFilter.origin = { contains: from, mode: 'insensitive' };
+  }
+  if (to) {
+    routeFilter.destination = { contains: to, mode: 'insensitive' };
+  }
+
   const where: any = {
     status: 'active',
     availableSeats: { gt: 0 },
     company: { status: 'active' },
-    route: { isActive: true },
+    route: routeFilter,
   };
 
   if (companyId) {
@@ -107,20 +115,14 @@ async function querySchedules(params: {
   const now = new Date();
   const recentDepartureCutoff = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
-  if (from) {
-    where.route.origin = { contains: from, mode: 'insensitive' };
-  }
-  if (to) {
-    where.route.destination = { contains: to, mode: 'insensitive' };
-  }
-
   if (startDate || endDate) {
-    where.departureDateTime = {};
+    const depTimeFilter: any = {};
     if (startDate) {
       const start = new Date(startDate);
-      where.departureDateTime.gte = start < gracePeriod ? gracePeriod : start;
+      depTimeFilter.gte = start < gracePeriod ? gracePeriod : start;
     }
-    if (endDate) where.departureDateTime.lte = new Date(endDate);
+    if (endDate) depTimeFilter.lte = new Date(endDate);
+    where.departureDateTime = depTimeFilter;
   } else if (!date) {
     where.departureDateTime = { gte: recentDepartureCutoff };
     where.arrivalDateTime = { gt: now };
@@ -146,14 +148,16 @@ async function querySchedules(params: {
     };
   }
 
-  const orderByQuery =
-    sortBy === 'time' || (sortBy as string) === 'departureDateTime'
-      ? { departureDateTime: 'asc' }
-      : sortBy === 'price_asc'
-      ? { price: 'asc' }
-      : sortBy === 'price_desc'
-      ? { price: 'desc' }
-      : { availableSeats: 'desc' };
+  let orderByQuery: any;
+  if (sortBy === 'time' || (sortBy as string) === 'departureDateTime') {
+    orderByQuery = { departureDateTime: 'asc' };
+  } else if (sortBy === 'price_asc') {
+    orderByQuery = { price: 'asc' };
+  } else if (sortBy === 'price_desc') {
+    orderByQuery = { price: 'desc' };
+  } else {
+    orderByQuery = { availableSeats: 'desc' };
+  }
 
   const [schedules, total] = await Promise.all([
     prisma.schedule.findMany({
@@ -163,16 +167,21 @@ async function querySchedules(params: {
         bus: { include: { company: true } },
         company: true,
       },
-      orderBy: orderByQuery as any,
+      orderBy: orderByQuery,
       skip: pageOffset,
       take: limit,
     }),
     prisma.schedule.count({ where }),
   ]);
 
+  interface StopInfo {
+    id: string;
+    name: string;
+  }
+
   // Transform to enhanced format
   const enhanced = schedules
-    .map((sch) => {
+    .map((sch: any) => {
       const route = sch.route;
       const bus = sch.bus;
       const company = sch.company;
@@ -187,7 +196,7 @@ async function querySchedules(params: {
       // Smart Segment Filtering
       let originStopId: string | undefined;
       if (from && Array.isArray(route.stops)) {
-        const stops = route.stops as any[];
+        const stops = route.stops as unknown as StopInfo[];
         const match = stops.find(s => s?.name?.toLowerCase().includes(from));
         if (match) originStopId = match.id;
       }
@@ -195,8 +204,8 @@ async function querySchedules(params: {
       try {
         const bookable = isSegmentBookable(sch, originStopId);
         if (!bookable) return null;
-      } catch (err) {
-        console.error("Error checking bookable status for schedule", sch.id, err);
+      } catch (err: any) {
+        logger.logError('api', `Error checking bookable status for schedule ${sch.id}`, err);
       }
 
       return {
@@ -226,7 +235,7 @@ async function querySchedules(params: {
         arrivalLocation: sch.arrivalLocation || `${route.destination} Main Terminal`,
       };
     })
-    .filter(item => item !== null) as any[] as EnhancedSchedule[];
+    .filter((item: any) => item !== null) as EnhancedSchedule[];
 
   // Deduplicate identical schedules
   const seen = new Set<string>();
@@ -252,8 +261,8 @@ async function querySchedules(params: {
 export async function GET(request: NextRequest) {
   try {
     // Fire-and-forget: ensure future schedules exist (runs at most once per 5 min)
-    checkAndRollSchedules().catch((err) => {
-      console.error('[schedule-generator] Async roll error:', err);
+    checkAndRollSchedules().catch((err: any) => {
+      logger.logError('api', '[schedule-generator] Async roll error', err);
     });
 
     const searchParams = request.nextUrl.searchParams;
@@ -301,8 +310,8 @@ export async function GET(request: NextRequest) {
           .then((freshResult) => {
             serverCache.set(cacheKey, freshResult, CACHE_FRESH_MS, CACHE_STALE_MS);
           })
-          .catch((err) => {
-            console.error('[schedules] Background revalidation failed:', err);
+          .catch((err: any) => {
+            logger.logError('api', '[schedules] Background revalidation failed', err);
           })
           .finally(() => {
             serverCache.clearRevalidating(cacheKey);
@@ -334,7 +343,6 @@ export async function GET(request: NextRequest) {
       }
     );
   } catch (error: any) {
-    console.error('[schedules] Error:', error);
     await logger.logError('api', 'Failed to fetch schedules', error, {
       action: 'fetch_error',
     });

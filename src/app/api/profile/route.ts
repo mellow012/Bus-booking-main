@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth-utils';
 import prisma from '@/lib/prisma';
+import { logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 
@@ -73,25 +74,25 @@ export async function GET(req: NextRequest) {
 
     // Calculate stats
     const bookings = userProfile.bookings || [];
-    const completedBookings = bookings.filter(b => b.bookingStatus === 'confirmed');
-    const pendingBookings = bookings.filter(b => b.bookingStatus === 'pending');
-    const cancelledBookings = bookings.filter(b => b.bookingStatus === 'cancelled');
+    const completedBookings = bookings.filter((b: any) => b.bookingStatus === 'confirmed');
+    const pendingBookings = bookings.filter((b: any) => b.bookingStatus === 'pending');
+    const cancelledBookings = bookings.filter((b: any) => b.bookingStatus === 'cancelled');
     
-    const totalSpent = bookings.reduce((sum, b) => sum + (b.totalAmount || 0), 0);
-    const thisMonthBookings = bookings.filter(b => {
+    const totalSpent = bookings.reduce((sum: number, b: any) => sum + (b.totalAmount || 0), 0);
+    const thisMonthBookings = bookings.filter((b: any) => {
       const bookingMonth = new Date(b.createdAt).getMonth();
       const currentMonth = new Date().getMonth();
       const bookingYear = new Date(b.createdAt).getFullYear();
       const currentYear = new Date().getFullYear();
       return bookingMonth === currentMonth && bookingYear === currentYear;
     });
-    const thisMonthSpent = thisMonthBookings.reduce((sum, b) => sum + (b.totalAmount || 0), 0);
+    const thisMonthSpent = thisMonthBookings.reduce((sum: number, b: any) => sum + (b.totalAmount || 0), 0);
 
     // Travel insights
     const destinationCounts: Record<string, number> = {};
     const companyCounts: Record<string, number> = {};
     
-    completedBookings.forEach(b => {
+    completedBookings.forEach((b: any) => {
       const dest = b.schedule?.route?.destination || 'Unknown';
       destinationCounts[dest] = (destinationCounts[dest] || 0) + 1;
       
@@ -101,7 +102,7 @@ export async function GET(req: NextRequest) {
 
     const mostVisitedDest = Object.entries(destinationCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || 'N/A';
     const favoriteCompany = Object.entries(companyCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || 'N/A';
-    const totalDistance = completedBookings.reduce((sum, b) => sum + (b.schedule?.route?.distance || 0), 0);
+    const totalDistance = completedBookings.reduce((sum: number, b: any) => sum + (b.schedule?.route?.distance || 0), 0);
     const avgCost = completedBookings.length > 0 ? totalSpent / completedBookings.length : 0;
 
     return NextResponse.json({
@@ -143,8 +144,8 @@ export async function GET(req: NextRequest) {
         'Cache-Control': 'no-store, max-age=0',
       }
     });
-  } catch (error) {
-    console.error('GET /api/profile error:', error);
+  } catch (error: any) {
+    await logger.logError('api', 'GET /api/profile error', error);
     return NextResponse.json(
       { error: 'Failed to fetch profile' },
       { status: 500 }
@@ -206,8 +207,8 @@ export async function PUT(req: NextRequest) {
         currentAddress: updated.currentAddress,
       },
     });
-  } catch (error) {
-    console.error('PUT /api/profile error:', error);
+  } catch (error: any) {
+    await logger.logError('api', 'PUT /api/profile error', error);
     return NextResponse.json(
       { error: 'Failed to update profile' },
       { status: 500 }

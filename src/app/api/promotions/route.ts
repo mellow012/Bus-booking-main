@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/auth-utils';
+import { logger } from '@/lib/logger';
 
 export async function GET() {
   try {
@@ -17,7 +18,7 @@ export async function GET() {
       data: promotions
     });
   } catch (error: any) {
-    console.error('Failed to fetch promotions:', error);
+    await logger.logError('booking', 'Failed to fetch promotions', error);
     return NextResponse.json(
       { success: false, error: 'Internal Server Error' },
       { status: 500 }
@@ -79,7 +80,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: true, data: promotion });
   } catch (error: any) {
-    console.error('Failed to create/update promotion:', error);
+    await logger.logError('booking', 'Failed to create/update promotion', error);
     return NextResponse.json(
       { success: false, error: error.message || 'Internal Server Error' },
       { status: 500 }
@@ -107,7 +108,7 @@ export async function DELETE(req: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
-    console.error('Failed to delete promotion:', error);
+    await logger.logError('booking', 'Failed to delete promotion', error);
     return NextResponse.json(
       { success: false, error: 'Internal Server Error' },
       { status: 500 }

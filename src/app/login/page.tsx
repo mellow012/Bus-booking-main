@@ -222,13 +222,13 @@ export default function Login() {
     <div className="min-h-screen flex flex-col items-center pt-28 sm:pt-32 lg:pt-36 pb-8 bg-gradient-to-br from-gray-50 to-gray-100 sm:px-6 lg:px-8 overflow-y-auto">
       <div className="w-full max-w-md pt-2">
         <div className="flex justify-center pb-1">
-          <div className="flex items-center justify-center transition-transform duration-300 hover:scale-105 max-h-16 sm:max-h-20 md:max-h-20">
+          <div className="flex items-center justify-center transition-transform duration-300 hover:scale-105">
             <Image
               src="/tibhukebus_logo_transparent.png"
               alt="TibhukeBus Logo"
-              width={120}
-              height={48}
-              className="w-auto h-auto object-contain drop-shadow-2xl brightness-[1.02] contrast-[1.05]"
+              width={192}
+              height={80}
+              className="w-48 h-20 object-contain drop-shadow-xl brightness-[1.02] contrast-[1.05]"
               priority
             />
           </div>

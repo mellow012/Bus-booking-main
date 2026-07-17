@@ -75,17 +75,17 @@ export default function ResetPasswordPage() {
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex flex-col items-center pt-28 sm:pt-32 lg:pt-36 pb-8 sm:px-6 lg:px-8">
       <div className="sm:w-full sm:max-w-md">
         {/* Brand Logo consistent with Register page */}
-        <div className="flex justify-center">
-          <div className="flex items-center justify-center transition-transform duration-300 hover:scale-105 max-h-16">
+        <div className="flex justify-center pb-1">
+          <div className="flex items-center justify-center transition-transform duration-300 hover:scale-105">
             <img
               src="/tibhukebus_logo_transparent.png"
               alt="TibhukeBus Logo"
-              className="h-14 w-auto object-contain"
+              className="w-48 h-20 object-contain drop-shadow-xl brightness-[1.02] contrast-[1.05]"
             />
           </div>
         </div>
         
-        <h1 className="mt-2 text-center text-4xl font-extrabold text-gray-900 tracking-tight">
+        <h1 className="text-center text-4xl font-extrabold text-gray-900 tracking-tight">
           Secure your account
         </h1>
         <p className="mt-2 text-center text-sm text-gray-600">

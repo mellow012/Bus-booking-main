@@ -1,9 +1,3 @@
-/**
- * GET /api/search/schedules
- * Advanced search endpoint for the search page
- * Supports filtering by origin, destination, date, and sort options
- */
-
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
@@ -13,11 +7,16 @@ import { checkAndRollSchedules } from '@/lib/schedule-generator';
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 100;
 
+interface StopInfo {
+  id: string;
+  name: string;
+}
+
 export async function GET(request: NextRequest) {
   try {
     // Ensure future schedules are active and running all the time (asynchronously)
-    checkAndRollSchedules().catch((err) => {
-      console.error('[schedule-generator] Async roll error:', err);
+    checkAndRollSchedules().catch((err: any) => {
+      logger.logError('api', '[schedule-generator] Async roll error', err);
     });
 
     const searchParams = request.nextUrl.searchParams;
@@ -49,9 +48,10 @@ export async function GET(request: NextRequest) {
     };
 
     if (origin || destination) {
-      where.route = { AND: [] };
-      if (origin) where.route.AND.push({ origin: { contains: origin, mode: 'insensitive' } });
-      if (destination) where.route.AND.push({ destination: { contains: destination, mode: 'insensitive' } });
+      const andFilters: any[] = [];
+      if (origin) andFilters.push({ origin: { contains: origin, mode: 'insensitive' } });
+      if (destination) andFilters.push({ destination: { contains: destination, mode: 'insensitive' } });
+      where.route = { AND: andFilters };
     }
 
     // Optional: filter by date
@@ -86,7 +86,7 @@ export async function GET(request: NextRequest) {
     const total = await prisma.schedule.count({ where });
 
     // Transform to enhanced format
-    const enhanced = schedules.map(sch => {
+    const enhanced = schedules.map((sch: any) => {
       const route = sch.route;
       const bus = sch.bus;
       const company = sch.company || bus?.company;
@@ -97,7 +97,7 @@ export async function GET(request: NextRequest) {
       // This allows booking a bus that has already started but hasn't reached the user's stop yet.
       let originStopId: string | undefined;
       if (origin && route.stops) {
-        const stops = route.stops as any[];
+        const stops = route.stops as unknown as StopInfo[];
         const match = stops.find(s => s.name.toLowerCase().includes(origin));
         if (match) originStopId = match.id;
       }
@@ -128,7 +128,7 @@ export async function GET(request: NextRequest) {
         busType: bus?.busType || 'Standard',
         amenities: (bus?.amenities as string[]) || [],
       };
-    }).filter(item => item !== null);
+    }).filter((item: any) => item !== null);
 
     return NextResponse.json({
       success: true,
@@ -141,7 +141,6 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error: any) {
-    console.error('[search] Error:', error);
     await logger.logError('api', 'Search failed', error, {
       action: 'search_error',
     });

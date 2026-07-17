@@ -1,13 +1,21 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { SearchResult } from "@/types";
+import { Route, Schedule, Bus, Company } from "@prisma/client";
 import { checkAndRollSchedules } from "@/lib/schedule-generator";
+import { logger } from "@/lib/logger";
+
+interface SearchResultPayload {
+  schedule: Schedule;
+  route: Route;
+  bus: Bus;
+  company: Company;
+}
 
 export async function POST(request: Request) {
   try {
     // Ensure future schedules are active and running all the time (asynchronously)
-    checkAndRollSchedules().catch((err) => {
-      console.error('[schedule-generator] Async roll error:', err);
+    checkAndRollSchedules().catch((err: any) => {
+      logger.logError('api', '[schedule-generator] Async roll error', err);
     });
 
     const { origin, destination, date, passengers = 1 } = await request.json();
@@ -18,7 +26,7 @@ export async function POST(request: Request) {
 
     // 1. Fuzzy search for routes matching origin/destination using similarity
     // We use raw query for pg_trgm similarity matching (threshold defaults to 0.3)
-    const routes: any[] = await prisma.$queryRaw`
+    const routes = await prisma.$queryRaw<Route[]>`
       SELECT * FROM "Route"
       WHERE 
         ("origin" % ${origin} OR "origin" ILIKE ${`%${origin}%`})
@@ -55,20 +63,16 @@ export async function POST(request: Request) {
       orderBy: [{ departureDateTime: "asc" }],
     });
 
-    const results: any[] = schedules.map((s) => ({
-      schedule: {
-        ...s,
-        departureDateTime: s.departureDateTime,
-        arrivalDateTime: s.arrivalDateTime,
-      } as any,
-      route: s.route as any,
-      bus: s.bus as any,
-      company: s.company as any,
+    const results: SearchResultPayload[] = schedules.map((s) => ({
+      schedule: s,
+      route: s.route,
+      bus: s.bus,
+      company: s.company,
     }));
 
     return NextResponse.json({ results }, { status: 200 });
-  } catch (error) {
-    console.error("Search error:", error);
+  } catch (error: any) {
+    await logger.logError('api', 'Search API error', error);
     return NextResponse.json({ error: "Failed to search buses" }, { status: 500 });
   }
 }

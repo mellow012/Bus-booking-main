@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth-utils";
 import { prisma } from "@/lib/prisma";
+import { logger } from "@/lib/logger";
 
 /**
  * Handles persistence of daily operational reports.
@@ -65,7 +66,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true, report: result });
 
   } catch (error: any) {
-    console.error("[api/reports/daily/create] Error:", error);
+    await logger.logError('company', 'Failed to persist report', error);
     return NextResponse.json(
       { error: "Failed to persist report: " + (error.message || "Unknown error") },
       { status: 500 }

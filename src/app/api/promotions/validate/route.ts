@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { logger } from '@/lib/logger';
 
 export async function POST(req: NextRequest) {
   try {
@@ -65,7 +66,7 @@ export async function POST(req: NextRequest) {
     });
 
   } catch (error: any) {
-    console.error('Failed to validate promotion:', error);
+    await logger.logError('booking', 'Failed to validate promotion', error);
     return NextResponse.json(
       { success: false, error: 'Internal Server Error' },
       { status: 500 }
