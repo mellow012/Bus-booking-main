@@ -1,8 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { collection, getDocs } from 'firebase/firestore';
-import { db } from '@/lib/firebaseConfig';
+import { supabase } from '@/lib/supabase';
 import { Route } from '@/types';
 import { Loader2, AlertCircle, MapPin, Calendar, Users, ArrowRightLeft } from 'lucide-react';
 import AlertMessage from './AlertMessage';
@@ -42,27 +41,31 @@ export default function SearchForm({ initialValues, onSearch, loading }: SearchF
       setFetchLoading(true);
       setError('');
       try {
-        const routesSnapshot = await getDocs(collection(db, 'routes'));
+        const { data: routesData, error: routesError } = await supabase
+          .from('Route')
+          .select('*')
+          .eq('isActive', true);
+
+        if (routesError) throw routesError;
         if (!isMounted) return;
 
-        const routes = routesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Route));
+        const routes = routesData || [];
         const uniqueCities = Array.from(
           new Set([...routes.map(r => r.origin), ...routes.map(r => r.destination)])
         ).sort();
         setCities(uniqueCities);
-        
-        // Get popular routes - you can modify this logic based on your needs
+
+        // Get popular routes
         const popularRoutesData = routes
-          .slice(0, 6) // Take first 6 routes as popular
+          .slice(0, 6)
           .map(r => ({ from: r.origin, to: r.destination }));
         setPopularRoutes(popularRoutesData);
-        
       } catch (err: any) {
         if (!isMounted) return;
         console.error('Error fetching cities and routes:', err);
         setError(
-          err.code === 'unavailable' 
-            ? 'Network error. Please check your connection.' 
+          err.code === 'unavailable'
+            ? 'Network error. Please check your connection.'
             : 'Failed to load cities. Please try again.'
         );
       } finally {
@@ -71,55 +74,38 @@ export default function SearchForm({ initialValues, onSearch, loading }: SearchF
     };
 
     fetchCitiesAndRoutes();
-
-    return () => {
-      isMounted = false;
-    };
+    return () => { isMounted = false; };
   }, []);
 
   const validateForm = (): string | null => {
-    if (!formData.from) return 'Please select a departure city';
-    if (!formData.to) return 'Please select a destination city';
-    if (formData.from === formData.to) return 'Departure and destination cities cannot be the same';
+    // Location fields are now optional for broad searches
     if (!formData.date) return 'Please select a travel date';
-    
     const selectedDate = new Date(formData.date);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    
     if (selectedDate < today) return 'Please select a valid future date';
-    if (formData.passengers < 1 || formData.passengers > 6) return 'Passengers must be between 1 and 6';
-    
+    if (formData.passengers < 1 || formData.passengers > 6)
+      return 'Passengers must be between 1 and 6';
     return null;
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
     const validationError = validateForm();
     if (validationError) {
       setError(validationError);
       return;
     }
-    
     setError('');
     onSearch(formData);
   };
 
   const handleSwapCities = () => {
-    setFormData(prev => ({
-      ...prev,
-      from: prev.to,
-      to: prev.from
-    }));
+    setFormData(prev => ({ ...prev, from: prev.to, to: prev.from }));
   };
 
   const handleQuickSelect = (route: { from: string; to: string }) => {
-    setFormData(prev => ({
-      ...prev,
-      from: route.from,
-      to: route.to
-    }));
+    setFormData(prev => ({ ...prev, from: route.from, to: route.to }));
   };
 
   if (fetchLoading) {
@@ -148,7 +134,7 @@ export default function SearchForm({ initialValues, onSearch, loading }: SearchF
   return (
     <form onSubmit={handleSubmit} className="space-y-6" aria-label="Bus Search Form">
       {error && <AlertMessage type="error" message={error} onClose={() => setError('')} />}
-      
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {/* From Field */}
         <div className="space-y-2">
@@ -162,8 +148,6 @@ export default function SearchForm({ initialValues, onSearch, loading }: SearchF
               value={formData.from}
               onChange={(e) => setFormData({ ...formData, from: e.target.value })}
               className="w-full pl-10 pr-10 py-3 text-gray-800 bg-white border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 transition-all duration-200 appearance-none cursor-pointer font-medium"
-              required
-              aria-required="true"
               aria-label="Select departure city"
             >
               <option value="" className="text-gray-500">Select departure city</option>
@@ -181,7 +165,7 @@ export default function SearchForm({ initialValues, onSearch, loading }: SearchF
           </div>
         </div>
 
-        {/* Swap Button - Mobile hidden, shown on larger screens */}
+        {/* Swap Button - Desktop */}
         <div className="hidden lg:flex lg:items-end lg:justify-center lg:pb-3">
           <button
             type="button"
@@ -206,8 +190,6 @@ export default function SearchForm({ initialValues, onSearch, loading }: SearchF
               value={formData.to}
               onChange={(e) => setFormData({ ...formData, to: e.target.value })}
               className="w-full pl-10 pr-10 py-3 text-gray-800 bg-white border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 transition-all duration-200 appearance-none cursor-pointer font-medium"
-              required
-              aria-required="true"
               aria-label="Select destination city"
             >
               <option value="" className="text-gray-500">Select destination city</option>
@@ -250,7 +232,7 @@ export default function SearchForm({ initialValues, onSearch, loading }: SearchF
               value={formData.date}
               onChange={(e) => setFormData({ ...formData, date: e.target.value })}
               min={new Date().toISOString().split('T')[0]}
-              max={new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]} // 90 days from now
+              max={new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}
               className="w-full pl-10 py-3 text-gray-800 bg-white border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 transition-all duration-200 font-medium cursor-pointer"
               required
               aria-required="true"

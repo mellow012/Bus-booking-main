@@ -1,19 +1,9 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { useParams, useSearchParams, useRouter } from "next/navigation";
-import {
-  doc,
-  getDoc,
-  setDoc,
-  updateDoc,
-  serverTimestamp,
-  Timestamp,
-} from "firebase/firestore";
-import { db } from "@/lib/firebaseConfig";
-import { useAuth } from "@/contexts/AuthContext";
-import { Schedule, Bus, Route, Company } from "@/types";
+import { useRef, useEffect } from "react";
 import SeatSelection from "@/components/SeatSelection";
+import AlertMessage from '@/components/AlertMessage';
+import BackButton from '@/components/BackButton';
 import { Button } from "@/components/ui/button";
 import Modal from "@/components/Modals";
 import { Label } from "@/components/ui/Label";
@@ -23,559 +13,69 @@ import { Badge } from "@/components/ui/badge";
 import {
   CreditCard, CheckCircle, AlertCircle, MapPin,
   Users, Calendar, ArrowRight, Star, ArrowLeft,
+  TicketPercent, Loader2, Lock, ArrowDown,
 } from "lucide-react";
+
+import InlinePassengerForm, { PassengerFormState } from "./InlinePassengerForm";
+import useBookBus from "./useBookBus";
+import BookingConfirmModal from "./BookingConfirmModal";
+import { formatTime, formatDate, formatDuration } from "./utils";
 
 // ================================
 // CONSTANTS
 // ================================
-const SEAT_HOLD_DURATION = 10 * 60 * 1000; // 10 minutes
+// SEAT_HOLD_DURATION is now handled server-side in the API
 
 // ================================
 // INTERFACES
 // ================================
-interface NormalisedStop {
-  id: string;
-  name: string;
-  distanceFromOrigin: number;
-  order: number;
-}
+// Helpers and types extracted to ./utils and InlinePassengerForm
 
-interface PassengerFormState {
-  name: string;
-  ageInput: string;
-  age: number;
-  gender: "male" | "female" | "other";
-  seatNumber: string;
-  ticketType: "adult" | "child" | "senior";
-}
-
-// ================================
-// HELPERS
-// ================================
-
-function buildNormalisedStops(route: Route): NormalisedStop[] {
-  const stops: NormalisedStop[] = [];
-  stops.push({ id: "__origin__", name: route.origin, distanceFromOrigin: 0, order: -1 });
-
-  const intermediate = (route.stops ?? [])
-    .slice()
-    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-
-  intermediate.forEach((s, i) => {
-    stops.push({
-      id: s.id, name: s.name,
-      distanceFromOrigin: s.distanceFromOrigin > 0
-        ? s.distanceFromOrigin
-        : Math.round(((i + 1) / (intermediate.length + 1)) * (route.distance || 100)),
-      order: i,
-    });
-  });
-
-  stops.push({
-    id: "__destination__", name: route.destination,
-    distanceFromOrigin: route.distance || 100, order: intermediate.length,
-  });
-  return stops;
-}
-
-// ✅ New — stop-index based, matches server logic exactly
-function calcSegmentPrice(
-  originDist: number, destDist: number,
-  route: Route, schedulePrice: number, isFullTrip: boolean,
-  stops: NormalisedStop[], originId: string, destId: string,
-  segmentPrices?: Record<string, number>
-): number {
-  if (isFullTrip) return schedulePrice;
-
-  const key = `${originId}:${destId}`;
-  const price = segmentPrices?.[key];
-  if (typeof price === 'number' && price > 0) return price;
-
-  const oi = stops.findIndex(s => s.id === originId);
-  const di = stops.findIndex(s => s.id === destId);
-  if (oi !== -1 && di !== -1 && di > oi && stops.length > 1) {
-    const raw = ((di - oi) / (stops.length - 1)) * schedulePrice;
-    return Math.max(50, Math.round(raw / 50) * 50);
-  }
-
-  const segKm = Math.max(0, destDist - originDist);
-  const totalKm = route.distance || 0;
-  if (totalKm > 0 && segKm > 0)
-    return Math.max(50, Math.round(((segKm / totalKm) * schedulePrice) / 50) * 50);
-
-  return schedulePrice;
-}
-
-// ================================
-// INLINE PASSENGER FORM
-// ================================
-interface InlinePassengerFormProps {
-  passengers: number;
-  formState: PassengerFormState[];
-  onChange: (index: number, field: keyof PassengerFormState, value: string) => void;
-  onAgeBlur: (index: number) => void;
-  onSubmit: () => void;
-  onBack: () => void;
-  loading: boolean;
-  error: string;
-}
-
-const InlinePassengerForm: React.FC<InlinePassengerFormProps> = ({
-  passengers, formState, onChange, onAgeBlur, onSubmit, onBack, loading, error,
-}) => (
-  <div className="space-y-5">
-    {formState.map((p, i) => (
-      <div key={i} className="p-4 border border-gray-200 rounded-xl bg-white space-y-4">
-        <div className="flex items-center gap-2 mb-1">
-          <span className="w-7 h-7 rounded-full bg-blue-600 text-white text-xs font-bold flex items-center justify-center shrink-0">
-            {i + 1}
-          </span>
-          <span className="font-semibold text-gray-800 text-sm">
-            Passenger {i + 1} — Seat {p.seatNumber}
-          </span>
-        </div>
-        <div>
-          <Label htmlFor={`name-${i}`} className="mb-1 block text-sm">
-            Full Name <span className="text-red-500">*</span>
-          </Label>
-          <Input
-            id={`name-${i}`} value={p.name}
-            onChange={e => onChange(i, "name", e.target.value)}
-            placeholder="e.g. Chisomo Banda" className="h-10" required
-          />
-        </div>
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <Label htmlFor={`age-${i}`} className="mb-1 block text-sm">
-              Age <span className="text-red-500">*</span>
-            </Label>
-            <Input
-              id={`age-${i}`} type="text" inputMode="numeric" pattern="[0-9]*"
-              value={p.ageInput}
-              onChange={e => onChange(i, "ageInput", e.target.value.replace(/\D/g, ""))}
-              onBlur={() => onAgeBlur(i)}
-              placeholder="e.g. 28" className="h-10" required
-            />
-          </div>
-          <div>
-            <Label htmlFor={`gender-${i}`} className="mb-1 block text-sm">
-              Gender <span className="text-red-500">*</span>
-            </Label>
-            <select
-              id={`gender-${i}`} value={p.gender}
-              onChange={e => onChange(i, "gender", e.target.value)}
-              className="w-full h-10 px-3 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 bg-white"
-              required
-            >
-              <option value="male">Male</option>
-              <option value="female">Female</option>
-              <option value="other">Other</option>
-            </select>
-          </div>
-        </div>
-        <div>
-          <Label htmlFor={`ticket-${i}`} className="mb-1 block text-sm">Ticket Type</Label>
-          <select
-            id={`ticket-${i}`} value={p.ticketType}
-            onChange={e => onChange(i, "ticketType", e.target.value)}
-            className="w-full h-10 px-3 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 bg-white"
-          >
-            <option value="adult">Adult</option>
-            <option value="child">Child</option>
-            <option value="senior">Senior</option>
-          </select>
-        </div>
-      </div>
-    ))}
-    {error && (
-      <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
-        <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />{error}
-      </div>
-    )}
-    <div className="flex flex-col-reverse sm:flex-row gap-3 pt-2">
-      <Button variant="outline" onClick={onBack} disabled={loading} className="flex items-center gap-2 sm:flex-1">
-        <ArrowLeft className="w-4 h-4" /> Back to Seats
-      </Button>
-      <Button onClick={onSubmit} disabled={loading} className="bg-blue-600 hover:bg-blue-700 text-white sm:flex-1">
-        {loading
-          ? <span className="flex items-center gap-2"><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Saving…</span>
-          : "Continue to Review →"
-        }
-      </Button>
-    </div>
-  </div>
-);
+// Inline passenger form extracted to ./InlinePassengerForm
 
 // ================================
 // MAIN COMPONENT
 // ================================
 export default function BookBus() {
-  const { id: scheduleId } = useParams() as { id: string };
-  const searchParams = useSearchParams();
-  const router = useRouter();
-  const { user } = useAuth();
+  const ref = useRef<HTMLDivElement | null>(null);
 
-  const passengers = parseInt(searchParams.get("passengers") || "1", 10);
+  const {
+    schedule, bus, route, company,
+    passengers,
+    selectedSeats, setSelectedSeats,
+    selectedReturnSeats, setSelectedReturnSeats,
+    passengerForms, setPassengerForms,
+    currentStep, setCurrentStep,
+    reservationId,
+    returnReservationId,
+    confirmedBookingId, serverTotalAmount, serverCurrency,
+    normalisedStops, originStopId, setOriginStopId, destinationStopId, setDestinationStopId,
+    availableDestinations, handleOriginChange,
+    displayPrice,
+    wantsReturnTrip, setWantsReturnTrip, returnDate, setReturnDate,
+    outboundLocked, savedOutboundSeats,
+    returnSchedules, returnScheduleLoading, returnScheduleError,
+    returnDateOptions, returnDateOptionsLoading,
+    selectedReturnScheduleId, returnSchedule, returnBus, returnRoute,
+    loading, bookingLoading, error, setError, passengerError, success, setSuccess,
+    confirmModalOpen, setConfirmModalOpen,
+    bookingForSelf, toggleBookingForSelf,
+    dupNameModalOpen, setDupNameModalOpen, pendingPassengerSubmit, setPendingPassengerSubmit,
+    promoCode, setPromoCode, appliedPromo, setAppliedPromo, isValidatingPromo,
+    fetchBookingData,
+    handleSeatSelection, handleSelectReturnSchedule, handleReturnSeatSelection, handlePassengerFieldChange, handleAgeBlur, handlePassengerSubmit, proceedToConfirm,
+    confirmBooking, goBackToSeats, goBackToPassengers, skipReturnAndProceed, validatePromoCode, stopName,
+    outboundSectionRef, returnSectionScrollRef,
+    liveSelectedSeats, setLiveSelectedSeats,
+  } = useBookBus();
 
-  const [schedule,   setSchedule]   = useState<Schedule | null>(null);
-  const [bus,        setBus]        = useState<Bus | null>(null);
-  const [route,      setRoute]      = useState<Route | null>(null);
-  const [company,    setCompany]    = useState<Company | null>(null);
 
-  const [selectedSeats,    setSelectedSeats]    = useState<string[]>([]);
-  const [passengerForms,   setPassengerForms]   = useState<PassengerFormState[]>([]);
-  const [currentStep,      setCurrentStep]      = useState<"seats" | "passengers" | "confirm">("seats");
-  const [reservationId,    setReservationId]    = useState<string | null>(null);
-
-  // PAY-2: Server-confirmed booking values — never trust client-calculated price
-  const [confirmedBookingId,     setConfirmedBookingId]     = useState<string | null>(null);
-  const [serverTotalAmount,      setServerTotalAmount]      = useState<number | null>(null);
-  const [serverCurrency,         setServerCurrency]         = useState<string>("MWK");
-
-  const [normalisedStops,      setNormalisedStops]      = useState<NormalisedStop[]>([]);
-  const [originStopId,         setOriginStopId]         = useState<string>("");
-  const [destinationStopId,    setDestinationStopId]    = useState<string>("");
-  // displayPrice is for UI only — the authoritative amount comes from the server
-  const [displayPrice,         setDisplayPrice]         = useState<number>(0);
-
-  const [loading,          setLoading]          = useState(true);
-  const [bookingLoading,   setBookingLoading]   = useState(false);
-  const [error,            setError]            = useState("");
-  const [passengerError,   setPassengerError]   = useState("");
-  const [success,          setSuccess]          = useState("");
-  const [confirmModalOpen, setConfirmModalOpen] = useState(false);
-  // FIX UX-1: replaces window.confirm() for duplicate name check
-  const [dupNameModalOpen, setDupNameModalOpen] = useState(false);
-  const [pendingPassengerSubmit, setPendingPassengerSubmit] = useState(false);
-
-  // ── Helpers ────────────────────────────────────────────────────────────────
-
-  const formatTime = (timestamp: any) => {
-    if (!timestamp) return "N/A";
-    try {
-      const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
-      return date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
-    } catch { return "N/A"; }
-  };
-
-  const formatDate = (timestamp: any) => {
-    if (!timestamp) return "N/A";
-    try {
-      const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
-      return date.toLocaleDateString("en-GB", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
-    } catch { return "N/A"; }
-  };
-
-  const formatDuration = (minutes: number) => {
-    if (!minutes || minutes < 0) return "N/A";
-    const h = Math.floor(minutes / 60); const m = minutes % 60;
-    return h > 0 ? `${h}h ${m}m` : `${m}m`;
-  };
-
-  const stopName = (stopId: string) =>
-    normalisedStops.find(n => n.id === stopId)?.name ?? stopId;
-
-  // ── Seat reservation ───────────────────────────────────────────────────────
-
-  const holdSeats = useCallback(async (seats: string[]) => {
-    if (!schedule || !user) throw new Error("Missing schedule or user information");
-    const userSnap = await getDoc(doc(db, "users", user.uid));
-    if (!userSnap.exists()) throw new Error("User profile not found");
-    const role = userSnap.data()?.role;
-    if (role !== "customer") {
-      const labels: Record<string, string> = {
-        operator: "Bus Operator", conductor: "Bus Conductor",
-        company_admin: "Company Administrator", superadmin: "Super Administrator",
-      };
-      throw new Error(
-        `Access Denied\n\nYou are logged in as a ${labels[role] || role}. Only customer accounts can book bus tickets.\n\nPlease log out and create a customer account to book tickets.`
-      );
-    }
-    const newReservationId = `${schedule.id}_${user.uid}_${crypto.randomUUID()}`;
-    await setDoc(doc(db, "seatReservations", newReservationId), {
-      scheduleId: schedule.id, customerId: user.uid, seatNumbers: seats,
-      status: "reserved",
-      expiresAt: Timestamp.fromDate(new Date(Date.now() + SEAT_HOLD_DURATION)),
-      createdAt: serverTimestamp(),
-    });
-    setReservationId(newReservationId);
-  }, [schedule, user]);
-
-  const releaseSeats = useCallback(async () => {
-    if (!reservationId) return;
-    try {
-      await updateDoc(doc(db, "seatReservations", reservationId), {
-        status: "released", updatedAt: serverTimestamp(),
-      });
-      setReservationId(null);
-    } catch (e) { console.error("Failed to release seats:", e); }
-  }, [reservationId]);
-
-  // ── Data fetching ──────────────────────────────────────────────────────────
-
-  const fetchBookingData = async () => {
-    if (!scheduleId || typeof scheduleId !== "string") {
-      setError("Invalid schedule ID"); setLoading(false); return;
-    }
-    setLoading(true); setError("");
-    try {
-      const scheduleDoc = await getDoc(doc(db, "schedules", scheduleId));
-      if (!scheduleDoc.exists()) throw new Error("Schedule not found");
-      const scheduleData = { id: scheduleDoc.id, ...scheduleDoc.data() } as Schedule;
-      if (!scheduleData.busId || !scheduleData.routeId || !scheduleData.companyId)
-        throw new Error("Schedule data is incomplete");
-      if ((scheduleData.availableSeats || 0) < passengers)
-        throw new Error(`Not enough seats. Only ${scheduleData.availableSeats || 0} available.`);
-      // ✅ After
-const depTime = (scheduleData.departureDateTime as any)?.toDate
-  ? (scheduleData.departureDateTime as any).toDate()
-  : new Date(scheduleData.departureDateTime as any);  // ← cast to any first
-      if (depTime < new Date()) throw new Error("This schedule has already departed");
-      setSchedule(scheduleData);
-      const [busDoc, routeDoc, companyDoc] = await Promise.all([
-        getDoc(doc(db, "buses",     scheduleData.busId)),
-        getDoc(doc(db, "routes",    scheduleData.routeId)),
-        getDoc(doc(db, "companies", scheduleData.companyId)),
-      ]);
-      if (!busDoc.exists())     throw new Error("Bus information not found");
-      if (!routeDoc.exists())   throw new Error("Route information not found");
-      if (!companyDoc.exists()) throw new Error("Company information not found");
-      setBus(    { id: busDoc.id,     ...busDoc.data()     } as Bus);
-      setRoute(  { id: routeDoc.id,   ...routeDoc.data()   } as Route);
-      setCompany({ id: companyDoc.id, ...companyDoc.data() } as Company);
-    } catch (e: any) {
-      setError(e.message || "Error loading booking information");
-    } finally { setLoading(false); }
-  };
-
-  // ── Stop / display price effects ───────────────────────────────────────────
-
-  useEffect(() => {
-    if (!route) return;
-    const stops = buildNormalisedStops(route);
-    setNormalisedStops(stops);
-    setOriginStopId(stops[0].id);
-    setDestinationStopId(stops[stops.length - 1].id);
-  }, [route]);
-
-  useEffect(() => {
-    if (!route || !normalisedStops.length || !originStopId || !destinationStopId) return;
-    const originStop = normalisedStops.find(s => s.id === originStopId);
-    const destStop   = normalisedStops.find(s => s.id === destinationStopId);
-    if (!originStop || !destStop || originStop.distanceFromOrigin >= destStop.distanceFromOrigin) {
-      setDisplayPrice(0); return;
-    }
-    const isFullTrip = originStop.id === "__origin__" && destStop.id === "__destination__";
-    const segmentPrices: Record<string, number> = (schedule as any)?.segmentPrices ?? {};
-setDisplayPrice(calcSegmentPrice(
-  originStop.distanceFromOrigin, destStop.distanceFromOrigin,
-  route, schedule?.price ?? 0, isFullTrip,
-  normalisedStops, originStopId, destinationStopId, segmentPrices
-));
-  }, [originStopId, destinationStopId, normalisedStops, route, schedule]);
-
-  // ── Passenger form helpers ─────────────────────────────────────────────────
-
-  const handlePassengerFieldChange = (
-    index: number, field: keyof PassengerFormState, value: string
-  ) => {
-    setPassengerForms(prev => prev.map((p, i) => i !== index ? p : { ...p, [field]: value }));
-  };
-
-  const handleAgeBlur = (index: number) => {
-    setPassengerForms(prev => prev.map((p, i) => {
-      if (i !== index) return p;
-      const parsed = parseInt(p.ageInput, 10);
-      const clamped = isNaN(parsed) ? 1 : Math.min(120, Math.max(1, parsed));
-      return { ...p, age: clamped, ageInput: String(clamped) };
-    }));
-  };
-
-  // ── Booking flow handlers ──────────────────────────────────────────────────
-
-  const handleSeatSelection = useCallback((seats: string[]) => {
-    setError("");
-    if (seats.length !== passengers) {
-      setError(`Please select exactly ${passengers} seat${passengers > 1 ? "s" : ""}.`); return;
-    }
-    if (new Set(seats).size !== seats.length) {
-      setError("Duplicate seats selected. Please choose different seats."); return;
-    }
-    if (schedule?.bookedSeats?.some(s => seats.includes(s))) {
-      setError("One or more selected seats are already booked."); return;
-    }
-    if (!originStopId || !destinationStopId) {
-      setError("Please select boarding and alighting stops."); return;
-    }
-    holdSeats(seats)
-      .then(() => {
-        setSelectedSeats(seats);
-        setCurrentStep("passengers");
-        setPassengerForms(seats.map(seat => ({
-          name: "", ageInput: "18", age: 18,
-          gender: "male" as const, seatNumber: seat, ticketType: "adult" as const,
-        })));
-      })
-      .catch(err => setError(err.message || "Failed to reserve seats. Please try again."));
-  }, [passengers, schedule?.bookedSeats, holdSeats, originStopId, destinationStopId]);
-
-  // Core passenger validation — returns true if valid, false if not
-  const validatePassengers = (): boolean => {
-    setPassengerError("");
-    if (passengerForms.length !== passengers) {
-      setPassengerError(`Please provide details for exactly ${passengers} passenger${passengers > 1 ? "s" : ""}.`);
-      return false;
-    }
-    const missing = passengerForms.some(p => !p.name.trim() || !p.ageInput || !p.gender || !p.seatNumber);
-    if (missing) {
-      setPassengerError("Please fill in all required fields for every passenger.");
-      return false;
-    }
-    const ageVals = passengerForms.map(p => parseInt(p.ageInput, 10));
-    if (ageVals.some(a => isNaN(a) || a < 1 || a > 120)) {
-      setPassengerError("Please enter a valid age (1–120) for each passenger.");
-      return false;
-    }
-    return true;
-  };
-
-  const proceedToConfirm = useCallback(() => {
-    // Commit numeric ages
-    setPassengerForms(prev => prev.map(p => ({
-      ...p,
-      age: Math.min(120, Math.max(1, parseInt(p.ageInput, 10) || 18)),
-    })));
-    setCurrentStep("confirm");
-    setConfirmModalOpen(true);
-  }, []);
-
-  const handlePassengerSubmit = useCallback(() => {
-    if (!validatePassengers()) return;
-    // FIX UX-1: replaced window.confirm() with Modal
-    const names = passengerForms.map(p => p.name.trim().toLowerCase());
-    const hasDuplicates = new Set(names).size !== names.length && passengers > 1;
-    if (hasDuplicates) {
-      setPendingPassengerSubmit(true);
-      setDupNameModalOpen(true);
-      return;
-    }
-    proceedToConfirm();
-  }, [passengerForms, passengers, proceedToConfirm]);
-
-  // ── confirmBooking — PAY-2 fix ─────────────────────────────────────────────
-  // Previously this wrote totalAmount: calculatedPrice * passengers directly
-  // to Firestore from the client. A buyer could manipulate calculatedPrice
-  // in DevTools and pay any amount they wanted.
-  //
-  // Now we call POST /api/bookings/create which reads baseFare from Firestore
-  // server-side and returns the authoritative bookingId + totalAmount.
-  // The client displays the server's amount and never supplies a price.
-
-  const confirmBooking = async () => {
-    setBookingLoading(true);
-    setError("");
-    try {
-      if (!user?.uid) throw new Error("User authentication required");
-      if (!schedule || !selectedSeats.length || !passengerForms.length)
-        throw new Error("Missing booking information");
-      if (!originStopId || !destinationStopId)
-        throw new Error("Please select boarding and alighting stops");
-
-      // Get a fresh ID token to authenticate the API request
-      const idToken = await user.getIdToken();
-
-      const response = await fetch("/api/bookings/create", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${idToken}`,
-        },
-        body: JSON.stringify({
-          scheduleId: schedule.id,
-          routeId:    schedule.routeId,
-          companyId:  schedule.companyId,
-          seatNumbers: selectedSeats,
-          passengerDetails: passengerForms.map(p => ({
-            firstName:  p.name.trim().split(" ")[0] || p.name.trim(),
-            lastName:   p.name.trim().split(" ").slice(1).join(" ") || "",
-            age:        Math.min(120, Math.max(1, parseInt(p.ageInput, 10) || p.age)),
-            gender:     p.gender,
-            seatNumber: p.seatNumber,
-            ticketType: p.ticketType,
-            originStopId,
-            destinationStopId,
-            originStopName:      stopName(originStopId),
-            destinationStopName: stopName(destinationStopId),
-          })),
-        }),
-      });
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.error || `Booking failed (${response.status})`);
-      }
-
-      // Store server-returned values for display — never calculate these client-side
-      setConfirmedBookingId(result.bookingId);
-      setServerTotalAmount(result.totalAmount);
-      setServerCurrency(result.currency ?? "MWK");
-
-      setSuccess("Booking created successfully! Redirecting to payment…");
-      setConfirmModalOpen(false);
-
-      // Redirect to payment page with the server-issued bookingId
-      // The payment page must read totalAmount from the booking document,
-      // never from a query param or local state.
-      setTimeout(() => router.push(`/bookings`), 1500);
-    } catch (e: any) {
-      console.error("Error creating booking:", e);
-      setError(`Failed to create booking: ${e.message || "Unknown error"}`);
-    } finally {
-      setBookingLoading(false);
-    }
-  };
-
-  // ── Navigation ─────────────────────────────────────────────────────────────
-
-  const goBackToSeats = () => {
-    setCurrentStep("seats"); setError(""); setPassengerError("");
-    if (selectedSeats.length > 0) {
-      releaseSeats().catch(console.error);
-      setSelectedSeats([]);
-    }
-  };
-
-  const goBackToPassengers = () => {
-    setCurrentStep("passengers"); setConfirmModalOpen(false); setError("");
-  };
-
-  // ── Effects ────────────────────────────────────────────────────────────────
-
-  useEffect(() => {
-    if (!user) { router.push("/register"); return; }
-    if (passengers < 1 || passengers > 10) {
-      setError("Invalid passenger count. Please select between 1 and 10 passengers.");
-      setTimeout(() => router.push("/search"), 3000);
-    }
-  }, [user, passengers, router]);
-
-  useEffect(() => {
-    if (user && scheduleId && passengers >= 1 && passengers <= 10) fetchBookingData();
-  }, [scheduleId, user]);
-
-  useEffect(() => {
-    if (error)   { const t = setTimeout(() => setError(""),   5000); return () => clearTimeout(t); }
-  }, [error]);
-  useEffect(() => {
-    if (success) { const t = setTimeout(() => setSuccess(""), 5000); return () => clearTimeout(t); }
-  }, [success]);
 
   // ── Render: loading ────────────────────────────────────────────────────────
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+      <div className="min-h-screen bg-gradient-to-br from-brand-50 to-brand-100/50 pt-28 sm:pt-32 lg:pt-36">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="animate-pulse space-y-6">
             <Card><CardContent className="p-6">
@@ -593,123 +93,40 @@ setDisplayPrice(calcSegmentPrice(
 
   if (!schedule || !bus || !route || !company) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gradient-to-br from-brand-50 to-brand-100/50 flex items-center justify-center p-4 pt-28 sm:pt-32 lg:pt-36">
         <Card className="w-full max-w-md"><CardContent className="p-8 text-center">
           <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
           <h2 className="text-2xl font-bold text-gray-900 mb-4">Booking Not Available</h2>
           <p className="text-gray-600 mb-6">{error || "Could not load booking. Please try again."}</p>
           <div className="space-y-3">
             <Button onClick={() => window.location.reload()} className="w-full">Try Again</Button>
-            <Button onClick={() => router.push("/search")} variant="outline" className="w-full">Back to Search</Button>
+            <Button onClick={() => (window.location.href = "/schedules")} variant="outline" className="w-full">Back to Search</Button>
           </div>
         </CardContent></Card>
       </div>
     );
   }
 
-  const availableDestinations = normalisedStops.filter(s => {
-    const origin = normalisedStops.find(n => n.id === originStopId);
-    return origin && s.distanceFromOrigin > origin.distanceFromOrigin;
-  });
+  // `availableDestinations` is provided by the hook (memoized)
 
-  const boardingStopName  = originStopId      ? stopName(originStopId)      : route.origin;
+  const boardingStopName = originStopId ? stopName(originStopId) : route.origin;
   const alightingStopName = destinationStopId ? stopName(destinationStopId) : route.destination;
-  const isPartialSegment  = originStopId !== "__origin__" || destinationStopId !== "__destination__";
+  const isPartialSegment = originStopId !== "__origin__" || destinationStopId !== "__destination__";
+
+  const formattedReturnDate = returnDate ? new Date(returnDate).toLocaleDateString() : '';
 
   // ── Main render ────────────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-brand-50 to-gray-50 pt-28 sm:pt-32 lg:pt-36">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-
-        {/* ── Trip Information Header ── */}
-        <Card className="mb-6 shadow-lg border-0">
-          <CardContent className="p-4 sm:p-6">
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-center">
-              <div className="flex items-center space-x-4">
-                <div className="w-14 h-14 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg shrink-0">
-                  <span className="text-white font-bold text-xl">{company.name?.charAt(0) || "?"}</span>
-                </div>
-                <div>
-                  <h1 className="text-lg sm:text-xl font-bold text-gray-900">{company.name}</h1>
-                  <p className="text-sm text-gray-600">{bus.licensePlate} · {bus.busType || "Standard"}</p>
-                  <div className="flex items-center mt-1">
-                    <Star className="w-4 h-4 text-yellow-400 fill-current" />
-                    <span className="text-sm text-gray-600 ml-1">4.5 (120 reviews)</span>
-                  </div>
-                </div>
-              </div>
-              <div className="text-center">
-                <div className="flex items-center justify-center gap-3 mb-2">
-                  <div className="text-center">
-                    <p className="text-xl sm:text-2xl font-bold text-gray-900">{formatTime(schedule.departureDateTime)}</p>
-                    <p className="text-sm text-gray-600 flex items-center justify-center gap-1">
-                      <MapPin className="w-3 h-3 text-green-600" />
-                      <span className="font-medium text-green-700 truncate max-w-[100px]">{boardingStopName}</span>
-                    </p>
-                  </div>
-                  <div className="flex-1 max-w-20 relative">
-                    <div className="border-t-2 border-gray-300" />
-                    <ArrowRight className="w-4 h-4 text-gray-400 absolute -top-2 left-1/2 -translate-x-1/2 bg-white" />
-                    <p className="text-xs text-gray-500 mt-1">{formatDuration(route.duration)}</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-xl sm:text-2xl font-bold text-gray-900">{formatTime(schedule.arrivalDateTime)}</p>
-                    <p className="text-sm text-gray-600 flex items-center justify-center gap-1">
-                      <MapPin className="w-3 h-3 text-red-500" />
-                      <span className="font-medium text-red-600 truncate max-w-[100px]">{alightingStopName}</span>
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center justify-center gap-2 mt-2">
-                  <Calendar className="w-4 h-4 text-gray-500" />
-                  <p className="text-sm text-gray-600">{formatDate(schedule.departureDateTime)}</p>
-                </div>
-                {isPartialSegment && (
-                  <div className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 bg-amber-50 border border-amber-200 rounded-full text-xs text-amber-700 font-medium">
-                    <MapPin className="w-3 h-3" /> Partial segment
-                  </div>
-                )}
-              </div>
-              <div className="text-center lg:text-right">
-                {/* Display estimate only — server price shown after booking created */}
-                <p className="text-xs text-gray-400 mb-1">Estimated price</p>
-                <p className="text-2xl sm:text-3xl font-bold text-blue-600">
-                  MWK {displayPrice > 0 ? displayPrice.toLocaleString() : "—"}
-                </p>
-                <p className="text-sm text-gray-600">per person</p>
-                <div className="flex items-center justify-center lg:justify-end gap-2 mt-2">
-                  <Users className="w-4 h-4 text-gray-500" />
-                  <p className="text-sm text-gray-600">{passengers} passenger{passengers > 1 ? "s" : ""}</p>
-                </div>
-                {displayPrice > 0 && (
-                  <p className="text-sm text-gray-500 mt-1">
-                    Est. total: MWK {(displayPrice * passengers).toLocaleString()}
-                  </p>
-                )}
-              </div>
-            </div>
-            {bus.amenities && bus.amenities.length > 0 && (
-              <div className="mt-5 pt-4 border-t">
-                <div className="flex flex-wrap gap-2">
-                  {bus.amenities.slice(0, 6).map((amenity, i) => (
-                    <Badge key={i} variant="secondary" className="px-3 py-1">{amenity}</Badge>
-                  ))}
-                  {bus.amenities.length > 6 && (
-                    <Badge variant="outline" className="px-3 py-1">+{bus.amenities.length - 6} more</Badge>
-                  )}
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
 
         {/* ── Boarding & Alighting Stop Selector ── */}
         {currentStep === "seats" && normalisedStops.length > 1 && (
           <Card className="mb-6 shadow-lg border-0">
             <CardContent className="p-4 sm:p-6">
               <h3 className="text-base sm:text-lg font-semibold mb-1 flex items-center gap-2">
-                <MapPin className="w-5 h-5 text-blue-600" /> Pick-up &amp; Drop-off Stops
+                <MapPin className="w-5 h-5 text-brand-700" /> Pick-up &amp; Drop-off Stops
               </h3>
               <p className="text-sm text-gray-500 mb-4">Select where you will board and alight.</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -719,14 +136,8 @@ setDisplayPrice(calcSegmentPrice(
                   </Label>
                   <select
                     id="boardAt" value={originStopId}
-                    onChange={e => {
-                      setOriginStopId(e.target.value);
-                      const newOrigin = normalisedStops.find(s => s.id === e.target.value);
-                      const currentDest = normalisedStops.find(s => s.id === destinationStopId);
-                      if (newOrigin && currentDest && currentDest.distanceFromOrigin <= newOrigin.distanceFromOrigin)
-                        setDestinationStopId("");
-                    }}
-                    className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white text-sm"
+                    onChange={e => handleOriginChange(e.target.value)}
+                    className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-700 bg-white text-sm"
                     required
                   >
                     {normalisedStops
@@ -747,7 +158,7 @@ setDisplayPrice(calcSegmentPrice(
                   <select
                     id="alightAt" value={destinationStopId}
                     onChange={e => setDestinationStopId(e.target.value)}
-                    className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white text-sm disabled:opacity-50"
+                    className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-700 bg-white text-sm disabled:opacity-50"
                     required disabled={!originStopId}
                   >
                     <option value="">Select drop-off stop</option>
@@ -762,15 +173,15 @@ setDisplayPrice(calcSegmentPrice(
                 </div>
               </div>
               {originStopId && destinationStopId && displayPrice > 0 && (
-                <div className="mt-4 p-3 bg-blue-50 border border-blue-100 rounded-lg flex items-center justify-between gap-2 text-sm text-blue-800">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-green-500" />
-                    <span className="font-medium">{stopName(originStopId)}</span>
+                <div className="mt-4 p-3 bg-brand-50 border border-brand-100 rounded-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-sm text-brand-800">
+                  <div className="flex items-center gap-2 flex-wrap min-w-0">
+                    <span className="w-2 h-2 rounded-full bg-green-500 flex-shrink-0" />
+                    <span className="font-medium min-w-0 break-words">{stopName(originStopId)}</span>
                     <ArrowRight className="w-3.5 h-3.5" />
-                    <span className="w-2 h-2 rounded-full bg-red-500" />
-                    <span className="font-medium">{stopName(destinationStopId)}</span>
+                    <span className="w-2 h-2 rounded-full bg-red-500 flex-shrink-0" />
+                    <span className="font-medium min-w-0 break-words">{stopName(destinationStopId)}</span>
                   </div>
-                  <span className="font-bold text-blue-700 shrink-0">
+                  <span className="font-bold text-brand-700 shrink-0 mt-2 sm:mt-0">
                     ~MWK {displayPrice.toLocaleString()} / person
                   </span>
                 </div>
@@ -784,25 +195,23 @@ setDisplayPrice(calcSegmentPrice(
           <CardContent className="p-4 sm:p-6">
             <div className="flex items-center justify-center gap-4 sm:gap-8">
               {[
-                { step: 1, title: "Select Seats",      key: "seats"      },
+                { step: 1, title: "Select Seats", key: "seats" },
                 { step: 2, title: "Passenger Details", key: "passengers" },
-                { step: 3, title: "Confirm & Submit",  key: "confirm"    },
+                { step: 3, title: "Confirm & Submit", key: "confirm" },
               ].map(({ step, title, key }, idx) => {
-                const isActive    = currentStep === key;
+                const isActive = currentStep === key;
                 const isCompleted =
-                  (key === "seats"      && (currentStep === "passengers" || currentStep === "confirm")) ||
+                  (key === "seats" && (currentStep === "passengers" || currentStep === "confirm")) ||
                   (key === "passengers" && currentStep === "confirm");
                 return (
                   <div key={step} className="flex items-center gap-2 sm:gap-3">
-                    <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center font-semibold transition-all text-sm sm:text-base ${
-                      isActive ? "bg-blue-600 text-white shadow-lg scale-110" :
-                      isCompleted ? "bg-green-600 text-white" : "bg-gray-200 text-gray-600"
-                    }`}>
+                    <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center font-semibold transition-all text-sm sm:text-base ${isActive ? "bg-brand-700 text-white shadow-lg scale-110" :
+                        isCompleted ? "bg-green-600 text-white" : "bg-gray-200 text-gray-600"
+                      }`}>
                       {isCompleted ? <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5" /> : step}
                     </div>
-                    <span className={`font-medium text-xs sm:text-sm hidden sm:block ${
-                      isActive ? "text-blue-600" : isCompleted ? "text-green-600" : "text-gray-400"
-                    }`}>{title}</span>
+                    <span className={`font-medium text-xs sm:text-sm hidden sm:block ${isActive ? "text-brand-700" : isCompleted ? "text-green-600" : "text-gray-400"
+                      }`}>{title}</span>
                     {idx < 2 && <div className="w-6 sm:w-10 h-px bg-gray-200 hidden sm:block" />}
                   </div>
                 );
@@ -811,15 +220,6 @@ setDisplayPrice(calcSegmentPrice(
           </CardContent>
         </Card>
 
-        {/* ── Alerts ── */}
-        {error && (
-          <Card className="mb-6 border-red-200 bg-red-50"><CardContent className="p-4">
-            <div className="flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
-              <p className="text-red-700 whitespace-pre-wrap font-medium text-sm">{error}</p>
-            </div>
-          </CardContent></Card>
-        )}
         {success && (
           <Card className="mb-6 border-green-200 bg-green-50"><CardContent className="p-4">
             <div className="flex items-center gap-3">
@@ -828,20 +228,205 @@ setDisplayPrice(calcSegmentPrice(
             </div>
           </CardContent></Card>
         )}
+        {currentStep !== "seats" && error && (
+          <AlertMessage
+            type="error"
+            message={error}
+            onClose={() => setError('')}
+            scrollIntoView={true}
+            className="mb-6"
+          />
+        )}
 
         {/* ── Step content ── */}
         <div className="space-y-6">
 
           {/* Step 1 — Seat selection */}
           {currentStep === "seats" && (
-            <SeatSelection
-              bus={bus} schedule={schedule} passengers={passengers}
-              onSeatSelection={handleSeatSelection}
-              selectedSeats={selectedSeats}
-              originStopId={originStopId}
-              destinationStopId={destinationStopId}
-              route={route}
-            />
+            <>
+              {/* Outbound Seat Map — attached to outboundSectionRef for scroll-back-to-top */}
+              <div ref={outboundSectionRef}>
+                <SeatSelection
+                  bus={bus} schedule={schedule} passengers={passengers}
+                  onSeatSelection={handleSeatSelection}
+                  onSelectionChange={setLiveSelectedSeats}
+                  selectedSeats={selectedSeats}
+                  disabled={outboundLocked}
+                  hideContinue={outboundLocked}
+                  originStopId={originStopId}
+                  destinationStopId={destinationStopId}
+                  route={route}
+                  reservedSeats={schedule.reservedSeats || []}
+                />
+              </div>
+
+              {outboundLocked && savedOutboundSeats && (
+                <div className="mt-3 flex items-center gap-3 p-3 rounded-xl bg-green-50 border border-green-200 text-green-800 text-sm">
+                  <CheckCircle className="w-4 h-4 text-green-500 shrink-0" />
+                  <span>
+                    <span className="font-semibold">Outbound confirmed:</span> seats <span className="font-bold">{savedOutboundSeats.join(', ')}</span> locked.
+                    {' '}To change, uncheck &ldquo;Add return trip&rdquo; below.
+                  </span>
+                </div>
+              )}
+
+              {/* Return trip card — ref used for smooth scroll from hook */}
+              <div ref={returnSectionScrollRef}>
+                <Card className="mt-6 border border-brand-100 shadow-sm">
+                  <CardContent className="space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                      <div>
+                        <h3 className="text-base font-semibold text-gray-900">Return trip</h3>
+                        <p className="text-sm text-gray-500">Add a return schedule from {route.destination} back to {route.origin}.</p>
+                      </div>
+                      <div className="flex flex-col items-end">
+                        <label className={`inline-flex items-center gap-2 select-none ${liveSelectedSeats.length !== passengers ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}>
+                          <input
+                            type="checkbox"
+                            checked={wantsReturnTrip}
+                            disabled={liveSelectedSeats.length !== passengers}
+                            onChange={(e) => setWantsReturnTrip(e.target.checked)}
+                            className="h-4 w-4 accent-brand-700 border-gray-300 rounded focus:ring-brand-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                          />
+                          <span className="text-sm font-medium text-gray-700">Add return trip</span>
+                        </label>
+                        {liveSelectedSeats.length !== passengers && (
+                          <p className="text-[11px] text-gray-500 mt-1">Select outbound seats first</p>
+                        )}
+                      </div>
+                    </div>
+
+                    {wantsReturnTrip && (
+                      <div className="space-y-4">
+                        <div className="space-y-2">
+                          <p className="text-sm font-medium text-gray-700">Return date</p>
+                          <p className="text-sm text-gray-500">Select one of the available return dates for this bus/company combination.</p>
+                        </div>
+
+                        {returnDateOptionsLoading ? (
+                          <div className="rounded-2xl border border-brand-100 bg-brand-50 p-4 text-sm text-brand-700">Searching available return dates...</div>
+                        ) : returnDateOptions.length > 0 ? (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+                            {returnDateOptions.map((option) => {
+                              const isSelected = returnDate === option.date;
+                              return (
+                                <button
+                                  key={option.date}
+                                  type="button"
+                                  onClick={() => setReturnDate(option.date)}
+                                  className={`w-full rounded-2xl border p-4 text-left transition ${isSelected ? 'border-brand-700 bg-brand-50 shadow-sm' : 'border-gray-200 bg-white hover:border-brand-200'}`}
+                                >
+                                  <div className="flex items-center justify-between gap-3">
+                                    <div>
+                                      <p className="font-semibold text-gray-900">{option.formatted}</p>
+                                      <p className="text-xs text-gray-500">{option.count} available trip{option.count > 1 ? 's' : ''}</p>
+                                    </div>
+                                    {isSelected && <span className="inline-flex items-center rounded-full bg-brand-700 text-white px-2 py-1 text-[11px] font-semibold">Selected</span>}
+                                  </div>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <div className="rounded-2xl border border-rose-100 bg-rose-50 p-4 text-sm text-rose-700">
+                            <p className="mb-3">{returnScheduleError || 'No return trip dates available for this company and route in the next week.'}</p>
+                            <Button
+                              variant="outline"
+                              className="bg-white hover:bg-rose-50 text-rose-700 border-rose-200"
+                              onClick={skipReturnAndProceed}
+                            >
+                              Skip return trip & continue
+                            </Button>
+                          </div>
+                        )}
+
+                        {returnDate && (
+                          <div className="rounded-2xl border border-brand-100 bg-brand-50 p-4 text-sm text-brand-700">
+                            Selected return date: <span className="font-semibold text-brand-900">{formattedReturnDate}</span>
+                          </div>
+                        )}
+
+                        {returnDate && returnScheduleLoading && (
+                          <div className="rounded-2xl border border-brand-100 bg-brand-50 p-4 text-sm text-brand-700">Searching return schedules for {formattedReturnDate}...</div>
+                        )}
+
+                        {returnDate && !returnScheduleLoading && returnScheduleError && (
+                          <div className="rounded-2xl border border-rose-100 bg-rose-50 p-4 text-sm text-rose-700">
+                            {returnScheduleError}
+                          </div>
+                        )}
+
+                        {returnDate && !returnScheduleLoading && returnSchedules.length > 0 && (
+                          <div className="space-y-3">
+                            <div className="flex items-center justify-between gap-3">
+                              <p className="text-sm font-semibold text-gray-900">Select a return schedule</p>
+                              <span className="text-sm text-gray-500">{returnSchedules.length} option{returnSchedules.length > 1 ? 's' : ''}</span>
+                            </div>
+                            <div className="grid grid-cols-1 gap-3">
+                              {returnSchedules.map((returnOption: any) => {
+                                const isSelected = selectedReturnScheduleId === returnOption.id;
+                                return (
+                                  <button
+                                    key={returnOption.id}
+                                    type="button"
+                                    onClick={() => handleSelectReturnSchedule(returnOption.id)}
+                                    className={`w-full rounded-2xl border p-4 text-left transition ${isSelected ? 'border-brand-700 bg-brand-50 shadow-sm' : 'border-gray-200 bg-white hover:border-brand-200'}`}
+                                  >
+                                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                                      <div>
+                                        <p className="font-semibold text-gray-900">{returnOption.origin} → {returnOption.destination}</p>
+                                        <p className="text-sm text-gray-500">{new Date(returnOption.departureDateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} — {new Date(returnOption.arrivalDateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                                      </div>
+                                      <div className="text-right">
+                                        <p className="text-sm font-semibold text-gray-900">MWK {returnOption.price?.toLocaleString()}</p>
+                                        <p className="text-xs text-gray-500">{returnOption.availableSeats} seats left</p>
+                                      </div>
+                                    </div>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+
+                        {returnSchedule && (
+                          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+                              <div>
+                                <p className="text-sm font-semibold text-slate-900">Return schedule selected</p>
+                                <p className="text-sm text-slate-600">{returnSchedule.departureLocation} → {returnSchedule.arrivalLocation}</p>
+                              </div>
+                              <span className="inline-flex items-center rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700 border border-slate-200">MWK {returnSchedule.price?.toLocaleString()}</span>
+                            </div>
+
+                            <SeatSelection
+                              bus={returnBus!} schedule={returnSchedule} passengers={passengers}
+                              onSeatSelection={handleReturnSeatSelection}
+                              selectedSeats={selectedReturnSeats}
+                              originStopId="__origin__"
+                              destinationStopId="__destination__"
+                              route={returnRoute!}
+                              reservedSeats={returnSchedule.reservedSeats || []}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                  </CardContent>
+                </Card>
+              </div>
+
+              {error && (
+                <AlertMessage
+                  type="error"
+                  message={error}
+                  onClose={() => setError('')}
+                  scrollIntoView={true}
+                  className="mt-4"
+                />
+              )}
+            </>
           )}
 
           {/* Step 2 — Passenger details */}
@@ -852,27 +437,52 @@ setDisplayPrice(calcSegmentPrice(
                   <CardTitle className="flex items-center gap-2">
                     <Users className="w-5 h-5" /> Passenger Details
                   </CardTitle>
-                  <Button variant="outline" onClick={goBackToSeats} className="flex items-center gap-2 w-full sm:w-auto">
-                    <ArrowLeft className="w-4 h-4" /> Back to Seats
-                  </Button>
+                  <BackButton
+                    onClick={goBackToSeats}
+                    label="Back to Seats"
+                    className="flex items-center gap-2 w-full sm:w-auto"
+                  />
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="mb-4 p-3 bg-gray-50 rounded-lg border text-sm text-gray-600 space-y-1">
-                  <p>Selected seats: <span className="font-semibold">{selectedSeats.join(", ")}</span></p>
-                  <p className="flex items-center gap-1.5 flex-wrap">
-                    <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
-                    <span>Pick-up: <span className="font-semibold text-green-700">{boardingStopName}</span></span>
-                    <ArrowRight className="w-3.5 h-3.5 text-gray-400" />
-                    <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" />
-                    <span>Drop-off: <span className="font-semibold text-red-600">{alightingStopName}</span></span>
-                  </p>
+                <div className="mb-4 space-y-3">
+                  {/* Outbound leg summary */}
+                  <div className="p-3 bg-brand-50 rounded-lg border border-brand-100 text-sm text-gray-700">
+                    <p className="text-xs font-semibold text-brand-700 uppercase tracking-wide mb-1.5">🚌 Outbound Trip</p>
+                    <p>Seats: <span className="font-semibold text-gray-900">{selectedSeats.join(", ")}</span></p>
+                    <p className="flex items-center gap-1.5 flex-wrap mt-1">
+                      <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
+                      <span>Pick-up: <span className="font-semibold text-green-700">{boardingStopName}</span></span>
+                      <ArrowRight className="w-3.5 h-3.5 text-gray-400" />
+                      <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" />
+                      <span>Drop-off: <span className="font-semibold text-red-600">{alightingStopName}</span></span>
+                    </p>
+                  </div>
+                  {/* Return leg summary (only when return trip is selected) */}
+                  {wantsReturnTrip && returnSchedule && selectedReturnSeats.length > 0 && (
+                    <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 text-sm text-gray-700">
+                      <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">🔁 Return Trip</p>
+                      <p>Seats: <span className="font-semibold text-gray-900">{selectedReturnSeats.join(", ")}</span></p>
+                      <p className="flex items-center gap-1.5 flex-wrap mt-1">
+                        <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
+                        <span>From: <span className="font-semibold text-green-700">{returnSchedule.departureLocation || returnRoute?.origin || route.destination}</span></span>
+                        <ArrowRight className="w-3.5 h-3.5 text-gray-400" />
+                        <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" />
+                        <span>To: <span className="font-semibold text-red-600">{returnSchedule.arrivalLocation || returnRoute?.destination || route.origin}</span></span>
+                      </p>
+                      <p className="text-xs text-slate-500 mt-1">
+                        Departure: {new Date(returnSchedule.departureDateTime).toLocaleDateString()} · {new Date(returnSchedule.departureDateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    </div>
+                  )}
                 </div>
                 <InlinePassengerForm
                   passengers={passengers} formState={passengerForms}
                   onChange={handlePassengerFieldChange} onAgeBlur={handleAgeBlur}
                   onSubmit={handlePassengerSubmit} onBack={goBackToSeats}
                   loading={bookingLoading} error={passengerError}
+                  bookingForSelf={bookingForSelf}
+                  onToggleSelf={toggleBookingForSelf}
                 />
               </CardContent>
             </Card>
@@ -897,7 +507,7 @@ setDisplayPrice(calcSegmentPrice(
                 Go Back &amp; Edit
               </Button>
               <Button
-                className="flex-1 bg-blue-600 text-white hover:bg-blue-700"
+                className="flex-1 bg-coral-500 text-white hover:bg-coral-600"
                 onClick={() => {
                   setDupNameModalOpen(false);
                   setPendingPassengerSubmit(false);
@@ -911,89 +521,36 @@ setDisplayPrice(calcSegmentPrice(
         </Modal>
 
         {/* ── Step 3: Confirm booking modal ── */}
-        {confirmModalOpen && (
-          <Modal
-            isOpen={confirmModalOpen}
-            onClose={() => { if (!bookingLoading) setConfirmModalOpen(false); }}
-            title="Confirm Booking Details"
-          >
-            <div className="space-y-5">
-              <div className="bg-blue-50 p-3 rounded-lg">
-                <p className="text-sm text-blue-700 font-medium">
-                  Review all details before submitting. The final price will be confirmed by the server.
-                </p>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="p-3 bg-green-50 border border-green-100 rounded-lg">
-                  <p className="text-xs text-gray-500 mb-0.5">Pick-up Stop</p>
-                  <p className="font-semibold text-sm text-green-800">{stopName(originStopId)}</p>
-                </div>
-                <div className="p-3 bg-red-50 border border-red-100 rounded-lg">
-                  <p className="text-xs text-gray-500 mb-0.5">Drop-off Stop</p>
-                  <p className="font-semibold text-sm text-red-800">{stopName(destinationStopId)}</p>
-                </div>
-                <div className="p-3 bg-gray-50 rounded-lg">
-                  <p className="text-xs text-gray-500 mb-0.5">Departure</p>
-                  <p className="font-semibold text-sm">{formatDate(schedule.departureDateTime)}</p>
-                  <p className="text-sm text-blue-600 font-medium">{formatTime(schedule.departureDateTime)}</p>
-                </div>
-                <div className="p-3 bg-gray-50 rounded-lg">
-                  <p className="text-xs text-gray-500 mb-0.5">Seats</p>
-                  <p className="font-semibold text-sm">{selectedSeats.join(", ")}</p>
-                </div>
-                <div className="p-3 bg-blue-50 rounded-lg border border-blue-100 col-span-full">
-                  <p className="text-xs text-gray-500 mb-0.5">Price</p>
-                  {serverTotalAmount !== null ? (
-                    <>
-                      <p className="text-lg font-bold text-blue-600">
-                        {serverCurrency} {serverTotalAmount.toLocaleString()}
-                      </p>
-                      <p className="text-xs text-green-600 font-medium">✓ Server-confirmed price</p>
-                    </>
-                  ) : (
-                    <p className="text-sm text-gray-500">Will be confirmed on submission</p>
-                  )}
-                </div>
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-gray-700 mb-2">Passengers</p>
-                <div className="space-y-2">
-                  {passengerForms.map((p, i) => (
-                    <div key={i} className="p-3 bg-gray-50 rounded-lg flex items-center justify-between gap-3">
-                      <div>
-                        <p className="font-medium text-sm">{p.name}</p>
-                        <p className="text-xs text-gray-500">Age {p.ageInput} · {p.gender}</p>
-                      </div>
-                      <span className="text-xs font-semibold bg-blue-100 text-blue-700 px-2 py-1 rounded shrink-0">
-                        Seat {p.seatNumber}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div className="flex flex-col-reverse sm:flex-row gap-3 pt-4 border-t">
-                <Button onClick={goBackToPassengers} variant="outline" className="flex-1" disabled={bookingLoading}>
-                  Edit Details
-                </Button>
-                <Button
-                  onClick={confirmBooking}
-                  className="flex-1 bg-blue-600 text-white hover:bg-blue-700"
-                  disabled={bookingLoading}
-                >
-                  {bookingLoading
-                    ? <span className="flex items-center justify-center gap-2">
-                        <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                        <span>Creating booking…</span>
-                      </span>
-                    : <span className="flex items-center justify-center gap-2">
-                        <CreditCard className="w-4 h-4" /> Submit &amp; Pay
-                      </span>
-                  }
-                </Button>
-              </div>
-            </div>
-          </Modal>
-        )}
+        <BookingConfirmModal
+          isOpen={confirmModalOpen}
+          onClose={() => { if (!bookingLoading) setConfirmModalOpen(false); }}
+          schedule={schedule}
+          originStopId={originStopId}
+          destinationStopId={destinationStopId}
+          stopName={stopName}
+          formatDate={formatDate}
+          formatTime={formatTime}
+          selectedSeats={selectedSeats}
+          selectedReturnSeats={selectedReturnSeats}
+          returnSchedule={returnSchedule}
+          returnRoute={returnRoute}
+          displayPrice={displayPrice}
+          passengers={passengers}
+          appliedPromo={appliedPromo}
+          promoCode={promoCode}
+          setPromoCode={setPromoCode}
+          isValidatingPromo={isValidatingPromo}
+          validatePromoCode={validatePromoCode}
+          setAppliedPromo={setAppliedPromo}
+          wantsReturnTrip={wantsReturnTrip}
+          setWantsReturnTrip={setWantsReturnTrip}
+          returnDate={returnDate}
+          setReturnDate={setReturnDate}
+          bookingLoading={bookingLoading}
+          passengerForms={passengerForms}
+          goBackToPassengers={goBackToPassengers}
+          confirmBooking={confirmBooking}
+        />
       </div>
     </div>
   );

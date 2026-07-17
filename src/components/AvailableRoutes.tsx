@@ -2,9 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { collection, query, where, getDocs, orderBy, doc, getDoc, limitToLast } from 'firebase/firestore';
-import { db } from '@/lib/firebaseConfig';
+import { supabase } from '@/lib/supabase';
 import { Schedule, Route, Bus, Company } from '@/types';
+import AlertMessage from './AlertMessage';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
 
@@ -46,44 +47,28 @@ export default function AvailableRoutes({ limit }: AvailableRoutesProps) {
         const nextWeek = new Date(today);
         nextWeek.setDate(today.getDate() + 7);
 
-        const schedulesQuery = query(
-          collection(db, 'schedules'),
-          where('status', '==', 'active'),
-          where('departureDateTime', '>=', today),
-          where('departureDateTime', '<=', nextWeek),
-          where('availableSeats', '>', 0),
-          orderBy('departureDateTime'),
-          limitToLast(typeof limit === 'number' ? limit : 10),
-        );
+        const { data, error: fetchError } = await (supabase as any)
+          .from('Schedule')
+          .select('*, route:Route(*), bus:Bus(*), company:Company(*)')
+          .eq('status', 'active')
+          .gte('departureDateTime', today.toISOString())
+          .lte('departureDateTime', nextWeek.toISOString())
+          .gt('availableSeats', 0)
+          .order('departureDateTime', { ascending: true })
+          .limit(limit || 10);
 
-        const schedulesSnapshot = await getDocs(schedulesQuery);
-        let schedules = schedulesSnapshot.docs.map(d => ({ id: d.id, ...d.data() })) as Schedule[];
+        if (fetchError) throw fetchError;
 
-        if (limit) {
-          schedules = schedules.slice(0, limit);
-        }
-
-        const results: OpenRoute[] = [];
-        for (const schedule of schedules) {
-          const routeDoc   = await getDoc(doc(db, 'routes',    schedule.routeId));
-          const busDoc     = await getDoc(doc(db, 'buses',     schedule.busId));
-          const companyDoc = await getDoc(doc(db, 'companies', schedule.companyId));
-
-          if (routeDoc.exists() && busDoc.exists() && companyDoc.exists()) {
-            results.push({
-              schedule: {
-                ...schedule,
-                departureDateTime: toDate(schedule.departureDateTime),
-                arrivalDateTime:   toDate(schedule.arrivalDateTime),
-              },
-              route:   { id: routeDoc.id,   ...routeDoc.data()   } as Route,
-              bus:     { id: busDoc.id,     ...busDoc.data()     } as Bus,
-              company: { id: companyDoc.id, ...companyDoc.data() } as Company,
-            });
-          } else {
-            console.log(`Missing data for schedule ${schedule.id}`);
-          }
-        }
+        const results: OpenRoute[] = (data || []).map((item: any) => ({
+          schedule: {
+            ...item,
+            departureDateTime: new Date(item.departureDateTime),
+            arrivalDateTime:   new Date(item.arrivalDateTime),
+          },
+          route:   item.route as Route,
+          bus:     item.bus as Bus,
+          company: item.company as Company,
+        }));
 
         setOpenRoutes(results);
       } catch (err) {
@@ -114,16 +99,12 @@ export default function AvailableRoutes({ limit }: AvailableRoutesProps) {
   // ── Render ──────────────────────────────────────────────────────────────────
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
-      </div>
-    );
+    return <LoadingSpinner className="text-blue-600" size="md" />;
   }
 
   return (
     <section aria-label="Available Bus Schedules">
-      {error && <p className="text-red-500 mb-4 text-center" role="alert">{error}</p>}
+      {error && <AlertMessage type="error" message={error} onClose={() => setError('')} />}
       {openRoutes.length > 0 ? (
         <div className="space-y-4">
           {openRoutes.map((result) => (

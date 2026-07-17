@@ -21,8 +21,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { doc, getDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebaseConfig';
+import { supabase } from '@/lib/supabase';
 import { Info, ChevronDown, ChevronUp, Tag } from 'lucide-react';
 
 interface RouteStop { id: string; name: string; }
@@ -59,19 +58,38 @@ const SegmentPriceEditor: React.FC<SegmentPriceEditorProps> = ({
   // Load stops from route document
   useEffect(() => {
     if (!routeId) { setStops([]); return; }
-    setLoading(true);
-    getDoc(doc(db, 'routes', routeId))
-      .then(snap => {
-        if (!snap.exists()) { setStops([]); return; }
-        const data = snap.data();
+    
+    const fetchStops = async () => {
+      setLoading(true);
+      try {
+        const { data, error } = await supabase
+          .from('Route')
+          .select('*')
+          .eq('id', routeId)
+          .single();
+
+        if (error || !data) {
+          setStops([]);
+          return;
+        }
+
         const list: RouteStop[] = [];
         if (data.origin)      list.push({ id: '__origin__',      name: data.origin });
-        if (data.stops)       list.push(...(data.stops as RouteStop[]).filter(s => s?.id && s?.name));
+        if (data.stops) {
+          const stopsArray = Array.isArray(data.stops) ? data.stops : [];
+          list.push(...stopsArray.filter((s: any) => s?.id && s?.name));
+        }
         if (data.destination) list.push({ id: '__destination__', name: data.destination });
         setStops(list);
-      })
-      .catch(() => setStops([]))
-      .finally(() => setLoading(false));
+      } catch (err) {
+        console.error('Error fetching stops:', err);
+        setStops([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchStops();
   }, [routeId]);
 
   // All forward stop pairs (origin before dest)

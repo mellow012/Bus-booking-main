@@ -15,7 +15,7 @@ export const emailSchema = z
 
 export const passwordSchema = z
   .string()
-  .min(8, 'Password must be at least 8 characters')
+  .min(6, 'Password must be at least 6 characters')
   .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
   .regex(/[a-z]/, 'Password must contain at least one lowercase letter')
   .regex(/[0-9]/, 'Password must contain at least one number')
@@ -49,11 +49,10 @@ export const uuidSchema = z
   .string()
   .uuid('Invalid UUID format');
 
-export const firebaseUidSchema = z
+export const authUidSchema = z
   .string()
-  .min(20, 'Invalid Firebase UID')
-  .max(30, 'Invalid Firebase UID')
-  .regex(/^[a-zA-Z0-9]+$/, 'Invalid UID format');
+  .min(1, 'Invalid User ID')
+  .max(100, 'Invalid User ID'); // Keeping it flexible but Supabase uses UUIDs
 
 // ─── Business Data ─────────────────────────────────────────────────────────
 
@@ -108,7 +107,7 @@ export const sortOrderSchema = z.enum(['asc', 'desc']).catch('asc');
 export const bookingSchema = z.object({
   bookingId: uuidSchema,
   scheduleId: uuidSchema,
-  userId: firebaseUidSchema,
+  userId: authUidSchema,
   numberOfPassengers: z
     .number()
     .int()
@@ -123,7 +122,7 @@ export const bookingSchema = z.object({
 
 export const paymentInitiateSchema = z.object({
   bookingId: uuidSchema,
-  paymentProvider: z.enum(['stripe', 'paychangu'], {
+  paymentProvider: z.enum(['paychangu'], {
     message: 'Invalid payment provider',
   }),
   customerDetails: z
@@ -133,18 +132,23 @@ export const paymentInitiateSchema = z.object({
       name: z.string().min(2).max(100).trim(),
     })
     .strict(),
-  metadata: z.record(z.string(), z.any()).optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
 // ─── Notification Data ──────────────────────────────────────────────────────
 
 export const notificationSchema = z.object({
-  recipientIds: z.array(firebaseUidSchema).min(1, 'At least one recipient required'),
+  recipientIds: z.array(authUidSchema).min(1, 'At least one recipient required'),
   title: z.string().min(1, 'Title required').max(200),
   body: z.string().min(1, 'Body required').max(4096),
-  data: z.record(z.string(), z.any()).optional(),
+  type: z.enum(['booking', 'payment', 'payment_reminder', 'schedule', 'system', 'promotion', 'alert', 'cancellation', 'cancellation_requested', 'trip_update']).optional().default('system'),
+  priority: z.enum(['low', 'medium', 'high', 'urgent']).optional().default('medium'),
+  data: z.record(z.string(), z.unknown()).optional(),
   icon: z.string().url('Invalid icon URL').optional(),
-  clickAction: z.string().url('Invalid click action URL').optional(),
+  clickAction: z.string().optional().refine((value) => {
+    if (!value) return true;
+    return /^\/|^https?:\/\//.test(value);
+  }, 'Invalid click action URL or path'),
 });
 
 // ─── Profile Data ──────────────────────────────────────────────────────────
@@ -177,14 +181,14 @@ export function sanitizeString(input: string): string {
     .slice(0, 1000); // Limit length
 }
 
-export function sanitizeObject<T extends Record<string, any>>(obj: T): T {
-  const sanitized: Record<string, any> = {};
+export function sanitizeObject<T extends Record<string, unknown>>(obj: T): T {
+  const sanitized: Record<string, unknown> = {};
   
   for (const [key, value] of Object.entries(obj)) {
     if (typeof value === 'string') {
       sanitized[key] = sanitizeString(value);
     } else if (typeof value === 'object' && value !== null) {
-      sanitized[key] = sanitizeObject(value);
+      sanitized[key] = sanitizeObject(value as Record<string, unknown>);
     } else {
       sanitized[key] = value;
     }

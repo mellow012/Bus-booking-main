@@ -4,8 +4,11 @@
 // POST — server-to-server payment event from PayChangu
 
 import { NextRequest, NextResponse } from 'next/server';
-import { adminDb } from '@/lib/firebaseAdmin';
+import { prisma } from '@/lib/prisma';
+import type { Prisma } from '@prisma/client';
 import crypto from 'crypto';
+import { logger } from '@/lib/logger';
+import { sendNotificationToUser } from '@/lib/notificationService';
 
 const APP_URL = (process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000').replace(/\/$/, '');
 
@@ -68,55 +71,56 @@ export async function POST(req: NextRequest) {
       crypto.timingSafeEqual(sigBuffer, expectedBuffer);
 
     if (!signatureValid) {
-      console.warn('[paychangu/webhook] Invalid signature — ignoring');
+      await logger.logSecurityEvent(
+        '[paychangu/webhook] Invalid signature — request rejected',
+        undefined,
+        { action: 'webhook_signature_invalid', metadata: { tx_ref: 'unknown' } }
+      );
       return NextResponse.json({ received: true });
     }
 
     const data = JSON.parse(rawBody);
     const { tx_ref, status, reference } = data;
 
-    console.log('[paychangu/webhook] event tx_ref:', tx_ref, 'status:', status);
-
     if (!tx_ref) {
       return NextResponse.json({ received: true });
     }
 
-    // ── Resolve booking ───────────────────────────────────────────────────────
+    // ── Resolve booking from PostgreSQL ─────────────────────────────────────────
     // tx_ref may be our custom format pc_{bookingId}_{ts} or PayChangu's UUID.
-    // Never use tx_ref as a doc ID directly.
-    let bookingRef: FirebaseFirestore.DocumentReference | null = null;
+    let booking: Record<string, any> | null = null;
 
     // 1. Custom format: extract bookingId from tx_ref
     if (tx_ref.startsWith('pc_')) {
       const bookingId = tx_ref.split('_')[1];
       if (bookingId) {
-        const snap = await adminDb.collection('bookings').doc(bookingId).get();
-        if (snap.exists) bookingRef = snap.ref;
+        booking = await prisma.booking.findUnique({
+          where: { id: bookingId },
+        });
       }
     }
 
-    // 2. Query by stored reference fields
-    if (!bookingRef) {
-      for (const field of ['paychanguTxRef', 'paychanguReference', 'customTxRef']) {
-        const snap = await adminDb
-          .collection('bookings')
-          .where(field, '==', tx_ref)
-          .limit(1)
-          .get();
-        if (!snap.empty) { bookingRef = snap.docs[0].ref; break; }
+    // 2. Query by payment record (txRef field)
+    if (!booking) {
+      const payment = await prisma.payment.findFirst({
+        where: {
+          txRef: tx_ref,
+        },
+      });
+      if (payment?.bookingId) {
+        booking = await prisma.booking.findUnique({
+          where: { id: payment.bookingId },
+        });
       }
     }
 
-    if (!bookingRef) {
+    if (!booking) {
       console.warn('[paychangu/webhook] Booking not found for tx_ref:', tx_ref);
       return NextResponse.json({ received: true });
     }
 
-    const bookingSnap = await bookingRef.get();
-    if (!bookingSnap.exists) return NextResponse.json({ received: true });
-
     // Idempotency
-    if (bookingSnap.data()?.paymentStatus === 'paid') {
+    if (booking.paymentStatus === 'paid') {
       return NextResponse.json({ received: true });
     }
 
@@ -138,22 +142,78 @@ export async function POST(req: NextRequest) {
         break;
       default:
         paymentStatus = 'pending';
-        bookingStatus = bookingSnap.data()?.bookingStatus ?? 'pending';
+        bookingStatus = booking.bookingStatus ?? 'pending';
     }
 
-    await bookingRef.update({
-      paymentStatus,
-      bookingStatus,
-      paychanguReference: reference ?? tx_ref,
-      paymentUpdatedAt:   new Date(),
-      updatedAt:          new Date(),
-      ...(paymentStatus === 'paid' ? { paymentCompletedAt: new Date() } : {}),
+    // ── Atomic transaction ──────────────────────────────────────────────────────
+    await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      // Update booking
+      await tx.booking.update({
+        where: { id: booking.id },
+        data: {
+          paymentStatus,
+          bookingStatus,
+          paidAt: paymentStatus === 'paid' ? new Date() : booking.paidAt,
+          updatedAt: new Date(),
+        },
+      });
+
+      // Update payment record
+      const updatePaymentData: Record<string, any> = {
+        status: paymentStatus === 'paid' ? 'completed' : paymentStatus === 'failed' ? 'failed' : 'pending',
+        metadata: {
+          ...(booking.metadata || {}),
+          webhookStatus: normalised,
+          paychanguReference: reference ?? tx_ref,
+        },
+        updatedAt: new Date(),
+      };
+
+      await tx.payment.updateMany({
+        where: {
+          txRef: tx_ref,
+        },
+        data: updatePaymentData,
+      });
     });
+
+    try {
+      if (paymentStatus === 'paid') {
+        await sendNotificationToUser(booking.userId, {
+          title: 'Payment received',
+          body: `Your payment for booking ${booking.bookingReference} was successful.`,
+          type: 'payment',
+          priority: 'high',
+          clickAction: `/bookings/${booking.id}`,
+          data: { bookingId: booking.id },
+        });
+      } else if (paymentStatus === 'failed') {
+        await sendNotificationToUser(booking.userId, {
+          title: 'Payment failed',
+          body: `Your payment for booking ${booking.bookingReference} could not be completed. Please try again.`,
+          type: 'payment',
+          priority: 'high',
+          clickAction: `/bookings/${booking.id}`,
+          data: { bookingId: booking.id },
+        });
+      }
+    } catch (sendError) {
+      console.warn('[paychangu/webhook] Notification send failed:', sendError);
+    }
+
+    await logger.logPayment(
+      `[paychangu/webhook] Payment ${paymentStatus} for booking ${booking.id}`,
+      booking.id,
+      0, // amount not in webhook payload; tracked in DB
+      'paychangu',
+      paymentStatus === 'paid',
+      { metadata: { tx_ref, status: normalised } }
+    );
 
     return NextResponse.json({ received: true });
 
   } catch (err: any) {
-    console.error('[paychangu/webhook]', err);
+    await logger.logError('payment', '[paychangu/webhook] Unhandled error', err);
     return NextResponse.json({ received: true, warning: err.message });
   }
 }

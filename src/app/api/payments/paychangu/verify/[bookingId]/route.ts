@@ -4,7 +4,8 @@
 // bookingId is in the path so PayChangu can't strip it.
 
 import { NextRequest, NextResponse } from "next/server";
-import { adminDb } from "@/lib/firebaseAdmin";
+import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@prisma/client";
 
 const PAYCHANGU_API     = "https://api.paychangu.com";
 const SUCCESS_STATUSES  = ["success", "successful", "completed"];
@@ -18,28 +19,34 @@ export async function GET(
   const { searchParams } = new URL(req.url);
   const txRef  = searchParams.get("tx_ref");
   const status = searchParams.get("status");
-
-  console.log("[paychangu/verify] bookingId:", bookingId, "tx_ref:", txRef, "status:", status);
+  const buildErrorRedirect = (code: string, extra: Record<string, string> = {}) => {
+    const qs = new URLSearchParams({ error: code, ...extra });
+    return NextResponse.redirect(`${appUrl}/bookings?${qs.toString()}`);
+  };
 
   if (!bookingId) {
-    return NextResponse.redirect(`${appUrl}/bookings?error=payment_failed`);
+    return buildErrorRedirect("payment_failed", { reason: "missing_booking_id" });
   }
 
   if (status && !SUCCESS_STATUSES.includes(status.toLowerCase())) {
-    return NextResponse.redirect(`${appUrl}/bookings?error=payment_failed`);
+    return buildErrorRedirect("payment_failed", { reason: status.toLowerCase() });
   }
 
   try {
-    // ── Direct doc lookup — bookingId is always in the path ──────────────────
-    const bookingRef  = adminDb.collection("bookings").doc(bookingId);
-    const bookingSnap = await bookingRef.get();
+    // ── Lookup booking from PostgreSQL ──────────────────────────────────────
+    const booking = await prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: {
+        schedule: true,
+        user: true,
+        company: true,
+      },
+    });
 
-    if (!bookingSnap.exists) {
+    if (!booking) {
       console.error("[paychangu/verify] Booking not found:", bookingId);
       return NextResponse.redirect(`${appUrl}/bookings?error=booking_not_found`);
     }
-
-    const booking = bookingSnap.data()!;
 
     // ── Idempotency ───────────────────────────────────────────────────────────
     if (booking.paymentStatus === "paid") {
@@ -50,10 +57,10 @@ export async function GET(
 
     // ── Server-side verification ──────────────────────────────────────────────
     // Use the tx_ref PayChangu gave us (their UUID) to verify with their API.
-    const refToVerify = txRef ?? booking.paychanguReference;
+    const refToVerify = txRef;
     if (!refToVerify) {
       console.error("[paychangu/verify] No tx_ref to verify with");
-      return NextResponse.redirect(`${appUrl}/bookings?error=verification_failed`);
+      return buildErrorRedirect("verification_failed", { reason: "missing_tx_ref" });
     }
 
     const verifyRes = await fetch(`${PAYCHANGU_API}/verify-payment/${refToVerify}`, {
@@ -65,19 +72,19 @@ export async function GET(
     });
 
     const rawText = await verifyRes.text();
-    console.log("[paychangu/verify] PayChangu response:", verifyRes.status, rawText.slice(0, 300));
 
     if (!verifyRes.ok) {
-      console.error("[paychangu/verify] HTTP error:", verifyRes.status);
-      return NextResponse.redirect(`${appUrl}/bookings?error=verification_failed`);
+      const reason = `paychangu_http_${verifyRes.status}`;
+      console.error("[paychangu/verify] HTTP error:", verifyRes.status, rawText.slice(0, 500));
+      return buildErrorRedirect("verification_failed", { reason });
     }
 
-    let result: any;
+    let result: Record<string, any>;
     try {
       result = JSON.parse(rawText);
     } catch {
       console.error("[paychangu/verify] Non-JSON response:", rawText.slice(0, 500));
-      return NextResponse.redirect(`${appUrl}/bookings?error=verification_failed`);
+      return buildErrorRedirect("verification_failed", { reason: "invalid_response" });
     }
 
     const verified =
@@ -86,22 +93,58 @@ export async function GET(
 
     if (!verified) {
       console.warn("[paychangu/verify] Not verified:", result);
-      await bookingRef.update({
-        paymentStatus: "failed",
-        bookingStatus: "payment_failed",
-        updatedAt:     new Date(),
+      await prisma.booking.update({
+        where: { id: bookingId },
+        data: {
+          paymentStatus: "failed",
+          bookingStatus: "payment_failed",
+          updatedAt: new Date(),
+        },
       });
-      return NextResponse.redirect(`${appUrl}/bookings?error=verification_failed`);
+      return buildErrorRedirect("verification_failed", { reason: "not_verified" });
     }
 
-    // ── Mark paid ─────────────────────────────────────────────────────────────
-    await bookingRef.update({
-      paymentStatus:      "paid",
-      bookingStatus:      "confirmed",
-      paychanguReference: refToVerify,
-      paychanguTxRef:     refToVerify,
-      paymentCompletedAt: new Date(),
-      updatedAt:          new Date(),
+    // ── Mark paid with atomic transaction ─────────────────────────────────────
+    await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      // Update booking status
+      await tx.booking.update({
+        where: { id: bookingId },
+        data: {
+          paymentStatus: "paid",
+          bookingStatus: "confirmed",
+          paidAt: new Date(),
+          updatedAt: new Date(),
+        },
+      });
+
+      // Upsert payment record to avoid duplicate paymentId errors
+      await tx.payment.upsert({
+        where: { paymentId: refToVerify },
+        update: {
+          bookingId: bookingId,
+          amount: booking.totalAmount,
+          currency: booking.currency,
+          customerEmail: booking.contactEmail,
+          customerPhone: booking.contactPhone,
+          status: "completed",
+          provider: "paychangu",
+          txRef: refToVerify,
+          metadata: result.data || {},
+          updatedAt: new Date(),
+        },
+        create: {
+          paymentId: refToVerify,
+          bookingId: bookingId,
+          amount: booking.totalAmount,
+          currency: booking.currency,
+          customerEmail: booking.contactEmail,
+          customerPhone: booking.contactPhone,
+          status: "completed",
+          provider: "paychangu",
+          txRef: refToVerify,
+          metadata: result.data || {},
+        },
+      });
     });
 
     return NextResponse.redirect(
@@ -109,7 +152,7 @@ export async function GET(
     );
 
   } catch (error: any) {
-    console.error("[paychangu/verify] Unhandled error:", error);
-    return NextResponse.redirect(`${appUrl}/bookings?error=server_error`);
+    console.error("[paychangu/verify] Unhandled error:", error?.message ?? error);
+    return buildErrorRedirect("server_error", { reason: "internal_exception" });
   }
 }

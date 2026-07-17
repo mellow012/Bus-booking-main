@@ -7,6 +7,8 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+  --font-sans: var(--font-dm-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-jakarta), ui-sans-serif, system-ui, sans-serif;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -38,6 +40,28 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+
+  /* ── Brand palette (Deep Teal + Coral) ──────────────────────────────── */
+  /* brand-700 on white = 7.8:1 (AAA) | brand-600 on white = 4.7:1 (AA)  */
+  /* brand-400 = icons/blobs only — 3.6:1 on white, not suitable for text */
+  --color-brand-50:  #E6F4F4;
+  --color-brand-100: #CCE9E9;
+  --color-brand-200: #99D4D4;
+  --color-brand-300: #4DB8B9;
+  --color-brand-400: #009091;
+  --color-brand-600: #007B7C;
+  --color-brand-700: #005A5B;
+  --color-brand-800: #003D3E;
+  --color-brand-900: #002627;
+
+  /* coral-500 with white bold text = 3.4:1 (large text AA) */
+  /* coral-600 with white text = 4.2:1 (AA) — use for smaller text CTA   */
+  --color-coral-50:  #FFF0ED;
+  --color-coral-100: #FFD9D3;
+  --color-coral-400: #F0724F;
+  --color-coral-500: #E8604C;
+  --color-coral-600: #D04F3C;
+  --color-coral-700: #B83D2B;
 }
 
 :root {
@@ -48,8 +72,9 @@
   --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
+  /* Primary → Deep Teal #005A5B | oklch approx: L=0.39 C=0.088 H=196 */
+  --primary: oklch(0.39 0.088 196);
+  --primary-foreground: oklch(0.985 0 0); /* white — 7.8:1 on teal ✓ */
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
   --muted: oklch(0.97 0 0);
@@ -59,7 +84,7 @@
   --destructive: oklch(0.577 0.245 27.325);
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  --ring: oklch(0.39 0.088 196); /* Teal focus ring */
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
   --chart-3: oklch(0.398 0.07 227.392);
@@ -67,12 +92,12 @@
   --chart-5: oklch(0.769 0.188 70.08);
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary: oklch(0.39 0.088 196);
   --sidebar-primary-foreground: oklch(0.985 0 0);
   --sidebar-accent: oklch(0.97 0 0);
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --sidebar-ring: oklch(0.39 0.088 196);
 }
 
 .dark {
@@ -122,7 +147,7 @@
   body {
     @apply bg-background text-foreground;
   }
-  
+
   /* Fix SVG/image vertical alignment issues in Edge */
   svg,
   img {
@@ -136,4 +161,105 @@
     padding-left: max(1rem, env(safe-area-inset-left));
     padding-right: max(1rem, env(safe-area-inset-right));
   }
+
+  .pb-safe {
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+  }
 }
+
+/* Hide scrollbar utility (alias) */
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Touch feedback for conductor dashboard */
+.touch-highlight {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.touch-highlight:active {
+  transform: scale(0.97);
+  transition: transform 0.1s ease;
+}
+
+/* Large conductor action button base */
+.conductor-action-btn {
+  min-height: 52px;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+/* ── Premium UI Utilities ── */
+.shadow-premium {
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.05),
+    0 4px 12px rgba(0, 0, 0, 0.05),
+    0 12px 24px -4px rgba(0, 0, 0, 0.02);
+}
+
+.glass {
+  @apply bg-white/98 backdrop-blur-xl border border-white/40;
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.05),
+    0 4px 12px rgba(0, 0, 0, 0.05),
+    0 12px 24px -4px rgba(0, 0, 0, 0.02);
+}
+
+.bg-premium-gradient {
+  /* brand-700 → brand-800: white text contrast = 7.8:1 / 12:1 (AAA) */
+  background: linear-gradient(135deg, #005A5B, #003D3E);
+}
+
+.focus-premium {
+  /* brand-700 focus ring — visible on both light and dark surfaces */
+  @apply focus:outline-none focus:ring-2 focus:ring-[#005A5B] focus:ring-offset-2;
+}
+
+/* Spacing Helpers */
+.p-container {
+  @apply px-4 sm:px-6 lg:px-8;
+}
+
+.m-section {
+  @apply my-12 sm:my-16 lg:my-20;
+}
+
+.page-content {
+  scroll-padding-top: 7rem;
+}
+
+@media (max-width: 640px) {
+  .conductor-action-btn {
+    min-height: 56px;
+    font-size: 1.05rem;
+  }
+}
+
+/* ─── Home page animations ─────────────────────────────────────────────────── */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+.anim-fade-up  { animation: fadeUp  0.7s ease-out both; }
+.anim-scale-in { animation: scaleIn 0.5s ease-out both; }
+
+.delay-100 { animation-delay: 0.1s; }
+.delay-200 { animation-delay: 0.2s; }
+.delay-300 { animation-delay: 0.3s; }
+.delay-400 { animation-delay: 0.4s; }
+
+.scrollbar-none { -ms-overflow-style: none; scrollbar-width: none; }
+.scrollbar-none::-webkit-scrollbar { display: none; }

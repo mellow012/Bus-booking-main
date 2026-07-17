@@ -10,22 +10,22 @@
 
 import { NextResponse } from 'next/server';
 import { verifyEmailTransporter } from '@/lib/email-service';
-import { getAdminDb } from '@/lib/firebaseAdmin';
+import { prisma } from '@/lib/prisma';
 
 export async function GET() {
   const checks: Record<string, 'ok' | 'degraded' | 'error'> = {};
 
-  // ── Firestore connectivity ─────────────────────────────────────────────────
+  // ── PostgreSQL/Prisma connectivity ────────────────────────────────────────
   try {
-    // Lightweight read to confirm Admin SDK is initialized and Firestore responds
-    await getAdminDb().collection('systemSettings').limit(1).get();
-    checks.firestore = 'ok';
+    // Lightweight query to confirm database connection
+    await prisma.$queryRaw`SELECT 1`;
+    checks.database = 'ok';
   } catch (err: any) {
-    console.error('[health] Firestore check failed:', err.message);
-    checks.firestore = 'error';
+    console.error('[health] Database check failed:', err.message);
+    checks.database = 'error';
   }
 
-  // ── SMTP transporter ───────────────────────────────────────────────────────
+  // ── Email delivery check ──────────────────────────────────────────────────
   // verifyEmailTransporter() is now only called here, not at module load time.
   try {
     const emailOk = await verifyEmailTransporter();

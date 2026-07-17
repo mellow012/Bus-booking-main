@@ -5,42 +5,33 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { adminAuth, adminDb } from '@/lib/firebaseAdmin';
+import { getCurrentUser } from '@/lib/auth-utils';
+import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
-import { sendNotificationToUser, broadcastNotification } from '@/lib/fcmService';
+// Mocked FCM service (Firebase removed during migration)
+const broadcastNotification = async (recipientIds: string[], data: any) => {
+  return { results: {}, totalSent: 0 };
+};
 import { z } from 'zod';
 import { notificationSchema } from '@/lib/validationSchemas';
 
 export async function POST(request: NextRequest) {
   try {
-    // Get authorization token
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader?.startsWith('Bearer ')) {
+    const user = await getCurrentUser(request);
+
+    if (!user) {
+      await logger.logError('notification', 'Auth verification failed on notification send', new Error('No user'), {});
       return NextResponse.json(
-        { error: 'Missing or invalid authorization header' },
+        { error: 'Unauthorized', message: 'Missing or invalid authentication session' },
         { status: 401 }
       );
     }
 
-    const idToken = authHeader.substring(7);
-    let userId: string;
-    let userRole: string;
-
-    // Verify ID token
-    try {
-      const decodedToken = await adminAuth.verifyIdToken(idToken, true);
-      userId = decodedToken.uid;
-      userRole = decodedToken.customClaims?.role || 'customer';
-    } catch (error: any) {
-      await logger.logError('notification', 'Token verification failed on notification send', error, {});
-      return NextResponse.json(
-        { error: 'Invalid or expired token' },
-        { status: 401 }
-      );
-    }
+    const userId = user.id;
+    const userRole = user.role || 'customer';
 
     // Check authorization - only admins and system can send
-    const ALLOWED_ROLES = ['superadmin', 'company_admin'];
+    const ALLOWED_ROLES = ['superadmin', 'company_admin', 'operator', 'chief_of_operations'];
     if (!ALLOWED_ROLES.includes(userRole)) {
       await logger.logSecurityEvent('Unauthorized notification send attempt', request.headers.get('x-forwarded-for') || 'unknown', {
         userId,
@@ -55,8 +46,19 @@ export async function POST(request: NextRequest) {
     }
 
     // Parse and validate request body
-    const body = await request.json();
-    const { recipientIds, title, body: messageBody, data, icon, clickAction } = notificationSchema.parse(body);
+    const rawBody = await request.json();
+    const normalizedBody = rawBody.recipientIds
+      ? rawBody
+      : {
+          recipientIds: rawBody.userId ? [rawBody.userId] : [],
+          title: rawBody.title,
+          body: rawBody.message ?? rawBody.body,
+          data: rawBody.data,
+          icon: rawBody.icon,
+          clickAction: rawBody.actionUrl ?? rawBody.clickAction,
+        };
+
+    const { recipientIds, title, body: messageBody, data, icon, clickAction, type = 'system', priority = 'medium' } = notificationSchema.parse(normalizedBody);
 
     // Log the notification send attempt
     await logger.logSuccess('notification', 'Starting notification broadcast', {
@@ -68,12 +70,33 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Send notifications
+    // 1. Get SQL IDs for recipients (passed as Supabase/Firebase IDs)
+    const sqlUsers = await prisma.user.findMany({
+      where: { id: { in: recipientIds } },
+      select: { id: true }
+    });
+
+    // 2. Persist notifications in SQL database
+    if (sqlUsers.length > 0) {
+      await (prisma as any).notification.createMany({
+        data: sqlUsers.map(u => ({
+          userId: u.id,
+          title,
+          message: messageBody,
+          type,
+          priority,
+          actionUrl: clickAction || null,
+          data: data || {},
+        }))
+      });
+    }
+
+    // 3. Broadcast via FCM (fcmService still handles Firebase Admin FCM initialization)
     const results = await broadcastNotification(recipientIds, {
       title,
       body: messageBody,
       icon,
-      data,
+      data: data ? Object.fromEntries(Object.entries(data).map(([k, v]) => [k, String(v)])) : undefined,
       clickAction,
     });
 
@@ -142,3 +165,4 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+

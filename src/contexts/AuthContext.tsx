@@ -1,25 +1,23 @@
 'use client';
-// contexts/AuthContext.tsx
-
-import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
-import { auth, db } from '@/lib/firebaseConfig';
-import {
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-  signOut,
-  onAuthStateChanged,
-  reload,
-  User,
-} from 'firebase/auth';
-import {
-  doc,
-  getDoc,
-  setDoc,
-  updateDoc,
-  serverTimestamp,
-} from 'firebase/firestore';
-import { UserProfile, UserRole, CompanyRole } from '@/types';
+import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import { createClient } from '@/utils/supabase/client';
+import { User } from '@supabase/supabase-js';
+import { UserProfile, CompanyRole } from '@/types';
+import { normalizeRole } from '@/lib/roles';
 import { useRouter, usePathname } from 'next/navigation';
+import {
+  getAuthenticatedUserProfile,
+  updateAuthenticatedUserProfile,
+} from '@/lib/actions/user.actions';
+import { activateCompanyOnLogin } from '@/lib/actions/company.actions';
+
+const getCookie = (name: string): string | null => {
+  if (typeof document === 'undefined') return null;
+  const value = `; ${document.cookie}`;
+  const parts = value.split(`; ${name}=`);
+  if (parts.length === 2) return parts.pop()?.split(';').shift() || null;
+  return null;
+};
 
 const formatPhoneToE164 = (phone?: string): string => {
   if (!phone) return '';
@@ -32,24 +30,24 @@ const formatPhoneToE164 = (phone?: string): string => {
   return '+' + digits;
 };
 
-const COMPANY_ROLES: CompanyRole[] = ['company_admin', 'operator', 'conductor'];
-const _isCompanyRole = (role?: UserRole): role is CompanyRole =>
-  COMPANY_ROLES.includes(role as CompanyRole);
+const splitFullName = (fullName: string) => {
+  const parts = fullName.trim().split(/\s+/).filter(Boolean);
+  const firstName = parts[0] || '';
+  const lastName = parts.slice(1).join(' ') || firstName;
+  return { firstName, lastName };
+};
 
 interface AuthContextType {
-  user: User | null;
-  userProfile: UserProfile | null;
+  user: (User & { uid: string; emailVerified: boolean; getIdToken: () => Promise<string> }) | null;
+  userProfile: UserProfile | null; // 👈 Exposed user profile instance
   setUserProfile: (profile: UserProfile | null) => void;
+  signInWithGoogle: () => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (
-    email: string,
-    password: string,
-    profile: { firstName: string; lastName: string; phone?: string }
-  ) => Promise<void>;
+  signUp: (email: string, password: string, profile: { fullName: string; phone?: string }) => Promise<void>;
   updateUserProfile: (profile: UpdateProfilePayload) => Promise<void>;
   signOut: () => Promise<void>;
   loading: boolean;
-  refreshUserProfile: (uid?: string) => Promise<void>;
+  refreshUserProfile: (uid?: string, sessionUser?: any) => Promise<void>;
 }
 
 interface UpdateProfilePayload {
@@ -62,488 +60,320 @@ interface UpdateProfilePayload {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const supabase = createClient();
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user,          setUser]          = useState<User | null>(null);
-  const [userProfile,   setUserProfile]   = useState<UserProfile | null>(null);
-  const [loading,       setLoading]       = useState(true);
+  const [user, setUser] = useState<(User & { uid: string; emailVerified: boolean; getIdToken: () => Promise<string> }) | null>(null);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null); // 👈 Profile local react state tracking
+  const [loading, setLoading] = useState(true);
   const [isInitialized, setIsInitialized] = useState(false);
 
-  const syncingEmailVerified = useRef(false);
+  const router = useRouter();
+  const pathname = usePathname() || '';
 
-  const router   = useRouter();
-  const pathname = usePathname();
-
-  // ─── Session helpers ──────────────────────────────────────────────────────
-
-  const createServerSession = async (currentUser: User): Promise<boolean> => {
-    try {
-      const idToken = await currentUser.getIdToken();
-      const res = await fetch('/api/auth/session', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${idToken}` },
-      });
-      return res.ok;
-    } catch (err) {
-      console.error('[AuthContext] createServerSession failed:', err);
-      return false;
-    }
-  };
-
-  const deleteServerSession = async (): Promise<void> => {
-    try {
-      await fetch('/api/auth/session', { method: 'DELETE' });
-    } catch (err) {
-      console.error('[AuthContext] deleteServerSession failed:', err);
-    }
-  };
-
-  // ─── emailVerified sync ───────────────────────────────────────────────────
-
-  const syncEmailVerifiedToFirestore = useCallback(async (currentUser: User): Promise<void> => {
-    if (!currentUser.emailVerified) return;
-    try {
-      const userDocRef = doc(db, 'users', currentUser.uid);
-      const snap = await getDoc(userDocRef);
-      if (snap.exists() && snap.data()?.emailVerified !== true) {
-        syncingEmailVerified.current = true;
-        await updateDoc(userDocRef, {
-          emailVerified: true,
-          updatedAt:     serverTimestamp(),
-        });
-      }
-    } catch (err) {
-      console.warn('[AuthContext] syncEmailVerifiedToFirestore failed (non-fatal):', err);
-    } finally {
-      syncingEmailVerified.current = false;
-    }
-  }, []);
-
-  // ─── Profile management ───────────────────────────────────────────────────
-
-  const refreshUserProfile = useCallback(async (uid?: string) => {
-    const targetUid = uid ?? user?.uid;
-    if (!targetUid) return;
-
-    try {
-      const userDocRef = doc(db, 'users', targetUid);
-      const userDoc    = await getDoc(userDocRef);
-
-      if (userDoc.exists()) {
-        setUserProfile({ id: userDoc.id, ...userDoc.data() } as UserProfile);
-      } else {
-        const defaultProfile = {
-          id:             targetUid,
-          uid:            targetUid,
-          email:          auth.currentUser?.email || '',
-          firstName:      '',
-          lastName:       '',
-          phone:          '',
-          role:           'customer' as const,
-          isActive:       true,
-          emailVerified:  auth.currentUser?.emailVerified ?? false,
-          passwordSet:    false,
-          setupCompleted: false,
-          createdAt:      serverTimestamp(),
-          updatedAt:      serverTimestamp(),
-        };
-        await setDoc(userDocRef, defaultProfile, { merge: true });
-        setUserProfile(defaultProfile as unknown as UserProfile);
-      }
-    } catch (error: any) {
-      console.error('[AuthContext] refreshUserProfile failed:', error);
-    }
-  }, [user?.uid]);
-
-  // ─── Auth state listener ──────────────────────────────────────────────────
-
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      if (currentUser) {
-        try { await reload(currentUser); } catch { /* offline — continue */ }
-
-        const freshUser = auth.currentUser ?? currentUser;
-        setUser(freshUser);
-
-        await syncEmailVerifiedToFirestore(freshUser);
-        await refreshUserProfile(freshUser.uid);
-      } else {
-        setUser(null);
-        setUserProfile(null);
-      }
-
-      setLoading(false);
-      setIsInitialized(true);
-    });
-
-    return () => unsubscribe();
-  }, [refreshUserProfile, syncEmailVerifiedToFirestore]);
-
-  // ─── Auto-refresh session cookie when ID token rotates ───────────────────
-
-  useEffect(() => {
-    const unsubscribeToken = auth.onIdTokenChanged(async (currentUser) => {
-      if (!currentUser) return;
-
-      // ✅ Set the real Firebase User object — never spread it, that loses prototype methods
-      setUser(currentUser);
-
-      try {
-        const idToken = await currentUser.getIdToken();
-        await fetch("/api/auth/session", {
-          method: "POST",
-          headers: { Authorization: `Bearer ${idToken}` },
-        });
-      } catch (err) {
-        console.warn("[AuthContext] onIdTokenChanged session refresh failed:", err);
-      }
-    });
-    return () => unsubscribeToken();
-  }, []);
-
-  // ─── Window focus: refresh when user returns after verifying ─────────────
-
-  useEffect(() => {
-    if (!user || user.emailVerified) return;
-
-    const handleFocus = async () => {
-      try {
-        await reload(user);
-        const refreshed = auth.currentUser;
-        if (refreshed?.emailVerified) {
-          await syncEmailVerifiedToFirestore(refreshed);
-          // ✅ Set the real Firebase User object — never spread it
-          setUser(refreshed);
-          await refreshUserProfile(refreshed.uid);
-        }
-      } catch {
-        // ignore
-      }
-    };
-
-    window.addEventListener('focus', handleFocus);
-    return () => window.removeEventListener('focus', handleFocus);
-  }, [user, refreshUserProfile, syncEmailVerifiedToFirestore]);
-
-  // ─── Route guard ──────────────────────────────────────────────────────────
-
-  useEffect(() => {
-    if (!isInitialized || loading) return;
-
-    const searchParams =
-      typeof window !== 'undefined'
-        ? new URLSearchParams(window.location.search)
-        : null;
-
-    const oobCode    = searchParams?.get('oobCode');
-    const operatorId = searchParams?.get('operatorId');
-
-    const publicRoutes = [
-      '/login', '/register', '/', '/about', '/contact',
-      '/forgot-password', '/reset-password', '/verify-email',
-      '/company/setup', '/company/conductor/setup', '/company/operator/signup',
-    ];
-    const isPublicRoute = publicRoutes.includes(pathname);
-
-    const isSetupPage =
-      (pathname === '/company/setup' ||
-        pathname === '/company/conductor/setup' ||
-        pathname === '/company/operator/signup') &&
-      !!(oobCode || operatorId);
-
-    if (!user && !isSetupPage && !isPublicRoute) {
-      router.push('/login');
-      return;
-    }
-
-    if (user && userProfile) {
-      const emailVerified = user.emailVerified;
-      const isSuperAdmin  = userProfile.role === 'superadmin';
-
-      if (!emailVerified && !isPublicRoute && !syncingEmailVerified.current && !isSuperAdmin) {
-        router.push('/verify-email');
-        return;
-      }
-
-      if ((emailVerified || isSuperAdmin) && pathname === '/verify-email') {
-        if (!oobCode) redirectAfterVerification(userProfile);
-        return;
-      }
-
-      if (
-        emailVerified &&
-        userProfile.role === 'customer' &&
-        !userProfile.setupCompleted &&
-        pathname !== '/profile'
-      ) {
-        router.push('/profile');
-        return;
-      }
-
-      if (['/login', '/register'].includes(pathname)) {
-        redirectToDashboard(userProfile);
-        return;
-      }
-
-      if (
-        pathname.startsWith('/company/admin') &&
-        (userProfile.role === 'operator' || userProfile.role === 'conductor')
-      ) {
-        redirectToDashboard(userProfile);
-        return;
-      }
-
-      if (
-        pathname.startsWith('/company/operator/dashboard') &&
-        userProfile.role === 'company_admin'
-      ) {
-        redirectToDashboard(userProfile);
-        return;
-      }
-
-      if (
-        pathname.startsWith('/company/conductor/dashboard') &&
-        userProfile.role !== 'conductor'
-      ) {
-        redirectToDashboard(userProfile);
-        return;
-      }
-
-      if (pathname === '/company/setup' && userProfile.role !== 'company_admin') {
-        redirectToDashboard(userProfile);
-        return;
-      }
-    }
-  }, [user, userProfile, isInitialized, loading, router, pathname]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const redirectAfterVerification = useCallback((profile: UserProfile) => {
-    if (profile.role === 'customer' && !profile.setupCompleted) {
-      router.push('/profile');
-    } else {
-      redirectToDashboard(profile);
-    }
-  }, [router]); // eslint-disable-line react-hooks/exhaustive-deps
-
+  // Redirect routing rules strictly driven by userProfile configuration parameters
   const redirectToDashboard = useCallback((profile: UserProfile) => {
+    if (typeof window !== 'undefined') {
+      const searchParams = new URLSearchParams(window.location.search);
+      const redirect = searchParams.get('redirect');
+      if (redirect && redirect.startsWith('/')) {
+        router.push(redirect);
+        return;
+      }
+    }
+
     switch (profile.role) {
-      case 'superadmin':
-        router.push('/admin');
+      case 'superadmin': 
+        router.push('/admin'); 
         break;
       case 'company_admin':
-        router.push(
-          profile.companyId
-            ? `/company/admin?companyId=${profile.companyId}`
-            : '/company/setup'
-        );
+        router.push(profile.companyId ? `/company/admin?companyId=${profile.companyId}` : '/company/setup');
         break;
       case 'operator':
-        if (profile.companyId) {
-          router.push(`/company/operator/dashboard?companyId=${profile.companyId}`);
-        } else {
-          console.error('[AuthContext] Operator missing companyId');
-          router.push('/login');
-        }
+        router.push(profile.companyId ? `/company/operator/dashboard?companyId=${profile.companyId}` : '/login');
         break;
       case 'conductor':
-        if (profile.companyId) {
-          router.push('/company/conductor/dashboard');
-        } else {
-          console.error('[AuthContext] Conductor missing companyId');
-          router.push('/login');
-        }
+        router.push(profile.companyId ? '/company/conductor/dashboard' : '/login');
         break;
-      case 'customer':
-      default:
+      case 'customer': 
+        router.push('/'); 
+        break;
+      default: 
         router.push('/');
     }
   }, [router]);
 
-  // ─── signIn ───────────────────────────────────────────────────────────────
+  // Network engine query layer — fetches profile via Server Action (no fetch round-trip)
+  const refreshUserProfile = useCallback(async (_uid?: string, sessionUser?: any) => {
+    const targetUid = _uid ?? user?.id;
+    if (!targetUid) return;
 
-  const signIn = async (email: string, password: string): Promise<void> => {
-    if (!email?.trim() || !password?.trim()) {
-      throw new Error('Email and password are required');
-    }
+    const meta = sessionUser?.user_metadata ?? user?.user_metadata;
+    const metaEmail = sessionUser?.email ?? user?.email;
+    const metaEmailConfirmed = sessionUser?.email_confirmed_at ?? user?.email_confirmed_at;
 
     try {
-      const credential = await signInWithEmailAndPassword(
-        auth,
-        email.trim().toLowerCase(),
-        password
-      );
+      const result = await getAuthenticatedUserProfile();
 
-      const sessionCreated = await createServerSession(credential.user);
+      if (result.success && result.data) {
+        const data = result.data;
+        const mergedRole = normalizeRole(data.role) ?? normalizeRole(meta?.role) ?? data.role ?? 'customer';
+        setUserProfile({ ...data, role: mergedRole } as UserProfile);
 
-      if (!sessionCreated) {
-        await signOut(auth);
-        throw Object.assign(
-          new Error('Unable to establish a secure session. Please try again.'),
-          { code: 'auth/session-failed' }
-        );
+        // Auto-activate invited operators/conductors
+        const isTeamRole = ['operator', 'conductor'].includes(mergedRole);
+        const needsActivation = isTeamRole && (data as any).invitationSent && (!data.isActive || !data.setupCompleted);
+        if (needsActivation) {
+          updateAuthenticatedUserProfile({ isActive: true, setupCompleted: true, passwordSet: true })
+            .then((res) => {
+              if (res.success && res.data) {
+                const r = normalizeRole(res.data.role) ?? normalizeRole(meta?.role) ?? res.data.role ?? 'customer';
+                setUserProfile({ ...res.data, role: r } as UserProfile);
+              }
+            })
+            .catch((err) => console.error('[AuthContext] Auto-activate failed:', err));
+        }
+
+        // Ensure company is active on company_admin login
+        if (mergedRole === 'company_admin' && data.companyId) {
+          activateCompanyOnLogin(data.companyId)
+            .catch((err) => console.error('[AuthContext] activateCompanyOnLogin failed:', err));
+        }
+      } else {
+        // Profile doesn't exist yet — initialize it from Supabase auth metadata
+        updateAuthenticatedUserProfile({
+          email: metaEmail || '',
+          firstName: meta?.first_name || '',
+          lastName: meta?.last_name || '',
+          phone: meta?.phone || '',
+          role: 'customer',
+          isActive: true,
+          emailVerified: !!metaEmailConfirmed,
+          setupCompleted: false,
+        })
+          .then((res) => {
+            if (res.success && res.data) {
+              const r = normalizeRole(res.data.role) ?? normalizeRole(meta?.role) ?? res.data.role ?? 'customer';
+              setUserProfile({ ...res.data, role: r } as UserProfile);
+            }
+          })
+          .catch((err) => console.error('[AuthContext] Profile init failed:', err));
+      }
+    } catch (error: any) {
+      console.error('[AuthContext] refreshUserProfile failed:', error);
+    }
+  }, [user?.id, user?.email, user?.email_confirmed_at]);
+
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session?.user) {
+        const augmentedUser = {
+          ...session.user,
+          uid: session.user.id,
+          emailVerified: !!session.user.email_confirmed_at,
+          getIdToken: async () => session.access_token,
+        };
+        setUser(augmentedUser);
+        setLoading(false);
+        setIsInitialized(true);
+
+        const isRecovery = event === 'PASSWORD_RECOVERY' || 
+                          pathname === '/reset-password' || 
+                          pathname === '/auth/callback' || 
+                          (typeof window !== 'undefined' && (
+                            window.location.href.includes('type=recovery') || 
+                            window.location.href.includes('access_token=') ||
+                            window.location.hash.includes('recovery') ||
+                            window.location.search.includes('type=recovery')
+                          ));
+
+        if (isRecovery) return;
+
+        refreshUserProfile(session.user.id, session.user);
+      } else {
+        setUser(null);
+        setUserProfile(null);
+        setLoading(false);
+        setIsInitialized(true);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [pathname, refreshUserProfile]);
+
+  useEffect(() => {
+    if (!isInitialized) return;
+
+    const publicRoutes = [
+      '/login', '/register', '/', '/about', '/contact',
+      '/forgot-password', '/reset-password', '/verify-email',
+      '/auth/callback',
+      '/company/setup', '/company/conductor/setup', '/company/operator/signup',
+      '/search', '/schedules',
+    ];
+    const isPublicRoute = publicRoutes.includes(pathname) || pathname.startsWith('/bus/');
+
+    const isRecoveryFlow = pathname === '/reset-password' || 
+                          pathname === '/auth/callback' ||
+                          pathname === '/forgot-password' ||
+                          pathname === '/verify-email' ||
+                          (typeof window !== 'undefined' && (
+                            window.location.href.includes('type=recovery') || 
+                            window.location.href.includes('access_token=') ||
+                            window.location.hash.includes('recovery') ||
+                            window.location.search.includes('type=recovery')
+                          ));
+    if (isRecoveryFlow) return;
+
+    if (!user && !isPublicRoute) {
+      const currentPath = typeof window !== 'undefined' ? pathname + window.location.search : pathname;
+      router.push(`/login?redirect=${encodeURIComponent(currentPath)}`);
+      return;
+    }
+
+    if (user) {
+      const emailVerified = !!user.email_confirmed_at;
+      const isSuperAdmin = userProfile?.role === 'superadmin';
+
+      if (!emailVerified && !isPublicRoute && !isSuperAdmin) {
+        router.push('/verify-email');
+        return;
       }
 
-      try { await reload(credential.user); } catch { /* non-fatal */ }
-
-    } catch (error: any) {
-      if (error.code === 'auth/session-failed') throw error;
-
-      const messages: Record<string, string> = {
-        'auth/user-not-found':         'No account found with this email address.',
-        'auth/wrong-password':         'Incorrect password. Please try again.',
-        'auth/invalid-email':          'Please enter a valid email address.',
-        'auth/user-disabled':          'This account has been disabled. Contact support.',
-        'auth/too-many-requests':      'Too many failed attempts. Please try again later.',
-        'auth/invalid-credential':     'Invalid email or password.',
-        'auth/network-request-failed': 'Network error. Check your connection and try again.',
-      };
-
-      throw new Error(messages[error.code] || 'Sign in failed. Please try again.');
+      if (userProfile) {
+        if (emailVerified && pathname === '/verify-email') {
+          redirectToDashboard(userProfile);
+          return;
+        }
+        if (['/login', '/register'].includes(pathname)) {
+          redirectToDashboard(userProfile);
+          return;
+        }
+      }
     }
+  }, [user, userProfile, isInitialized, router, pathname, redirectToDashboard]);
+
+  const signInWithGoogle = async (): Promise<void> => {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+        queryParams: { access_type: 'offline', prompt: 'select_account' },
+      },
+    });
+    if (error) throw new Error(error.message);
   };
 
-  // ─── signUp ───────────────────────────────────────────────────────────────
+  const signIn = async (email: string, password: string): Promise<void> => {
+    if (!email?.trim() || !password?.trim()) throw new Error('Email and password are required');
+    const { error } = await supabase.auth.signInWithPassword({
+      email: email.trim().toLowerCase(),
+      password,
+    });
+    if (error) {
+      const messages: Record<string, string> = {
+        'Invalid login credentials': 'Invalid email or password.',
+        'Email not confirmed': 'Please verify your email address before signing in.',
+      };
+      throw new Error(messages[error.message] || error.message);
+    }
+  };
 
   const signUp = async (
     email: string,
     password: string,
-    profile: { firstName: string; lastName: string; phone?: string }
+    profile: { fullName: string; phone?: string }
   ): Promise<void> => {
-    if (!email?.trim() || !password?.trim()) {
-      throw new Error('Email and password are required');
-    }
-    if (!profile.firstName?.trim() || !profile.lastName?.trim()) {
-      throw new Error('First name and last name are required');
-    }
+    if (!email?.trim() || !password?.trim()) throw new Error('Email and password are required');
+    if (!profile.fullName?.trim()) throw new Error('Full name is required');
 
-    try {
-      const { user: newUser } = await createUserWithEmailAndPassword(
-        auth,
-        email.trim().toLowerCase(),
-        password
-      );
+    const { firstName, lastName } = splitFullName(profile.fullName);
 
-      await setDoc(doc(db, 'users', newUser.uid), {
-        id:             newUser.uid,
-        uid:            newUser.uid,
-        email:          newUser.email || email.trim().toLowerCase(),
-        firstName:      profile.firstName.trim(),
-        lastName:       profile.lastName.trim(),
-        phone:          formatPhoneToE164(profile.phone),
-        role:           'customer',
-        isActive:       true,
-        emailVerified:  false,
-        passwordSet:    true,
-        setupCompleted: false,
-        createdAt:      serverTimestamp(),
-        updatedAt:      serverTimestamp(),
-      });
+    const { data, error } = await supabase.auth.signUp({
+      email: email.trim().toLowerCase(),
+      password,
+      options: {
+        emailRedirectTo: `${window.location.origin}/verify-email?mode=verified`,
+        data: {
+          first_name: firstName,
+          last_name: lastName,
+          phone: formatPhoneToE164(profile.phone),
+        },
+      },
+    });
 
-      const sessionCreated = await createServerSession(newUser);
-      if (!sessionCreated) {
-        console.warn('[AuthContext] signUp — session cookie creation failed');
-      }
-
-      if (sessionCreated) {
-        newUser.getIdToken()
-          .then((idToken) =>
-            fetch('/api/auth/send-verification-email', {
-              method:  'POST',
-              headers: { Authorization: `Bearer ${idToken}` },
-            })
-          )
-          .then(async (res) => {
-            if (!res.ok) {
-              const body = await res.json().catch(() => ({}));
-              console.warn('[AuthContext] signUp — verification email API error:', body.message);
-            }
-          })
-          .catch((err) => {
-            console.warn('[AuthContext] signUp — verification email failed:', err.message);
-          });
-      }
-    } catch (error: any) {
-      console.error('[AuthContext] signUp error:', error.code, error.message);
-
+    if (error) {
       const messages: Record<string, string> = {
-        'auth/email-already-in-use':   'An account with this email already exists.',
-        'auth/invalid-email':          'Please enter a valid email address.',
-        'auth/weak-password':          'Password should be at least 6 characters.',
-        'auth/operation-not-allowed':  'Account creation is currently disabled.',
-        'auth/network-request-failed': 'Network error. Check your connection and try again.',
+        'User already registered': 'This email is already associated with an account. Please sign in or reset your password.',
+        'Invalid Content-Type: Missing Content-Type header': 'A server-side configuration error occurred during registration.',
+        'Email rate limit exceeded': 'Rate limit reached. Please wait an hour before trying again.',
       };
+      throw new Error(messages[error.message] || error.message);
+    }
 
-      const friendlyMessage = messages[error.code] || 'Account creation failed. Please try again.';
-      throw Object.assign(new Error(friendlyMessage), { code: error.code });
+    if (data.user && data.user.identities && data.user.identities.length === 0) {
+      throw new Error('This email is already associated with an account. Please sign in or reset your password.');
+    }
+
+    if (data.user && data.session) {
+      await updateAuthenticatedUserProfile({
+        email: data.user.email,
+        firstName,
+        lastName,
+        phone: formatPhoneToE164(profile.phone),
+        role: 'customer',
+        isActive: true,
+        emailVerified: false,
+        setupCompleted: false,
+      }).catch(err => console.warn('[AuthContext] Unauthenticated profile sync skipped:', err));
     }
   };
-
-  // ─── updateUserProfile ────────────────────────────────────────────────────
 
   const updateUserProfile = async (profile: UpdateProfilePayload): Promise<void> => {
-    if (!user?.uid) throw new Error('No authenticated user found');
-    if (!profile.firstName?.trim() || !profile.lastName?.trim()) {
-      throw new Error('First name and last name are required');
-    }
-    if (!profile.phone?.trim()) throw new Error('Phone number is required');
-
-    try {
-      const update: Record<string, any> = {
-        firstName:      profile.firstName.trim(),
-        lastName:       profile.lastName.trim(),
-        phone:          formatPhoneToE164(profile.phone),
+    if (!user?.id) throw new Error('No authenticated user found');
+    const response = await fetch('/api/profile', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'x-csrf-token': getCookie('__csrf_token') || '' },
+      body: JSON.stringify({
+        firstName: profile.firstName.trim(),
+        lastName: profile.lastName.trim(),
+        phone: formatPhoneToE164(profile.phone),
         setupCompleted: true,
-        updatedAt:      serverTimestamp(),
-      };
-
-      if (profile.nationalId)     update.nationalId     = profile.nationalId;
-      if (profile.sex)            update.sex            = profile.sex;
-      if (profile.currentAddress) update.currentAddress = profile.currentAddress;
-
-      await setDoc(doc(db, 'users', user.uid), update, { merge: true });
-      await refreshUserProfile();
-    } catch (error: any) {
-      throw new Error(
-        error.code === 'invalid-argument'
-          ? 'Invalid data provided. Please check all fields and try again.'
-          : 'Profile update failed. Please try again.'
-      );
-    }
+        nationalId: profile.nationalId,
+        sex: profile.sex,
+        currentAddress: profile.currentAddress,
+      }),
+    });
+    if (!response.ok) throw new Error('Failed to update profile');
+    await refreshUserProfile();
   };
-
-  // ─── signOut ──────────────────────────────────────────────────────────────
 
   const signOutUser = async (): Promise<void> => {
-    try {
-      await deleteServerSession();
-      await signOut(auth);
-      setUser(null);
-      setUserProfile(null);
-      router.push('/login');
-    } catch (error: any) {
-      console.error('[AuthContext] signOut error:', error);
-      throw new Error('Sign out failed. Please try again.');
-    }
+    const { error } = await supabase.auth.signOut();
+    if (error) throw new Error(error.message);
+    setUser(null);
+    setUserProfile(null);
+    router.push('/login');
   };
 
-  // ─── Context value ────────────────────────────────────────────────────────
-
   const contextValue: AuthContextType = {
-    user,
-    userProfile,
+    user, 
+    userProfile, // 👈 Included in the exported provider map value
     setUserProfile,
-    signIn,
+    signInWithGoogle, 
+    signIn, 
     signUp,
-    updateUserProfile,
+    updateUserProfile, 
     signOut: signOutUser,
-    loading,
+    loading, 
     refreshUserProfile,
   };
 
   if (!isInitialized) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-brand-50 to-gray-50">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
+          <div className="w-10 h-10 border-4 border-brand-700 border-t-transparent rounded-full animate-spin" />
           <p className="text-sm text-slate-500">Loading…</p>
         </div>
       </div>

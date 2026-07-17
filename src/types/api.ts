@@ -12,7 +12,7 @@ export interface CreateCompanyRequest {
 export interface ApiError {
   code: string;
   message: string;
-  details?: Record<string, any>;
+  details?: Record<string, unknown>;
   timestamp: Date;
 }
 
@@ -50,8 +50,29 @@ export interface SearchQuery {
 }
 
 export interface SearchResult {
-  schedule: Schedule;
-  bus: Bus;
-  route: Route;
-  company: Company;
+  id: string;
+  companyId: string;
+  busId: string;
+  routeId: string;
+  price: number;
+  availableSeats: number;
+  totalSeats: number;
+  status: string;
+  date: string;
+  departureTime: string;
+  arrivalTime: string;
+  duration: number;
+  distance: number;
+  companyName: string;
+  companyLogo?: string;
+  origin: string;
+  destination: string;
+  busNumber: string;
+  busType: string;
+  amenities: string[];
+  // Optional legacy fields to avoid immediate breakage in some components
+  schedule?: Schedule;
+  bus?: Bus;
+  route?: Route;
+  company?: Company;
 }

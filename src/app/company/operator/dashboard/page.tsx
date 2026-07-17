@@ -1,651 +1,139 @@
-"use client";
+'use client';
 
-import { useState, useEffect, useCallback, useMemo } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { 
-  collection, 
-  query, 
-  where, 
-  getDocs, 
-  doc, 
-  getDoc, 
-  addDoc,
-  serverTimestamp,
-  Timestamp
-} from "firebase/firestore";
-import { db } from "@/lib/firebaseConfig";
-import { useAuth } from "@/contexts/AuthContext";
-import { Company, Schedule, Route, Bus, Booking } from "@/types";
-import { 
-  Building2, 
-  Loader2, 
-  Calendar, 
-  Users, 
-  DollarSign,
-  User,
-  Menu,
-  X,
-  ChevronRight,
-  Bell,
-  AlertTriangle
-} from "lucide-react";
-import AlertMessage from "@/components/AlertMessage";
-import SchedulesTab from "@/components/scheduleTab";
-import BookingsTab from "@/components/bookingTab";
-import PaymentsTab from "@/components/PaymentTab";
-import OperatorProfileTab from "@/components/OperatorProfileTab";
+import React, { useState, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { ArrowLeft } from 'lucide-react';
+import { useOperatorDashboard } from './_hooks/useOperatorDashboard';
+import OperatorLayout from './_components/OperatorLayout';
+import { OPERATOR_CATEGORIES } from './_lib/constants';
+import { Skeleton } from '@/components/ui/Skeleton';
+import { NotificationBell } from '@/contexts/NotificationContext';
+import { useAppToast } from '@/contexts/ToastContext';
+// Tabs
+import HomeTab from './tabs/HomeTab';
+import RoutesTab from './tabs/RoutesTab';
+import BookingsTab from './tabs/BookingsTab';
+import RevenueTab from './tabs/RevenueTab';
+import ProfileTab from './tabs/ProfileTab';
 
-const TABS = [
-  { id: "schedules" as const, label: "Schedules", icon: Calendar },
-  { id: "bookings" as const, label: "Bookings", icon: Users },
-  { id: "payments" as const, label: "Payments", icon: DollarSign },
-  { id: "profile" as const, label: "Profile", icon: User }
-] as const;
-
-type TabType = typeof TABS[number]["id"];
-type AlertType = { type: "error" | "success" | "warning" | "info"; message: string } | null;
-
-interface DashboardData {
-  company: Company | null;
-  schedules: Schedule[];
-  routes: Route[];
-  buses: Bus[];
-  bookings: Booking[];
-}
-
-const convertFirestoreDate = (date: any): Date => {
-  if (!date) return new Date();
-  if (date instanceof Date) return date;
-  if (date.toDate && typeof date.toDate === "function") {
-    try {
-      return date.toDate();
-    } catch (error) {
-      console.warn('Date conversion error:', error);
-      return new Date();
-    }
-  }
-  if (typeof date === "string" || typeof date === "number") return new Date(date);
-  if (date.seconds && typeof date.seconds === "number") return new Date(date.seconds * 1000);
-  return new Date();
-};
-
-const useAlert = () => {
-  const [alert, setAlert] = useState<AlertType>(null);
-  
-  const showAlert = useCallback((type: "error" | "success" | "warning" | "info", message: string) => {
-    setAlert({ type, message });
-  }, []);
-
-  const clearAlert = useCallback(() => {
-    setAlert(null);
-  }, []);
-
-  useEffect(() => {
-    if (alert) {
-      const timer = setTimeout(clearAlert, alert.type === "error" ? 7000 : 5000);
-      return () => clearTimeout(timer);
-    }
-  }, [alert, clearAlert]);
-
-  return { alert, showAlert, clearAlert };
-};
-
-const Sidebar = ({ activeSection, setActiveSection, isMobileOpen, setIsMobileOpen, company, operatorName, pendingCount }: any) => {
-  return (
-    <>
-      {isMobileOpen && (
-        <div 
-          className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
-          onClick={() => setIsMobileOpen(false)}
-        />
-      )}
-
-      <aside className={`
-        fixed top-0 left-0 z-50 h-screen w-64 bg-white border-r border-gray-200
-        transform transition-transform duration-300 ease-in-out
-        ${isMobileOpen ? 'translate-x-0' : '-translate-x-full'}
-        lg:translate-x-0 lg:static
-      `}>
-        <div className="flex flex-col h-full">
-          <div className="flex items-center justify-between p-6 border-b border-gray-200">
-            <div className="flex items-center space-x-3">
-              {company?.logo ? (
-                <img src={company.logo} alt="Logo" className="w-10 h-10 rounded-xl object-cover" />
-              ) : (
-                <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-blue-700 rounded-xl flex items-center justify-center">
-                  <Building2 className="w-6 h-6 text-white" />
-                </div>
-              )}
-              <div>
-                <h1 className="font-bold text-gray-900 text-sm">{company?.name || 'BusOps'}</h1>
-                <p className="text-xs text-gray-500">Operator Panel</p>
-              </div>
-            </div>
-            <button 
-              onClick={() => setIsMobileOpen(false)}
-              className="lg:hidden p-2 hover:bg-gray-100 rounded-lg"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-
-          <nav className="flex-1 overflow-y-auto p-4 space-y-1">
-            {TABS.map((item) => {
-              const Icon = item.icon;
-              const isActive = activeSection === item.id;
-              
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => {
-                    setActiveSection(item.id);
-                    setIsMobileOpen(false);
-                  }}
-                  className={`
-                    w-full flex items-center space-x-3 px-4 py-3 rounded-xl
-                    transition-all duration-200 group relative
-                    ${isActive 
-                      ? 'bg-blue-50 text-blue-700' 
-                      : 'text-gray-700 hover:bg-gray-50'
-                    }
-                  `}
-                >
-                  <Icon className={`w-5 h-5 ${isActive ? 'text-blue-700' : 'text-gray-400 group-hover:text-gray-600'}`} />
-                  <span className="font-medium flex-1 text-left">{item.label}</span>
-                  {item.id === 'bookings' && pendingCount > 0 && (
-                    <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
-                      {pendingCount}
-                    </span>
-                  )}
-                  {isActive && <ChevronRight className="w-4 h-4" />}
-                </button>
-              );
-            })}
-          </nav>
-
-          <div className="p-4 border-t border-gray-200">
-            <div className="flex items-center space-x-3 px-4 py-3 bg-gray-50 rounded-xl">
-              <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                <User className="w-5 h-5 text-blue-600" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-900 truncate">{operatorName || 'Operator'}</p>
-                <p className="text-xs text-gray-500 truncate">Operations Team</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </aside>
-    </>
-  );
-};
-
-export default function OperatorDashboard() {
-  const { user, userProfile, loading: authLoading } = useAuth();
+export default function OperatorDashboardPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { alert, showAlert, clearAlert } = useAlert();
-
-  const [activeTab, setActiveTab] = useState<TabType>("schedules");
+  const dashboard = useOperatorDashboard();
+  const { error, success } = useAppToast();
+  const queryTab = searchParams?.get('tab');
+  const [activeTab, setActiveTab] = useState(queryTab || 'home');
+  const [searchQuery, setSearchQuery] = useState('');
   const [isMobileOpen, setIsMobileOpen] = useState(false);
-  const [dashboardData, setDashboardData] = useState<DashboardData>({
-    company: null,
-    schedules: [],
-    routes: [],
-    buses: [],
-    bookings: [],
-  });
-  const [loading, setLoading] = useState(true);
-
-  const companyId = userProfile?.companyId?.trim() || "";
-
-  const isValidUser = useMemo(() => {
-    return user && userProfile?.role === "operator" && userProfile.companyId;
-  }, [user, userProfile]);
-
-  const statistics = useMemo(() => {
-    const { schedules, bookings } = dashboardData;
-    const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    
-    const todayBookings = bookings.filter(b => {
-      const bookingDate = convertFirestoreDate(b.createdAt);
-      return bookingDate >= today;
-    });
-
-    const totalRevenue = bookings
-      .filter(b => b.paymentStatus === "paid")
-      .reduce((sum, b) => sum + (b.totalAmount || 0), 0);
-
-    return {
-      totalRevenue,
-      totalBookings: bookings.length,
-      todayBookings: todayBookings.length,
-      activeSchedules: schedules.filter((s) => s.isActive).length,
-      pendingBookings: bookings.filter(b => b.bookingStatus === "pending").length,
-      confirmedBookings: bookings.filter(b => b.bookingStatus === "confirmed").length,
-    };
-  }, [dashboardData.schedules, dashboardData.bookings]);
-
-  const fetchCollectionData = useCallback(async <T extends { id: string }>(
-    collectionName: string, 
-    companyId: string
-  ): Promise<T[]> => {
-    if (!companyId) {
-      console.warn(`Invalid companyId for ${collectionName} query. Skipping fetch.`);
-      return [];
-    }
-
-    try {
-      console.log(`Fetching ${collectionName} for companyId: "${companyId}"`);
-      
-      let q;
-      
-      // CRITICAL: Operators must filter schedules by createdBy
-      if (collectionName === "schedules" && userProfile?.role === "operator") {
-        q = query(
-          collection(db, collectionName), 
-          where("companyId", "==", companyId),
-          where("createdBy", "==", user?.uid) // REQUIRED for operators
-        );
-      } 
-      // For bookings, operators need to fetch their schedules first, then filter
-      else if (collectionName === "bookings" && userProfile?.role === "operator") {
-        // First, get operator's schedule IDs
-        const schedulesQuery = query(
-          collection(db, "schedules"),
-          where("companyId", "==", companyId),
-          where("createdBy", "==", user?.uid)
-        );
-        const schedulesSnap = await getDocs(schedulesQuery);
-        const scheduleIds = schedulesSnap.docs.map(doc => doc.id);
-        
-        if (scheduleIds.length === 0) {
-          console.log("Operator has no schedules, returning empty bookings");
-          return [] as T[];
-        }
-        
-        // Firestore 'in' queries support max 30 items, so chunk if needed
-        const bookingsResults: T[] = [];
-        const chunks = [];
-        for (let i = 0; i < scheduleIds.length; i += 30) {
-          chunks.push(scheduleIds.slice(i, i + 30));
-        }
-        
-        for (const chunk of chunks) {
-          const bookingsQuery = query(
-            collection(db, "bookings"),
-            where("companyId", "==", companyId),
-            where("scheduleId", "in", chunk)
-          );
-          const bookingsSnap = await getDocs(bookingsQuery);
-          bookingsSnap.docs.forEach(doc => {
-            const data = doc.data();
-            bookingsResults.push({
-              id: doc.id,
-              ...data,
-              createdAt: data.createdAt ? convertFirestoreDate(data.createdAt) : new Date(),
-              updatedAt: data.updatedAt ? convertFirestoreDate(data.updatedAt) : new Date(),
-              bookingDate: data.bookingDate ? convertFirestoreDate(data.bookingDate) : new Date(),
-            } as unknown as T);
-          });
-        }
-        
-        console.log(`Found ${bookingsResults.length} bookings for operator's schedules`);
-        return bookingsResults;
-      }
-      // For other collections, standard query
-      else {
-        q = query(collection(db, collectionName), where("companyId", "==", companyId));
-      }
-
-      const snapshot = await getDocs(q);
-      console.log(`Found ${snapshot.docs.length} documents in ${collectionName}`);
-
-      return snapshot.docs.map((document) => {
-        const data = document.data();
-
-        // Handle Schedules specifically for date conversion
-        if (collectionName === "schedules") {
-          const scheduleData = {
-            id: document.id,
-            ...data,
-            departureDateTime: convertFirestoreDate(data.departureDateTime),
-            arrivalDateTime: convertFirestoreDate(data.arrivalDateTime),
-            createdAt: convertFirestoreDate(data.createdAt),
-            updatedAt: convertFirestoreDate(data.updatedAt),
-          };
-          return scheduleData as unknown as T;
-        }
-
-        // Handle all other collections
-        const genericData = {
-          id: document.id,
-          ...data,
-          createdAt: data.createdAt ? convertFirestoreDate(data.createdAt) : new Date(),
-          updatedAt: data.updatedAt ? convertFirestoreDate(data.updatedAt) : new Date(),
-        };
-        
-        return genericData as unknown as T;
-      });
-    } catch (error: any) {
-      console.error(`Error fetching ${collectionName}:`, error);
-      throw error;
-    }
-  }, [user, userProfile]);
-
-  const fetchInitialData = useCallback(async () => {
-    if (!companyId || authLoading) return;
-
-    try {
-      setLoading(true);
-      console.log("Starting initial data fetch for companyId:", companyId);
-
-      const companyDoc = await getDoc(doc(db, "companies", companyId));
-
-      if (!companyDoc.exists()) {
-        showAlert("error", "Company not found. Please contact your administrator.");
-        router.push("/login");
-        return;
-      }
-
-      const companyData = { 
-        id: companyDoc.id, 
-        ...companyDoc.data(),
-        createdAt: convertFirestoreDate(companyDoc.data()?.createdAt),
-        updatedAt: convertFirestoreDate(companyDoc.data()?.updatedAt)
-      } as Company;
-      
-      console.log("Company data loaded:", companyData.name);
-
-      const [schedules, routes, buses, bookings] = await Promise.all([
-        fetchCollectionData<Schedule>("schedules", companyId),
-        fetchCollectionData<Route>("routes", companyId),
-        fetchCollectionData<Bus>("buses", companyId),
-        fetchCollectionData<Booking>("bookings", companyId),
-      ]);
-
-      console.log("Initial data fetch complete:", {
-        schedules: schedules.length,
-        routes: routes.length,
-        buses: buses.length,
-        bookings: bookings.length,
-      });
-
-      setDashboardData({
-        company: companyData,
-        schedules,
-        routes,
-        buses,
-        bookings,
-      });
-    } catch (error: any) {
-      console.error("Fetch error:", error);
-      showAlert("error", error.message || "Failed to load dashboard data");
-    } finally {
-      setLoading(false);
-    }
-  }, [companyId, authLoading, showAlert, router, fetchCollectionData]);
+  const [defaultScheduleId, setDefaultScheduleId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (authLoading) return;
-
-    if (!user) {
-      router.push("/login");
-      return;
+    const currentTab = searchParams?.get('tab') || 'home';
+    if (currentTab && currentTab !== activeTab) {
+      setActiveTab(currentTab);
     }
+  }, [searchParams, activeTab]);
 
-    if (!userProfile) {
-      showAlert("warning", "Loading user profile...");
-      return;
+  useEffect(() => {
+    if (dashboard.globalError) {
+      error('Error', dashboard.globalError);
     }
+  }, [dashboard.globalError, error]);
 
-    if (userProfile.role !== "operator") {
-      showAlert("error", "Access denied. Operator role required.");
-      router.push("/");
-      return;
+  useEffect(() => {
+    if (dashboard.successMessage) {
+      success('Success', dashboard.successMessage);
     }
+  }, [dashboard.successMessage, success]);
 
-    if (!userProfile.companyId) {
-      showAlert("error", "No company associated with your account. Please contact support.");
-      router.push("/login");
-      return;
-    }
+  const updateTab = (tabId: string) => {
+    setActiveTab(tabId);
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      params.set('tab', tabId);
 
-    const urlCompanyId = searchParams.get("companyId");
-    if (urlCompanyId && urlCompanyId !== userProfile.companyId) {
-      showAlert("error", "Invalid company ID in URL");
-      router.push("/login");
-      return;
-    }
+      if (dashboard.operatorInfo?.id) {
+        params.set('operatorId', dashboard.operatorInfo.id);
+      }
 
-    fetchInitialData();
-  }, [user, userProfile, authLoading, router, searchParams, fetchInitialData, showAlert]);
-
-  const renderActiveTab = () => {
-    const { company, schedules, routes, buses, bookings } = dashboardData;
-
-    const commonProps = {
-      setError: (msg: string) => showAlert("error", msg),
-      setSuccess: (msg: string) => showAlert("success", msg),
-    };
-
-    if (loading) {
-      return (
-        <div className="space-y-4">
-          <div className="h-8 bg-gray-200 animate-pulse rounded"></div>
-          <div className="h-96 bg-gray-200 animate-pulse rounded"></div>
-        </div>
-      );
-    }
-
-    switch (activeTab) {
-      case "schedules":
-        return (
-          <SchedulesTab
-            companyId={companyId}
-            schedules={schedules}
-            user={user}
-            userProfile={userProfile}
-            setSchedules={(newSchedules) => {
-              const updatedSchedules = Array.isArray(newSchedules)
-                ? newSchedules.map((s) => ({
-                    ...s,
-                    departureDateTime: convertFirestoreDate(s.departureDateTime),
-                    arrivalDateTime: convertFirestoreDate(s.arrivalDateTime),
-                    createdAt: convertFirestoreDate(s.createdAt),
-                    updatedAt: convertFirestoreDate(s.updatedAt),
-                  }))
-                : schedules;
-              setDashboardData(prev => ({ ...prev, schedules: updatedSchedules }));
-            }}
-            routes={routes}
-            buses={buses}
-            addSchedule={async (data) => {
-              try {
-                const schedulesRef = collection(db, "schedules");
-                
-                const firestoreData = {
-                  ...data,
-                  departureDateTime: Timestamp.fromDate(new Date(data.departureDateTime)),
-                  arrivalDateTime: Timestamp.fromDate(new Date(data.arrivalDateTime)),
-                  createdAt: serverTimestamp(),
-                  updatedAt: serverTimestamp(),
-                  companyId: companyId, 
-                  createdBy: user?.uid
-                };
-
-                const docRef = await addDoc(schedulesRef, firestoreData);
-                return docRef.id;
-              } catch (error: any) {
-                console.error("Error in addSchedule:", error);
-                showAlert("error", `Failed to save schedule: ${error.message}`);
-                throw error;
-              }
-            }}
-            {...commonProps}
-          />
-        );
-
-      case "bookings":
-        const isCompany = (item: Company | null | undefined): item is Company => !!item;
-       // ✅ After — only pass what BookingsTabProps declares
-       case "bookings":
-            return (
-              <BookingsTab
-                schedules={schedules}
-                routes={routes}
-                buses={buses}
-                companyId={companyId}
-                user={user}
-                userProfile={userProfile}
-              />
-            );
-      case "profile":
-        return (
-          <OperatorProfileTab
-            userProfile={userProfile}
-            companyName={company?.name || ''}
-            companyBranches={company?.branches || []}
-            {...commonProps}
-          />
-        );
-
-      case "payments":
-        const paymentSettings = company?.paymentSettings;
-        return company && paymentSettings ? (
-          <PaymentsTab
-            company={company}
-            paymentSettings={paymentSettings}
-            bookings={bookings}
-            buses={buses}
-            {...commonProps}
-          />
-        ) : (
-          <div className="text-center py-12 bg-white rounded-xl shadow-sm border">
-            <AlertTriangle className="w-12 h-12 text-yellow-500 mx-auto mb-4" />
-            <p className="text-gray-600">No payment gateway configured.</p>
-            <p className="text-sm text-gray-500 mt-2">Contact your administrator to set up payments.</p>
-          </div>
-        );
-
-      default:
-        return (
-          <div className="text-center py-12">
-            <p className="text-gray-500">Tab not found</p>
-          </div>
-        );
+      window.history.pushState(null, '', `?${params.toString()}`);
     }
   };
 
-  if (loading || authLoading) {
+  // Augment dashboard with searchQuery and navigation helpers so tabs can access it
+  const navigateToBookings = (scheduleId?: string) => {
+    if (scheduleId) setDefaultScheduleId(scheduleId);
+    updateTab('bookings');
+  };
+  const dashboardWithSearch = { ...dashboard, searchQuery, navigateTo: updateTab, navigateToBookings };
+
+  if (dashboard.isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <Loader2 className="w-12 h-12 text-blue-600 animate-spin mx-auto" />
-          <p className="mt-4 text-gray-600">Loading dashboard...</p>
+      <div className="min-h-screen bg-gray-50 flex">
+        <Skeleton className="w-64 h-screen rounded-none hidden lg:block" />
+        <div className="flex-1 flex flex-col p-6 sm:p-8 gap-8">
+          <Skeleton className="w-full h-16 rounded-xl" />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <Skeleton className="h-32 w-full rounded-2xl" />
+            <Skeleton className="h-32 w-full rounded-2xl" />
+            <Skeleton className="h-32 w-full rounded-2xl" />
+          </div>
+          <Skeleton className="h-[400px] w-full rounded-2xl mt-4" />
         </div>
       </div>
     );
   }
 
-  if (!isValidUser) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center bg-white p-8 rounded-2xl shadow-lg max-w-md">
-          <AlertTriangle className="w-16 h-16 text-red-400 mx-auto mb-4" />
-          <h2 className="text-xl font-semibold text-gray-800 mb-2">Access Denied</h2>
-          <p className="text-gray-600 mb-6">You don't have permission to access this dashboard.</p>
-          <button
-            onClick={() => router.push("/login")}
-            className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            Go to Login
-          </button>
-        </div>
-      </div>
-    );
-  }
+  const renderActiveTab = () => {
+    switch (activeTab) {
+      case 'home':
+        return <HomeTab dashboard={dashboardWithSearch} />;
+      case 'routes':
+        return <RoutesTab dashboard={dashboardWithSearch} />;
+      case 'bookings':
+        return <BookingsTab dashboard={dashboardWithSearch} defaultScheduleId={defaultScheduleId} />;
+      case 'revenue':
+        return <RevenueTab dashboard={dashboardWithSearch} />;
+      case 'profile':
+        return <ProfileTab dashboard={dashboardWithSearch} />;
+      default:
+        return <HomeTab dashboard={dashboardWithSearch} />;
+    }
+  };
 
-  if (!dashboardData.company) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center bg-white p-8 rounded-2xl shadow-lg max-w-md">
-          <Building2 className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-          <h2 className="text-xl font-semibold text-gray-800 mb-2">Company Not Found</h2>
-          <p className="text-gray-600 mb-6">Please contact your administrator for assistance.</p>
-          <button
-            onClick={() => router.push("/login")}
-            className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            Back to Login
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  const { company } = dashboardData;
-  const operatorName = `${userProfile?.firstName || ''} ${userProfile?.lastName || ''}`.trim();
+  const activeTabLabel = OPERATOR_CATEGORIES.find((tab) => tab.id === activeTab)?.label || 'Operator Dashboard';
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
-      <Sidebar 
-        activeSection={activeTab}
-        setActiveSection={setActiveTab}
-        isMobileOpen={isMobileOpen}
-        setIsMobileOpen={setIsMobileOpen}
-        company={company}
-        operatorName={operatorName}
-        pendingCount={statistics.pendingBookings}
-      />
-
-      <div className="flex-1 flex flex-col min-h-screen lg:ml-0">
-        <header className="bg-white border-b sticky top-0 z-30 shadow-sm">
-          <div className="px-4 sm:px-6 lg:px-8 py-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-4">
-                <button 
-                  onClick={() => setIsMobileOpen(true)}
-                  className="lg:hidden p-2 hover:bg-gray-100 rounded-lg"
-                >
-                  <Menu className="w-6 h-6" />
-                </button>
-                <div>
-                  <h1 className="text-2xl font-bold text-gray-900">
-                    {TABS.find(t => t.id === activeTab)?.label || 'Dashboard'}
-                  </h1>
-                  <p className="text-sm text-gray-500">Manage {activeTab} for {company.name}</p>
-                </div>
-              </div>
-
-              <div className="flex items-center space-x-4">
-                {statistics.pendingBookings > 0 && (
-                  <div 
-                    className="flex items-center space-x-2 px-3 py-2 bg-yellow-100 text-yellow-800 rounded-lg cursor-pointer hover:bg-yellow-200 transition-colors"
-                    onClick={() => setActiveTab("bookings")}
-                  >
-                    <Bell className="w-4 h-4" />
-                    <span className="text-sm font-medium">{statistics.pendingBookings} pending</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </header>
-
-        <main className="flex-1 px-4 sm:px-6 lg:px-8 py-8">
-          {alert && (
-            <div className="mb-6">
-              <AlertMessage type={alert?.type} message={alert?.message} onClose={clearAlert} />
-            </div>
-          )}
-
-          <div className="max-w-7xl mx-auto">
-            {renderActiveTab()}
-          </div>
-        </main>
-      </div>
-    </div>
+    <OperatorLayout
+      title={activeTabLabel}
+      user={dashboard.user}
+      userProfile={dashboard.userProfile}
+      searchQuery={searchQuery}
+      setSearchQuery={setSearchQuery}
+      sidebarTabs={OPERATOR_CATEGORIES}
+      activeTab={activeTab}
+      setActiveTab={updateTab}
+      isMobileOpen={isMobileOpen}
+      setIsMobileOpen={setIsMobileOpen}
+      companyName={dashboard.operatorInfo?.companyName || (dashboard.userProfile as any)?.companyName || 'Operator'}
+      companyLogo={dashboard.companyLogo}
+      onSignOut={dashboard.signOut}
+      NotificationBellComponent={NotificationBell}
+    >
+      {dashboard.operatorInfo && dashboard.userProfile?.role === 'company_admin' && (
+        <div className="mb-6 rounded-2xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-900 flex items-center justify-between">
+          <span>Viewing operator dashboard for <span className="font-semibold">{dashboard.operatorInfo.name || dashboard.operatorInfo.email}</span>.</span>
+          <button
+            type="button"
+            onClick={() => router.back()}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-indigo-200 bg-white px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 transition"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            Back
+          </button>
+        </div>
+      )}
+      {renderActiveTab()}
+    </OperatorLayout>
   );
 }

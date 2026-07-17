@@ -12,7 +12,8 @@
     "signIn": "Lowani",
     "getStarted": "Yambani",
     "smartTravel": "Ulendo Wanzeru",
-    "member": "Membala"
+    "member": "Membala",
+    "promotions": "Zotsatsa"
   },
 
   "common": {
@@ -117,7 +118,7 @@
     "submitting": "Kulowa…",
     "troubleSignIn": "Muli ndi Vuto Polowa?",
     "lockedTitle": "Akaunto Yatsekedwa Mwakanthi",
-    "lockedBody": "Mayerekezi ochuluka olephereka. Yesaninso mu {time}.",
+    "lockedBody": "Mayerekezi ochuluka olephereka. Yesaninso pambuyo pake.",
     "attemptsRemaining": "Mayerekezi {count} otsala asanatsekede akaunto.",
     "errorTitle": "Kulowa Kunapherwa",
     "errorInvalid": "Imelo kapena chinsinsi cholakwika. Onani zakukhala kwanu ndikuyesanso.",
@@ -144,7 +145,7 @@
     "emailLabel": "Imelo",
     "emailPlaceholder": "chisomo.banda@chitsanzo.com",
     "passwordLabel": "Chinsinsi",
-    "passwordPlaceholder": "Pangani chinsinsi cholimba",
+    "passwordPlaceholder": "Gwiritsani ntchito zilembo zisanu ndi ziwiri kapena kupitilira",
     "confirmPasswordLabel": "Tsimikizirani Chinsinsi",
     "confirmPasswordPlaceholder": "Lowetsaninso chinsinsi chanu",
     "passwordStrengthLabel": "Mphamvu ya Chinsinsi:",
@@ -168,11 +169,11 @@
     "accountCreated": "Akaunto Yapangidwa!",
     "errorTitle": "Kulembetsa Kunapherwa",
     "successTitle": "Kulembetsa Kunachita Bwino!",
-    "successRedirect": "Kupita ku dashboard yanu…",
+    "successRedirect": "Kupita ku chitsimikizo cha imelo…",
     "errorEmailRequired": "Imelo ilyonse iliyonse",
     "errorEmailInvalid": "Lowetsani imelo yoyenera",
     "errorPasswordRequired": "Chinsinsi chiyenera",
-    "errorPasswordMin": "Chinsinsi chiyenera kukhala ndi zilembo {min} kapena kupitilira",
+    "errorPasswordMin": "Gwiritsani ntchito zilembo zisanu ndi ziwiri kapena kupitilira",
     "errorPasswordMax": "Chinsinsi chiyenera kukhala phansi pa zilembo {max}",
     "errorPasswordStrength": "Chinsinsi chiyenera kukhala ndi zilembo zalikulu, zazing'ono, ndi nambala",
     "errorConfirmRequired": "Tsimikizirani chinsinsi chanu",

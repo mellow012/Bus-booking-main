@@ -11,9 +11,9 @@ interface SearchFiltersProps {
 }
 
 export default function SearchFilters({ filters, onFiltersChange, results }: SearchFiltersProps) {
-  const busTypes  = useMemo(() => Array.from(new Set(results.map(r => r.bus.busType))), [results]);
-  const companies = useMemo(() => Array.from(new Set(results.map(r => r.company.name))), [results]);
-  const amenities = useMemo(() => Array.from(new Set(results.flatMap(r => r.bus.amenities))), [results]);
+  const busTypes  = useMemo(() => Array.from(new Set(results.map(r => r.busType))), [results]);
+  const companies = useMemo(() => Array.from(new Set(results.map(r => r.companyName))), [results]);
+  const amenities = useMemo(() => Array.from(new Set(results.flatMap(r => r.amenities))), [results]);
 
   const handleFilterChange = (key: keyof SearchFilters, value: any) => {
     onFiltersChange({ ...filters, [key]: value });

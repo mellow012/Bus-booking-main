@@ -1,29 +1,41 @@
 'use client';
 // contexts/NotificationContext.tsx
+// Migrated from Firebase real-time listeners to polling API
 
 import React, {
   createContext, useContext, useEffect, useState,
   ReactNode, useRef, useCallback,
 } from 'react';
-import { db } from '@/lib/firebaseConfig';
-import {
-  collection, query, where, orderBy, addDoc,
-  onSnapshot, updateDoc, doc, writeBatch, Timestamp,
-} from 'firebase/firestore';
 import { Bell, X, Check, CheckCheck, Trash2 } from 'lucide-react';
-import { Notification } from '@/types/index';
+import type { Notification } from '@/types/index';
+import { createClient } from '@/utils/supabase/client';
+
+function urlBase64ToUint8Array(base64String: string) {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type NotificationType =
   | 'booking'
   | 'payment'
+  | 'payment_reminder'
   | 'schedule'
   | 'system'
   | 'promotion'
   | 'alert'
   | 'cancellation'
-  | 'cancellation_requested';
+  | 'cancellation_requested'
+  | 'trip_update';
 
 export interface SendNotificationParams {
   userId: string;
@@ -63,8 +75,34 @@ export const NotificationProvider: React.FC<{ children: ReactNode; userId?: stri
   userId,
 }) => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [isLoading, setIsLoading]         = useState(true);
-  const [error, setError]                 = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const pollIntervalRef = useRef<number | null>(null);
+
+  const fetchNotifications = useCallback(async (force = false) => {
+    if (!userId) return;
+    if (!force && document.visibilityState !== 'visible') return;
+
+    try {
+      const response = await fetch('/api/notifications/list?userId=' + userId);
+
+      if (response.status === 401 || response.status === 403) {
+        return;
+      }
+
+      if (!response.ok) throw new Error(`Failed to fetch: ${response.status}`);
+
+      const { data } = await response.json();
+      setNotifications(data || []);
+      setError(null);
+    } catch (err: any) {
+      // Log network errors or other unexpected issues
+      console.error('[NotificationProvider] Polling error:', err);
+      setError(err.message);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [userId]);
 
   useEffect(() => {
     if (!userId) {
@@ -75,59 +113,92 @@ export const NotificationProvider: React.FC<{ children: ReactNode; userId?: stri
     }
 
     setIsLoading(true);
-    setError(null);
 
-    // This query requires a Firestore composite index:
-    //   Collection: notifications
-    //   Fields: userId (ASC), createdAt (DESC)
-    //
-    // If you see a "requires an index" error in the console, click the link
-    // Firebase provides in the error message — it creates the index automatically.
-    // Until the index is built (takes ~1 minute), notifications will not load.
-    const q = query(
-      collection(db, 'notifications'),
-      where('userId', '==', userId),
-      orderBy('createdAt', 'desc')
-    );
+    // Initial load
+    fetchNotifications(true);
 
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        const data = snapshot.docs.map(d => ({
-          id: d.id,
-          ...d.data(),
-          createdAt: d.data().createdAt?.toDate?.() ?? new Date(),
-        } as Notification));
-        setNotifications(data);
-        setIsLoading(false);
-        setError(null);
-      },
-      (err) => {
-        console.error('[NotificationProvider] Firestore error:', err.code, err.message);
-
-        // Surface the missing-index error so it's visible during development
-        if (err.code === 'failed-precondition' || err.message.includes('index')) {
-          setError('index_required');
-          console.warn(
-            '[NotificationProvider] Missing Firestore index.\n' +
-            'Go to Firebase Console → Firestore → Indexes and create:\n' +
-            '  Collection: notifications\n' +
-            '  Fields: userId (Ascending), createdAt (Descending)\n' +
-            'Or click the link in the error message above to create it automatically.'
-          );
-        } else {
-          setError(err.message);
+    // Set up Supabase Realtime to keep notification state fresh.
+    const supabase = createClient();
+    const channel = supabase
+      .channel(`user-notifications-${userId}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'Notification', filter: `userId=eq.${userId}` },
+        (payload) => {
+          const newNotification = payload.new as Notification;
+          setNotifications((prev) => [newNotification, ...prev]);
+          import('react-hot-toast').then(({ default: toast }) => {
+            toast(newNotification.title, { icon: '🔔' });
+          });
         }
-        setIsLoading(false);
-      }
-    );
+      )
+      .subscribe();
 
-    return () => unsubscribe();
-  }, [userId]);
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') fetchNotifications();
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    const registerPushSubscription = async () => {
+      if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+      if (!('Notification' in window) || Notification.permission === 'denied') return;
+
+      try {
+        const registration = await navigator.serviceWorker.register('/sw.js');
+        const existingSubscription = await registration.pushManager.getSubscription();
+
+        if (existingSubscription) {
+          await fetch('/api/notifications/subscribe', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ subscription: existingSubscription }),
+          });
+          return;
+        }
+
+        const permission = await Notification.requestPermission();
+        if (permission !== 'granted') return;
+
+        const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+        if (!vapidPublicKey) {
+          console.warn('[NotificationProvider] NEXT_PUBLIC_VAPID_PUBLIC_KEY is missing');
+          return;
+        }
+
+        const subscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
+        });
+
+        await fetch('/api/notifications/subscribe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ subscription }),
+        });
+      } catch (err: any) {
+        console.error('[NotificationProvider] push registration failed:', err);
+      }
+    };
+
+    registerPushSubscription();
+
+    return () => {
+      supabase.removeChannel(channel);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [userId, fetchNotifications]);
 
   const markAsRead = useCallback(async (id: string) => {
     try {
-      await updateDoc(doc(db, 'notifications', id), { isRead: true, readAt: new Date() });
+      await fetch(`/api/notifications/mark-read`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notificationId: id }),
+      });
+      // Update local state optimistically
+      setNotifications(prev =>
+        prev.map(n => n.id === id ? { ...n, isRead: true } : n)
+      );
     } catch (err) {
       console.error('[NotificationProvider] markAsRead failed:', err);
     }
@@ -138,11 +209,13 @@ export const NotificationProvider: React.FC<{ children: ReactNode; userId?: stri
     const unread = notifications.filter(n => !n.isRead);
     if (unread.length === 0) return;
     try {
-      const batch = writeBatch(db);
-      unread.forEach(n =>
-        batch.update(doc(db, 'notifications', n.id), { isRead: true, readAt: new Date() })
-      );
-      await batch.commit();
+      await fetch(`/api/notifications/mark-all-read`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId }),
+      });
+      // Update local state optimistically
+      setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
     } catch (err) {
       console.error('[NotificationProvider] markAllAsRead failed:', err);
     }
@@ -151,9 +224,13 @@ export const NotificationProvider: React.FC<{ children: ReactNode; userId?: stri
   const clearAll = useCallback(async () => {
     if (!userId || notifications.length === 0) return;
     try {
-      const batch = writeBatch(db);
-      notifications.forEach(n => batch.delete(doc(db, 'notifications', n.id)));
-      await batch.commit();
+      await fetch(`/api/notifications/clear-all`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId }),
+      });
+      // Update local state optimistically
+      setNotifications([]);
     } catch (err) {
       console.error('[NotificationProvider] clearAll failed:', err);
     }
@@ -187,8 +264,8 @@ export const NotificationBell: React.FC<{ userId: string; className?: string }> 
 }) => {
   const { notifications, markAsRead, markAllAsRead, clearAll, unreadCount, isLoading, error } =
     useNotifications();
-  const [isOpen,    setIsOpen]    = useState(false);
-  const dropdownRef               = useRef<HTMLDivElement>(null);
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -204,30 +281,30 @@ export const NotificationBell: React.FC<{ userId: string; className?: string }> 
     <div className={`relative ${className ?? ''}`} ref={dropdownRef}>
       <button
         onClick={() => setIsOpen(prev => !prev)}
-        className="relative p-2 rounded-xl hover:bg-gray-100 transition-colors"
+        className="relative p-2 rounded-xl hover:bg-gray-100 transition-all duration-300 group active:scale-90"
         aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ''}`}
       >
-        <Bell className="w-6 h-6 text-gray-600 hover:text-blue-600" />
+        <Bell className="w-6 h-6 text-gray-600 group-hover:text-brand-700 transition-colors" />
         {unreadCount > 0 && (
-          <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center animate-pulse">
+          <span className="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-[10px] font-black rounded-full w-4.5 h-4.5 flex items-center justify-center border-2 border-white shadow-sm transition-all animate-in zoom-in">
             {unreadCount > 99 ? '99+' : unreadCount}
           </span>
         )}
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-80 bg-white shadow-xl rounded-xl z-50 border border-gray-200 overflow-hidden">
+        <div className="fixed md:absolute inset-x-4 md:inset-x-auto md:right-0 mt-3 top-20 md:top-full md:w-[360px] bg-white/95 glass rounded-[1.5rem] shadow-premium z-50 overflow-hidden animate-in fade-in slide-in-from-top-5 duration-300">
           {/* Header */}
-          <div className="px-4 py-3 border-b border-gray-100 flex justify-between items-center">
-            <h3 className="font-semibold text-gray-900">Notifications</h3>
+          <div className="px-5 py-4 border-b border-gray-100/50 flex justify-between items-center bg-gray-50/50">
+            <h3 className="font-bold text-gray-900 text-[15px]">Notifications</h3>
             <div className="flex gap-1">
               {unreadCount > 0 && (
                 <button
                   onClick={markAllAsRead}
-                  className="p-1.5 hover:bg-blue-100 rounded-lg transition-colors"
+                  className="p-1.5 hover:bg-brand-50 rounded-lg transition-colors"
                   title="Mark all as read"
                 >
-                  <CheckCheck className="w-4 h-4 text-blue-600" />
+                  <CheckCheck className="w-4 h-4 text-brand-700" />
                 </button>
               )}
               <button
@@ -250,15 +327,14 @@ export const NotificationBell: React.FC<{ userId: string; className?: string }> 
           <div className="max-h-80 overflow-y-auto">
             {isLoading ? (
               <div className="p-6 text-center">
-                <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+                <div className="w-6 h-6 border-2 border-brand-700 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
                 <p className="text-sm text-gray-500">Loading notifications…</p>
               </div>
             ) : error === 'index_required' ? (
               <div className="p-4 text-center">
-                <p className="text-sm text-amber-600 font-medium mb-1">Index building…</p>
+                <p className="text-sm text-amber-600 font-medium mb-1">Sync in progress…</p>
                 <p className="text-xs text-gray-500">
-                  Firestore is creating the required index. This takes about 1 minute.
-                  Check your browser console for the setup link.
+                  Syncing notifications. Please try again in a moment.
                 </p>
               </div>
             ) : error ? (
@@ -275,21 +351,28 @@ export const NotificationBell: React.FC<{ userId: string; className?: string }> 
                 <div
                   key={n.id}
                   onClick={() => { markAsRead(n.id); setIsOpen(false); }}
-                  className={`px-4 py-3 hover:bg-gray-50 cursor-pointer flex items-start gap-3 border-b border-gray-50 last:border-0 transition-colors ${
-                    !n.isRead ? 'bg-blue-50/60' : ''
-                  }`}
+                  className={`px-4 py-3 hover:bg-gray-50 cursor-pointer flex items-start gap-3 border-b border-gray-50 last:border-0 transition-colors ${!n.isRead ? 'bg-brand-50/40' : ''
+                    }`}
                 >
                   {/* Type indicator dot */}
-                  <div className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${
-                    !n.isRead ? 'bg-blue-500' : 'bg-gray-300'
-                  }`} />
+                  <div className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${!n.isRead ? 'bg-brand-700' : 'bg-gray-300'
+                    }`} />
 
                   <div className="flex-1 min-w-0">
-                    <p className={`text-sm font-medium truncate ${
-                      !n.isRead ? 'text-gray-900' : 'text-gray-600'
-                    }`}>
-                      {n.title}
-                    </p>
+                    <div className="flex items-center justify-between gap-3">
+                      <p className={`text-sm font-medium truncate ${!n.isRead ? 'text-gray-900' : 'text-gray-600'
+                        }`}>
+                        {n.title}
+                      </p>
+                      <span className={`text-[10px] font-bold uppercase tracking-[0.12em] rounded-full px-2 py-0.5 ${n.type === 'booking' ? 'bg-brand-100 text-brand-800' :
+                          n.type === 'payment' ? 'bg-emerald-100 text-emerald-700' :
+                            n.type === 'schedule' ? 'bg-violet-100 text-violet-700' :
+                              n.type === 'cancellation' || n.type === 'cancellation_requested' ? 'bg-rose-100 text-rose-700' :
+                                n.type === 'promotion' ? 'bg-yellow-100 text-yellow-700' :
+                                  n.type === 'alert' ? 'bg-orange-100 text-orange-700' :
+                                    'bg-gray-100 text-gray-600'
+                        }`}>{n.type.replace('_', ' ')}</span>
+                    </div>
                     <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{n.message}</p>
                     <p className="text-xs text-gray-400 mt-1">
                       {new Date(n.createdAt).toLocaleString()}
@@ -299,10 +382,10 @@ export const NotificationBell: React.FC<{ userId: string; className?: string }> 
                   {!n.isRead && (
                     <button
                       onClick={e => { e.stopPropagation(); markAsRead(n.id); }}
-                      className="p-1 hover:bg-blue-100 rounded-lg shrink-0 transition-colors"
+                      className="p-1 hover:bg-brand-100 rounded-lg shrink-0 transition-colors"
                       title="Mark as read"
                     >
-                      <Check className="w-3.5 h-3.5 text-blue-600" />
+                      <Check className="w-3.5 h-3.5 text-brand-700" />
                     </button>
                   )}
                 </div>
@@ -315,7 +398,7 @@ export const NotificationBell: React.FC<{ userId: string; className?: string }> 
   );
 };
 
-// ─── Standalone helpers ───────────────────────────────────────────────────────
+// ─── Standalone helpers (API-based) ──────────────────────────────────────────
 
 export async function sendNotification({
   userId, type, title, message,
@@ -324,14 +407,24 @@ export async function sendNotification({
   const cleanData = Object.fromEntries(
     Object.entries(data).filter(([, v]) => v !== undefined && v !== null)
   );
-  await addDoc(collection(db, 'notifications'), {
-    userId, type, title, message,
-    data: cleanData,
-    actionUrl: actionUrl ?? null,
-    priority,
-    isRead: false,
-    createdAt: Timestamp.now(),
+
+  const response = await fetch('/api/notifications/send', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      recipientIds: [userId],
+      title,
+      body: message,
+      data: cleanData,
+      clickAction: actionUrl ?? null,
+      priority,
+    }),
   });
+
+  if (!response.ok) {
+    const body = await response.text().catch(() => '');
+    throw new Error(`Failed to send notification: ${response.status} ${body}`);
+  }
 }
 
 export async function sendBulkNotification({
@@ -349,18 +442,23 @@ export async function sendBulkNotification({
   const cleanData = Object.fromEntries(
     Object.entries(data).filter(([, v]) => v !== undefined && v !== null)
   );
-  await Promise.all(
-    userIds.map(uid =>
-      addDoc(collection(db, 'notifications'), {
-        userId: uid, type, title, message,
-        data: cleanData,
-        actionUrl: actionUrl ?? null,
-        priority,
-        isRead: false,
-        createdAt: Timestamp.now(),
-      })
-    )
-  );
+
+  const response = await fetch('/api/notifications/send', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      recipientIds: userIds,
+      title,
+      body: message,
+      data: cleanData,
+      clickAction: actionUrl ?? null,
+      priority,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to send bulk notifications: ${response.status}`);
+  }
 }
 
 export const NotificationTemplates = {

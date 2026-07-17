@@ -21,15 +21,15 @@ A comprehensive bus booking platform built with Next.js 14, Firebase, and Tailwi
 - Mobile-responsive layout
 
 ### 🔧 Technical Features
-- Next.js 14 with App Router
-- Firebase Authentication & Firestore
+- Next.js 16 with App Router
+- Supabse Authentication & Storage
 - TypeScript for type safety
 - Server-side rendering (SSR)
 - Optimized performance
 
 ## Tech Stack
 
-- **Frontend**: Next.js 14, React 18, TypeScript
+- **Frontend**: Next.js 16, React 18, TypeScript
 - **Styling**: Tailwind CSS
-- **Backend**: Firebase (Authentication + Firestore)
+- **Backend**: Supabase (Authentication + Storage)
 - **Deployment**: Vercel-readys

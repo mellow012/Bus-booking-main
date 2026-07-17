@@ -1,7 +1,6 @@
 // app/api/payments/paychangu/charge/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { adminDb } from "@/lib/firebaseAdmin";
-import { decryptSecret } from "@/lib/Encrypt-secret";
+import { prisma } from "@/lib/prisma";
 
 export async function POST(req: NextRequest) {
   try {
@@ -25,13 +24,17 @@ export async function POST(req: NextRequest) {
 
     const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000").replace(/\/$/, "");
 
-    // ── Fetch booking ──────────────────────────────────────────────────────────
-    const bookingSnap = await adminDb.collection("bookings").doc(bookingId).get();
-    if (!bookingSnap.exists) {
+    // ── Fetch booking from PostgreSQL ──────────────────────────────────────────
+    const booking = await prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: { company: true },
+    });
+    
+    if (!booking) {
       return NextResponse.json({ error: "Booking not found" }, { status: 404 });
     }
-    const booking   = bookingSnap.data()!;
-    const companyId = booking.companyId   as string;
+    
+    const companyId = booking.companyId;
     const amount    = Number(booking.totalAmount);
 
     if (!amount || !companyId) {
@@ -41,28 +44,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "This booking has already been paid" }, { status: 409 });
     }
 
-    // ── Fetch company PayChangu settings ──────────────────────────────────────
-    const companySnap = await adminDb.collection("companies").doc(companyId).get();
-    if (!companySnap.exists) {
-      return NextResponse.json({ error: "Company not found" }, { status: 404 });
-    }
-    const ps = companySnap.data()?.paymentSettings;
-
-    if (!ps?.paychanguEnabled) {
-      return NextResponse.json({ error: "PayChangu is not enabled for this company" }, { status: 400 });
-    }
-    if (!ps?.paychanguSecretKeyEnc) {
-      return NextResponse.json({ error: "PayChangu secret key not configured" }, { status: 400 });
-    }
-
-    // ── Decrypt secret key ────────────────────────────────────────────────────
-    let secretKey: string;
-    try {
-      secretKey = decryptSecret(ps.paychanguSecretKeyEnc);
-    } catch (e: any) {
-      console.error("[paychangu/charge] Decryption failed:", e.message);
+    const secretKey = process.env.PAYCHANGU_SECRET_KEY;
+    if (!secretKey) {
+      console.error("[paychangu/charge] PAYCHANGU_SECRET_KEY not set");
       return NextResponse.json(
-        { error: "Payment gateway configuration error — contact support" },
+        { error: "Payment gateway is not configured. Contact support." },
         { status: 500 },
       );
     }
@@ -82,7 +68,7 @@ export async function POST(req: NextRequest) {
       description,
       tx_ref:       customTxRef,
       callback_url: `${appUrl}/api/payments/paychangu/webhook`,
-      return_url:   `${appUrl}/api/payments/paychangu/verify/${bookingId}`,
+      return_url:   `${appUrl}/api/payments/paychangu/return?tx_ref=${customTxRef}`,
     };
 
     // ── Direct fetch ───────────────────────────────────────────────────────────
@@ -97,7 +83,7 @@ export async function POST(req: NextRequest) {
     });
 
     const rawText = await apiRes.text();
-    let paymentResponse: any;
+    let paymentResponse: Record<string, any>;
     try { paymentResponse = JSON.parse(rawText); }
     catch { paymentResponse = { raw: rawText }; }
 
@@ -109,25 +95,42 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // ── Persist payment state ──────────────────────────────────────────────────
+    // ── Persist payment state to PostgreSQL ────────────────────────────────────
     const paychanguTxRef =
       paymentResponse?.data?.tx_ref ??
       paymentResponse?.tx_ref       ??
       customTxRef;
 
     try {
-      await adminDb.collection("bookings").doc(bookingId).update({
-        paymentStatus:      "pending",
-        paymentProvider:    "paychangu",
-        paychanguReference: paychanguTxRef,
-        paychanguTxRef:     paychanguTxRef,
-        customTxRef:        customTxRef,
-        paychanguNetwork:   subMethod?.toUpperCase() ?? null,
-        paymentInitiatedAt: new Date(),
-        updatedAt:          new Date(),
+      await prisma.booking.update({
+        where: { id: bookingId },
+        data: {
+          paymentStatus: "pending",
+          updatedAt: new Date(),
+        },
       });
-    } catch (fsErr: any) {
-      console.error("[paychangu/charge] Firestore update failed:", fsErr.message);
+      
+      // Create payment record
+      await prisma.payment.create({
+        data: {
+          paymentId: paychanguTxRef,
+          bookingId: bookingId,
+          amount: amount,
+          currency: "MWK",
+          customerEmail: customerEmail,
+          customerPhone: booking.contactPhone,
+          status: "initiated",
+          provider: "paychangu",
+          txRef: paychanguTxRef,
+          metadata: {
+            customTxRef: customTxRef,
+            subMethod: subMethod ?? null,
+            fullResponse: paymentResponse,
+          },
+        },
+      });
+    } catch (dbErr: any) {
+      console.error("[paychangu/charge] Database update failed:", dbErr.message);
     }
 
     // ── Extract checkout URL ───────────────────────────────────────────────────

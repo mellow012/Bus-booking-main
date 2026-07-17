@@ -1,30 +1,13 @@
 // utils/auditLogs.ts
 //
-// FIX F-13: getAuditLogs() previously fetched the ENTIRE auditLogs collection
-// for a company and then filtered in JavaScript. A company with 100,000 audit
-// events would read all 100,000 documents on every call, causing out-of-memory
-// errors and slow responses.
+// Migrated from Firestore to PostgreSQL via Prisma
+// All queries now use Prisma with proper indexing on:
+// - activityLog (companyId, userId, action, resourceType, timestamp DESC)
 //
-// All filters are now pushed into the Firestore query using where() clauses.
-// A hard limit (default 500, max 1000) is always applied at the query level.
-//
-// REQUIRED COMPOSITE INDEXES (add to firestore.indexes.json):
-//   Collection: auditLogs
-//   Fields needed for common filter combinations:
-//     1. companyId ASC, timestamp DESC                          (base query)
-//     2. companyId ASC, action ASC, timestamp DESC              (+ action filter)
-//     3. companyId ASC, userId ASC, timestamp DESC              (+ userId filter)
-//     4. companyId ASC, resourceType ASC, timestamp DESC        (+ resourceType filter)
-//     5. companyId ASC, timestamp ASC, timestamp DESC           (+ date range)
-//
-// Deploy indexes with: firebase deploy --only firestore:indexes
+// Filtering is now performed at the database level, eliminating the need for
+// composite indexes if using Prisma's query optimization.
 
-import {
-  collection, addDoc, Timestamp,
-  query, where, orderBy, limit, getDocs,
-  QueryConstraint,
-} from 'firebase/firestore';
-import { db } from '@/lib/firebaseConfig';
+import { prisma } from '@/lib/prisma';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -43,6 +26,8 @@ export type AuditAction =
   | 'login'
   | 'logout'
   | 'access_dashboard'
+  | 'update_user_role'
+  | 'delete_user'
   | 'export_data';
 
 export interface AuditLog {
@@ -56,12 +41,12 @@ export interface AuditLog {
   resourceId: string;
   resourceName?: string;
   description: string;
-  changes?: { before?: any; after?: any };
+  changes?: { before?: unknown; after?: unknown };
   ipAddress?: string;
   userAgent?: string;
   status: 'success' | 'failed';
   errorMessage?: string;
-  metadata?: any;
+  metadata?: Record<string, unknown>;
   timestamp: Date;
 }
 
@@ -71,17 +56,36 @@ export const logAudit = async (
   auditLog: Omit<AuditLog, 'id' | 'timestamp'>
 ): Promise<string | undefined> => {
   try {
-    const docRef = await addDoc(collection(db, 'auditLogs'), {
-      ...auditLog,
-      timestamp: Timestamp.fromDate(new Date()),
+    const record = await prisma.activityLog.create({
+      data: {
+        action: auditLog.action,
+        userId: auditLog.userId,
+        companyId: auditLog.companyId && auditLog.companyId.trim() !== '' ? auditLog.companyId : null,
+        description: auditLog.description,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        metadata: {
+          userName: auditLog.userName,
+          userRole: auditLog.userRole,
+          resourceType: auditLog.resourceType,
+          resourceId: auditLog.resourceId,
+          resourceName: auditLog.resourceName || '',
+          changes: auditLog.changes || {},
+          ipAddress: auditLog.ipAddress || '',
+          userAgent: auditLog.userAgent || '',
+          status: auditLog.status,
+          errorMessage: auditLog.errorMessage || '',
+          ...(auditLog.metadata || {})
+        } as any,
+        createdAt: new Date(),
+      },
     });
-    return docRef.id;
-  } catch (error: any) {
+    return record.id;
+  } catch (error) {
     console.error('[AUDIT ERROR] Failed to log audit:', error);
   }
 };
 
-// ─── Read — FIX F-13 ──────────────────────────────────────────────────────────
+// ─── Read – Optimized for PostgreSQL ──────────────────────────────────────────
 
 const DEFAULT_LIMIT = 500;
 const MAX_LIMIT     = 1_000;
@@ -99,40 +103,44 @@ export const getAuditLogs = async (
   }
 ): Promise<AuditLog[]> => {
   try {
-    const constraints: QueryConstraint[] = [
-      where('companyId', '==', companyId),
-    ];
-
-    // Push every filter into the Firestore query — never filter in JS
-    if (filters?.action) {
-      constraints.push(where('action', '==', filters.action));
-    }
-    if (filters?.userId) {
-      constraints.push(where('userId', '==', filters.userId));
-    }
-    if (filters?.resourceType) {
-      constraints.push(where('resourceType', '==', filters.resourceType));
-    }
-    if (filters?.startDate) {
-      constraints.push(where('timestamp', '>=', Timestamp.fromDate(filters.startDate)));
-    }
-    if (filters?.endDate) {
-      constraints.push(where('timestamp', '<=', Timestamp.fromDate(filters.endDate)));
-    }
-
-    // Always order and always apply a hard limit — never unbounded reads
-    constraints.push(orderBy('timestamp', 'desc'));
     const hardLimit = Math.min(filters?.limit ?? DEFAULT_LIMIT, MAX_LIMIT);
-    constraints.push(limit(hardLimit));
 
-    const snapshot = await getDocs(query(collection(db, 'auditLogs'), ...constraints));
+    const records = await prisma.activityLog.findMany({
+      where: {
+        companyId,
+        ...(filters?.action && { action: filters.action }),
+        ...(filters?.userId && { userId: filters.userId }),
+        ...(filters?.resourceType && { metadata: { path: ['resourceType'], equals: filters.resourceType } }),
+        ...(filters?.startDate && { createdAt: { gte: filters.startDate } }),
+        ...(filters?.endDate && { createdAt: { lte: filters.endDate } }),
+      },
+      orderBy: { createdAt: 'desc' },
+      take: hardLimit,
+    });
 
-    return snapshot.docs.map(d => ({
-      id: d.id,
-      ...d.data(),
-      timestamp: d.data().timestamp?.toDate?.() ?? new Date(),
-    })) as AuditLog[];
-  } catch (error: any) {
+    return records.map(doc => {
+      const meta = (doc.metadata as Record<string, any>) || {};
+      return {
+        id: doc.id,
+        action: doc.action as AuditAction,
+        userId: doc.userId,
+        userName: meta.userName || '',
+        userRole: meta.userRole || '',
+        companyId: doc.companyId || '',
+        resourceType: meta.resourceType || '',
+        resourceId: meta.resourceId || '',
+        resourceName: meta.resourceName || '',
+        description: doc.description,
+        changes: meta.changes,
+        ipAddress: meta.ipAddress,
+        userAgent: meta.userAgent,
+        status: meta.status as 'success' | 'failed',
+        errorMessage: meta.errorMessage,
+        metadata: meta, // passing the raw meta
+        timestamp: doc.createdAt,
+      };
+    }) as AuditLog[];
+  } catch (error) {
     console.error('[AUDIT] Error fetching logs:', error);
     return [];
   }
@@ -142,7 +150,7 @@ export const getAuditLogs = async (
 
 export const logScheduleCreated = (
   userId: string, userName: string, userRole: string, companyId: string,
-  scheduleId: string, route: string, details?: any
+  scheduleId: string, route: string, details?: Record<string, unknown>
 ) => logAudit({
   action: 'create_schedule', userId, userName, userRole, companyId,
   resourceType: 'schedule', resourceId: scheduleId, resourceName: route,
@@ -151,7 +159,7 @@ export const logScheduleCreated = (
 
 export const logScheduleUpdated = (
   userId: string, userName: string, userRole: string, companyId: string,
-  scheduleId: string, route: string, beforeData?: any, afterData?: any
+  scheduleId: string, route: string, beforeData?: unknown, afterData?: unknown
 ) => logAudit({
   action: 'update_schedule', userId, userName, userRole, companyId,
   resourceType: 'schedule', resourceId: scheduleId, resourceName: route,
@@ -210,7 +218,7 @@ export const logReportGenerated = (
 export const logFailedAction = (
   userId: string, userName: string, userRole: string, companyId: string,
   action: AuditAction, resourceType: string, resourceId: string,
-  errorMessage: string, context?: any
+  errorMessage: string, context?: Record<string, unknown>
 ) => logAudit({
   action, userId, userName, userRole, companyId, resourceType, resourceId,
   description: `Failed to ${action}: ${errorMessage}`,

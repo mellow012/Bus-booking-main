@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
-import { MapPin, X } from "lucide-react";
+import { MapPin, X, ChevronDown } from "lucide-react";
 
 interface LocationAutocompleteProps {
   value: string;
@@ -131,11 +131,16 @@ export const LocationAutocomplete: React.FC<LocationAutocompleteProps> = ({
         onChange={e => { onChange(e.target.value); setOpen(true); setHighlight(-1); }}
         onFocus={() => setOpen(true)}
         onKeyDown={handleKey}
-        className="w-full pl-9 pr-8 h-11 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white transition-shadow"
+        className="w-full pl-9 pr-8 h-11 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white transition-shadow text-gray-900"
         aria-autocomplete="list"
         aria-expanded={open && suggestions.length > 0}
         role="combobox"
       />
+      {!value && (
+        <div className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-300 pointer-events-none">
+          <ChevronDown className="w-4 h-4"/>
+        </div>
+      )}
       {value && (
         <button onClick={() => { onChange(""); onSelect(""); inputRef.current?.focus(); }}
           className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 text-gray-400 hover:text-gray-700 transition-colors rounded-md hover:bg-gray-100">

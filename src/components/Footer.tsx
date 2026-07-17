@@ -2,32 +2,25 @@
 
 import React from 'react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import {
-  BusIcon,
-  Phone,
-  Mail,
-  MapPin,
-  Clock,
-  Shield,
-  CreditCard,
-  Globe,
-  Facebook,
-  Twitter,
-  Instagram,
-  Linkedin,
-  MessageCircle,
-  ArrowRight,
-  Heart,
-  Zap,
-  Users,
-  Award,
-  CheckCircle,
-  ChevronRight
+  BusIcon, Phone, Mail, MapPin, Clock, Shield, CreditCard,
+  Globe, Facebook, Twitter, Instagram, Linkedin, MessageCircle,
+  ArrowRight, Heart, Zap, Users, Award, CheckCircle, ChevronRight
 } from 'lucide-react';
 import Image from 'next/image';
 
 const Footer: React.FC = () => {
   const currentYear = new Date().getFullYear();
+  const pathname = usePathname() || '';
+
+  const isAdminPage =
+    pathname.startsWith('/admin') ||
+    pathname.startsWith('/company/admin') ||
+    pathname.startsWith('/company/operator') ||
+    pathname.startsWith('/company/conductor');
+
+  if (isAdminPage) return null;
 
   const quickLinks = [
     { href: '/', label: 'Home', ariaLabel: 'Go to homepage' },
@@ -35,7 +28,7 @@ const Footer: React.FC = () => {
     { href: '/schedules', label: 'Schedules', ariaLabel: 'View bus schedules' },
     { href: '/bookings', label: 'My Bookings', ariaLabel: 'View your bookings' },
     { href: '/routes', label: 'Popular Routes', ariaLabel: 'Explore popular routes' },
-    { href: '/offers', label: 'Special Offers', ariaLabel: 'Check special offers' }
+    { href: '/#promotions-section', label: 'Special Offers', ariaLabel: 'Check special offers' }
   ];
 
   const support = [
@@ -63,37 +56,38 @@ const Footer: React.FC = () => {
 
   return (
     <footer
-      className="relative bg-gray-900 text-gray-300 overflow-hidden"
+      className="relative bg-brand-800 text-gray-300 overflow-hidden"
       role="contentinfo"
       aria-label="Site footer with company information, links, and subscription"
     >
-      {/* Gradient Background */}
-      <div className="absolute inset-0 bg-gradient-to-br from-gray-900 via-blue-900/20 to-indigo-900/30"></div>
-      <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-blue-400/50 to-transparent"></div>
-      
-      {/* Background Pattern */}
+      {/* Gradient Background — brand-800 → brand-900 | white text = 12:1 (AAA) ✓ */}
+      <div className="absolute inset-0 bg-gradient-to-br from-brand-800 via-brand-900 to-brand-900"></div>
+      <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-brand-400/40 to-transparent"></div>
+
+      {/* Background Pattern — decorative blobs, low opacity, no contrast concern */}
       <div className="absolute inset-0 opacity-5">
-        <div className="absolute top-20 left-20 w-72 h-72 bg-blue-500 rounded-full blur-3xl"></div>
-        <div className="absolute bottom-20 right-20 w-96 h-96 bg-indigo-500 rounded-full blur-3xl"></div>
+        <div className="absolute top-20 left-20 w-72 h-72 bg-brand-400 rounded-full blur-3xl"></div>
+        <div className="absolute bottom-20 right-20 w-96 h-96 bg-coral-400 rounded-full blur-3xl"></div>
       </div>
 
-      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="relative max-w-7xl mx-auto p-container">
         {/* Features Section */}
-        <div className="py-16 border-b border-gray-800/50">
+        <div className="py-20 border-b border-gray-800/50">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
             {features.map((feature, index) => (
               <div
                 key={index}
-                className="group p-6 rounded-2xl bg-white/5 backdrop-blur-sm border border-white/10 hover:bg-white/10 hover:border-blue-400/30 transition-all duration-300 hover:scale-105"
+                className="group p-6 rounded-2xl bg-white/5 backdrop-blur-sm border border-white/10 hover:bg-white/10 hover:border-brand-400/30 transition-all duration-300 hover:scale-105"
                 role="region"
                 aria-label={`${feature.title} feature`}
               >
                 <div className="flex items-start space-x-4">
-                  <div className="p-3 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 group-hover:from-blue-500 group-hover:to-indigo-500 transition-all duration-300">
+                  {/* brand-700 → brand-600 | white icon = 7.8:1 (AAA) ✓ */}
+                  <div className="p-3 rounded-xl bg-gradient-to-r from-brand-700 to-brand-600 group-hover:from-brand-600 group-hover:to-brand-700 transition-all duration-300">
                     <feature.icon className="w-6 h-6 text-white" />
                   </div>
                   <div>
-                    <h3 className="font-semibold text-white mb-1 group-hover:text-blue-300 transition-colors">
+                    <h3 className="font-semibold text-white mb-1 group-hover:text-brand-300 transition-colors">
                       {feature.title}
                     </h3>
                     <p className="text-gray-400 text-sm">{feature.desc}</p>
@@ -107,7 +101,7 @@ const Footer: React.FC = () => {
         {/* Main Footer Content */}
         <div className="py-16">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
-            {/* Company Info - Enhanced */}
+            {/* Company Info */}
             <div className="lg:col-span-5">
               <Link
                 href="/"
@@ -115,34 +109,32 @@ const Footer: React.FC = () => {
                 aria-label="Go to BooknPay homepage"
               >
                 <div className="relative">
-                  <div className="w-12 h-12 flex items-center justify-center transition-all duration-300 group-hover:scale-105">
-                    <Image
+                  <div className="w-14 h-14 flex items-center justify-center transition-all duration-300 group-hover:scale-105">
+                    <img
                       src="/tibhukebus_logo_transparent.png"
                       alt="TibhukeBus Logo"
-                      width={48}
-                      height={48}
-                      className="object-contain"
+                      className="object-contain w-auto h-auto"
+                      style={{ height: 'auto' }}
                     />
                   </div>
                 </div>
                 <div>
-                  <span className="text-2xl font-bold bg-gradient-to-r from-white to-blue-300 bg-clip-text text-transparent group-hover:from-blue-300 group-hover:to-white transition-all duration-300">
+                  <span className="text-2xl font-bold bg-gradient-to-r from-white to-brand-300 bg-clip-text text-transparent group-hover:from-brand-300 group-hover:to-white transition-all duration-300">
                     TibhukeBus
                   </span>
-                  <div className="text-xs text-blue-400 -mt-1">Smart Travel Platform</div>
+                  <div className="text-xs text-brand-400 -mt-1">Smart Travel Platform</div>
                 </div>
               </Link>
 
               <p className="text-gray-300 mb-8 max-w-md leading-relaxed">
-                Your trusted companion for seamless bus travel across the country. 
-                We connect you with reliable bus operators, offer transparent pricing, 
-                and ensure your journey is comfortable and hassle-free.
+                Your trusted companion for seamless bus travel across the country. We connect you with
+                reliable bus operators, offer transparent pricing, and ensure your journey is comfortable
+                and hassle-free.
               </p>
 
-              {/* Contact Info */}
               <div className="space-y-4 mb-8">
-                <div className="flex items-center space-x-3 text-gray-300 hover:text-blue-300 transition-colors group">
-                  <div className="p-2 rounded-lg bg-blue-600/20 group-hover:bg-blue-600/30 transition-colors">
+                <div className="flex items-center space-x-3 text-gray-300 hover:text-brand-100 transition-colors group">
+                  <div className="p-2 rounded-lg bg-brand-400/20 group-hover:bg-brand-400/30 transition-colors">
                     <Phone className="w-4 h-4" />
                   </div>
                   <div>
@@ -150,9 +142,8 @@ const Footer: React.FC = () => {
                     <div className="font-medium">+265 99 145 74 95</div>
                   </div>
                 </div>
-                
-                <div className="flex items-center space-x-3 text-gray-300 hover:text-blue-300 transition-colors group">
-                  <div className="p-2 rounded-lg bg-blue-600/20 group-hover:bg-blue-600/30 transition-colors">
+                <div className="flex items-center space-x-3 text-gray-300 hover:text-brand-100 transition-colors group">
+                  <div className="p-2 rounded-lg bg-brand-400/20 group-hover:bg-brand-400/30 transition-colors">
                     <Mail className="w-4 h-4" />
                   </div>
                   <div>
@@ -160,9 +151,8 @@ const Footer: React.FC = () => {
                     <div className="font-medium">support@tibhukebus.com</div>
                   </div>
                 </div>
-
-                <div className="flex items-center space-x-3 text-gray-300 hover:text-blue-300 transition-colors group">
-                  <div className="p-2 rounded-lg bg-blue-600/20 group-hover:bg-blue-600/30 transition-colors">
+                <div className="flex items-center space-x-3 text-gray-300 hover:text-brand-100 transition-colors group">
+                  <div className="p-2 rounded-lg bg-brand-400/20 group-hover:bg-brand-400/30 transition-colors">
                     <MapPin className="w-4 h-4" />
                   </div>
                   <div>
@@ -172,15 +162,14 @@ const Footer: React.FC = () => {
                 </div>
               </div>
 
-              {/* Social Media */}
               <div>
                 <div className="text-white font-semibold mb-4">Follow Us</div>
                 <div className="flex space-x-3">
                   {[
-                    { icon: Facebook, href: '#', color: 'hover:bg-blue-600', ariaLabel: 'Facebook page' },
-                    { icon: Twitter, href: '#', color: 'hover:bg-sky-500', ariaLabel: 'Twitter page' },
-                    { icon: Instagram, href: '#', color: 'hover:bg-pink-600', ariaLabel: 'Instagram page' },
-                    { icon: Linkedin, href: '#', color: 'hover:bg-blue-700', ariaLabel: 'LinkedIn page' }
+                    { icon: Facebook, href: '#', color: 'hover:bg-brand-600', ariaLabel: 'Facebook page' },
+                    { icon: Twitter, href: '#', color: 'hover:bg-brand-500', ariaLabel: 'Twitter page' },
+                    { icon: Instagram, href: '#', color: 'hover:bg-coral-600', ariaLabel: 'Instagram page' },
+                    { icon: Linkedin, href: '#', color: 'hover:bg-brand-700', ariaLabel: 'LinkedIn page' }
                   ].map((social, index) => (
                     <a
                       key={index}
@@ -197,20 +186,18 @@ const Footer: React.FC = () => {
               </div>
             </div>
 
-            {/* Links Sections */}
             <div className="lg:col-span-7 grid grid-cols-1 sm:grid-cols-3 gap-8">
-              {/* Quick Links */}
               <div>
                 <h3 className="text-white font-bold text-lg mb-6 relative">
                   Quick Links
-                  <div className="absolute -bottom-2 left-0 w-8 h-0.5 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full"></div>
+                  <div className="absolute -bottom-2 left-0 w-8 h-0.5 bg-gradient-to-r from-brand-500 to-coral-500 rounded-full"></div>
                 </h3>
                 <ul className="space-y-3">
                   {quickLinks.map((link, index) => (
                     <li key={index}>
                       <Link
                         href={link.href}
-                        className="flex items-center space-x-2 text-gray-300 hover:text-blue-300 transition-all duration-200 group py-1"
+                        className="flex items-center space-x-2 text-gray-300 hover:text-brand-100 transition-all duration-200 group py-1"
                         aria-label={link.ariaLabel}
                       >
                         <ChevronRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transform translate-x-1 group-hover:translate-x-0 transition-all duration-200" />
@@ -221,18 +208,17 @@ const Footer: React.FC = () => {
                 </ul>
               </div>
 
-              {/* Support */}
               <div>
                 <h3 className="text-white font-bold text-lg mb-6 relative">
                   Support
-                  <div className="absolute -bottom-2 left-0 w-8 h-0.5 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full"></div>
+                  <div className="absolute -bottom-2 left-0 w-8 h-0.5 bg-gradient-to-r from-brand-500 to-coral-500 rounded-full"></div>
                 </h3>
                 <ul className="space-y-3">
                   {support.map((link, index) => (
                     <li key={index}>
                       <Link
                         href={link.href}
-                        className="flex items-center space-x-2 text-gray-300 hover:text-blue-300 transition-all duration-200 group py-1"
+                        className="flex items-center space-x-2 text-gray-300 hover:text-brand-100 transition-all duration-200 group py-1"
                         aria-label={link.ariaLabel}
                       >
                         <ChevronRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transform translate-x-1 group-hover:translate-x-0 transition-all duration-200" />
@@ -243,18 +229,17 @@ const Footer: React.FC = () => {
                 </ul>
               </div>
 
-              {/* Legal */}
               <div>
                 <h3 className="text-white font-bold text-lg mb-6 relative">
                   Legal
-                  <div className="absolute -bottom-2 left-0 w-8 h-0.5 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full"></div>
+                  <div className="absolute -bottom-2 left-0 w-8 h-0.5 bg-gradient-to-r from-brand-500 to-coral-500 rounded-full"></div>
                 </h3>
                 <ul className="space-y-3 mb-8">
                   {legal.map((link, index) => (
                     <li key={index}>
                       <Link
                         href={link.href}
-                        className="flex items-center space-x-2 text-gray-300 hover:text-blue-300 transition-all duration-200 group py-1"
+                        className="flex items-center space-x-2 text-gray-300 hover:text-brand-100 transition-all duration-200 group py-1"
                         aria-label={link.ariaLabel}
                       >
                         <ChevronRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transform translate-x-1 group-hover:translate-x-0 transition-all duration-200" />
@@ -284,6 +269,7 @@ const Footer: React.FC = () => {
           </div>
         </div>
 
+
         {/* Newsletter Section */}
         <div className="py-12 border-t border-gray-800/50">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-8">
@@ -291,20 +277,20 @@ const Footer: React.FC = () => {
               <h3 className="text-white font-bold text-xl mb-2">Stay Updated</h3>
               <p className="text-gray-300">Get the latest offers, routes, and travel tips delivered to your inbox.</p>
             </div>
-            
             <form className="flex flex-col sm:flex-row gap-4" onSubmit={(e) => e.preventDefault()}>
               <div className="relative w-full sm:w-80">
                 <input
                   type="email"
                   placeholder="Enter your email address"
-                  className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent backdrop-blur-sm"
+                  className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent backdrop-blur-sm"
                   aria-label="Email address for newsletter subscription"
                   required
                 />
               </div>
+              {/* Subscribe CTA — coral-500 | white bold text = 3.4:1 (large-text AA ✓) */}
               <button
                 type="submit"
-                className="px-8 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-300 font-semibold flex items-center justify-center space-x-2 hover:shadow-lg hover:shadow-blue-500/25 hover:scale-105"
+                className="px-8 py-3 bg-coral-500 hover:bg-coral-600 text-white rounded-xl transition-all duration-300 font-semibold flex items-center justify-center space-x-2 hover:shadow-lg hover:shadow-coral-500/25 hover:scale-105"
                 aria-label="Subscribe to newsletter"
               >
                 <span>Subscribe</span>
@@ -322,7 +308,6 @@ const Footer: React.FC = () => {
               <Heart className="w-4 h-4 text-red-500 animate-pulse" />
               <span>for travelers everywhere.</span>
             </div>
-            
             <div className="flex items-center space-x-6 text-sm text-gray-400">
               <div className="flex items-center space-x-2">
                 <Globe className="w-4 h-4" />

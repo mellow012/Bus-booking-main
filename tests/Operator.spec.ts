@@ -682,7 +682,7 @@ test.describe('Operator — Profile', () => {
 
     // Operator profile should never expose company payment API keys
     await expect(
-      page.locator('input[name*="paychangu" i], input[name*="flutterwave" i], label:has-text("PayChangu")')
+      page.locator('input[name*="paychangu" i], label:has-text("PayChangu")')
         .first()
     ).not.toBeVisible();
     console.log('[profile-read-only] no payment key fields visible ✓');

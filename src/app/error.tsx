@@ -29,7 +29,7 @@ export default function Error({
         <div className="flex flex-col gap-3">
           <Button
             onClick={() => reset()}
-            className="w-full h-12 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-base font-semibold transition-colors"
+            className="w-full h-12 bg-coral-500 hover:bg-coral-600 text-white rounded-xl text-base font-semibold transition-colors"
           >
             Try again
           </Button>

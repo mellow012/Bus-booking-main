@@ -266,7 +266,7 @@ export default function TourModal({ open, onClose }: TourModalProps) {
               </button>
             )}
             <button onClick={() => navigate('forward')}
-              className={`flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white rounded-xl bg-gradient-to-r ${slide.accent} hover:opacity-90 transition-opacity shadow-md`}>
+              className={`flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white rounded-xl bg-gradient-to-r ${slide.accent} hover:opacity-90 active:scale-95 active:opacity-95 active:shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 transition-transform transition-opacity shadow-md`}>
               {index < slides.length - 1 ? <>Next <ArrowRight className="w-3.5 h-3.5"/></> : <>Get Started <Zap className="w-3.5 h-3.5"/></>}
             </button>
           </div>

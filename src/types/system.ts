@@ -16,6 +16,7 @@ import { UserRole } from './core';
 export type NotificationType =
   | 'booking'       // replaces 'booking_confirmed'
   | 'payment'       // replaces 'payment_received'
+  | 'payment_reminder'
   | 'schedule'      // replaces 'trip_reminder'
   | 'system'
   | 'promotion'
@@ -29,7 +30,7 @@ export interface Notification {
   type: NotificationType;
   title: string;
   message: string;
-  data?: Record<string, any>;
+  data?: Record<string, unknown>;
   actionUrl?: string | null;
   priority?: 'low' | 'medium' | 'high' | 'urgent';
   isRead: boolean;
@@ -67,12 +68,12 @@ export interface AuditLog {
   resourceId: string;
   resourceName?: string;
   description: string;
-  changes?: { before?: any; after?: any };
+  changes?: { before?: unknown; after?: unknown };
   ipAddress?: string;
   userAgent?: string;
   status: 'success' | 'failed';
   errorMessage?: string;
-  metadata?: any;
+  metadata?: Record<string, unknown>;
   timestamp: Date;
 }
 
@@ -81,8 +82,26 @@ export interface AuditLog {
 export interface SystemSettings {
   id: string;
   key: string;
-  value: any;
+  value: unknown;
   category: 'general' | 'payment' | 'booking' | 'notification';
   description?: string;
+  updatedAt: Date;
+}
+
+// ─── Promotion ───────────────────────────────────────────────────────────────
+
+export interface Promotion {
+  id: string;
+  code: string;
+  title: string;
+  description: string;
+  discountValue: number;
+  discountType: 'percentage' | 'fixed';
+  minPurchase?: number | null;
+  maxDiscount?: number | null;
+  startDate: Date;
+  endDate: Date;
+  isActive: boolean;
+  createdAt: Date;
   updatedAt: Date;
 }

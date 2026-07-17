@@ -17,8 +17,8 @@ export const CityPickerModal = ({ onSelect, onClose, geoStatus, onRequestGeo, cu
       <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
         <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-gray-100">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-blue-100 rounded-xl flex items-center justify-center">
-              <MapPin className="w-5 h-5 text-blue-600" />
+            <div className="w-9 h-9 bg-brand-50 rounded-xl flex items-center justify-center">
+              <MapPin className="w-5 h-5 text-brand-700" />
             </div>
             <div>
               <p className="font-semibold text-gray-900 text-sm">Your City</p>
@@ -33,15 +33,15 @@ export const CityPickerModal = ({ onSelect, onClose, geoStatus, onRequestGeo, cu
         <div className="p-5 space-y-4">
           <button onClick={onRequestGeo}
             disabled={geoStatus==="detecting"||geoStatus==="unavailable"}
-            className="w-full flex items-center gap-3 px-4 py-3 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-xl transition-colors disabled:opacity-50">
+            className="w-full flex items-center gap-3 px-4 py-3 bg-brand-50 hover:bg-brand-100 border border-brand-100 rounded-xl transition-colors disabled:opacity-50">
             {geoStatus==="detecting"
-              ? <Loader2 className="w-5 h-5 text-blue-600 animate-spin shrink-0"/>
-              : <LocateFixed className="w-5 h-5 text-blue-600 shrink-0"/>}
+              ? <Loader2 className="w-5 h-5 text-brand-700 animate-spin shrink-0"/>
+              : <LocateFixed className="w-5 h-5 text-brand-700 shrink-0"/>}
             <div className="text-left">
-              <p className="text-sm font-semibold text-blue-800">
+              <p className="text-sm font-semibold text-brand-800">
                 {geoStatus==="detecting"?"Detecting location…":geoStatus==="denied"?"Location access denied":geoStatus==="unavailable"?"Not available":"Use my current location"}
               </p>
-              {geoStatus==="denied"&&<p className="text-xs text-blue-500 mt-0.5">Enable location in browser settings</p>}
+              {geoStatus==="denied"&&<p className="text-xs text-brand-700 mt-0.5">Enable location in browser settings</p>}
             </div>
           </button>
 
@@ -49,7 +49,7 @@ export const CityPickerModal = ({ onSelect, onClose, geoStatus, onRequestGeo, cu
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"/>
             <input ref={ref} type="text" placeholder="Search city…" value={query}
               onChange={e=>setQuery(e.target.value)}
-              className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"/>
+              className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-700"/>
           </div>
 
           <div className="max-h-56 overflow-y-auto">
@@ -57,7 +57,7 @@ export const CityPickerModal = ({ onSelect, onClose, geoStatus, onRequestGeo, cu
               {filtered.map(city=>(
                 <button key={city} onClick={()=>onSelect(city)}
                   className={`text-left px-3 py-2.5 rounded-xl text-sm transition-colors ${
-                    current===city?"bg-blue-600 text-white font-semibold":"bg-gray-50 text-gray-700 hover:bg-blue-50 hover:text-blue-700"
+                    current===city?"bg-coral-500 text-white font-semibold":"bg-gray-50 text-gray-700 hover:bg-brand-50 hover:text-brand-700"
                   }`}>
                   {city}{current===city&&<span className="ml-1 opacity-70">✓</span>}
                 </button>

@@ -1,9 +1,9 @@
-import { FirestoreDocument } from './core';
+import { BaseEntity } from './core';
 
 export type PaymentStatus =
   | 'pending'
   | 'processing'
-  | 'paid'          // Flutterwave uses 'paid' — alias for succeeded on booking docs
+  | 'paid'
   | 'succeeded'
   | 'failed'
   | 'refunded'
@@ -17,12 +17,11 @@ export type PaymentMethod =
   | 'cash_on_boarding';
 
 export type PaymentProvider =
-  | 'flutterwave'   // replaces paychangu
   | 'paychangu'
   | 'local_bank'
   | 'cash';         // cash_on_boarding — no gateway involved
 
-export interface Payment extends FirestoreDocument {
+export interface Payment extends BaseEntity {
   id:        string;
   bookingId: string;
   userId:    string;
@@ -33,15 +32,9 @@ export interface Payment extends FirestoreDocument {
   method:    PaymentMethod;
   provider:  PaymentProvider;
 
-  // ── Flutterwave-specific ─────────────────────────────────────────────────
-  flutterwaveTxRef?:         string;  // tx_ref we generate — used to look up booking in webhook
-  flutterwaveFlwRef?:        string;  // flw_ref Flutterwave assigns — required for refunds
-  flutterwaveTransactionId?: number;  // numeric ID — required for verify + refund API calls
-
-  // ── Stripe-specific (kept for hybrid deployments) ────────────────────────
-  stripeSessionId?:      string;
-  stripePaymentIntent?:  string;
-  clientSecret?:         string;
+  // ── PayChangu-specific ─────────────────────────────────────────────────
+  paychanguTxRef?:         string;  // tx_ref generated for PayChangu payments
+  paychanguResponse?:      Record<string, unknown>;
 
   // ── General ──────────────────────────────────────────────────────────────
   transactionId?:        string;
@@ -49,5 +42,5 @@ export interface Payment extends FirestoreDocument {
   initiatedAt:           Date;
   completedAt?:          Date;
   failureReason?:        string;
-  metadata?:             Record<string, any>;
+  metadata?:             Record<string, unknown>;
 }

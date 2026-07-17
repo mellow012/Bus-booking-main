@@ -2,24 +2,17 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // Provides email verification actions for components.
 //
-// IMPORTANT — single source of truth for emailVerified:
-//   Always read user.emailVerified from Firebase Auth (via useAuth().user),
-//   never userProfile.emailVerified from Firestore. Auth is updated immediately
-//   when the user clicks the verification link; Firestore lags until
-//   AuthContext.syncEmailVerifiedToFirestore() writes it back.
+// Single source of truth for emailVerified:
+//   Always read user.email_confirmed_at from Supabase Auth (via useAuth().user).
 //
 // This hook handles:
-//   - Sending / resending verification emails via the API route
-//   - Checking verification status server-side (for polling on /verify-email)
-//   - Refreshing the Firebase user object to pick up emailVerified changes
-//
-// Window focus listening is handled in AuthContext to avoid duplicate
-// reload() calls. Do NOT add another focus listener here.
+//   - Sending / resending verification emails via the Supabase client
+//   - Checking verification status (via session refresh)
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { getAuth, reload } from 'firebase/auth';
+import { createClient } from '@/utils/supabase/client';
 
 interface VerificationStatus {
   isVerified: boolean;
@@ -30,6 +23,7 @@ interface VerificationStatus {
 
 export const useEmailVerification = () => {
   const { user } = useAuth();
+  const supabase = createClient();
 
   // ─── Send / resend verification email ──────────────────────────────────────
 
@@ -39,39 +33,35 @@ export const useEmailVerification = () => {
     alreadyVerified?: boolean;
     verificationLink?: string;
   }> => {
-    if (!user) throw new Error('User not authenticated');
+    if (!user || !user.email) throw new Error('User email not found');
 
     try {
-      const token = await user.getIdToken();
       const response = await fetch('/api/auth/send-verification-email', {
         method: 'POST',
         headers: {
-          Authorization:  `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
       });
 
-      const data = await response.json();
+      const payload = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message || 'Failed to send verification email');
+        throw new Error(payload.message || payload.error || 'Failed to send verification email');
       }
 
       return {
-        success:          true,
-        message:          data.message,
-        alreadyVerified:  data.alreadyVerified ?? false,
-        verificationLink: data.verificationLink,
+        success: true,
+        message: payload.message || 'Verification email sent successfully',
+        alreadyVerified: payload.alreadyVerified,
+        verificationLink: payload.verificationLink,
       };
     } catch (error: any) {
       console.error('[useEmailVerification] sendVerificationEmail error:', error);
-      throw error;
+      throw new Error(error.message || 'Failed to send verification email');
     }
   }, [user]);
 
-  // ─── Check verification status server-side ─────────────────────────────────
-  // Calls the Admin SDK which always has the current server-side state.
-  // Use this for polling on the /verify-email page.
+  // ─── Check verification status ─────────────────────────────────────────────
 
   const checkVerificationStatus = useCallback(async (): Promise<VerificationStatus> => {
     if (!user) {
@@ -79,64 +69,49 @@ export const useEmailVerification = () => {
     }
 
     try {
-      const token = await user.getIdToken();
-      const response = await fetch('/api/auth/check-verification', {
-        method: 'GET',
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      // Refresh user session to get latest email_confirmed_at
+      const { data: { user: refreshedUser }, error } = await supabase.auth.getUser();
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to check verification status');
-      }
+      if (error) throw error;
 
       return {
-        isVerified: data.emailVerified,
-        email:      data.email,
-        loading:    false,
-        error:      null,
+        isVerified: !!refreshedUser?.email_confirmed_at,
+        email: refreshedUser?.email || '',
+        loading: false,
+        error: null,
       };
     } catch (error: any) {
       console.error('[useEmailVerification] checkVerificationStatus error:', error);
       return {
-        isVerified: false,
-        email:      user.email || '',
-        loading:    false,
-        error:      error.message,
+        isVerified: !!user.email_confirmed_at,
+        email: user.email || '',
+        loading: false,
+        error: error.message,
       };
     }
-  }, [user]);
+  }, [user, supabase.auth]);
 
-  // ─── Refresh Firebase user object ─────────────────────────────────────────
-  // Call this when you need to force-check emailVerified without waiting for
-  // the next onAuthStateChanged event (e.g. a "Check again" button).
-  //
-  // Note: AuthContext already calls reload() on window focus. Only call this
-  // manually for explicit user-triggered actions to avoid redundant network calls.
+  // ─── Refresh verification status ──────────────────────────────────────────
 
   const refreshEmailVerificationStatus = useCallback(async (): Promise<boolean> => {
     if (!user) return false;
 
     try {
-      const currentUser = getAuth().currentUser;
-      if (!currentUser) return false;
-
-      await reload(currentUser);
-      console.log('[useEmailVerification] Refreshed — emailVerified:', currentUser.emailVerified);
-      return currentUser.emailVerified;
+      const { data: { user: refreshedUser }, error } = await supabase.auth.getUser();
+      if (error) throw error;
+      
+      return !!refreshedUser?.email_confirmed_at;
     } catch (error) {
       console.error('[useEmailVerification] Refresh error:', error);
       return false;
     }
-  }, [user]);
+  }, [user, supabase.auth]);
 
   return {
     sendVerificationEmail,
     checkVerificationStatus,
     refreshEmailVerificationStatus,
-    // Always read from Firebase Auth — never from userProfile
-    isVerified: user?.emailVerified ?? false,
-    email:      user?.email ?? '',
+    isVerified: !!user?.email_confirmed_at,
+    email: user?.email ?? '',
   };
 };

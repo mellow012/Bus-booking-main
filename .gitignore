@@ -1,14 +1,7 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-
 # dependencies
 /node_modules
 /.pnp
 .pnp.js
-.yarn/*
-!.yarn/patches
-!.yarn/plugins
-!.yarn/releases
-!.yarn/versions
 
 # testing
 /coverage
@@ -30,15 +23,12 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# local env files - ignore local secrets but allow .env.example
-.env.local
-.env.*.local
-.env.production.local
-.env.development.local
-
-# ignore actual env files containing secrets
+# local env files
 .env
-.env.*.secret
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
 
 # vercel
 .vercel
@@ -47,21 +37,5 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# local service account / private key files
-src/lib/serviceAccountKey.json
-
-.busbookingapp-50592-firebase-adminsdk-fbsvc-00047ea501e.json
-
-.busbookingapp-50592-firebase-adminsdk-fbsvc-e825220c1d.json
-.functions/src/index.ts
-
-# Playwright
-node_modules/
-/test-results/
-/playwright-report/
-/blob-report/
-/playwright/.cache/
-/playwright/.auth/
-
-# Browser binaries (Playwright downloads them automatically)
-/playwright/.local-browsers/
+# prisma
+/prisma/dev.db

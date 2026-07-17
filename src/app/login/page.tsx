@@ -1,13 +1,13 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
-import Image from 'next/image';
 import { useTranslations } from 'next-intl';
-import { EnvelopeIcon, LockClosedIcon, EyeIcon, EyeSlashIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
+import { EnvelopeIcon, LockClosedIcon, EyeIcon, EyeSlashIcon, ExclamationTriangleIcon, CheckCircleIcon } from '@heroicons/react/24/outline';
 
 // Types
 interface FormData {
@@ -29,8 +29,7 @@ interface ValidationResult {
 
 // Constants
 const MAX_ATTEMPTS      = 5;
-const LOCKOUT_DURATION  = 15 * 60 * 1000;
-const MIN_PASSWORD_LENGTH = 8;
+const MIN_PASSWORD_LENGTH = 6;
 
 // ─── Hooks ────────────────────────────────────────────────────────────────────
 
@@ -78,87 +77,56 @@ const useFormValidation = (formData: FormData, t: (key: string, opts?: any) => s
 
 const useLoginAttempts = () => {
   const [attemptCount, setAttemptCount] = useState(0);
-  const [lockoutTime,  setLockoutTime]  = useState<number | null>(null);
   const [isLockedOut,  setIsLockedOut]  = useState(false);
-
-  useEffect(() => {
-    const stored = localStorage.getItem('loginAttempts');
-    if (stored) {
-      const { count, lockout } = JSON.parse(stored);
-      setAttemptCount(count || 0);
-      if (lockout && Date.now() < lockout) {
-        setLockoutTime(lockout);
-        setIsLockedOut(true);
-      }
-    }
-  }, []);
-
-  useEffect(() => {
-    let timer: NodeJS.Timeout;
-    if (lockoutTime && isLockedOut) {
-      timer = setInterval(() => {
-        if (Date.now() >= lockoutTime) {
-          setIsLockedOut(false);
-          setAttemptCount(0);
-          setLockoutTime(null);
-          localStorage.removeItem('loginAttempts');
-        }
-      }, 1000);
-    }
-    return () => clearInterval(timer);
-  }, [lockoutTime, isLockedOut]);
 
   const incrementAttempts = () => {
     const newCount = attemptCount + 1;
     setAttemptCount(newCount);
     if (newCount >= MAX_ATTEMPTS) {
-      const lockout = Date.now() + LOCKOUT_DURATION;
-      setLockoutTime(lockout);
       setIsLockedOut(true);
-      localStorage.setItem('loginAttempts', JSON.stringify({ count: newCount, lockout }));
-    } else {
-      localStorage.setItem('loginAttempts', JSON.stringify({ count: newCount }));
     }
   };
 
   const resetAttempts = () => {
     setAttemptCount(0);
-    setLockoutTime(null);
     setIsLockedOut(false);
-    localStorage.removeItem('loginAttempts');
   };
 
-  const getRemainingTime = () =>
-    lockoutTime ? Math.max(0, Math.ceil((lockoutTime - Date.now()) / 1000)) : 0;
-
-  return { attemptCount, isLockedOut, remainingTime: getRemainingTime(), incrementAttempts, resetAttempts };
-};
-
-const formatTime = (seconds: number): string => {
-  const minutes         = Math.floor(seconds / 60);
-  const remainingSeconds = seconds % 60;
-  return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+  return { attemptCount, isLockedOut, incrementAttempts, resetAttempts };
 };
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function Login() {
-  const router     = useRouter();
+  const router       = useRouter();
+  const searchParams = useSearchParams();
+  const isVerified   = searchParams?.get('verified') === 'true';
   // FIX: use AuthContext.signIn so the __session cookie is created properly.
   // Previously the page called Firebase directly and skipped session creation,
   // which caused middleware to reject every subsequent request.
-  const { signIn } = useAuth();
+  const { signIn, signInWithGoogle } = useAuth();
   const t          = useTranslations('login');
 
   const [formData,     setFormData]     = useState<FormData>({ email: '', password: '', rememberMe: false });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [generalError, setGeneralError] = useState('');
+  const dest = searchParams?.get('redirect') || searchParams?.get('redirectTo') || searchParams?.get('from');
 
   const { errors, touched, validateForm, handleBlur, clearErrors } = useFormValidation(formData, t);
-  const { attemptCount, isLockedOut, remainingTime, incrementAttempts, resetAttempts } = useLoginAttempts();
+  const { attemptCount, isLockedOut, incrementAttempts, resetAttempts } = useLoginAttempts();
 
   const getErrorMessage = (error: any): string => {
+    // Supabase error messages are usually in the message string
+    // but some implementations might still pass objects with codes
+    const message = error?.message || '';
+    
+    if (message.includes('Invalid login credentials')) return t('errorInvalid');
+    if (message.includes('Email not confirmed')) return 'Please verify your email address before signing in.';
+    if (message.includes('Too many requests')) return t('errorTooMany');
+    
+    // Fallback for legacy Firebase codes if any still bubble up from components
     if (error?.code) {
       switch (error.code) {
         case 'auth/user-not-found':
@@ -166,13 +134,10 @@ export default function Login() {
         case 'auth/invalid-credential':     return t('errorInvalid');
         case 'auth/too-many-requests':      return t('errorTooMany');
         case 'auth/user-disabled':          return t('errorDisabled');
-        case 'auth/network-request-failed': return t('errorNetwork');
-        case 'auth/invalid-email':          return t('errorInvalidEmail');
-        case 'auth/session-failed':         return 'Unable to establish a secure session. Please try again.';
         default:                            return t('errorGeneral');
       }
     }
-    return error?.message || t('errorUnexpected');
+    return message || t('errorUnexpected');
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -185,7 +150,7 @@ export default function Login() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isLockedOut) {
-      setGeneralError(t('lockedBody', { time: formatTime(remainingTime) }));
+      setGeneralError(t('lockedBody'));
       return;
     }
 
@@ -201,7 +166,11 @@ export default function Login() {
       // the router manually here; both systems redirecting causes a race.
       await signIn(formData.email, formData.password);
       resetAttempts();
-      // Redirect is handled by AuthContext route guard — no router.push here.
+      
+      // Check for redirect, redirectTo, or from parameters to ensure user returns to their previous context
+      if (dest) {
+        router.push(dest);
+      }
     } catch (error: any) {
       console.error('Login error:', error);
       incrementAttempts();
@@ -214,6 +183,18 @@ export default function Login() {
 
   const handleForgotPassword = () => {
     router.push(`/forgot-password${formData.email ? `?email=${encodeURIComponent(formData.email)}` : ''}`);
+  };
+
+  const handleGoogleSignIn = async () => {
+    setIsGoogleLoading(true);
+    setGeneralError('');
+    try {
+      await signInWithGoogle();
+    } catch (error: any) {
+      console.error('Google login error:', error);
+      setGeneralError(error.message || 'Failed to sign in with Google');
+      setIsGoogleLoading(false);
+    }
   };
 
   const renderError = (fieldName: keyof FormErrors) => {
@@ -234,44 +215,48 @@ export default function Login() {
     const hasError = errors[fieldName] && touched[fieldName];
     return hasError
       ? `${base} border-red-300 text-red-900 placeholder-red-300 focus:ring-red-500 focus:border-red-500`
-      : `${base} border-gray-300 focus:ring-blue-500 focus:border-blue-500`;
+      : `${base} border-gray-300 focus:ring-brand-700 focus:border-brand-700`;
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
-      <div className="sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="flex justify-center">
-          <div className="w-20 h-20 sm:w-24 sm:h-24 flex items-center justify-center transition-transform duration-300 hover:scale-105">
+    <div className="min-h-screen flex flex-col items-center pt-28 sm:pt-32 lg:pt-36 pb-8 bg-gradient-to-br from-gray-50 to-gray-100 sm:px-6 lg:px-8 overflow-y-auto">
+      <div className="w-full max-w-md pt-2">
+        <div className="flex justify-center pb-1">
+          <div className="flex items-center justify-center transition-transform duration-300 hover:scale-105 max-h-16 sm:max-h-20 md:max-h-20">
             <Image
               src="/tibhukebus_logo_transparent.png"
               alt="TibhukeBus Logo"
-              width={96}
-              height={96}
-              className="object-contain"
+              width={120}
+              height={48}
+              className="w-auto h-auto object-contain drop-shadow-2xl brightness-[1.02] contrast-[1.05]"
               priority
             />
           </div>
         </div>
-        <h1 className="mt-6 text-center text-4xl font-extrabold text-gray-900 tracking-tight">
+        <h1 className="text-center text-2xl font-extrabold text-gray-900 tracking-tight">
           {t('title')}
         </h1>
-        <p className="mt-2 text-center text-sm text-gray-600">
-          {t('newCustomer')}{' '}
-          <Link href="/register" className="font-medium text-blue-600 hover:text-blue-500 focus:outline-none focus:underline transition-colors duration-200">
-            {t('createAccount')}
-          </Link>
-        </p>
       </div>
 
-      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
+      <div className="mt-3 w-full max-w-md">
         <div className="bg-white py-10 px-6 shadow-xl rounded-2xl sm:px-12">
+
+          {isVerified && (
+            <div className="mb-6 bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-lg flex items-start">
+              <CheckCircleIcon className="w-5 h-5 mr-2 flex-shrink-0 mt-0.5 text-green-600" />
+              <div>
+                <p className="font-medium">Email Verified!</p>
+                <p className="text-sm mt-1">Your email has been verified successfully. You can now log in.</p>
+              </div>
+            </div>
+          )}
 
           {isLockedOut && (
             <div className="mb-6 bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3 rounded-lg flex items-start">
               <ExclamationTriangleIcon className="w-5 h-5 mr-2 flex-shrink-0 mt-0.5" />
               <div>
                 <p className="font-medium">{t('lockedTitle')}</p>
-                <p className="text-sm mt-1">{t('lockedBody', { time: formatTime(remainingTime) })}</p>
+                <p className="text-sm mt-1">{t('lockedBody')}</p>
               </div>
             </div>
           )}
@@ -307,6 +292,7 @@ export default function Login() {
                   value={formData.email}
                   onChange={handleInputChange}
                   onBlur={() => handleBlur('email')}
+                  onFocus={(e) => e.currentTarget.scrollIntoView({ behavior: 'smooth', block: 'center' })}
                   className={getInputClassName('email')}
                   placeholder={t('emailPlaceholder')}
                   disabled={isSubmitting || isLockedOut}
@@ -333,6 +319,7 @@ export default function Login() {
                   value={formData.password}
                   onChange={handleInputChange}
                   onBlur={() => handleBlur('password')}
+                  onFocus={(e) => e.currentTarget.scrollIntoView({ behavior: 'smooth', block: 'center' })}
                   className={getInputClassName('password')}
                   placeholder={t('passwordPlaceholder')}
                   disabled={isSubmitting || isLockedOut}
@@ -358,7 +345,7 @@ export default function Login() {
                   id="rememberMe" name="rememberMe" type="checkbox"
                   checked={formData.rememberMe}
                   onChange={handleInputChange}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded transition-colors duration-200"
+                  className="h-4 w-4 accent-brand-700 focus:ring-brand-700 border-gray-300 rounded transition-colors duration-200"
                   disabled={isSubmitting || isLockedOut}
                 />
                 <label htmlFor="rememberMe" className="ml-2 block text-sm text-gray-700 cursor-pointer">
@@ -369,7 +356,7 @@ export default function Login() {
                 type="button"
                 onClick={handleForgotPassword}
                 disabled={isSubmitting}
-                className="text-sm font-medium text-blue-600 hover:text-blue-500 focus:outline-none focus:underline transition-colors duration-200"
+                className="text-sm font-medium text-brand-700 hover:text-brand-800 focus:outline-none focus:underline transition-colors duration-200"
               >
                 {t('forgotPassword')}
               </button>
@@ -380,7 +367,7 @@ export default function Login() {
               <Button
                 type="submit"
                 disabled={isSubmitting || isLockedOut}
-                className="w-full flex justify-center items-center py-2.5 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+                className="w-full flex justify-center items-center py-2.5 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-coral-500 hover:bg-coral-600 active:scale-95 active:opacity-95 active:shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-coral-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
               >
                 {isSubmitting ? (
                   <>
@@ -395,10 +382,70 @@ export default function Login() {
             </div>
           </form>
 
+          <div className="mt-6">
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-gray-300" />
+              </div>
+              <div className="relative flex justify-center text-sm">
+                <span className="px-2 bg-white text-gray-500">Or continue with</span>
+              </div>
+            </div>
+
+            <div className="mt-6">
+              <Button
+                onClick={handleGoogleSignIn}
+                disabled={isGoogleLoading || isSubmitting || isLockedOut}
+                variant="outline"
+                className="w-full flex justify-center items-center py-2.5 px-4 border border-gray-300 rounded-lg shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 active:scale-95 active:opacity-95 active:shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-700 transition-all duration-200"
+              >
+                {isGoogleLoading ? (
+                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-gray-700" fill="none" viewBox="0 0 24 24">
+                    <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" className="opacity-25" />
+                    <path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" className="opacity-75" />
+                  </svg>
+                ) : (
+                  <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24">
+                    <path
+                      d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                      fill="#4285F4"
+                    />
+                    <path
+                      d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                      fill="#34A853"
+                    />
+                    <path
+                      d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+                      fill="#FBBC05"
+                    />
+                    <path
+                      d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+                      fill="#EA4335"
+                    />
+                    <path d="M1 1h22v22H1z" fill="none" />
+                  </svg>
+                )}
+                Google
+              </Button>
+            </div>
+          </div>
+
           <div className="mt-6 text-center">
+            <p className="text-sm text-gray-600">
+              {t('newCustomer')}{' '}
+              <Link 
+                href={`/register${dest ? `?redirect=${encodeURIComponent(dest)}` : ''}`} 
+                className="font-medium text-brand-700 hover:text-brand-800 focus:outline-none focus:underline transition-colors duration-200"
+              >
+                {t('createAccount')}
+              </Link>
+            </p>
+          </div>
+
+          <div className="mt-4 text-center">
             <p className="text-xs text-gray-500">
               {t('troubleSignIn')}{' '}
-              <Link href="/contact" className="text-blue-600 hover:text-blue-500 focus:outline-none focus:underline transition-colors duration-200">
+              <Link href="/contact" className="text-brand-700 hover:text-brand-800 focus:outline-none focus:underline transition-colors duration-200">
                 Contact support
               </Link>
             </p>

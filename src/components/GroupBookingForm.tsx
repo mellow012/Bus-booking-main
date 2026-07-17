@@ -2,8 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { db } from '@/lib/firebaseConfig';
-import { collection, addDoc, Timestamp, doc, getDoc } from 'firebase/firestore';
+import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -56,19 +55,18 @@ const GroupBookingForm: React.FC<GroupBookingFormProps> = ({
     const fetchSchedule = async () => {
       try {
         setLoading(true);
-        const scheduleRef = doc(db, 'schedules', scheduleId);
-        const scheduleDoc = await getDoc(scheduleRef);
+        const { data: scheduleData, error: fetchError } = await (supabase as any)
+          .from('Schedule')
+          .select('*')
+          .eq('id', scheduleId)
+          .single();
         
-        if (scheduleDoc.exists()) {
-          const data = scheduleDoc.data() as Omit<Schedule, 'id'>;
-          // Ensure price field exists
-          const pricePerSeat = data.price || data.price;
-          const scheduleData: Schedule = {
-            id: scheduleDoc.id,
-            ...data,
-            price: pricePerSeat !== undefined ? pricePerSeat : 0,
-          };
-          setSchedule(scheduleData);
+        if (!fetchError && scheduleData) {
+          setSchedule({
+            ...scheduleData,
+            departureDateTime: new Date(scheduleData.departureDateTime),
+            arrivalDateTime: new Date(scheduleData.arrivalDateTime),
+          } as Schedule);
           setError('');
         } else {
           setError('Schedule not found. Please go back and try again.');
@@ -154,21 +152,22 @@ const GroupBookingForm: React.FC<GroupBookingFormProps> = ({
     try {
       const totalPrice = formData.seatsRequested * (schedule.price || schedule.price || 0);
       
-      await addDoc(collection(db, 'groupRequests'), {
-        userId: user.uid,
-        organizerName: formData.organizerName.trim(),
-        organizerPhone: formData.organizerPhone.trim(),
-        routeId,
-        scheduleId,
-        seatsRequested: formData.seatsRequested,
-        seatsBooked: [],
-        totalPrice,
-        companyId: schedule.companyId,
-        status: 'pending',
-        notes: formData.notes.trim(),
-        createdAt: Timestamp.now(),
-        updatedAt: Timestamp.now(),
-      });
+      const { error: submitError } = await (supabase as any)
+        .from('GroupRequest')
+        .insert([{
+          userId: user.id,
+          organizerName: formData.organizerName.trim(),
+          organizerPhone: formData.organizerPhone.trim(),
+          routeId,
+          scheduleId,
+          seatsRequested: formData.seatsRequested,
+          totalPrice,
+          companyId: schedule.companyId,
+          status: 'pending',
+          notes: formData.notes.trim(),
+        }]);
+
+      if (submitError) throw submitError;
 
       setSuccess(true);
       setTimeout(() => {
@@ -294,9 +293,7 @@ const GroupBookingForm: React.FC<GroupBookingFormProps> = ({
                 <div className="min-w-0">
                   <p className="text-xs text-gray-600 mb-1">Departure</p>
                   <p className="font-semibold text-gray-900 text-sm">
-                    {schedule.departureDateTime instanceof Timestamp
-                      ? schedule.departureDateTime.toDate().toLocaleString()
-                      : schedule.departureDateTime instanceof Date
+                    {schedule.departureDateTime instanceof Date
                       ? schedule.departureDateTime.toLocaleString()
                       : 'TBA'}
                   </p>

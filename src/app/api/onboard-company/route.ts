@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { adminAuth, adminDb } from '@/lib/firebaseAdmin';
-import { FieldValue } from 'firebase-admin/firestore';
-import { apiRateLimiter, getClientIp } from '@/lib/rateLimiter';
+import { getCurrentUser } from '@/lib/auth-utils';
+import { prisma } from '@/lib/prisma';
+import { apiRateLimiter, getClientIp } from '@/lib/rateLimit';
 import { z } from 'zod';
 
 // ─── Validation schemas ──────────────────────────────────────────────────────
@@ -47,7 +47,6 @@ export async function POST(req: NextRequest) {
 
   // ─── Rate limiting ──────────────────────────────────────────────────────────
   const ip = getClientIp(req);
-  // ✅ Fix 2: await the async rate limiter
   const rateLimitResult = await apiRateLimiter.limit(ip);
 
   if (!rateLimitResult.success) {
@@ -60,26 +59,16 @@ export async function POST(req: NextRequest) {
   }
 
   // ─── Authorization ──────────────────────────────────────────────────────────
-  const authHeader = req.headers.get('authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
+  const user = await getCurrentUser(req);
+  if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const token = authHeader.split(' ')[1];
-  let decodedToken: any;
-  try {
-    // ✅ Fix 1: use adminAuth directly (Admin SDK only in API routes)
-    decodedToken = await adminAuth.verifyIdToken(token);
-  } catch {
-    return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
-  }
-
-  if (decodedToken.role !== 'company_admin') {
+  if (user.role !== 'company_admin') {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
   // ─── Parse & validate body ──────────────────────────────────────────────────
-  // ✅ Fix 3: try/catch around req.json() + Zod validation (Fix 4)
   let parsed: z.infer<typeof onboardingSchema>;
   try {
     const body = await req.json();
@@ -96,61 +85,85 @@ export async function POST(req: NextRequest) {
 
   const { company, buses, routes, schedules } = parsed;
 
-  // ─── Write to Firestore ─────────────────────────────────────────────────────
-  // ✅ Fix 1: use adminDb (Admin SDK) instead of client-side db
-  // ✅ Fix 5: add createdAt/updatedAt to all documents
+  // ─── Write to PostgreSQL using Prisma transaction ──────────────────────────
   try {
-    const batch = adminDb.batch();
-
-    const companyRef = adminDb.collection('bus_companies').doc();
-
-    batch.set(companyRef, {
-      ...company,
-      adminUserId: decodedToken.uid,
-      status: 'active',
-      createdAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
-    });
-
-    buses.forEach(bus => {
-      const busRef = adminDb.collection('buses').doc();
-      batch.set(busRef, {
-        ...bus,
-        companyId: companyRef.id,
-        status: 'active',
-        createdAt: FieldValue.serverTimestamp(),
-        updatedAt: FieldValue.serverTimestamp(),
+    const result = await prisma.$transaction(async (tx: any) => {
+      const createdCompany = await tx.company.create({
+        data: {
+          name: company.name,
+          email: company.email,
+          phone: company.phone || '',
+          address: company.address || '',
+          status: 'active',
+          setupCompleted: true,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          maxBuses: Math.max(buses.length, 10),
+        },
       });
+
+      // Create all buses for this company
+      await Promise.all(
+        buses.map(bus =>
+          tx.bus.create({
+            data: {
+              licensePlate: bus.licensePlate,
+              busType: bus.busType,
+              capacity: bus.capacity,
+              companyId: createdCompany.id,
+              status: 'active',
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            },
+          })
+        )
+      );
+
+      // Create all routes for this company
+      await Promise.all(
+        routes.map(route =>
+          tx.route.create({
+            data: {
+              name: `${route.origin} - ${route.destination}`,
+              origin: route.origin,
+              destination: route.destination,
+              distance: 0,
+              duration: 0,
+              baseFare: route.price,
+              companyId: createdCompany.id,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            },
+          })
+        )
+      );
+
+      // Create all schedules for this company
+      await Promise.all(
+        schedules.map(schedule =>
+          tx.schedule.create({
+            data: {
+              routeId: schedule.routeId,
+              busId: schedule.busId,
+              departureDateTime: new Date(schedule.departureDateTime),
+              arrivalDateTime: new Date(schedule.arrivalDateTime),
+              availableSeats: schedule.availableSeats,
+              price: schedule.price,
+              companyId: createdCompany.id,
+              status: 'active',
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            },
+          })
+        )
+      );
+
+      return createdCompany;
     });
 
-    routes.forEach(route => {
-      const routeRef = adminDb.collection('routes').doc();
-      batch.set(routeRef, {
-        ...route,
-        companyId: companyRef.id,
-        createdAt: FieldValue.serverTimestamp(),
-        updatedAt: FieldValue.serverTimestamp(),
-      });
-    });
-
-    schedules.forEach(schedule => {
-      const scheduleRef = adminDb.collection('schedules').doc();
-      batch.set(scheduleRef, {
-        ...schedule,
-        companyId: companyRef.id,
-        bookedSeats: [],
-        status: 'active',
-        createdAt: FieldValue.serverTimestamp(),
-        updatedAt: FieldValue.serverTimestamp(),
-      });
-    });
-
-    await batch.commit();
-
-    return NextResponse.json({ companyId: companyRef.id }, { status: 201 });
+    return NextResponse.json({ companyId: result.id }, { status: 201 });
 
   } catch (error: any) {
-    // ✅ Fix 3: handle batch commit failures gracefully
     console.error('[ONBOARDING] Batch commit failed:', error);
     return NextResponse.json(
       { error: 'Failed to save onboarding data', message: error.message },

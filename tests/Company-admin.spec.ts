@@ -612,7 +612,7 @@ test.describe('Company Admin — Payment Settings', () => {
     if (await tab.isVisible({ timeout: 8_000 }).catch(() => false)) await tab.click();
     else await page.goto(`${BASE_URL}/company/admin/settings`);
     await expect(
-      page.locator('text=PayChangu, text=Flutterwave, text=Payment').first()
+      page.locator('text=PayChangu, text=Payment').first()
     ).toBeVisible({ timeout: 20_000 });
   }
 
@@ -628,13 +628,6 @@ test.describe('Company Admin — Payment Settings', () => {
     ).toBeVisible({ timeout: 12_000 });
   });
 
-  test('Flutterwave key field visible', async ({ page }) => {
-    await goToPayments(page);
-    await expect(
-      page.locator('input[name*="flutterwave" i], input[placeholder*="Flutterwave" i], input[name*="flw" i], label:has-text("Flutterwave")').first()
-    ).toBeVisible({ timeout: 12_000 });
-  });
-
   test('save PayChangu key — shows success', async ({ page }) => {
     await goToPayments(page);
     const input = page.locator('input[name*="paychangu" i], input[placeholder*="PayChangu" i]').first();
@@ -646,16 +639,6 @@ test.describe('Company Admin — Payment Settings', () => {
     console.log('[paychangu-save] ✓');
   });
 
-  test('save Flutterwave key — shows success', async ({ page }) => {
-    await goToPayments(page);
-    const input = page.locator('input[name*="flutterwave" i], input[name*="flw" i], input[placeholder*="Flutterwave" i]').first();
-    if (!await input.isVisible({ timeout: 8_000 }).catch(() => false)) return;
-    await input.click({ clickCount: 3 });
-    await input.fill('FLWSECK_TEST-' + uid());
-    await page.locator('button[type="submit"], button:has-text("Save")').first().click();
-    await expectToast(page);
-    console.log('[flutterwave-save] ✓');
-  });
 
   test('payment method toggles fire and confirm', async ({ page }) => {
     await goToPayments(page);

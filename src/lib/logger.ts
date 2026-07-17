@@ -44,7 +44,14 @@ class Logger {
     const userInfo = entry.userId ? ` [User: ${entry.userId}]` : '';
     const ipInfo = entry.ip ? ` [IP: ${entry.ip}]` : '';
 
-    return `${prefix}${userInfo}${ipInfo}: ${entry.message}`;
+    let msg = `${prefix}${userInfo}${ipInfo}: ${entry.message}`;
+    if (entry.error) {
+      msg += `\n  Error: ${entry.error.message}`;
+      if (entry.error.stack) {
+        msg += `\n  Stack: ${entry.error.stack}`;
+      }
+    }
+    return msg;
   }
 
   /**

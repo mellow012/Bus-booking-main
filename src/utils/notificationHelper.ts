@@ -1,12 +1,11 @@
-import { db } from '@/lib/firebaseConfig';
-import { addDoc, collection, Timestamp } from 'firebase/firestore';
+import { prisma } from '@/lib/prisma';
 
 export interface SendNotificationParams {
   userId: string;
   type: 'booking' | 'payment' | 'schedule' | 'system' | 'promotion' | 'alert';
   title: string;
   message: string;
-  data?: any;
+  data?: Record<string, unknown>;
   actionUrl?: string;
   priority?: 'low' | 'medium' | 'high' | 'urgent';
 }
@@ -21,16 +20,18 @@ export async function sendNotification({
   priority = 'medium'
 }: SendNotificationParams) {
   try {
-    await addDoc(collection(db, 'notifications'), {
-      userId,
-      type,
-      title,
-      message,
-      data,
-      actionUrl,
-      priority,
-      isRead: false,
-      createdAt: Timestamp.now(),
+    await prisma.notification.create({
+      data: {
+        userId,
+        type,
+        title,
+        message,
+        data: (data || {}) as any,
+        actionUrl: actionUrl || undefined,
+        priority,
+        isRead: false,
+        createdAt: new Date(),
+      },
     });
   } catch (error) {
     console.error('Error sending notification:', error);
@@ -52,28 +53,24 @@ export async function sendBulkNotification({
   type: string;
   title: string;
   message: string;
-  data?: any;
+  data?: Record<string, unknown>;
   actionUrl?: string;
   priority?: string;
 }) {
   try {
-    const batch = [];
-    for (const userId of userIds) {
-      batch.push(
-        addDoc(collection(db, 'notifications'), {
-          userId,
-          type,
-          title,
-          message,
-          data,
-          actionUrl,
-          priority,
-          isRead: false,
-          createdAt: Timestamp.now(),
-        })
-      );
-    }
-    await Promise.all(batch);
+    await prisma.notification.createMany({
+      data: userIds.map(userId => ({
+        userId,
+        type,
+        title,
+        message,
+        data: (data || {}) as any,
+        actionUrl: actionUrl || undefined,
+        priority,
+        isRead: false,
+        createdAt: new Date(),
+      })),
+    });
   } catch (error) {
     console.error('Error sending bulk notifications:', error);
     throw error;

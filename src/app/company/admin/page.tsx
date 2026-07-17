@@ -1,678 +1,97 @@
-"use client";
-import { useState, useEffect, useCallback, useMemo } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import {
-  collection,
-  query,
-  where,
-  getDocs,
-  doc,
-  getDoc,
-  updateDoc,
-  addDoc,
-  onSnapshot,
-  orderBy,
-  limit
-} from "firebase/firestore";
-import { db } from "@/lib/firebaseConfig";
-import { useAuth } from "@/contexts/AuthContext";
-import { Company, Schedule, Route, Bus, Booking } from "@/types";
-import {
-  Building2,
-  Loader2,
-  DollarSign,
-  Users,
-  Calendar,
-  Truck,
-  MapPin,
-  User,
-  Settings,
-  AlertTriangle,
-  Bell,
-  Menu,
-  X,
-  ChevronRight,
-  LayoutDashboard,
-  LogOut
-} from "lucide-react";
-import AlertMessage from "@/components/AlertMessage";
-import SchedulesTab from "@/components/scheduleTab";
-import RoutesTab from "@/components/routesTab";
-import BusesTab from "@/components/busesTab";
-import BookingsTab from "@/components/bookingTab";
-import CompanyProfileTab from "@/components/company-Profile";
-import SettingsTab from "@/components/SettingsTab";
-import PaymentsTab from "@/components/PaymentTab";
-import TeamManagementTab from "@/components/OperatorsTab";
-import OverviewTab from "@/components/OverviewTab";
+'use client';
 
-// ── Constants ────────────────────────────────────────────────────────────────
-const TABS = [
-  { id: "overview"   as const, label: "Overview",  icon: LayoutDashboard },
-  { id: "schedules"  as const, label: "Schedules", icon: Calendar },
-  { id: "routes"     as const, label: "Routes",    icon: MapPin },
-  { id: "buses"      as const, label: "Buses",     icon: Truck },
-  { id: "bookings"   as const, label: "Bookings",  icon: Users },
-  { id: "operators"  as const, label: "Team",      icon: Users },
-  { id: "profile"    as const, label: "Profile",   icon: User },
-  { id: "settings"   as const, label: "Settings",  icon: Settings },
-  { id: "payments"   as const, label: "Payments",  icon: DollarSign },
-] as const;
+import React from 'react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import useAdminDashboard from './_hooks/useAdminDashboard';
+import AdminLayout from './_components/AdminLayout';
 
-const BUS_TYPES     = ["AC", "Non-AC", "Sleeper", "Semi-Sleeper", "Luxury", "Economy", "Minibus"] as const;
-const BUS_STATUSES  = ["active", "inactive", "maintenance"] as const;
-const CAPACITY_LIMITS = { min: 10, max: 100 } as const;
-const MAX_RECONNECT_ATTEMPTS = 3;
-// Removed AUTO_REFRESH_INTERVAL — we rely on realtime listeners instead
+// Tabs
+import OverviewTab from './OverviewTab';
+import OperatorsAndBranchesTab from './OperatorsAndBranchesTab';
+import RegionsTab from './RegionsTab';
+import RevenueTab from './RevenueTab';
+import ProfileTab from './ProfileTab';
+import BookingsTab from './BookingsTab';
+import BusesTab from './BusesTab';
 
-type TabType  = typeof TABS[number]["id"];
-type AlertType = { type: "error" | "success" | "warning" | "info"; message: string } | null;
+import AlertMessage from '@/components/AlertMessage';
+import { NotificationBell } from '@/contexts/NotificationContext';
+import { CATEGORIES } from './_lib/constants';
 
-interface DashboardData {
-  company:   Company | null;
-  schedules: Schedule[];
-  routes:    Route[];
-  buses:     Bus[];
-  bookings:  Booking[];
-}
+const queryClient = new QueryClient();
 
-interface RealtimeStatus {
-  isConnected:    boolean;
-  lastUpdate:     Date | null;
-  pendingUpdates: number;
-}
-
-interface TabObject {
-  id:    TabType;
-  label: string;
-  icon:  typeof TABS[number]["icon"];
-}
-
-// ── Utilities ────────────────────────────────────────────────────────────────
-const convertFirestoreDate = (date: any): Date => {
-  if (!date) return new Date();
-  if (date instanceof Date) return date;
-  if (date.toDate && typeof date.toDate === "function") {
-    try { return date.toDate(); } catch { return new Date(); }
-  }
-  if (typeof date === "string" || typeof date === "number") return new Date(date);
-  if (date.seconds && typeof date.seconds === "number") return new Date(date.seconds * 1000);
-  return new Date();
-};
-
-const validateBusData = (data: any): void => {
-  const missing = ["licensePlate", "busType", "capacity", "status"].filter(f => !data[f]);
-  if (missing.length) throw new Error(`Missing required fields: ${missing.join(", ")}`);
-  if (data.capacity < CAPACITY_LIMITS.min || data.capacity > CAPACITY_LIMITS.max)
-    throw new Error(`Capacity must be between ${CAPACITY_LIMITS.min} and ${CAPACITY_LIMITS.max}`);
-  if (!BUS_TYPES.includes(data.busType))    throw new Error("Invalid bus type");
-  if (!BUS_STATUSES.includes(data.status))  throw new Error("Invalid status");
-};
-
-const getAvailableTabs = (paymentSettings: Company["paymentSettings"] | undefined): TabObject[] => {
-  const base: TabObject[] = [...TABS] as unknown as TabObject[];
-  if (
-    paymentSettings &&
-    Object.keys(paymentSettings).length > 0 &&
-    (paymentSettings.paychanguEnabled || paymentSettings.stripeEnabled)
-  ) {
-    if (!base.some(t => t.id === "payments"))
-      base.push({ id: "payments" as const, label: "Payments", icon: DollarSign });
-  }
-  return base;
-};
-
-// ── Custom hooks ─────────────────────────────────────────────────────────────
-const useAlert = () => {
-  const [alert, setAlert] = useState<AlertType>(null);
-
-  const showAlert = useCallback(
-    <T extends "error" | "success" | "warning" | "info">(
-      type: T,
-      message: string
-    ) => {
-      setAlert({ type, message });
-    },
-    []
-  );
-
-  const clearAlert = useCallback(() => setAlert(null), []);
-
-  useEffect(() => {
-    if (!alert) return;
-    const t = setTimeout(clearAlert, alert.type === "error" ? 7000 : 5000);
-    return () => clearTimeout(t);
-  }, [alert, clearAlert]);
-
-  return { alert, showAlert, clearAlert };
-};
-
-// ── OPTIMIZED realtime bookings hook ────────────────────────────────────────
-// Changes vs original:
-//   1. Added limit(100) to cap reads per snapshot.
-//   2. Tracks ALL docs in the snapshot, not just changes, so the local state
-//      is always a complete view — avoids stale state bugs.
-//   3. Removed reconnect loop that created duplicate listeners.
-const useRealtimeBookings = (
-  companyId: string | undefined,
-  showAlert: (type: "error" | "success" | "warning" | "info", message: string) => void,
-  activeTab: TabType
-) => {
-  const [realtimeStatus, setRealtimeStatus] = useState<RealtimeStatus>({
-    isConnected: false, lastUpdate: null, pendingUpdates: 0,
-  });
-  const [bookings, setBookings] = useState<Booking[]>([]);
-
-  useEffect(() => {
-    if (!companyId?.trim()) return;
-
-    // Limit to 100 most-recently-updated bookings to cap read cost.
-    const q = query(
-      collection(db, "bookings"),
-      where("companyId", "==", companyId.trim()),
-      orderBy("updatedAt", "desc"),
-      limit(100),
-    );
-
-    let reconnectAttempts = 0;
-
-    const subscribe = () => {
-      const unsub = onSnapshot(
-        q,
-        (snapshot) => {
-          try {
-            // Replace local state with the full snapshot result (cheap — already in memory)
-            const all: Booking[] = snapshot.docs.map(d => {
-              const data = d.data();
-              return {
-                id: d.id,
-                ...data,
-                createdAt:        convertFirestoreDate(data.createdAt),
-                updatedAt:        convertFirestoreDate(data.updatedAt),
-                cancellationDate: data.cancellationDate ? convertFirestoreDate(data.cancellationDate) : undefined,
-                bookingDate:      data.bookingDate      ? convertFirestoreDate(data.bookingDate)      : undefined,
-                confirmedDate:    data.confirmedDate    ? convertFirestoreDate(data.confirmedDate)    : undefined,
-                refundDate:       data.refundDate       ? convertFirestoreDate(data.refundDate)       : undefined,
-              } as Booking;
-            });
-
-            // Show alert only for genuinely new bookings (added changes)
-            snapshot.docChanges().forEach(change => {
-              if (change.type === "added" && activeTab === "bookings") {
-                const b = change.doc.data() as Booking;
-                showAlert("info", `New booking received from ${b.passengerDetails?.[0]?.name || 'customer'}`);
-              }
-            });
-
-            setBookings(all);
-            setRealtimeStatus({ isConnected: true, lastUpdate: new Date(), pendingUpdates: 0 });
-            reconnectAttempts = 0;
-          } catch (err) {
-            console.error("Snapshot processing error:", err);
-          }
-        },
-        (err) => {
-          console.error("Firestore snapshot error:", err);
-          setRealtimeStatus(prev => ({ ...prev, isConnected: false }));
-          if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
-            reconnectAttempts++;
-            setTimeout(subscribe, Math.pow(2, reconnectAttempts) * 1000);
-          } else {
-            showAlert("error", "Unable to establish real-time connection. Please refresh the page.");
-          }
-        }
-      );
-      return unsub;
-    };
-
-    const unsub = subscribe();
-    return () => unsub?.();
-  }, [companyId, showAlert, activeTab]);
-
-  return { bookings, setBookings, realtimeStatus };
-};
-
-// ── Sidebar ──────────────────────────────────────────────────────────────────
-const Sidebar = ({
-  activeSection, setActiveSection, isMobileOpen, setIsMobileOpen,
-  company, availableTabs, pendingCount, onSignOut,
-}: {
-  activeSection: TabType;
-  setActiveSection: (tab: TabType) => void;
-  isMobileOpen: boolean;
-  setIsMobileOpen: (open: boolean) => void;
-  company: Company | null;
-  availableTabs: TabObject[];
-  pendingCount: number;
-  onSignOut: () => void;
-}) => (
-  <>
-    {isMobileOpen && (
-      <div className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden" onClick={() => setIsMobileOpen(false)} />
-    )}
-    <aside className={`fixed left-0 z-50 w-64 bg-white border-r border-gray-200 transform transition-transform duration-300 ease-in-out top-0 h-screen ${isMobileOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 lg:static lg:h-auto lg:min-h-screen`}>
-      <div className="flex flex-col h-full">
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <div className="flex items-center space-x-3">
-            {company?.logo
-              ? <img src={company.logo} alt="Logo" className="w-10 h-10 rounded-xl object-cover" />
-              : <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-blue-700 rounded-xl flex items-center justify-center"><Building2 className="w-6 h-6 text-white" /></div>
-            }
-            <div>
-              <h1 className="font-bold text-gray-900 text-sm">{company?.name || 'BusOps'}</h1>
-              <p className="text-xs text-gray-500">Admin Panel</p>
-            </div>
-          </div>
-          <button onClick={() => setIsMobileOpen(false)} className="lg:hidden p-2 hover:bg-gray-100 rounded-lg">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        <nav className="flex-1 overflow-y-auto p-4 space-y-1">
-          {availableTabs.map((item: TabObject) => {
-            const Icon     = item.icon;
-            const isActive = activeSection === item.id;
-            return (
-              <button key={item.id} onClick={() => { setActiveSection(item.id); setIsMobileOpen(false); }}
-                className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all duration-200 group relative ${isActive ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50'}`}>
-                <Icon className={`w-5 h-5 ${isActive ? 'text-blue-700' : 'text-gray-400 group-hover:text-gray-600'}`} />
-                <span className="font-medium flex-1 text-left">{item.label}</span>
-                {item.id === 'bookings' && pendingCount > 0 && (
-                  <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">{pendingCount}</span>
-                )}
-                {isActive && <ChevronRight className="w-4 h-4" />}
-              </button>
-            );
-          })}
-        </nav>
-
-        <div className="p-4 border-t border-gray-200 space-y-2">
-          <button
-            onClick={onSignOut}
-            className="w-full flex items-center space-x-3 px-4 py-2.5 rounded-xl text-red-600 hover:bg-red-50 transition-colors group"
-          >
-            <LogOut className="w-5 h-5 group-hover:scale-110 transition-transform" />
-            <span className="font-medium">Sign Out</span>
-          </button>
-
-          <div className="flex items-center space-x-3 px-4 py-3 bg-gray-50 rounded-xl">
-            <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-              <User className="w-5 h-5 text-blue-600" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-gray-900 truncate">Admin</p>
-              <p className="text-xs text-gray-500 truncate">{company?.email || 'admin@busops.com'}</p>
-            </div>
-          </div>
-        </div>
-      </div>
-    </aside>
-  </>
-);
-
-// ── Main dashboard ────────────────────────────────────────────────────────────
 export default function AdminDashboard() {
-  const { user, userProfile, loading: authLoading, signOut } = useAuth();
-  const router       = useRouter();
-  const searchParams = useSearchParams();
-  const { alert, showAlert, clearAlert } = useAlert();
+  const dashboard = useAdminDashboard();
 
-  const [activeTab,     setActiveTab]     = useState<TabType>("overview");
-  const [isMobileOpen,  setIsMobileOpen]  = useState(false);
-  const [dashboardData, setDashboardData] = useState<DashboardData>({
-    company: null, schedules: [], routes: [], buses: [], bookings: [],
-  });
-  const [loading, setLoading] = useState(true);
-
-  const companyId = userProfile?.companyId?.trim() || "";
-  const { bookings, setBookings, realtimeStatus } = useRealtimeBookings(companyId, showAlert, activeTab);
-
-  // Keep dashboardData.bookings in sync with the realtime slice
-  useEffect(() => {
-    setDashboardData(prev => ({ ...prev, bookings }));
-  }, [bookings]);
-
-  const statistics = useMemo(() => ({
-    pendingBookings: bookings.filter(b => b.bookingStatus === "pending").length,
-  }), [bookings]);
-
-  const paymentSettings = dashboardData.company?.paymentSettings;
-  const availableTabs   = useMemo(() => getAvailableTabs(paymentSettings), [paymentSettings]);
-
-  const isValidUser = useMemo(() =>
-    !!(user && userProfile?.role === "company_admin" && userProfile.companyId),
-    [user, userProfile]
-  );
-
-  const handleStatusToggle = useCallback(async () => {
-    if (!dashboardData.company) return;
-    const newStatus = dashboardData.company.status === "active" ? "inactive" : "active";
-    try {
-      await updateDoc(doc(db, "companies", dashboardData.company.id), { status: newStatus, updatedAt: new Date() });
-      setDashboardData(prev => ({ ...prev, company: prev.company ? { ...prev.company, status: newStatus } : null }));
-      showAlert("success", `Company status updated to ${newStatus}`);
-    } catch {
-      showAlert("error", "Failed to update company status");
-    }
-  }, [dashboardData.company, showAlert]);
-
-  // ─── OPTIMIZED fetchCollectionData ─────────────────────────────────────────
-  // Schedules, routes, buses are fetched once on mount and only re-fetched
-  // when the user explicitly triggers an action (add/edit/delete).
-  // Bookings are handled by the realtime listener above.
-  const fetchCollectionData = useCallback(async <T extends { id: string }>(
-    collectionName: string,
-    companyId: string,
-  ): Promise<T[]> => {
-    if (!companyId) return [];
-    try {
-      const snap = await getDocs(query(collection(db, collectionName), where("companyId", "==", companyId)));
-      return snap.docs.map(d => {
-        const data = d.data();
-        if (collectionName === "schedules") {
-          return {
-            id: d.id, ...data,
-            departureDateTime: convertFirestoreDate(data.departureDateTime),
-            arrivalDateTime:   convertFirestoreDate(data.arrivalDateTime),
-            createdAt:         convertFirestoreDate(data.createdAt),
-            updatedAt:         convertFirestoreDate(data.updatedAt),
-          } as unknown as T;
-        }
-        return {
-          id: d.id, ...data,
-          createdAt: data.createdAt ? convertFirestoreDate(data.createdAt) : new Date(),
-          updatedAt: data.updatedAt ? convertFirestoreDate(data.updatedAt) : new Date(),
-        } as unknown as T;
-      });
-    } catch (err: any) {
-      console.error(`Error fetching ${collectionName}:`, err);
-      throw err;
-    }
-  }, []);
-
-  const fetchInitialData = useCallback(async () => {
-    if (!companyId || authLoading) return;
-    try {
-      setLoading(true);
-      const companyDoc = await getDoc(doc(db, "companies", companyId));
-      if (!companyDoc.exists()) {
-        showAlert("error", "Company not found. Please complete setup or contact support.");
-        router.push("/company/setup");
-        return;
-      }
-      const companyData = {
-        id: companyDoc.id, ...companyDoc.data(),
-        createdAt: convertFirestoreDate(companyDoc.data()?.createdAt),
-        updatedAt: convertFirestoreDate(companyDoc.data()?.updatedAt),
-      } as Company;
-
-      // Fetch schedules, routes, buses in parallel (bookings come from the realtime listener)
-      const [schedules, routes, buses] = await Promise.all([
-        fetchCollectionData<Schedule>("schedules", companyId),
-        fetchCollectionData<Route>("routes",    companyId),
-        fetchCollectionData<Bus>("buses",       companyId),
-      ]);
-
-      setDashboardData(prev => ({ ...prev, company: companyData, schedules, routes, buses }));
-    } catch (err: any) {
-      showAlert("error", err.message || "Failed to load dashboard data");
-    } finally {
-      setLoading(false);
-    }
-  }, [companyId, authLoading, showAlert, router, fetchCollectionData]);
-
-  const addItem = useCallback(async (collectionName: string, data: any): Promise<string | null> => {
-    try {
-      const processed = { ...data, companyId, createdAt: new Date(), updatedAt: new Date() };
-      if (collectionName === "buses") validateBusData(processed);
-      const ref = await addDoc(collection(db, collectionName), processed);
-      showAlert("success", `${collectionName.slice(0, -1)} added successfully`);
-      // Refresh static data (not bookings — those update via listener)
-      if (collectionName !== "bookings") await fetchInitialData();
-      return ref.id;
-    } catch (err: any) {
-      showAlert("error", err.message || `Failed to add ${collectionName.slice(0, -1)}`);
-      return null;
-    }
-  }, [companyId, showAlert, fetchInitialData]);
-
-  const updateDashboardData = useCallback(
-    <T extends keyof DashboardData>(key: T, value: DashboardData[T]) =>
-      setDashboardData(prev => ({ ...prev, [key]: value })),
-    []
-  );
-
-  // Auth guard
-  useEffect(() => {
-    if (authLoading) return;
-    if (!user)        { router.push("/login"); return; }
-    if (!userProfile) { showAlert("warning", "Loading user profile..."); return; }
-    if (userProfile.role !== "company_admin") { showAlert("error", "Access denied."); router.push("/"); return; }
-    if (!userProfile.companyId) { showAlert("info", "Please complete company setup."); router.push("/company/create-company"); return; }
-    const urlCompanyId = searchParams.get("companyId");
-    if (urlCompanyId && urlCompanyId !== userProfile.companyId) { showAlert("error", "Invalid company ID in URL"); router.push("/login"); return; }
-    fetchInitialData();
-  }, [user, userProfile, authLoading, router, searchParams, fetchInitialData, showAlert]);
-
-  // ── Render active tab ──────────────────────────────────────────────────────
-  const renderActiveTab = () => {
-    const { company, schedules, routes, buses } = dashboardData;
-    const commonProps = {
-  setError:   (msg: string) => showAlert("error"   as const, msg),
-  setSuccess: (msg: string) => showAlert("success" as const, msg),
-  // If you ever add these:
-  // setWarning: (msg: string) => showAlert("warning" as const, msg),
-  // setInfo:    (msg: string) => showAlert("info"    as const, msg),
-} as const;   // ← this helps TS infer everything perfectly
-
-    if (loading) return (
-      <div className="space-y-4">
-        <div className="h-8 bg-gray-200 animate-pulse rounded"></div>
-        <div className="h-96 bg-gray-200 animate-pulse rounded"></div>
+  // Show a loading state if initializing
+  if (dashboard.loading || dashboard.authLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-50">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
       </div>
     );
+  }
 
-    switch (activeTab) {
-      case "overview":
-        return <OverviewTab dashboardData={dashboardData} realtimeStatus={realtimeStatus} setActiveTab={setActiveTab} handleStatusToggle={handleStatusToggle} />;
+  if (!dashboard.user) {
+    return null; // Will redirect via hook
+  }
 
-      case "schedules":
-        return (
-          <SchedulesTab
-            companyId={companyId}
-            schedules={schedules}
-            user={user}
-            userProfile={userProfile}
-            // ✅ After
-setSchedules={(newSchedules) => {
-  const updated = Array.isArray(newSchedules)
-    ? newSchedules.map(s => ({
-        ...s,
-        departureDateTime: s.departureDateTime instanceof Date ? s.departureDateTime : ((d: any) => d?.toDate?.() ?? new Date(d))(s.departureDateTime),
-        arrivalDateTime:   s.arrivalDateTime   instanceof Date ? s.arrivalDateTime   : ((d: any) => d?.toDate?.() ?? new Date(d))(s.arrivalDateTime),
-      }))
-    : schedules;
-  updateDashboardData("schedules", updated);
-}}
-            routes={routes}
-            buses={buses}
-            addSchedule={async (data) => addItem("schedules", {
-              ...data,
-              departureDateTime: new Date(data.departureDateTime),
-              arrivalDateTime:   new Date(data.arrivalDateTime),
-            })}
-            {...commonProps}
-          />
-        );
-
-      case "routes":
-        return (
-          <RoutesTab
-            companyId={companyId}
-            routes={routes}
-            setRoutes={(newRoutes) => updateDashboardData("routes", typeof newRoutes === "function" ? newRoutes(routes) : newRoutes)}
-            addRoute={(data) => addItem("routes", data)}
-            {...commonProps}
-          />
-        );
-
-      case "buses":
-        return (
-          <BusesTab
-            buses={buses}
-            companyId={companyId}
-            setBuses={(newBuses) => updateDashboardData("buses", typeof newBuses === "function" ? newBuses(buses) : newBuses)}
-            {...commonProps}
-          />
-        );
-
-      case "bookings": {
-        const isCompany = (c: Company | null | undefined): c is Company => !!c;
-        return (
-          // ✅ After — only pass what BookingsTabProps actually declares
-        <BookingsTab
-          schedules={schedules}
-          routes={routes}
-          buses={buses}
-          companyId={companyId}
-          user={user}
-          userProfile={userProfile}
-        />
-        );
-      }
-
-      case "profile":
-        return company ? (
-          <CompanyProfileTab
-            company={company}
-            schedules={schedules}
-            routes={routes}
-            setCompany={(c) => updateDashboardData("company", c as Company)}
-            {...commonProps}
-          />
-        ) : null;
-
-      case "settings":
-        return company ? (
-          <SettingsTab
-            company={company}
-            setCompany={(c) => updateDashboardData("company", c as Company)}
-            {...commonProps}
-          />
-        ) : null;
-
-      case "operators":
-        return company ? <TeamManagementTab companyId={companyId} {...commonProps} /> : null;
-
-      case "payments":
-        return company && paymentSettings ? (
-          <PaymentsTab company={company} paymentSettings={paymentSettings} bookings={bookings} {...commonProps} />
-        ) : null;
-
+  const renderActiveTab = () => {
+    switch (dashboard.activeTab) {
+      case 'overview':
+        return <OverviewTab dashboard={dashboard} />;
+      case 'operators':
+        return <OperatorsAndBranchesTab dashboard={dashboard} />;
+      case 'regions':
+        return <RegionsTab dashboard={dashboard} />;
+      case 'revenue':
+        return <RevenueTab dashboard={dashboard} />;
+      case 'profile':
+        return <ProfileTab dashboard={dashboard} />;
+      case 'buses':
+        return <BusesTab dashboard={dashboard} />;
+      case 'bookings':
+        return <BookingsTab dashboard={dashboard} />;
       default:
-        return <div className="text-center py-12"><p className="text-gray-500">Tab not found</p></div>;
+        return (
+          <div className="p-8 text-center bg-white rounded-xl shadow-sm border border-gray-100">
+            <h2 className="text-xl font-bold text-gray-900 mb-2">Select a Tab</h2>
+            <p className="text-gray-500">This section is currently under construction.</p>
+          </div>
+        );
     }
   };
 
-  if (loading || authLoading) return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-      <div className="text-center">
-        <Loader2 className="w-12 h-12 text-blue-600 animate-spin mx-auto" />
-        <p className="mt-4 text-gray-600">Loading dashboard...</p>
-      </div>
-    </div>
-  );
-
-  if (!isValidUser) return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-      <div className="text-center bg-white p-8 rounded-2xl shadow-lg max-w-md">
-        <AlertTriangle className="w-16 h-16 text-red-400 mx-auto mb-4" />
-        <h2 className="text-xl font-semibold text-gray-800 mb-2">Access Denied</h2>
-        <p className="text-gray-600 mb-6">You don't have permission to access this dashboard.</p>
-        <button onClick={() => router.push("/login")} className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
-          Go to Login
-        </button>
-      </div>
-    </div>
-  );
-
-  if (!dashboardData.company) return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-      <div className="text-center bg-white p-8 rounded-2xl shadow-lg max-w-md">
-        <Building2 className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-        <h2 className="text-xl font-semibold text-gray-800 mb-2">Company Not Found</h2>
-        <p className="text-gray-600 mb-6">Please ensure your company is set up correctly or contact support.</p>
-        <button onClick={() => router.push("/support")} className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
-          Contact Support
-        </button>
-      </div>
-    </div>
-  );
-
-  const { company } = dashboardData;
-
   return (
-    <div className="min-h-screen bg-gray-50 flex">
-      <Sidebar
-        activeSection={activeTab}
-        setActiveSection={setActiveTab}
-        isMobileOpen={isMobileOpen}
-        setIsMobileOpen={setIsMobileOpen}
-        company={company}
-        availableTabs={availableTabs}
-        pendingCount={statistics.pendingBookings}
-        onSignOut={signOut}
-      />
-
-      <div className="flex-1 flex flex-col min-h-screen">
-        <header className="bg-white border-b sticky top-0 z-30 shadow-sm">
-          <div className="px-4 sm:px-6 lg:px-8 py-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-4">
-                <button onClick={() => setIsMobileOpen(true)} className="lg:hidden p-2 hover:bg-gray-100 rounded-lg">
-                  <Menu className="w-6 h-6" />
-                </button>
-                <div>
-                  <h1 className="text-2xl font-bold text-gray-900">{TABS.find(t => t.id === activeTab)?.label || 'Dashboard'}</h1>
-                  <p className="text-sm text-gray-500">Welcome back, manage your operations</p>
-                </div>
-              </div>
-
-              <div className="flex items-center space-x-4">
-                {statistics.pendingBookings > 0 && (
-                  <div
-                    className="flex items-center space-x-2 px-3 py-2 bg-yellow-100 text-yellow-800 rounded-lg cursor-pointer hover:bg-yellow-200 transition-colors"
-                    onClick={() => setActiveTab("bookings")}
-                  >
-                    <Bell className="w-4 h-4" />
-                    <span className="text-sm font-medium">{statistics.pendingBookings} pending</span>
-                  </div>
-                )}
-
-                <button
-                  onClick={handleStatusToggle}
-                  className={`px-6 py-2.5 rounded-lg font-medium transition-all duration-200 ${
-                    company?.status === "active"
-                      ? "bg-amber-500 hover:bg-amber-600 text-white shadow-lg"
-                      : "bg-green-600 hover:bg-green-700 text-white shadow-lg"
-                  }`}
-                >
-                  {company?.status === "active" ? "Pause Company" : "Activate Company"}
-                </button>
-              </div>
-            </div>
-          </div>
-        </header>
-
-        <main className="flex-1 px-4 sm:px-6 lg:px-8 py-8">
-          {alert && (
-            <div className="mb-6">
-              <AlertMessage type={alert.type} message={alert.message} onClose={clearAlert} />
-            </div>
-          )}
-          <div className="max-w-7xl mx-auto">{renderActiveTab()}</div>
-        </main>
-      </div>
-    </div>
+    <QueryClientProvider client={queryClient}>
+      <AdminLayout
+        user={dashboard.user}
+        userProfile={dashboard.userProfile}
+        company={dashboard.dashboardData?.company || null}
+        onSignOut={dashboard.signOut}
+        activeCategory={dashboard.activeCategory as any}
+        setActiveCategory={dashboard.setActiveCategory as any}
+        activeTab={dashboard.activeTab as any}
+        setActiveTab={dashboard.setActiveTab as any}
+        subTabs={CATEGORIES.find(c => c.id === dashboard.activeCategory)?.subTabs || []}
+        availableTabs={dashboard.availableTabs}
+        statistics={dashboard.statistics}
+        searchQuery={dashboard.searchQuery}
+        setSearchQuery={dashboard.setSearchQuery}
+        isBusy={dashboard.isBusy}
+        NotificationBellComponent={NotificationBell}
+      >
+        {dashboard.alert && (
+          <AlertMessage
+            type={dashboard.alert.type}
+            message={dashboard.alert.message}
+            onClose={dashboard.clearAlert}
+            className="mx-auto max-w-7xl"
+            scrollIntoView
+          />
+        )}
+        {renderActiveTab()}
+      </AdminLayout>
+    </QueryClientProvider>
   );
 }

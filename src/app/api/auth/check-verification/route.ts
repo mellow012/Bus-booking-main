@@ -3,59 +3,31 @@
 // GET /api/auth/check-verification
 //
 // Checks whether the authenticated user's email is verified according to
-// Firebase Auth (the source of truth).
-//
-// Used by the /verify-email page to poll verification status so the user
-// doesn't have to manually refresh after clicking the verification link.
-//
-// Requires: Authorization: Bearer <idToken> header
+// Supabase Auth (the source of truth).
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { NextRequest, NextResponse } from 'next/server';
-import { adminAuth } from '@/lib/firebaseAdmin';
+import { createClient } from '@/utils/supabase/server';
 
 export async function GET(request: NextRequest) {
   try {
-    // ── Auth ──────────────────────────────────────────────────────────────────
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader?.startsWith('Bearer ')) {
-      return NextResponse.json(
-        { error: 'Unauthorized', message: 'Missing or invalid authorization header' },
-        { status: 401 }
-      );
-    }
+    const supabase = await createClient();
+    const { data: { user }, error } = await supabase.auth.getUser();
 
-    let decodedToken;
-    try {
-      decodedToken = await adminAuth.verifyIdToken(authHeader.slice(7));
-    } catch {
+    if (error || !user) {
       return NextResponse.json(
-        { error: 'Unauthorized', message: 'Invalid or expired token' },
+        { error: 'Unauthorized', message: 'Missing or invalid authentication session' },
         { status: 401 }
-      );
-    }
-
-    // ── Fetch user record ─────────────────────────────────────────────────────
-    // We deliberately call getUser() instead of relying solely on the decoded
-    // token claims because the token may be up to 1 hour old. getUser() always
-    // returns the current server-side state from Firebase Auth.
-    let userRecord;
-    try {
-      userRecord = await adminAuth.getUser(decodedToken.uid);
-    } catch {
-      return NextResponse.json(
-        { error: 'User not found', message: 'No user found for this token' },
-        { status: 404 }
       );
     }
 
     return NextResponse.json(
       {
         success:       true,
-        uid:           userRecord.uid,
-        email:         userRecord.email,
-        emailVerified: userRecord.emailVerified,
-        message:       userRecord.emailVerified
+        uid:           user.id,
+        email:         user.email,
+        emailVerified: !!user.email_confirmed_at,
+        message:       user.email_confirmed_at
           ? 'Email is verified'
           : 'Email verification pending',
       },

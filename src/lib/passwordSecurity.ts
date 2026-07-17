@@ -1,34 +1,19 @@
 /**
  * Password Security Utilities
  *
- * FIX F-07: The previous implementation tracked failed login attempts in an
- * in-memory Map. This silently fails in production because:
- *   (a) All state wipes on every redeploy — lockouts reset.
- *   (b) Behind a load balancer, each pod has isolated state — lockouts
- *       are bypassed by hitting a different pod.
- *
- * Failed login attempts are now stored in a Firestore `loginAttempts`
- * collection with a TTL-based expiry. Firestore is used here (rather than
- * Redis) to avoid adding a new infrastructure dependency for this feature;
- * if Upstash Redis is already in use for the rate limiter, the Firestore
- * calls here can trivially be replaced with Redis SET/GET/DEL/EXPIRE calls.
- *
- * Collection structure: loginAttempts/{userId}
- *   { count: number, resetTime: number (ms epoch), lockedUntil?: number }
+ * NOTE: Failed login attempt tracking (lockout) is now handled automatically
+ * by Supabase Auth (Brute force protection).
  */
 
-import { adminDb } from './firebaseAdmin';
-import { adminAuth } from './firebaseAdmin';
+import { createAdminClient } from '@/utils/supabase/admin';
 import { logger } from './logger';
-import { FieldValue } from 'firebase-admin/firestore';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const MAX_ATTEMPTS = 5;
 const LOCKOUT_DURATION_MS = 15 * 60 * 1000; // 15 minutes
-const COLLECTION = 'loginAttempts';
 
-// ─── Password strength validation (unchanged — no in-memory state) ────────────
+// ─── Password strength validation (No state) ──────────────────────────────────
 
 export function validatePasswordStrength(password: string): {
   isStrong: boolean;
@@ -40,8 +25,8 @@ export function validatePasswordStrength(password: string): {
   const suggestions: string[] = [];
   let score = 0;
 
-  if (password.length < 8) {
-    issues.push('Password must be at least 8 characters');
+  if (password.length < 6) {
+    issues.push('Password must be at least 6 characters');
   } else {
     score++;
   }
@@ -95,92 +80,40 @@ export function validatePasswordStrength(password: string): {
   };
 }
 
-// ─── Failed login attempt tracking (Firestore-backed) ────────────────────────
+// ─── Failed login attempt tracking (Placeholder for Supabase) ───────────────
 
 /**
  * Record a failed login attempt for a user.
- * Returns true if the account should now be locked (>= MAX_ATTEMPTS).
+ * Supabase handles this automatically, but we keep the stub for compatibility.
  */
 export async function recordFailedLoginAttempt(userId: string): Promise<boolean> {
-  const ref = adminDb.collection(COLLECTION).doc(userId);
-  const now = Date.now();
-
-  const snap = await ref.get();
-  const data = snap.data();
-
-  // If no record or lockout window has passed, start a fresh counter
-  if (!data || now - data.resetTime > LOCKOUT_DURATION_MS) {
-    await ref.set({ count: 1, resetTime: now });
-    return false;
-  }
-
-  const newCount = (data.count ?? 0) + 1;
-  await ref.update({ count: newCount });
-  return newCount >= MAX_ATTEMPTS;
+  // Supabase Auth has built-in brute force protection.
+  return false;
 }
 
 /**
- * Clear failed login attempts for a user (call on successful login).
+ * Clear failed login attempts for a user.
  */
 export async function clearFailedLoginAttempts(userId: string): Promise<void> {
-  await adminDb.collection(COLLECTION).doc(userId).delete();
+  // Handled by Supabase.
 }
 
 /**
- * Check if an account is currently locked due to too many failed attempts.
+ * Check if an account is currently locked.
  */
 export async function isAccountLocked(userId: string): Promise<boolean> {
-  const snap = await adminDb.collection(COLLECTION).doc(userId).get();
-  if (!snap.exists) return false;
-
-  const data = snap.data()!;
-  const now = Date.now();
-
-  if (data.count >= MAX_ATTEMPTS && now - data.resetTime < LOCKOUT_DURATION_MS) {
-    return true;
-  }
-
-  // Auto-clean expired record
-  if (now - data.resetTime >= LOCKOUT_DURATION_MS) {
-    await snap.ref.delete();
-  }
-
+  // Supabase manages this state.
   return false;
 }
 
 /**
  * Get the number of seconds remaining in the current lockout.
- * Returns 0 if the account is not locked.
  */
 export async function getLockoutTimeRemaining(userId: string): Promise<number> {
-  const snap = await adminDb.collection(COLLECTION).doc(userId).get();
-  if (!snap.exists) return 0;
-
-  const data = snap.data()!;
-  const now = Date.now();
-  const elapsed = now - data.resetTime;
-
-  if (elapsed >= LOCKOUT_DURATION_MS) {
-    await snap.ref.delete();
-    return 0;
-  }
-
-  return Math.ceil((LOCKOUT_DURATION_MS - elapsed) / 1000);
+  return 0;
 }
 
-// ─── Password reset token validation ─────────────────────────────────────────
-
-/**
- * Validate a Firebase oobCode reset token (basic sanity check).
- * Full validation is performed by Firebase on the server when the code is used.
- */
-export function validateResetToken(token: string): boolean {
-  if (!token || typeof token !== 'string') return false;
-  if (token.length < 20) return false;
-  return true;
-}
-
-// ─── Password update via Admin SDK ───────────────────────────────────────────
+// ─── Password update via Supabase Admin ───────────────────────────────────────
 
 export async function updateUserPassword(
   userId: string,
@@ -195,8 +128,12 @@ export async function updateUserPassword(
       };
     }
 
-    await adminAuth.updateUser(userId, { password: newPassword });
-    await clearFailedLoginAttempts(userId);
+    const adminClient = createAdminClient();
+    const { error } = await adminClient.auth.admin.updateUserById(userId, {
+      password: newPassword,
+    });
+
+    if (error) throw error;
 
     await logger.logSuccess('auth', 'Password updated successfully', {
       userId,
@@ -220,7 +157,13 @@ export async function updateUserPassword(
 
 export async function disableUserAccount(userId: string): Promise<void> {
   try {
-    await adminAuth.updateUser(userId, { disabled: true });
+    const adminClient = createAdminClient();
+    const { error } = await adminClient.auth.admin.updateUserById(userId, {
+      ban_duration: '876000h', // Effectively forever (100 years)
+    });
+
+    if (error) throw error;
+
     await logger.logSecurityEvent('User account disabled due to security policy', undefined, {
       userId,
       action: 'account_disabled',
@@ -232,10 +175,3 @@ export async function disableUserAccount(userId: string): Promise<void> {
     });
   }
 }
-
-// ─── Removed: initPasswordSecurityCleanup ────────────────────────────────────
-// The old setInterval cleanup is no longer needed because Firestore documents
-// are cleaned up lazily on read (isAccountLocked / getLockoutTimeRemaining).
-// For a more thorough cleanup, set a Firestore TTL policy on the loginAttempts
-// collection via the Firebase Console:
-//   Collection: loginAttempts  |  TTL field: resetTime  |  Unit: milliseconds

@@ -1,10 +1,11 @@
 'use client';
 
 import React, { useState } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { getAuth, sendPasswordResetEmail } from 'firebase/auth';
 import { Button } from '@/components/ui/button';
+import { createClient } from '@/utils/supabase/client'; // 💡 Import client-side Supabase
 import { 
   EnvelopeIcon, 
   ArrowLeftIcon,
@@ -30,29 +31,13 @@ const validateEmail = (email: string): string => {
   return '';
 };
 
-const getErrorMessage = (error: any): string => {
-  if (error?.code) {
-    switch (error.code) {
-      case 'auth/user-not-found':
-        // Don't reveal if user exists for security
-        return 'If an account exists with this email, a password reset link has been sent.';
-      case 'auth/invalid-email':
-        return 'Please enter a valid email address.';
-      case 'auth/too-many-requests':
-        return 'Too many requests. Please try again later.';
-      case 'auth/network-request-failed':
-        return 'Network error. Please check your connection and try again.';
-      default:
-        return 'Unable to send reset email. Please try again or contact support.';
-    }
-  }
-  return error?.message || 'An unexpected error occurred. Please try again.';
-};
+// Initialize client instance once outside the react render window cycle
+const supabase = createClient();
 
 export default function ForgotPassword() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const emailParam = searchParams.get('email');
+  const emailParam = searchParams?.get('email');
 
   // Form state
   const [email, setEmail] = useState(emailParam || '');
@@ -91,26 +76,27 @@ export default function ForgotPassword() {
     setError({});
 
     try {
-      const auth = getAuth();
+      // 💡 FIXED: Directly invoke Supabase client SDK on the client side.
+      // This automatically triggers the "Send Email Hook" configured in your Supabase dashboard.
+      const { error: apiError } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
+        // 💡 FIXED: Direct the verification link to pass through your auth/callback route.
+        // This exchanges the recovery code for valid session cookies before mounting the reset-password page.
+        redirectTo: `${window.location.origin}/auth/callback?next=/reset-password`,
+      });
       
-      // Configure action code settings
-      const actionCodeSettings = {
-        url: `${window.location.origin}/login?email=${encodeURIComponent(email)}`,
-        handleCodeInApp: false,
-      };
-
-      await sendPasswordResetEmail(auth, email, actionCodeSettings);
-      
-      setSuccess(true);
-      
-    } catch (err: any) {
-      console.error('Password reset error:', err);
-      // For security, we show success message even if user doesn't exist
-      if (err.code === 'auth/user-not-found') {
-        setSuccess(true);
+      if (apiError) {
+        // Handle specific rate limits safely 
+        if (apiError.status === 429 || apiError.message.includes('rate limit')) {
+          setError({ general: 'Too many requests. Please wait a few minutes before trying again.' });
+        } else {
+          setError({ general: apiError.message });
+        }
       } else {
-        setError({ general: getErrorMessage(err) });
+        setSuccess(true);
       }
+    } catch (err: unknown) {
+      console.error('Password reset error:', err);
+      setError({ general: 'An unexpected connection failure occurred. Please try again.' });
     } finally {
       setIsSubmitting(false);
     }
@@ -129,21 +115,28 @@ export default function ForgotPassword() {
       return `${baseClass} border-red-300 text-red-900 placeholder-red-300 focus:ring-red-500 focus:border-red-500`;
     }
     
-    return `${baseClass} border-gray-300 focus:ring-blue-500 focus:border-blue-500`;
+    return `${baseClass} border-gray-300 focus:ring-brand-700 focus:border-brand-700`;
   };
 
   // Success view
   if (success) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
-        <div className="sm:mx-auto sm:w-full sm:max-w-md">
-          <div className="flex justify-center">
-            <div className="w-16 h-16 bg-green-500 rounded-full flex items-center justify-center shadow-lg">
-              <CheckCircleIcon className="w-10 h-10 text-white" />
+      <div className="min-h-screen flex flex-col items-center pt-28 sm:pt-32 lg:pt-36 pb-8 bg-gradient-to-br from-gray-50 to-gray-100 sm:px-6 lg:px-8 overflow-y-auto">
+        <div className="w-full max-w-md pt-2">
+          <div className="flex justify-center pb-1">
+            <div className="flex items-center justify-center transition-transform duration-300 hover:scale-105 max-h-16 sm:max-h-20 md:max-h-20">
+              <Image
+                src="/tibhukebus_logo_transparent.png"
+                alt="TibhukeBus Logo"
+                width={120}
+                height={48}
+                className="w-auto h-auto object-contain"
+                priority
+              />
             </div>
           </div>
           
-          <h1 className="mt-6 text-center text-4xl font-extrabold text-gray-900 tracking-tight">
+          <h1 className="mt-4 text-center text-3xl font-extrabold text-gray-900 tracking-tight">
             Check your email
           </h1>
           <p className="mt-2 text-center text-sm text-gray-600">
@@ -154,10 +147,10 @@ export default function ForgotPassword() {
         <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
           <div className="bg-white py-10 px-6 shadow-xl rounded-2xl sm:px-12">
             <div className="text-center space-y-4">
-              <div className="bg-blue-50 border border-blue-200 text-blue-700 px-4 py-3 rounded-lg">
+              <div className="bg-brand-50 border border-brand-100 text-brand-800 px-4 py-3 rounded-lg">
                 <InformationCircleIcon className="w-5 h-5 inline mr-2" />
                 <span className="text-sm">
-                  We've sent password reset instructions to <strong>{email}</strong>
+                  We&apos;ve sent password reset instructions to <strong>{email}</strong>
                 </span>
               </div>
 
@@ -169,7 +162,7 @@ export default function ForgotPassword() {
               <div className="pt-4 space-y-3">
                 <Button
                   onClick={() => router.push('/login')}
-                  className="w-full flex justify-center items-center py-2.5 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200"
+                  className="w-full flex justify-center items-center py-2.5 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-coral-500 hover:bg-coral-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-coral-500 transition-all duration-200"
                 >
                   Back to Sign In
                 </Button>
@@ -177,9 +170,9 @@ export default function ForgotPassword() {
                 <button
                   onClick={handleResend}
                   disabled={isSubmitting}
-                  className="w-full text-sm text-blue-600 hover:text-blue-500 focus:outline-none focus:underline transition-colors duration-200 disabled:opacity-50"
+                  className="w-full text-sm text-brand-700 hover:text-brand-800 focus:outline-none focus:underline transition-colors duration-200 disabled:opacity-50"
                 >
-                  Didn't receive the email? Resend
+                  Didn&apos;t receive the email? Resend
                 </button>
               </div>
 
@@ -188,7 +181,7 @@ export default function ForgotPassword() {
                   Need help?{' '}
                   <Link 
                     href="/contact" 
-                    className="text-blue-600 hover:text-blue-500 focus:outline-none focus:underline"
+                    className="text-brand-700 hover:text-brand-800 focus:outline-none focus:underline"
                   >
                     Contact support
                   </Link>
@@ -203,21 +196,28 @@ export default function ForgotPassword() {
 
   // Form view
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
-      <div className="sm:mx-auto sm:w-full sm:max-w-md">
+    <div className="min-h-screen flex flex-col items-center pt-28 sm:pt-32 lg:pt-36 pb-8 bg-gradient-to-br from-gray-50 to-gray-100 sm:px-6 lg:px-8 overflow-y-auto">
+      <div className="w-full max-w-md pt-2">
         {/* Logo */}
-        <div className="flex justify-center">
-          <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center shadow-lg">
-            <span className="text-white font-bold text-3xl">B</span>
+        <div className="flex justify-center pb-1">
+          <div className="flex items-center justify-center transition-transform duration-300 hover:scale-105 max-h-16 sm:max-h-20 md:max-h-20">
+            <Image
+              src="/tibhukebus_logo_transparent.png"
+              alt="TibhukeBus Logo"
+              width={120}
+              height={48}
+              className="w-auto h-auto object-contain"
+              priority
+            />
           </div>
         </div>
-        
+
         {/* Header */}
         <h1 className="mt-6 text-center text-4xl font-extrabold text-gray-900 tracking-tight">
           Reset your password
         </h1>
         <p className="mt-2 text-center text-sm text-gray-600">
-          Enter your email address and we'll send you a link to reset your password
+          Enter your email address and we&apos;ll send you a link to reset your password
         </p>
       </div>
 
@@ -238,7 +238,7 @@ export default function ForgotPassword() {
             )}
 
             {/* Info Box */}
-            <div className="bg-blue-50 border border-blue-200 text-blue-700 px-4 py-3 rounded-lg flex items-start">
+            <div className="bg-brand-50 border border-brand-100 text-brand-800 px-4 py-3 rounded-lg flex items-start">
               <InformationCircleIcon className="w-5 h-5 mr-2 flex-shrink-0 mt-0.5" />
               <div className="text-sm">
                 <p className="font-medium">Password Reset Instructions</p>
@@ -270,6 +270,7 @@ export default function ForgotPassword() {
                   value={email}
                   onChange={handleEmailChange}
                   onBlur={handleBlur}
+                  onFocus={(e) => e.currentTarget.scrollIntoView({ behavior: 'smooth', block: 'center' })}
                   className={getInputClassName()}
                   placeholder="Enter your email address"
                   disabled={isSubmitting}
@@ -292,7 +293,7 @@ export default function ForgotPassword() {
               <Button
                 type="submit"
                 disabled={isSubmitting}
-                className="w-full flex justify-center items-center py-2.5 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+                className="w-full flex justify-center items-center py-2.5 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-coral-500 hover:bg-coral-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-coral-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
                 aria-label={isSubmitting ? 'Sending reset link...' : 'Send reset link'}
               >
                 {isSubmitting ? (
@@ -327,10 +328,10 @@ export default function ForgotPassword() {
           {/* Additional Help */}
           <div className="mt-6 pt-6 border-t border-gray-200 text-center">
             <p className="text-xs text-gray-500">
-              Don't have an account?{' '}
+              Don&apos;t have an account?{' '}
               <Link 
                 href="/register" 
-                className="text-blue-600 hover:text-blue-500 focus:outline-none focus:underline transition-colors duration-200"
+                className="text-brand-700 hover:text-brand-800 focus:outline-none focus:underline transition-colors duration-200"
               >
                 Sign up
               </Link>
@@ -339,7 +340,7 @@ export default function ForgotPassword() {
               Having trouble?{' '}
               <Link 
                 href="/contact" 
-                className="text-blue-600 hover:text-blue-500 focus:outline-none focus:underline transition-colors duration-200"
+                className="text-brand-700 hover:text-brand-800 focus:outline-none focus:underline transition-colors duration-200"
               >
                 Contact support
               </Link>

@@ -21,7 +21,7 @@ export default function GlobalError({
           <h2 className="text-3xl font-bold text-gray-900 mb-4">A critical error occurred</h2>
           <Button
             onClick={() => reset()}
-            className="h-12 px-8 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-base font-semibold"
+            className="h-12 px-8 bg-coral-500 hover:bg-coral-600 text-white rounded-xl text-base font-semibold"
           >
             Try again
           </Button>

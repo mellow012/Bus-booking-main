@@ -34,9 +34,9 @@ const STEPS = [
     title: "Search Routes",
     subtitle: "Find your journey",
     description: "Enter your departure city and destination. We scan all active operators and show you every available schedule in real time.",
-    accent: "#2563EB",          // blue-600
-    lightBg: "#EFF6FF",         // blue-50
-    borderClr: "#BFDBFE",       // blue-200
+    accent: "#005A5B",          // brand-teal
+    lightBg: "#f0fbfb",         // brand-50
+    borderClr: "#ccf0f0",       // brand-200
     preview: <SearchPreview />,
   },
   {
@@ -79,18 +79,18 @@ const STEPS = [
 function SearchPreview() {
   return (
     <div className="space-y-2 w-full">
-      <div className="flex items-center gap-2 bg-white rounded-xl px-3 py-2.5 border border-blue-100 shadow-sm">
-        <MapPin className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+      <div className="flex items-center gap-2 bg-white rounded-xl px-3 py-2.5 border border-brand-100 shadow-sm">
+        <MapPin className="w-3.5 h-3.5 text-brand-400 shrink-0" />
         <span className="text-xs font-semibold text-gray-800">Blantyre</span>
       </div>
-      <div className="flex justify-center"><div className="w-px h-3 bg-blue-200" /></div>
-      <div className="flex items-center gap-2 bg-white rounded-xl px-3 py-2.5 border border-blue-100 shadow-sm">
-        <MapPin className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+      <div className="flex justify-center"><div className="w-px h-3 bg-brand-200" /></div>
+      <div className="flex items-center gap-2 bg-white rounded-xl px-3 py-2.5 border border-brand-100 shadow-sm">
+        <MapPin className="w-3.5 h-3.5 text-brand-600 shrink-0" />
         <span className="text-xs font-semibold text-gray-800">Lilongwe</span>
       </div>
-      <div className="flex items-center justify-between bg-blue-600 rounded-xl px-3 py-2 mt-1">
+      <div className="flex items-center justify-between bg-brand-700 rounded-xl px-3 py-2 mt-1">
         <span className="text-xs font-bold text-white">Search Buses</span>
-        <Search className="w-3.5 h-3.5 text-blue-200" />
+        <Search className="w-3.5 h-3.5 text-brand-200" />
       </div>
     </div>
   );
@@ -126,7 +126,7 @@ function SchedulePreview() {
 function PaymentPreview() {
   const methods = [
     { label: "Airtel Money", icon: Smartphone, active: true, clr: "text-red-500", bg: "bg-red-50 border-red-200" },
-    { label: "TNM Mpamba",   icon: Smartphone, active: false, clr: "text-blue-500", bg: "bg-blue-50 border-blue-100" },
+    { label: "TNM Mpamba",   icon: Smartphone, active: false, clr: "text-brand-600", bg: "bg-brand-50 border-brand-100" },
     { label: "Card",         icon: CreditCard, active: false, clr: "text-gray-500", bg: "bg-gray-50 border-gray-200" },
     { label: "Cash",         icon: Banknote,   active: false, clr: "text-gray-500", bg: "bg-gray-50 border-gray-200" },
   ];
@@ -210,12 +210,12 @@ const HowItWorks = () => {
     <section
       ref={ref}
       className="relative py-20 overflow-hidden"
-      style={{ background: "linear-gradient(160deg,#f8fafc 0%,#eff6ff 50%,#f5f3ff 100%)" }}
+      style={{ background: "linear-gradient(160deg,#f8fafc 0%,#f0fbfb 50%,#f5f3ff 100%)" }}
       aria-label="How TibhukeBus Works"
     >
       {/* Background decoration */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute top-0 right-0 w-96 h-96 rounded-full bg-blue-100/60 blur-3xl -translate-y-1/2 translate-x-1/2" />
+        <div className="absolute top-0 right-0 w-96 h-96 rounded-full bg-brand-100/60 blur-3xl -translate-y-1/2 translate-x-1/2" />
         <div className="absolute bottom-0 left-0 w-80 h-80 rounded-full bg-violet-100/50 blur-3xl translate-y-1/2 -translate-x-1/3" />
         {/* Subtle dot grid */}
         <svg className="absolute inset-0 w-full h-full opacity-[0.035]" xmlns="http://www.w3.org/2000/svg">
@@ -235,15 +235,15 @@ const HowItWorks = () => {
           className="text-center mb-14 transition-all duration-700"
           style={{ opacity: visible ? 1 : 0, transform: visible ? "none" : "translateY(20px)" }}
         >
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-blue-100 text-blue-700 text-xs font-bold uppercase tracking-widest mb-4 border border-blue-200">
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-brand-100 text-brand-800 text-xs font-bold uppercase tracking-widest mb-4 border border-brand-200">
             <Clock className="w-3.5 h-3.5" /> Book in under 2 minutes
           </div>
           <h2 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-gray-900 tracking-tight mb-4"
             style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
             How{" "}
             <span className="relative inline-block">
-              <span className="relative z-10 text-blue-600">TibhukeBus</span>
-              <span className="absolute bottom-1 left-0 w-full h-3 bg-blue-100 rounded-sm -z-0" />
+              <span className="relative z-10 text-brand-700">TibhukeBus</span>
+              <span className="absolute bottom-1 left-0 w-full h-3 bg-brand-100 rounded-sm -z-0" />
             </span>{" "}
             Works
           </h2>
@@ -358,7 +358,7 @@ const HowItWorks = () => {
             opacity: visible ? 1 : 0,
             transform: visible ? "none" : "translateY(20px)",
             transitionDelay: "520ms",
-            background: "linear-gradient(135deg,#1e40af 0%,#2563eb 50%,#4f46e5 100%)",
+            background: "linear-gradient(135deg,#004142 0%,#005A5B 50%,#007375 100%)",
           }}
         >
           {/* Inner decoration */}
@@ -373,7 +373,7 @@ const HowItWorks = () => {
 
           <div className="relative flex flex-col sm:flex-row items-center justify-between gap-6 px-8 py-8 sm:py-10">
             <div>
-              <p className="text-blue-200 text-sm font-semibold mb-1">Ready to travel?</p>
+              <p className="text-brand-200 text-sm font-semibold mb-1">Ready to travel?</p>
               <h3
                 className="text-white text-2xl sm:text-3xl font-extrabold leading-tight"
                 style={{ fontFamily: "'Plus Jakarta Sans',sans-serif" }}
@@ -383,8 +383,8 @@ const HowItWorks = () => {
             </div>
             <div className="flex flex-col sm:flex-row gap-3 shrink-0">
               <button
-                onClick={() => router.push("/search")}
-                className="group flex items-center justify-center gap-2 px-7 py-3.5 bg-white text-blue-700 font-bold rounded-2xl hover:bg-blue-50 transition-all shadow-lg text-sm active:scale-[.97]"
+                onClick={() => router.push("/schedules")}
+                className="group flex items-center justify-center gap-2 px-7 py-3.5 bg-white text-brand-850 font-bold rounded-2xl hover:bg-brand-50 transition-all shadow-lg text-sm active:scale-[.97]"
               >
                 Find a Bus
                 <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />

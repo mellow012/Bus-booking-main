@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { adminAuth, adminDb } from '@/lib/firebaseAdmin';
+import { createAdminClient } from '@/utils/supabase/admin';
+import { prisma } from '@/lib/prisma';
 import { sendPasswordResetEmail } from '@/lib/email-service';
-import { FieldValue } from 'firebase-admin/firestore';
-import { apiRateLimiter, authRateLimiter, getClientIp } from '@/lib/rateLimiter';
+import { authRateLimiter, getClientIp } from '@/lib/rateLimit';
 import { logger } from '@/lib/logger';
 import { z } from 'zod';
 import { companyNameSchema, emailSchema, phoneSchema } from '@/lib/validationSchemas';
@@ -31,7 +31,6 @@ export async function POST(request: NextRequest): Promise<NextResponse<ApiRespon
 
     if (!rateLimit.success) {
       const retryAfter = Math.ceil((rateLimit.reset - Date.now()) / 1000);
-      // ✅ Fix 1: added missing `return`
       return NextResponse.json(
         {
           success: false,
@@ -47,7 +46,6 @@ export async function POST(request: NextRequest): Promise<NextResponse<ApiRespon
     }
 
     // ─── Validation ──────────────────────────────────────────────────────────
-    // ✅ Fix 2: changed `var` to `const` and moved outside inner try
     let companyName: string;
     let companyEmail: string;
     let adminFirstName: string;
@@ -80,15 +78,13 @@ export async function POST(request: NextRequest): Promise<NextResponse<ApiRespon
     }
 
     const trimmedEmail = companyEmail.toLowerCase();
+    const adminClient = createAdminClient();
 
     // ─── Duplicate checks ────────────────────────────────────────────────────
-    let existingUser = null;
-    try {
-      existingUser = await adminAuth.getUserByEmail(trimmedEmail);
-    } catch (error: any) {
-      if (error.code !== 'auth/user-not-found') throw error;
-    }
-
+    const { data: { users }, error: listError } = await adminClient.auth.admin.listUsers();
+    if (listError) throw listError;
+    
+    const existingUser = users.find(u => u.email === trimmedEmail);
     if (existingUser) {
       return NextResponse.json(
         { success: false, error: 'Email already in use by a user', message: '' },
@@ -96,107 +92,123 @@ export async function POST(request: NextRequest): Promise<NextResponse<ApiRespon
       );
     }
 
-    const existingCompanies = await adminDb
-      .collection('companies')
-      .where('email', '==', trimmedEmail)
-      .limit(1)
-      .get();
+    const existingCompany = await prisma.company.findFirst({
+      where: { email: trimmedEmail }
+    });
 
-    if (!existingCompanies.empty) {
+    if (existingCompany) {
       return NextResponse.json(
         { success: false, error: 'Email already in use by a company', message: '' },
         { status: 400 }
       );
     }
 
-    // ─── Create Auth user ────────────────────────────────────────────────────
-    const companyRef = adminDb.collection('companies').doc();
-    const companyId = companyRef.id;
-
-    const userRecord = await adminAuth.createUser({
-      email: trimmedEmail,
-      emailVerified: false,
-      disabled: false,
+    const existingPrismaUser = await prisma.user.findFirst({
+      where: { email: trimmedEmail }
     });
 
-    // ─── Write Firestore docs ────────────────────────────────────────────────
-    // ✅ Fix 3: clean up orphaned Auth user if batch commit fails
+    if (existingPrismaUser) {
+      return NextResponse.json(
+        { success: false, error: 'Email already in use by a user', message: '' },
+        { status: 400 }
+      );
+    }
+
+    // ─── Create Supabase Auth user ───────────────────────────────────────────
+    const { data: { user: userRecord }, error: createError } = await adminClient.auth.admin.createUser({
+      email: trimmedEmail,
+      email_confirm: false,
+    });
+
+    if (createError || !userRecord) {
+      throw createError || new Error('Failed to create auth user');
+    }
+
+    // ─── Write records using Prisma transaction ─────────────────────────────
+    let companyId: string;
     try {
-      const batch = adminDb.batch();
+      const result = await prisma.$transaction(async (tx: any) => {
+        const company = await tx.company.create({
+          data: {
+            name: companyName.trim(),
+            email: trimmedEmail,
+            status: 'pending',
+            setupCompleted: false,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            maxBuses: 3,
+          },
+        });
 
-      batch.set(companyRef, {
-        name: companyName.trim(),
-        email: trimmedEmail,
-        adminUserId: userRecord.uid,
-        status: 'pending',
-        setupCompleted: false,
-        createdAt: FieldValue.serverTimestamp(),
-        updatedAt: FieldValue.serverTimestamp(),
-        maxBuses: 3,
-        businessDetails: {
-          address: '',
-          phone: '',
-          license: '',
-          description: '',
-          routes: [],
-        },
+        await tx.user.create({
+          data: {
+            id: userRecord.id,
+            uid: userRecord.id,
+            email: trimmedEmail,
+            firstName: (adminFirstName || '').trim(),
+            lastName: (adminLastName || '').trim(),
+            phone: (adminPhone || '').trim(),
+            role: 'company_admin',
+            companyId: company.id,
+            passwordSet: false,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+        });
+
+        return company;
       });
 
-      const userRef = adminDb.collection('users').doc(userRecord.uid);
-      batch.set(userRef, {
-        email: trimmedEmail,
-        firstName: (adminFirstName || '').trim(),
-        lastName: (adminLastName || '').trim(),
-        phone: (adminPhone || '').trim(),
-        role: 'company_admin',
-        companyId,
-        passwordSet: false,
-        createdAt: FieldValue.serverTimestamp(),
-        updatedAt: FieldValue.serverTimestamp(),
-      });
-
-      await batch.commit();
+      companyId = result.id;
     } catch (error: any) {
-      // Rollback: delete the Auth user so it doesn't become orphaned
-      await adminAuth.deleteUser(userRecord.uid).catch(() => {});
+      // Rollback: delete the Auth user if transaction fails
+      await adminClient.auth.admin.deleteUser(userRecord.id).catch(() => {});
       throw error;
     }
 
     // ─── Send setup email ────────────────────────────────────────────────────
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    let baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    if (!baseUrl.startsWith('http')) {
+      baseUrl = 'http://localhost:3000';
+    }
     const redirectUrl = new URL('/company/setup', baseUrl);
     redirectUrl.searchParams.append('companyId', companyId);
 
-    const actionCodeSettings = {
-      url: redirectUrl.toString(),
-      handleCodeInApp: true,
-    };
+    const { data: linkData, error: linkError } = await adminClient.auth.admin.generateLink({
+      type: 'recovery',
+      email: trimmedEmail,
+      options: { redirectTo: redirectUrl.toString() },
+    });
 
-    const passwordResetLink = await adminAuth.generatePasswordResetLink(
-      trimmedEmail,
-      actionCodeSettings
-    );
-    await sendPasswordResetEmail(trimmedEmail, companyName.trim(), passwordResetLink, companyId);
+    if (linkError || !linkData.properties?.hashed_token) {
+      throw linkError || new Error('Failed to generate setup link');
+    }
+
+    const tokenHash = linkData.properties.hashed_token;
+    redirectUrl.searchParams.append('token_hash', tokenHash);
+    
+    const passwordResetLink = redirectUrl.toString();
+    try {
+      await sendPasswordResetEmail(trimmedEmail, companyName.trim(), passwordResetLink, companyId);
+    } catch (emailError: any) {
+      console.error('Non-fatal error: Failed to send setup email:', emailError.message);
+      // We don't throw here because the company and user are already created.
+    }
 
     return NextResponse.json({
       success: true,
-      message: 'Company created and setup email sent!',
+      message: 'Company created successfully. Setup email sent (check server logs if it failed).',
       companyId,
-      adminUserId: userRecord.uid,
+      adminUserId: userRecord.id,
+      // Provide the setup link in development so the admin can copy it if email fails
+      ...(process.env.NODE_ENV !== 'production' && { setupLink: passwordResetLink })
     });
 
   } catch (error: any) {
     console.error('Error creating company:', error);
 
-    let errorMessage = 'Failed to create company';
-    if (error.code === 'auth/email-already-in-use')       errorMessage = 'Email already in use';
-    else if (error.code === 'auth/invalid-email')         errorMessage = 'Invalid email';
-    else if (error.message?.includes('continue URL must be a valid URL string'))
-      errorMessage = 'Invalid NEXT_PUBLIC_APP_URL. Check .env.local';
-    else if (error.message) errorMessage = error.message;
-
     return NextResponse.json(
-      { success: false, error: errorMessage, message: '' },
+      { success: false, error: error.message || 'Failed to create company', message: '' },
       { status: 500 }
     );
   }

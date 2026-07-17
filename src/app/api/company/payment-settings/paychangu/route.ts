@@ -1,21 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { adminDb, adminAuth } from '@/lib/firebaseAdmin';
+import { getCurrentUser } from '@/lib/auth-utils';
+import { prisma } from '@/lib/prisma';
 import { encryptSecret } from '@/lib/crypto.server';
-import { Timestamp } from 'firebase-admin/firestore';
 
 export async function POST(req: NextRequest) {
   try {
     // Auth: superadmin only for now
-    const authHeader = req.headers.get('authorization');
-    if (!authHeader?.startsWith('Bearer ')) {
-      return unauthorized();
-    }
-
-    const idToken = authHeader.split('Bearer ')[1];
-    const decoded = await adminAuth.verifyIdToken(idToken);
-    const userSnap = await adminDb.collection('users').doc(decoded.uid).get();
-
-    if (!userSnap.exists || userSnap.data()?.role !== 'superadmin') {
+    const user = await getCurrentUser(req);
+    
+    if (!user || user.role !== 'superadmin') {
       return unauthorized();
     }
 
@@ -25,20 +18,33 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
     }
 
-    const companyRef = adminDb.collection('companies').doc(companyId);
-    const companySnap = await companyRef.get();
-    if (!companySnap.exists) {
+    const company = await prisma.company.findUnique({
+      where: { id: companyId },
+      select: { id: true, paymentSettings: true }
+    });
+
+    if (!company) {
       return NextResponse.json({ error: 'Company not found' }, { status: 404 });
     }
 
-    // Encrypt once
+    // Encrypt once (encryptSecret in crypto.server is async)
     const encryptedSecret = await encryptSecret(secretKey.trim());
 
-    await companyRef.update({
-      'paymentSettings.paychanguEnabled': true,
-      'paymentSettings.paychanguEncryptedSecret': encryptedSecret,
-      'paymentSettings.paychanguUpdatedAt': Timestamp.now(),
-      updatedAt: Timestamp.now(),
+    // Update JSON paymentSettings
+    const currentSettings = (company.paymentSettings as Record<string, any>) || {};
+    const updatedSettings = {
+      ...currentSettings,
+      paychanguEnabled: true,
+      paychanguEncryptedSecret: encryptedSecret,
+      paychanguUpdatedAt: new Date().toISOString(),
+    };
+
+    await prisma.company.update({
+      where: { id: companyId },
+      data: {
+        paymentSettings: updatedSettings,
+        updatedAt: new Date(),
+      },
     });
 
     return NextResponse.json({ success: true, message: 'PayChangu key stored securely' });

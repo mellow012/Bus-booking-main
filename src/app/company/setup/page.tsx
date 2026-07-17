@@ -2,19 +2,6 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
-import { auth, db } from '@/lib/firebaseConfig';
-import { 
-  confirmPasswordReset, 
-  signInWithEmailAndPassword,
-  verifyPasswordResetCode,
-  sendPasswordResetEmail
-} from 'firebase/auth';
-import { 
-  doc, 
-  updateDoc, 
-  getDoc, 
-  Timestamp 
-} from 'firebase/firestore';
 import { useAuth } from '@/contexts/AuthContext';
 import { 
   Loader2, 
@@ -24,6 +11,8 @@ import {
   Building2,
   Lock
 } from 'lucide-react';
+import { createClient } from '@/utils/supabase/client';
+import { markPasswordSet } from '@/lib/actions/user.actions';
 
 interface SetupInfo {
   id: string;
@@ -40,7 +29,7 @@ function CompanySetupContent() {
   
   const [loading, setLoading] = useState(false);
   const [setupData, setSetupData] = useState<SetupInfo | null>(null);
-  const [oobCodeState, setOobCodeState] = useState<string | null>(null);
+  const [tokenHashState, setTokenHashState] = useState<string | null>(null);
   
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -54,10 +43,10 @@ function CompanySetupContent() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const code = params.get('oobCode');
+    const code = params.get('token_hash') || params.get('token');
     const continueUrl = params.get('continueUrl');
     
-    if (code) setOobCodeState(code);
+    if (code) setTokenHashState(code);
 
     let idToFetch = params.get('companyId') || params.get('operatorId') || params.get('conductorId') || null;
     let detectedType: 'company' | 'operator' | 'conductor' = 
@@ -66,9 +55,9 @@ function CompanySetupContent() {
     if (!idToFetch && continueUrl) {
       try {
         const decodedUrl = new URL(continueUrl);
-        const opId = decodedUrl.searchParams.get('operatorId');
-        const compId = decodedUrl.searchParams.get('companyId');
-        const condId = decodedUrl.searchParams.get('conductorId');
+        const opId = decodedUrl.searchParams?.get('operatorId');
+        const compId = decodedUrl.searchParams?.get('companyId');
+        const condId = decodedUrl.searchParams?.get('conductorId');
         idToFetch = condId || opId || compId || null;
         detectedType = condId ? 'conductor' : opId ? 'operator' : 'company';
       } catch (e) {
@@ -86,44 +75,45 @@ function CompanySetupContent() {
   const fetchSetupDetails = async (id: string, type: 'company' | 'operator' | 'conductor') => {
     setLoading(true);
     try {
-      const collectionName = type === 'company' ? 'companies' : type === 'operator' ? 'operators' : 'conductors';
-      const docSnap = await getDoc(doc(db, collectionName, id));
+      const response = await fetch(`/api/auth/setup-details?id=${id}&type=${type}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
 
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        setSetupData({
-          id: docSnap.id,
-          name: data.name || data.companyName || 'New User',
-          email: data.email,
-          targetUserId: type === 'company' ? data.adminUserId : data.uid,
-          type: type,
-          companyId: data.companyId
-        });
-      } else {
-        const otherTypes = type === 'company' ? ['operator', 'conductor'] : type === 'operator' ? ['company', 'conductor'] : ['company', 'operator'];
-        let found = false;
-        
-        for (const otherType of otherTypes) {
-          const otherColl = otherType === 'company' ? 'companies' : otherType === 'operator' ? 'operators' : 'conductors';
-          const otherSnap = await getDoc(doc(db, otherColl, id));
-          
-          if (otherSnap.exists()) {
-            const oData = otherSnap.data();
-            setSetupData({
-              id: otherSnap.id,
-              name: oData.name || oData.companyName || 'New User',
-              email: oData.email,
-              targetUserId: otherType === 'company' ? oData.adminUserId : oData.uid,
-              type: otherType as 'company' | 'operator' | 'conductor',
-              companyId: oData.companyId
-            });
-            found = true;
-            break;
+      if (!response.ok) {
+        setErrors({ general: 'Account record not found.' });
+        setLoading(false);
+        return;
+      }
+
+      const data = await response.json();
+      setSetupData({
+        id: data.id,
+        name: data.name || data.companyName || 'New User',
+        email: data.email,
+        targetUserId: data.targetUserId,
+        type: type,
+        companyId: data.companyId
+      });
+      
+      // Attempt to verify the token early
+      const code = new URLSearchParams(window.location.search).get('token_hash') || new URLSearchParams(window.location.search).get('token');
+      if (code && data.email) {
+        try {
+          const verifyResponse = await fetch('/api/auth/verify-reset-token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: code })
+          });
+          if (!verifyResponse.ok) {
+             const vData = await verifyResponse.json();
+             setErrors({ general: vData.message || 'Setup link is invalid or has expired.' });
           }
-        }
-        
-        if (!found) {
-          setErrors({ general: 'Account record not found.' });
+        } catch (err) {
+          // Ignore network errors here as they might succeed on submission
+          console.error("Token verification check failed", err);
         }
       }
     } catch (error) {
@@ -135,7 +125,7 @@ function CompanySetupContent() {
 
   const validatePassword = (pwd: string): string | null => {
     if (!pwd) return 'Password is required';
-    if (pwd.length < 8) return 'Password must be at least 8 characters';
+    if (pwd.length < 6) return 'Password must be at least 6 characters';
     if (!/(?=.*[a-z])/.test(pwd)) return 'Must include a lowercase letter';
     if (!/(?=.*[A-Z])/.test(pwd)) return 'Must include an uppercase letter';
     if (!/(?=.*\d)/.test(pwd)) return 'Must include a number';
@@ -145,7 +135,7 @@ function CompanySetupContent() {
   const handleSetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!oobCodeState || !setupData) {
+    if (!tokenHashState || !setupData) {
       setErrors({ general: 'Setup tokens missing. Please refresh.' });
       return;
     }
@@ -160,50 +150,33 @@ function CompanySetupContent() {
 
     setLoading(true);
     try {
-      // 1. Verify and Update Auth Password
-      await verifyPasswordResetCode(auth, oobCodeState);
-      await confirmPasswordReset(auth, oobCodeState, password);
+      // 1. Update the password in Supabase Auth first
+      const supabase = createClient();
+      const { error: authError } = await supabase.auth.updateUser({ password });
       
-      // 2. Log in
-      await signInWithEmailAndPassword(auth, setupData.email, password);
-      
-      // 3. Update the Users Document
-      await updateDoc(doc(db, 'users', setupData.targetUserId), { 
-        passwordSet: true,
-        updatedAt: Timestamp.now()
-      });
-
-      // 4. Update role-specific status if applicable
-      if (setupData.type === 'operator' || setupData.type === 'conductor') {
-        const collectionName = setupData.type === 'operator' ? 'operators' : 'conductors';
-        await updateDoc(doc(db, collectionName, setupData.id), {
-          status: 'active',
-          signupCompletedAt: Timestamp.now(),
-          updatedAt: Timestamp.now()
-        });
+      if (authError) {
+        throw authError;
       }
+
+      // 2. Mark passwordSet as true in Prisma
+      await markPasswordSet(setupData.email).catch((err) =>
+        console.error('[setup] Failed to sync Prisma passwordSet flag:', err)
+      );
 
       await refreshUserProfile();
       
-      // 5. Dynamic Redirect based on type
+      // Dynamic Redirect based on type
       if (setupData.type === 'operator') {
-        // Redirect to operator dashboard with companyId
-        router.push(`/operator/dashboard?companyId=${setupData.companyId}`);
+        router.push(`/company/operator/dashboard?companyId=${setupData.companyId}`);
       } else if (setupData.type === 'conductor') {
-        // Redirect to conductor dashboard with companyId
-        router.push(`/conductor/dashboard?companyId=${setupData.companyId}`);
+        router.push(`/company/conductor/dashboard?companyId=${setupData.companyId}`);
       } else {
-        // Company admin redirect
         router.push('/company/admin?setup=pending');
       }
 
     } catch (error: any) {
       console.error('Setup error:', error);
-      let msg = 'Failed to set password.';
-      if (error.code === 'auth/invalid-action-code') msg = 'Link expired or already used.';
-      if (error.code === 'auth/user-disabled') msg = 'Account is disabled.';
-      if (error.code === 'auth/expired-action-code') msg = 'This link has expired. Please request a new one.';
-      setErrors({ general: msg });
+      setErrors({ general: error.message || 'Failed to set password.' });
     } finally {
       setLoading(false);
     }
@@ -212,7 +185,21 @@ function CompanySetupContent() {
   const resendSetupEmail = async () => {
     if (!setupData) return;
     try {
-      await sendPasswordResetEmail(auth, setupData.email);
+      const response = await fetch('/api/auth/resend-setup-email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: setupData.email,
+          type: setupData.type,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to resend email');
+      }
+
       setErrors({ general: 'A new setup link has been sent to your email.' });
     } catch (error) {
       setErrors({ general: 'Failed to resend email.' });
@@ -270,10 +257,12 @@ function CompanySetupContent() {
         <form className="mt-8 space-y-6" onSubmit={handleSetPassword}>
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label htmlFor="setup-email" className="block text-sm font-medium text-gray-700 mb-2">
                 Email
               </label>
               <input
+                id="setup-email"
+                name="email"
                 type="email"
                 value={setupData?.email || ''}
                 disabled
@@ -282,11 +271,13 @@ function CompanySetupContent() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label htmlFor="new-password" className="block text-sm font-medium text-gray-700 mb-2">
                 New Password
               </label>
               <div className="relative">
                 <input
+                  id="new-password"
+                  name="password"
                   type={showPassword ? 'text' : 'password'}
                   required
                   value={password}
@@ -314,11 +305,13 @@ function CompanySetupContent() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label htmlFor="confirm-password" className="block text-sm font-medium text-gray-700 mb-2">
                 Confirm Password
               </label>
               <div className="relative">
                 <input
+                  id="confirm-password"
+                  name="confirmPassword"
                   type={showConfirmPassword ? 'text' : 'password'}
                   required
                   value={confirmPassword}

@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Inter } from "next/font/google";
+import { Inter, Montserrat, Plus_Jakarta_Sans, DM_Sans } from "next/font/google";
 import '@/app/globals.css';
 import { NextIntlClientProvider } from 'next-intl';
 import { getLocale, getMessages } from 'next-intl/server';
@@ -9,18 +9,24 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { ToastContainer } from "@/components/ToastContainer";
 import { EmailVerificationBannerLayout } from "@/components/EmailVerificationBannerLayout";
-import { FCMInitializer } from "@/components/FCMInitializer";
 import { NotificationProviderWrapper } from "@/components/NotificationProviderWrapper";
 
-const inter = Inter({ subsets: ["latin"] });
+const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
+const montserrat = Montserrat({ subsets: ["latin"], variable: "--font-montserrat", weight: ["400", "500", "600", "700"] });
+const plusJakartaSans = Plus_Jakarta_Sans({ subsets: ["latin"], variable: "--font-jakarta", weight: ["400", "500", "600", "700", "800"] });
+const dmSans = DM_Sans({ subsets: ["latin"], variable: "--font-dm-sans", weight: ["400", "500", "600", "700"] });
 
 export const viewport: Viewport = {
-  themeColor: "#2563eb",
+  themeColor: "#005A5B",
 };
 
 export const metadata: Metadata = {
-  title: "TibhukeBus - Multi-Company Bus Booking Platform",
-  description: "Book and pay for bus tickets from multiple companies.",
+  metadataBase: new URL('https://tibhukebus.com'),
+  title: {
+    template: "%s | TibhukeBus",
+    default: "TibhukeBus - Malawi's #1 Bus Booking Platform",
+  },
+  description: "Find, compare and book bus seats instantly across Malawi. Secure payments via Airtel Money, Mpamba, and Visa. Real-time availability for all major routes.",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
@@ -32,11 +38,35 @@ export const metadata: Metadata = {
     shortcut: "/tibhukebus_logo_transparent.png",
     apple: "/tibhukebus_logo_transparent.png",
   },
+  openGraph: {
+    type: "website",
+    locale: "en_MW",
+    url: "https://tibhukebus.com",
+    siteName: "TibhukeBus",
+    title: "TibhukeBus - Travel Anywhere in Malawi",
+    description: "Book and pay for bus tickets instantly from multiple companies. The fastest way to travel across Malawi.",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "TibhukeBus - Bus Booking Platform",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "TibhukeBus - Travel Anywhere in Malawi",
+    description: "Book and pay for bus tickets instantly. Secure payments and real-time availability.",
+    images: ["/og-image.png"],
+  },
   other: {
     "mobile-web-app-capable": "yes",
     "apple-mobile-web-app-status-bar-style": "black-translucent",
   }
 };
+
+import { MobileBottomNav } from "@/components/MobileBottomNav";
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const locale   = await getLocale();
@@ -44,22 +74,20 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 
   return (
     <html lang={locale}>
-      <body className={inter.className}>
+      <body className={`${inter.variable} ${montserrat.variable} ${plusJakartaSans.variable} ${dmSans.variable} ${inter.className} overflow-x-hidden`}>
         <NextIntlClientProvider messages={messages}>
-          {/* AuthProvider MUST be outermost — everything that calls useAuth()
-              must be a descendant, including NotificationProviderWrapper */}
           <AuthProvider>
             <NotificationProviderWrapper>
               <ToastProvider>
                 <div className="min-h-screen flex flex-col">
                   <Header />
-                  <main className="flex-grow py-12">
+                  <main className="flex-grow pb-12 page-content">
                     <EmailVerificationBannerLayout />
                     {children}
                   </main>
                   <Footer />
                 </div>
-                <FCMInitializer />
+                <MobileBottomNav />
                 <ToastContainer />
               </ToastProvider>
             </NotificationProviderWrapper>

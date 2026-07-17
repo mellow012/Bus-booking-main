@@ -179,12 +179,7 @@ export async function handlePaymentGateway(page: Page) {
     await input.waitFor({ timeout: 20_000 });
     await input.fill('0991457496');
     await page.click('button:has-text("Confirm"), button:has-text("Pay"), button[type="submit"]');
-  } else if (url.includes('flutterwave')) {
-    await page.waitForSelector('#cardnumber, input[placeholder*="Card"]', { timeout: 20_000 });
-    await page.fill('#cardnumber, input[placeholder*="Card number" i]', '5531886652142950');
-    await page.fill('#expiry,    input[placeholder*="MM" i]',            '09/32');
-    await page.fill('#cvv,       input[placeholder*="CVV" i]',           '564');
-    await page.click('button[type="submit"]');
+
   }
 }
 

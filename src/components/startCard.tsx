@@ -70,14 +70,14 @@ const StatCard = ({
 
   return (
     <div 
-      className={`bg-white p-6 shadow-sm rounded-xl border border-gray-100 transition-all duration-200 ${
+      className={`bg-white p-6 shadow-[0_2px_10px_-4px_rgba(0,0,0,0.1)] rounded-xl border border-gray-100 transition-all duration-200 ${
         onClick ? 'cursor-pointer hover:shadow-md hover:border-gray-200' : ''
       }`}
       onClick={onClick}
     >
       <div className="flex items-center justify-between">
         <div className="flex-1">
-          <p className="text-sm font-medium text-gray-600 mb-2">{title}</p>
+          <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2">{title}</p>
           <p className="text-3xl font-bold text-gray-900 mb-1">{value}</p>
           
           {trend && (

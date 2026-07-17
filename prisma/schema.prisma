@@ -1,0 +1,508 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id               String            @id @default(uuid())
+  uid              String            @unique
+  email            String            @unique
+  firstName        String
+  lastName         String
+  phone            String?
+  role             String
+  nationalId       String?
+  sex              String?
+  currentAddress   String?
+  isActive         Boolean           @default(true)
+  emailVerified    Boolean           @default(false)
+  setupCompleted   Boolean           @default(false)
+  passwordSet      Boolean           @default(false)
+  fcmTokens        Json?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  lastTokenUpdated DateTime?
+  companyId        String?
+  region           String?
+  invitationSent   Boolean           @default(false)
+  invitationSentAt DateTime?
+  createdBy        String?
+  sessionVersion   Int                @default(1)
+  activities       ActivityLog[]
+  bookings         Booking[]
+  groupRequests    GroupRequest[]
+  charterRequests  GroupCharterRequest[]
+  notifications    Notification[]
+  reservations     SeatReservation[]
+  company          Company?          @relation("CompanyStaff", fields: [companyId], references: [id])
+  conversations    Conversation[]    @relation("UserConversations")
+  sentMessages     ChatMessage[]
+}
+
+model Operator {
+  id                    String      @id @default(uuid())
+  uid                   String      @unique
+  companyId             String
+  companyName           String
+  email                 String      @unique
+  name                  String
+  role                  String      @default("operator")
+  status                String      @default("active")
+  regionId              String?
+  
+  invitationSent        Boolean     @default(false)
+  invitationSentAt      DateTime?
+  signupCompletedAt     DateTime?
+  
+  createdBy             String?
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
+  
+  company               Company     @relation(fields: [companyId], references: [id])
+  routes                Route[]     @relation("OperatorRoutes")
+  schedules             Schedule[]  @relation("OperatorSchedules")
+  buses                 Bus[]       @relation("OperatorBuses")
+  region                Region?     @relation(fields: [regionId], references: [id])
+
+  @@index([companyId])
+  @@index([status])
+  @@index([role])
+  @@index([uid])
+  @@index([regionId])
+}
+
+model Company {
+  id                   String             @id @default(uuid())
+  name                 String
+  email                String
+  phone                String?
+  address              String?
+  description          String?
+  logo                 String?
+  status               String             @default("active")
+  planType             String             @default("basic")
+  maxBuses             Int                @default(6)
+  maxRoutes            Int                @default(3)
+  contactSettings      Json?
+  paymentSettings      Json?
+  notificationSettings Json?
+  operatingHours       Json?
+  setupCompleted       Boolean            @default(false)
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+  activities           ActivityLog[]
+  bookings             Booking[]
+  buses                Bus[]
+  dailyReports         DailyReport[]
+  groupRequests        GroupRequest[]
+  routes               Route[]
+  schedules            Schedule[]
+  scheduleTemplates    ScheduleTemplate[]
+  charterQuotes        GroupCharterQuote[]
+  staff                User[]             @relation("CompanyStaff")
+  conversations        Conversation[]
+  operators            Operator[]
+  regions              Region[]
+  bookingSegments      BookingSegment[] @relation("BookingSegmentCompany")
+
+  @@index([status])
+}
+
+model Region {
+  id         String    @id @default(uuid())
+  name       String
+  code       String?   @unique
+  companyId  String?
+  isActive   Boolean   @default(true)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  company    Company?  @relation(fields: [companyId], references: [id])
+  routes     Route[]
+  operators  Operator[]
+
+  @@index([companyId])
+  @@index([isActive])
+}
+
+model Bus {
+  id                  String             @id @default(uuid())
+  companyId           String
+  licensePlate        String
+  busType             String
+  capacity            Int
+  amenities           Json?
+  status              String             @default("active")
+  yearOfManufacture   Int?
+  registrationDetails Json?
+  isActive            Boolean            @default(true)
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  fuelType            String?
+  insuranceDetails    Json?
+  lastMaintenanceDate DateTime?
+  nextMaintenanceDate DateTime?
+  conductorIds        String[]           @default([])
+  company             Company            @relation(fields: [companyId], references: [id])
+  conductors          Operator[]         @relation("OperatorBuses")
+  schedules           Schedule[]
+  scheduleTemplates   ScheduleTemplate[]
+}
+
+model Route {
+  id                String             @id @default(uuid())
+  companyId         String
+  regionId          String?
+  name              String
+  origin              String
+  destination         String
+  distance            Int
+  duration            Int
+  baseFare            Int
+  pricePerKm          Int?
+  stops               Json?
+  isActive            Boolean            @default(true)
+  status              String             @default("active")
+
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  groupRequests       GroupRequest[]
+  company             Company            @relation(fields: [companyId], references: [id])
+  operators           Operator[]         @relation("OperatorRoutes")
+  schedules           Schedule[]
+  scheduleTemplates   ScheduleTemplate[]
+  region              Region?            @relation(fields: [regionId], references: [id])
+
+  @@index([origin])
+  @@index([destination])
+  @@index([isActive])
+  @@index([regionId])
+}
+
+model Schedule {
+  id                String            @id @default(uuid())
+  companyId         String
+  busId             String
+  routeId           String
+  operatorId        String?
+  departureDateTime DateTime
+  arrivalDateTime   DateTime
+  departureLocation String?
+  arrivalLocation   String?
+  availableSeats    Int
+  bookedSeats       Json?
+  price             Int
+  status            String            @default("active")
+  tripStatus        String            @default("scheduled")
+  isActive          Boolean           @default(true)
+  isArchived        Boolean           @default(false)
+  isCompleted       Boolean           @default(false)
+  actualDepartureTime DateTime?
+  actualArrivalTime   DateTime?
+  
+  // Trip Tracking
+  currentStopIndex    Int               @default(0)
+  currentStopId       String?
+  departedStops       String[]          @default([])
+  tripStartedAt       DateTime?
+  tripCompletedAt     DateTime?
+  
+  delayMinutes        Int               @default(0)
+  tripNotes           String?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  baseFare          Int?
+  fare              Int?
+  segmentPrices     Json?
+  bookings          Booking[]
+  groupRequests     GroupRequest[]
+  bus               Bus               @relation(fields: [busId], references: [id])
+  company           Company           @relation(fields: [companyId], references: [id])
+  route             Route             @relation(fields: [routeId], references: [id])
+  operator          Operator?         @relation("OperatorSchedules", fields: [operatorId], references: [id])
+  reservations      SeatReservation[]
+  bookingSegments   BookingSegment[]  @relation("BookingSegmentSchedule")
+  activities        ActivityLog[]
+
+  @@index([companyId])
+  @@index([busId])
+  @@index([routeId])
+  @@index([operatorId])
+  @@index([departureDateTime])
+  @@index([status])
+  @@index([availableSeats])
+}
+
+model Booking {
+  id               String    @id @default(uuid())
+  bookingReference String    @unique
+  userId           String
+  scheduleId       String
+  companyId        String
+  totalAmount      Int
+  currency         String    @default("MWK")
+  bookingStatus    String    @default("pending")
+  paymentStatus    String    @default("pending")
+  passengerDetails Json?
+  seatNumbers      Json?
+  paidAt           DateTime?
+  bookingDate      DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  cancellationDate DateTime?
+  confirmedDate    DateTime?
+  contactEmail     String?
+  contactPhone     String?
+  createdAt        DateTime  @default(now())
+  routeId          String?
+  isWalkOn         Boolean   @default(false)
+  bookedBy         String?
+  originStopId     String?
+  destinationStopId String?
+  returnDate       DateTime?
+  metadata         Json?
+  segments         BookingSegment[] @relation("BookingSegmentBooking")
+  company          Company   @relation(fields: [companyId], references: [id])
+  schedule         Schedule  @relation(fields: [scheduleId], references: [id])
+  user             User      @relation(fields: [userId], references: [id])
+  payments         Payment[]
+}
+
+model BookingSegment {
+  id               String    @id @default(uuid())
+  bookingId        String
+  companyId        String
+  scheduleId       String
+  segmentIndex     Int
+  date             DateTime
+  seatNumbers      Json
+  passengerCount   Int
+  price            Int
+  currency         String    @default("MWK")
+  originStopId     String?
+  destinationStopId String?
+  metadata         Json?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  booking          Booking   @relation("BookingSegmentBooking", fields: [bookingId], references: [id])
+  schedule         Schedule  @relation("BookingSegmentSchedule", fields: [scheduleId], references: [id])
+  company          Company   @relation("BookingSegmentCompany", fields: [companyId], references: [id])
+  reservations     SeatReservation[] @relation("SeatReservationBookingSegment")
+
+  @@index([bookingId])
+  @@index([scheduleId])
+  @@index([companyId])
+}
+
+model Payment {
+  id                String   @id @default(uuid())
+  paymentId         String   @unique
+  bookingId         String?
+  amount            Int
+  currency          String   @default("MWK")
+  customerEmail     String?
+  customerPhone     String?
+  checkoutUrl       String?
+  status            String   @default("initiated")
+  paymentType       String?
+  provider          String   @default("paychangu")
+  txRef             String?
+  metadata          Json?
+  paychanguResponse Json?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  booking           Booking? @relation(fields: [bookingId], references: [id])
+}
+
+model Notification {
+  id        String    @id @default(uuid())
+  userId    String
+  title     String
+  message   String
+  type      String
+  priority  String    @default("medium")
+  isRead    Boolean   @default(false)
+  readAt    DateTime?
+  actionUrl String?
+  data      Json?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id])
+}
+
+model Conversation {
+  id           String         @id @default(uuid())
+  companyId    String
+  name         String?        // Useful for Broadcast or Group chats
+  isBroadcast  Boolean        @default(false)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  company      Company        @relation(fields: [companyId], references: [id])
+  participants User[]         @relation("UserConversations")
+  messages     ChatMessage[]
+
+  @@index([companyId])
+}
+
+model ChatMessage {
+  id             String       @id @default(uuid())
+  conversationId String
+  senderId       String
+  content        String?
+  mediaUrl       String?
+  mediaType      String?      // image, video, file
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+  sender         User         @relation(fields: [senderId], references: [id])
+
+  @@index([conversationId])
+  @@index([senderId])
+}
+
+model SeatReservation {
+  id              String   @id @default(uuid())
+  scheduleId      String
+  userId          String
+  seatNumbers     Json
+  status          String   @default("reserved")
+  expiresAt       DateTime
+  createdAt       DateTime @default(now())
+  bookingSegmentId String?
+  schedule        Schedule @relation(fields: [scheduleId], references: [id])
+  user            User     @relation(fields: [userId], references: [id])
+  bookingSegment  BookingSegment? @relation("SeatReservationBookingSegment", fields: [bookingSegmentId], references: [id])
+}
+
+model ScheduleTemplate {
+  id            String   @id @default(uuid())
+  companyId     String
+  routeId       String
+  busId         String
+  departureTime String
+  arrivalTime   String
+  daysOfWeek    Json?
+  price         Int
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  bus           Bus      @relation(fields: [busId], references: [id])
+  company       Company  @relation(fields: [companyId], references: [id])
+  route         Route    @relation(fields: [routeId], references: [id])
+}
+
+model ActivityLog {
+  id          String    @id @default(uuid())
+  userId      String
+  companyId   String?
+  scheduleId  String?
+  action      String
+  description String
+  metadata    Json?
+  createdAt   DateTime  @default(now())
+  company     Company?  @relation(fields: [companyId], references: [id])
+  user        User      @relation(fields: [userId], references: [id])
+  schedule    Schedule? @relation(fields: [scheduleId], references: [id])
+}
+
+model GroupRequest {
+  id             String   @id @default(uuid())
+  userId         String
+  companyId      String
+  scheduleId     String
+  routeId        String
+  organizerName  String
+  organizerPhone String
+  seatsRequested Int
+  totalPrice     Int
+  status         String   @default("pending")
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  company        Company  @relation(fields: [companyId], references: [id])
+  route          Route    @relation(fields: [routeId], references: [id])
+  schedule       Schedule @relation(fields: [scheduleId], references: [id])
+  user           User     @relation(fields: [userId], references: [id])
+}
+
+model DailyReport {
+  id                 String   @id @default(uuid())
+  companyId          String
+  date               DateTime
+  createdBy          String
+  createdByName      String
+  totalSchedules     Int
+  completedSchedules Int
+  totalBookings      Int
+  paidBookings       Int
+  boardedPassengers  Int
+  noShowPassengers   Int
+  totalRevenue       Int
+  avgOccupancyRate   Float
+  reportData         Json
+  createdAt          DateTime @default(now())
+  company            Company  @relation(fields: [companyId], references: [id])
+
+  @@index([companyId])
+  @@index([date])
+}
+
+model Promotion {
+  id            String   @id @default(uuid())
+  code          String   @unique
+  title         String
+  description   String
+  discountValue Int
+  discountType  String   @default("percentage") // "percentage" or "fixed"
+  minPurchase   Int?     @default(0)
+  maxDiscount   Int?
+  startDate     DateTime
+  endDate       DateTime
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([code])
+  @@index([isActive])
+}
+
+model GroupCharterRequest {
+  id              String   @id @default(uuid())
+  userId          String
+  organizerName   String
+  organizerPhone  String
+  origin          String   // School Campus/Pickup location
+  destination     String
+  departureDate   DateTime
+  estimatedPax    Int
+  status          String   @default("pending") // pending, quoted, approved, rejected, cancelled
+  charterType     String   @default("student") // 'student' or 'group'
+  notes           String?
+  budget          Int?
+  quotes          GroupCharterQuote[]
+  user            User     @relation(fields: [userId], references: [id])
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([userId])
+  @@index([status])
+}
+
+model GroupCharterQuote {
+  id                String              @id @default(uuid())
+  requestId         String
+  companyId         String
+  price             Int
+  notes             String?
+  status            String              @default("pending") // pending, accepted, rejected
+  validUntil        DateTime?
+  company           Company             @relation(fields: [companyId], references: [id])
+  request           GroupCharterRequest @relation(fields: [requestId], references: [id])
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  @@index([requestId])
+  @@index([companyId])
+}

@@ -7,7 +7,7 @@ import { useTransition } from 'react';
 export default function LanguageSwitcher() {
   const locale = useLocale();
   const router = useRouter();
-  const pathname = usePathname();
+  const pathname = usePathname() || '';
   const [isPending, startTransition] = useTransition();
 
   const toggle = () => {

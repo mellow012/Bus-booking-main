@@ -1,5 +1,5 @@
 // components/AlertMessage.tsx
-import { FC, useEffect, useState } from 'react';
+import { FC, useEffect, useRef, useState } from 'react';
 import { AlertCircle, CheckCircle, X, AlertTriangle, Info } from 'lucide-react';
 
 interface AlertMessageProps {
@@ -9,6 +9,7 @@ interface AlertMessageProps {
   autoClose?: boolean;
   duration?: number; // in milliseconds
   className?: string;
+  scrollIntoView?: boolean;
 }
 
 const AlertMessage: FC<AlertMessageProps> = ({ 
@@ -17,10 +18,18 @@ const AlertMessage: FC<AlertMessageProps> = ({
   onClose,
   autoClose = true,
   duration = 5000,
-  className = ''
+  className = '',
+  scrollIntoView = false,
 }) => {
   const [isVisible, setIsVisible] = useState(true);
   const [progress, setProgress] = useState(100);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (scrollIntoView && containerRef.current) {
+      containerRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [scrollIntoView, message]);
 
   useEffect(() => {
     if (autoClose) {
@@ -54,42 +63,42 @@ const AlertMessage: FC<AlertMessageProps> = ({
     switch (type) {
       case 'error':
         return {
-          bgColor: 'bg-red-50',
-          textColor: 'text-red-800',
+          bgColor: 'bg-red-50/80',
+          textColor: 'text-red-900',
           iconColor: 'text-red-600',
           buttonColor: 'text-red-600 hover:text-red-800',
-          borderColor: 'border-red-200',
-          progressColor: 'bg-red-400',
+          borderColor: 'border-red-100',
+          progressColor: 'bg-gradient-to-r from-red-400 to-red-500',
           icon: <AlertCircle className="w-5 h-5" />
         };
       case 'success':
         return {
-          bgColor: 'bg-green-50',
-          textColor: 'text-green-800',
+          bgColor: 'bg-green-50/80',
+          textColor: 'text-green-900',
           iconColor: 'text-green-600',
           buttonColor: 'text-green-600 hover:text-green-800',
-          borderColor: 'border-green-200',
-          progressColor: 'bg-green-400',
+          borderColor: 'border-green-100',
+          progressColor: 'bg-gradient-to-r from-green-400 to-green-500',
           icon: <CheckCircle className="w-5 h-5" />
         };
       case 'warning':
         return {
-          bgColor: 'bg-yellow-50',
-          textColor: 'text-yellow-800',
+          bgColor: 'bg-yellow-50/80',
+          textColor: 'text-yellow-900',
           iconColor: 'text-yellow-600',
           buttonColor: 'text-yellow-600 hover:text-yellow-800',
-          borderColor: 'border-yellow-200',
-          progressColor: 'bg-yellow-400',
+          borderColor: 'border-yellow-100',
+          progressColor: 'bg-gradient-to-r from-yellow-400 to-yellow-500',
           icon: <AlertTriangle className="w-5 h-5" />
         };
       case 'info':
         return {
-          bgColor: 'bg-blue-50',
-          textColor: 'text-blue-800',
+          bgColor: 'bg-blue-50/80',
+          textColor: 'text-blue-900',
           iconColor: 'text-blue-600',
           buttonColor: 'text-blue-600 hover:text-blue-800',
-          borderColor: 'border-blue-200',
-          progressColor: 'bg-blue-400',
+          borderColor: 'border-blue-100',
+          progressColor: 'bg-gradient-to-r from-blue-400 to-blue-500',
           icon: <Info className="w-5 h-5" />
         };
       default:
@@ -109,9 +118,11 @@ const AlertMessage: FC<AlertMessageProps> = ({
 
   return (
     <div 
-      className={`mb-6 rounded-lg border p-4 shadow-sm transition-all duration-300 transform ${
-        isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2'
-      } ${config.bgColor} ${config.borderColor} ${className}`}
+      ref={containerRef}
+      role="alert"
+      className={`mb-6 rounded-2xl border p-4 shadow-premium transition-all duration-500 transform ${
+        isVisible ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 -translate-y-2 scale-95'
+      } ${config.bgColor} ${config.borderColor} backdrop-blur-sm ${className}`}
     >
       <div className="flex items-center justify-between">
         <div className="flex items-center">

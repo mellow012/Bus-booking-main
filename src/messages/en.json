@@ -12,7 +12,8 @@
     "signIn": "Sign In",
     "getStarted": "Get Started",
     "smartTravel": "Smart Travel",
-    "member": "Member"
+    "member": "Member",
+    "promotions": "Promotions"
   },
 
   "common": {
@@ -117,7 +118,7 @@
     "submitting": "Signing in...",
     "troubleSignIn": "Having trouble signing in?",
     "lockedTitle": "Account Temporarily Locked",
-    "lockedBody": "Too many failed attempts. Try again in {time}.",
+    "lockedBody": "Too many failed attempts. Please try again later.",
     "attemptsRemaining": "{count} attempt(s) remaining before account lockout.",
     "errorTitle": "Sign In Failed",
     "errorInvalid": "Invalid email or password. Please check your credentials and try again.",
@@ -144,7 +145,7 @@
     "emailLabel": "Email Address",
     "emailPlaceholder": "john.doe@example.com",
     "passwordLabel": "Password",
-    "passwordPlaceholder": "Create a strong password",
+    "passwordPlaceholder": "Use at least 6 characters",
     "confirmPasswordLabel": "Confirm Password",
     "confirmPasswordPlaceholder": "Re-enter your password",
     "passwordStrengthLabel": "Password Strength:",
@@ -168,11 +169,11 @@
     "accountCreated": "Account Created!",
     "errorTitle": "Registration Failed",
     "successTitle": "Registration Successful!",
-    "successRedirect": "Redirecting to your dashboard...",
+    "successRedirect": "Redirecting to email verification...",
     "errorEmailRequired": "Email address is required",
     "errorEmailInvalid": "Please enter a valid email address",
     "errorPasswordRequired": "Password is required",
-    "errorPasswordMin": "Password must be at least {min} characters",
+    "errorPasswordMin": "Use at least {min} characters",
     "errorPasswordMax": "Password must be less than {max} characters",
     "errorPasswordStrength": "Password must contain uppercase, lowercase, and a number",
     "errorConfirmRequired": "Please confirm your password",
