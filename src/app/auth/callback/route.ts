@@ -21,6 +21,20 @@ export async function GET(request: NextRequest) {
   const redirectTo = new URL(next, appBaseUrl);
   const response = NextResponse.redirect(redirectTo);
 
+  const code = requestUrl.searchParams.get('code');
+
+  if (code) {
+    const supabase = await createClient();
+    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    if (!error) {
+      return response;
+    }
+    console.error('[callback] Supabase OAuth code exchange failed:', error.message);
+    return NextResponse.redirect(
+      new URL(`/login?error=${encodeURIComponent(error.message)}`, appBaseUrl)
+    );
+  }
+
   if (tokenHash && type) {
     const supabase = await createClient();
 
@@ -41,7 +55,7 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  console.warn('[callback] Missing token_hash or type parameters in the URL request.');
+  console.warn('[callback] Missing auth code, token_hash, or type parameters in the URL request.');
   return NextResponse.redirect(
     new URL('/login?error=Malformed authentication link callback loop.', appBaseUrl)
   );

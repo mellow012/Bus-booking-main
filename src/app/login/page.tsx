@@ -117,6 +117,13 @@ export default function Login() {
   const { errors, touched, validateForm, handleBlur, clearErrors } = useFormValidation(formData, t);
   const { attemptCount, isLockedOut, incrementAttempts, resetAttempts } = useLoginAttempts();
 
+  useEffect(() => {
+    const errorParam = searchParams?.get('error');
+    if (errorParam) {
+      setGeneralError(errorParam);
+    }
+  }, [searchParams]);
+
   const getErrorMessage = (error: any): string => {
     // Supabase error messages are usually in the message string
     // but some implementations might still pass objects with codes

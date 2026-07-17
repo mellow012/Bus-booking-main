@@ -127,6 +127,13 @@ export default function Register() {
   const { errors, touched, validateForm, handleBlur, clearFieldError } =
     useFormValidation(formData, t);
 
+  useEffect(() => {
+    const errorParam = searchParams?.get('error');
+    if (errorParam) {
+      setGeneralError(errorParam);
+    }
+  }, [searchParams]);
+
   // FIX VER-1: getErrorMessage now handles Firebase error codes directly on the
   // error object. AuthContext.signUp re-throws with error.code preserved when
   // possible, or wraps in a plain Error with a message string as fallback.
