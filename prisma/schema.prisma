@@ -22,6 +22,7 @@ model User {
   setupCompleted   Boolean           @default(false)
   passwordSet      Boolean           @default(false)
   fcmTokens        Json?
+  preferences      Json?
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
   lastTokenUpdated DateTime?

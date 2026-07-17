@@ -427,13 +427,13 @@ export const useBookingsList = () => {
     <path d="M 0 16 A 16 16 0 0 1 16 0 L 704 0 A 16 16 0 0 1 720 16 L 720 64 L 0 64 Z" fill="${ticketHeaderColor}" />
     
     <g transform="translate(24, 16)">
-      ${platformLogo ? `<image x="0" y="-8" width="40" height="40" href="${platformLogo.dataUrl}" />` : `
+      ${platformLogo ? `<image x="0" y="-8" width="140" height="40" href="${platformLogo.dataUrl}" />` : `
       <path d="M 12 4 L 38 4 L 32 16 L 22 16 L 16 32 L 6 32 Z" fill="${ticketHeaderTextColor}" transform="skewX(-15) scale(0.9)"/>
       <path d="M -2 10 L 6 10 L 12 22 L 4 22 Z" fill="${ticketAccentColor}" transform="skewX(-15) scale(0.9)"/>
       <path d="M 2 2 L 10 2 L 16 14 L 8 14 Z" fill="${ticketAccentColor}" transform="skewX(-15) scale(0.9)"/>
       `}
-      <text x="${platformLogo ? '50' : '44'}" y="24" font-family="system-ui, -apple-system, sans-serif" font-weight="800" font-size="22" fill="${ticketHeaderTextColor}" letter-spacing="-0.5">TibhukeBus</text>
-      <text x="${platformLogo ? '51' : '45'}" y="38" font-family="system-ui, -apple-system, sans-serif" font-weight="500" font-size="11" fill="${ticketHeaderTextColor}">Official Digital ${ticketTypeLabel}</text>
+      <text x="${platformLogo ? '150' : '44'}" y="24" font-family="system-ui, -apple-system, sans-serif" font-weight="800" font-size="22" fill="${ticketHeaderTextColor}" letter-spacing="-0.5">TibhukeBus</text>
+      <text x="${platformLogo ? '151' : '45'}" y="38" font-family="system-ui, -apple-system, sans-serif" font-weight="500" font-size="11" fill="${ticketHeaderTextColor}">Official Digital ${ticketTypeLabel}</text>
     </g>
 
     <g transform="translate(580, 20)">

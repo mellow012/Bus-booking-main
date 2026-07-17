@@ -101,16 +101,26 @@ export function useAdminDashboard() {
         return; 
       }
       
-      const [reports, templates] = await Promise.all([
+      const [reports, templates, schedules, routes, buses, regions, operators] = await Promise.all([
         fetchCollectionData('DailyReport', companyId),
         fetchCollectionData('ScheduleTemplate', companyId),
+        fetchCollectionData('Schedule', companyId),
+        fetchCollectionData('Route', companyId),
+        fetchCollectionData('Bus', companyId),
+        fetchCollectionData('Region', companyId),
+        fetchCollectionData('Operator', companyId),
       ]);
 
-      const operators: any[] = [];
       setDashboardData(prev => ({
         ...prev,
         company: { ...companyData, createdAt: new Date(companyData.createdAt), updatedAt: new Date(companyData.updatedAt) } as Company,
-        schedules: [], routes: [], buses: [], reports, regions: [], operators, templates,
+        schedules,
+        routes,
+        buses,
+        reports,
+        regions,
+        operators,
+        templates,
       }));
     } catch (err: any) { showAlert('error', err.message || 'Failed to load dashboard data'); }
     finally { setLoading(false); }
@@ -198,7 +208,7 @@ export function useAdminDashboard() {
 
   return {
     // auth & user
-    user, userProfile, authLoading, signOut,
+    user, userProfile, authLoading, signOut, companyId,
     // UI state
     activeTab, setActiveTab, activeCategory, setActiveCategory: handleCategoryChange,
     isMobileOpen, setIsMobileOpen, isCollapsed, setIsCollapsed,
@@ -210,6 +220,7 @@ export function useAdminDashboard() {
     statistics, paymentSettings, availableTabs, isValidUser,
     // actions
     fetchInitialData, fetchCollectionData, updateDashboardData, addItem,
+    refreshData: fetchInitialData,
     // global activity
     isBusy, setIsBusy,
     // alerts

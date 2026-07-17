@@ -109,7 +109,7 @@ const Footer: React.FC = () => {
                 aria-label="Go to BooknPay homepage"
               >
                 <div className="relative">
-                  <div className="w-14 h-14 flex items-center justify-center transition-all duration-300 group-hover:scale-105">
+                  <div className="w-20 h-20 flex items-center justify-center transition-all duration-300 group-hover:scale-105">
                     <img
                       src="/tibhukebus_logo_transparent.png"
                       alt="TibhukeBus Logo"

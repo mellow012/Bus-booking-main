@@ -732,7 +732,7 @@ const ProfilePage: React.FC = () => {
 
   if (isStaff) {
     return (
-      <div className="min-h-screen bg-slate-50/50 relative">
+      <div className="min-h-screen bg-slate-50/50 relative font-sans">
         {/* Background Decorations */}
         <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
           {/* brand-100/40 blobs — decorative, low opacity, no contrast issue */}
@@ -760,7 +760,7 @@ const ProfilePage: React.FC = () => {
 
           <div className="mb-6 flex items-center justify-between">
             <div>
-              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">My Profile</h1>
+              <h1 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight">My Profile</h1>
               <p className="text-gray-400 mt-1 text-sm">Manage your account details</p>
             </div>
             <BackButton
@@ -791,7 +791,7 @@ const ProfilePage: React.FC = () => {
 
 
   return (
-    <div className="min-h-screen bg-slate-50/50">
+    <div className="min-h-screen bg-slate-50/50 font-sans">
       {/* Background Decorations */}
       <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
         <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-brand-100/40 blur-[120px] rounded-full" />
@@ -825,9 +825,9 @@ const ProfilePage: React.FC = () => {
                     <Zap className="w-7 h-7 text-yellow-300" />
                   </div>
                   <div>
-                    <h2 className="text-xl sm:text-2xl font-bold">Welcome to TibhukeBus!</h2>
+                    <h2 className="text-lg sm:text-xl font-bold">Welcome to TibhukeBus!</h2>
                     {/* brand-100 on brand-700 = 9.6:1 (AAA) ✓ */}
-                    <p className="text-brand-100 text-sm mt-1 max-w-md">
+                    <p className="text-brand-100 text-xs sm:text-sm mt-1 max-w-md">
                       Please update your profile details to ensure a smooth booking experience and receive trip updates.
                     </p>
                   </div>
@@ -858,7 +858,7 @@ const ProfilePage: React.FC = () => {
                 </div>
                 <div className="min-w-0">
                   <div className="flex flex-col sm:flex-row sm:items-center gap-2 mb-1">
-                    <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 truncate">
+                    <h1 className="text-lg sm:text-xl lg:text-2xl font-bold text-gray-900 truncate">
                       {displayedFirstName} {displayedLastName}
                     </h1>
                     {/* brand-50/brand-700 = 7.0:1 (AAA) ✓ */}
@@ -914,10 +914,10 @@ const ProfilePage: React.FC = () => {
                 {/* brand-50 bg | brand-700 icon = 7.0:1 (AAA) ✓ */}
               <div className="p-3 bg-brand-50 rounded-xl"><BusIcon className="w-6 h-6 text-brand-700" /></div>
                 <div className="text-right">
-                  <p className="text-2xl font-bold text-gray-900">{bookingStats.total}</p>
-                  <p className="text-sm text-gray-600">Total Bookings</p>
+                  <p className="text-lg font-bold text-gray-900">{bookingStats.total}</p>
+                  <p className="text-xs text-gray-500">Total Bookings</p>
                   {bookingStats.thisMonth > 0 && (
-                    <p className="text-xs text-green-600">+{bookingStats.thisMonth} this month</p>
+                    <p className="text-[10px] text-green-600">+{bookingStats.thisMonth} this month</p>
                   )}
                 </div>
               </div>
@@ -927,9 +927,9 @@ const ProfilePage: React.FC = () => {
               <div className="flex items-center justify-between mb-4">
                 <div className="p-3 bg-green-50 rounded-xl"><CheckCircle className="w-6 h-6 text-green-600" /></div>
                 <div className="text-right">
-                  <p className="text-2xl font-bold text-gray-900">{bookingStats.completed}</p>
-                  <p className="text-sm text-gray-600">Completed</p>
-                  <p className="text-xs text-gray-500">
+                  <p className="text-lg font-bold text-gray-900">{bookingStats.completed}</p>
+                  <p className="text-xs text-gray-500">Completed</p>
+                  <p className="text-[10px] text-gray-500">
                     {bookingStats.total > 0 ? Math.round((bookingStats.completed / bookingStats.total) * 100) : 0}% success rate
                   </p>
                 </div>
@@ -940,8 +940,8 @@ const ProfilePage: React.FC = () => {
               <div className="flex items-center justify-between mb-4">
                 <div className="p-3 bg-yellow-50 rounded-xl"><Clock className="w-6 h-6 text-yellow-600" /></div>
                 <div className="text-right">
-                  <p className="text-2xl font-bold text-gray-900">{bookingStats.pending}</p>
-                  <p className="text-sm text-gray-600">Pending</p>
+                  <p className="text-lg font-bold text-gray-900">{bookingStats.pending}</p>
+                  <p className="text-xs text-gray-500">Pending</p>
                 </div>
               </div>
             </div>
@@ -950,9 +950,9 @@ const ProfilePage: React.FC = () => {
               <div className="flex items-center justify-between mb-4">
                 <div className="p-3 bg-purple-50 rounded-xl"><DollarSign className="w-6 h-6 text-purple-600" /></div>
                 <div className="text-right">
-                  <p className="text-2xl font-bold text-gray-900">MWK {bookingStats.totalSpent.toLocaleString()}</p>
-                  <p className="text-sm text-gray-600">Total Spent</p>
-                  <p className="text-xs text-gray-500">Avg: MWK {Math.round(bookingStats.avgBookingValue).toLocaleString()}</p>
+                  <p className="text-lg font-bold text-gray-900">MWK {bookingStats.totalSpent.toLocaleString()}</p>
+                  <p className="text-xs text-gray-500">Total Spent</p>
+                  <p className="text-[10px] text-gray-500">Avg: MWK {Math.round(bookingStats.avgBookingValue).toLocaleString()}</p>
                 </div>
               </div>
             </div>
@@ -967,13 +967,13 @@ const ProfilePage: React.FC = () => {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center space-x-2 px-4 sm:px-6 py-2.5 rounded-2xl transition-all duration-300 font-bold text-sm whitespace-nowrap ${activeTab === tab.id
+                  className={`flex items-center space-x-2 px-4 sm:px-6 py-2.5 rounded-2xl transition-all duration-300 font-bold text-xs whitespace-nowrap ${activeTab === tab.id
                     // brand-700 on white = 7.8:1 (AAA) ✓
                     ? 'bg-white text-brand-700 shadow-sm'
                     : 'text-gray-500 hover:text-gray-900'
                     }`}
                 >
-                  <tab.icon className={`w-4 h-4 ${activeTab === tab.id ? 'text-brand-700' : 'text-gray-400'}`} />
+                  <tab.icon className={`w-3.5 h-3.5 ${activeTab === tab.id ? 'text-brand-700' : 'text-gray-400'}`} />
                   <span>{tab.label}</span>
                 </button>
               ))}
@@ -991,7 +991,7 @@ const ProfilePage: React.FC = () => {
                   editProfile ? (
                     <>
                       <div className="mb-10">
-                        <h2 className="text-2xl font-bold text-gray-900">Update Profile</h2>
+                        <h2 className="text-lg font-bold text-gray-900">Update Profile</h2>
                         <p className="text-gray-500 text-sm mt-1">Keep your information accurate for a better booking experience.</p>
                       </div>
 
@@ -1095,16 +1095,16 @@ const ProfilePage: React.FC = () => {
                               <span className="inline-flex items-center px-3 py-1 bg-white/20 backdrop-blur-md rounded-full text-xs font-bold uppercase tracking-wider mb-4 border border-white/20">
                                 Upcoming Trip
                               </span>
-                              <h3 className="text-3xl sm:text-4xl font-black mb-2 leading-none uppercase tracking-tight">
+                              <h3 className="text-xl sm:text-2xl font-black mb-1.5 leading-none uppercase tracking-tight">
                                 {nextTrip.origin} → {nextTrip.destination}
                               </h3>
                               {/* brand-100 on brand-700 = 9.6:1 (AAA) ✓ */}
-                              <p className="text-brand-100 text-sm font-medium">with {nextTrip.companyName}</p>
+                              <p className="text-brand-100 text-xs font-medium">with {nextTrip.companyName}</p>
                             </div>
 
                             <div className="bg-white/10 backdrop-blur-md border border-white/20 p-5 rounded-3xl flex flex-col items-center justify-center min-w-[140px]">
                               <p className="text-[10px] font-bold uppercase tracking-[0.2em] mb-1 opacity-70">Starting in</p>
-                              <p className="text-2xl font-black">
+                              <p className="text-lg font-black">
                                 {Math.max(0, Math.ceil((nextTrip.departureDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)))} Days
                               </p>
                               <p className="text-[10px] font-bold mt-1 opacity-70">{nextTrip.departureDate.toLocaleDateString()}</p>
@@ -1113,11 +1113,11 @@ const ProfilePage: React.FC = () => {
 
                           <div className="mt-8 flex flex-wrap gap-3 relative z-10">
                             <button onClick={() => router.push(`/bookings?ref=${nextTrip.bookingReference}`)}
-                              className="px-6 py-2.5 bg-white text-brand-700 rounded-2xl font-bold text-sm hover:scale-105 transition-transform flex items-center shadow-lg shadow-brand-900/20">
+                              className="px-6 py-2.5 bg-white text-brand-700 rounded-2xl font-bold text-xs hover:scale-105 transition-transform flex items-center shadow-lg shadow-brand-900/20">
                               Manage Booking <ChevronRight className="w-4 h-4 ml-1.5" />
                             </button>
                             <button onClick={() => router.push(`/bookings?ref=${nextTrip.bookingReference}&action=download`)}
-                              className="px-6 py-2.5 bg-brand-600/30 text-white rounded-2xl font-bold text-sm hover:bg-brand-600/50 transition-colors flex items-center border border-white/10 backdrop-blur-sm">
+                              className="px-6 py-2.5 bg-brand-600/30 text-white rounded-2xl font-bold text-xs hover:bg-brand-600/50 transition-colors flex items-center border border-white/10 backdrop-blur-sm">
                               <Download className="w-4 h-4 mr-1.5" /> Ticket
                             </button>
                           </div>
@@ -1125,7 +1125,7 @@ const ProfilePage: React.FC = () => {
                       )}
 
                       <div className="flex items-center justify-between mb-8">
-                        <h2 className="text-2xl font-bold text-gray-900">Personal Space</h2>
+                        <h2 className="text-lg font-bold text-gray-900">Personal Space</h2>
                         <button onClick={() => setShowSensitiveInfo(!showSensitiveInfo)}
                           className={`flex items-center space-x-2 text-xs font-bold uppercase tracking-widest px-3 py-1.5 rounded-xl transition-all ${showSensitiveInfo ? 'bg-red-50 text-red-600' : 'bg-gray-50 text-gray-400 hover:text-gray-900'
                             }`}>
@@ -1159,7 +1159,7 @@ const ProfilePage: React.FC = () => {
                       {/* Quick Link Grid */}
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div className="p-6 bg-gradient-to-br from-brand-50 to-brand-100/50 border border-brand-100 rounded-[32px] group">
-                          <h4 className="text-sm font-black text-brand-900 uppercase tracking-widest mb-4">Discovery</h4>
+                          <h4 className="text-xs font-black text-brand-900 uppercase tracking-wider mb-4">Discovery</h4>
                           <div className="flex flex-col gap-3">
                             <button onClick={() => router.push('/schedules')}
                               className="flex items-center justify-between p-4 bg-white rounded-2xl shadow-sm hover:shadow-md transition-all group-hover:-translate-y-1">
@@ -1181,7 +1181,7 @@ const ProfilePage: React.FC = () => {
                         </div>
 
                         <div className="p-6 bg-gradient-to-br from-green-50 to-emerald-50 border border-green-100 rounded-[32px]">
-                          <h4 className="text-sm font-black text-green-900 uppercase tracking-widest mb-4">Rewards</h4>
+                          <h4 className="text-xs font-black text-green-900 uppercase tracking-wider mb-4">Rewards</h4>
                           <div className="flex items-center gap-4 bg-white p-5 rounded-2xl border border-green-100 shadow-sm">
                             <div className="w-12 h-12 bg-green-100 text-green-600 rounded-full flex items-center justify-center flex-shrink-0 animate-bounce">
                               <Award className="w-6 h-6" />
@@ -1200,7 +1200,7 @@ const ProfilePage: React.FC = () => {
 
                       {/* Quick Actions */}
                       <div className="p-4 sm:p-6 bg-gradient-to-r from-gray-50 to-brand-50 rounded-2xl border border-gray-100">
-                        <h3 className="text-lg font-bold text-gray-900 mb-4">Quick Actions</h3>
+                        <h3 className="text-base font-bold text-gray-900 mb-4">Quick Actions</h3>
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                           {[
                             { icon: <BusIcon className="w-6 h-6 text-brand-700" />, bg: 'bg-brand-100', hoverBorder: 'hover:border-brand-300', label: 'Book a Trip', sub: 'Find & book tickets', action: () => router.push('/schedules') },
@@ -1220,7 +1220,7 @@ const ProfilePage: React.FC = () => {
 
                       {/* Book Again Shortcuts */}
                       <div className="mt-8">
-                        <h3 className="text-lg font-bold text-gray-900 mb-4">Book Again</h3>
+                        <h3 className="text-base font-bold text-gray-900 mb-4">Book Again</h3>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                           {bookAgainRoutes.length > 0 ? (
                             bookAgainRoutes.map((b) => (
@@ -1249,27 +1249,17 @@ const ProfilePage: React.FC = () => {
                 {/* Bookings Tab */}
                 {activeTab === 'bookings' && (
                   <>
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+                    <div className="flex items-center justify-between mb-8">
                       <div>
-                        <h2 className="text-2xl font-bold text-gray-900">Trip History</h2>
-                        <p className="text-gray-500 text-sm mt-1">Found {filteredBookings.length} bookings</p>
+                        <h2 className="text-lg font-bold text-gray-900">Recent Bookings</h2>
+                        <p className="text-gray-400 text-xs mt-0.5">Showing your last 5 trips</p>
                       </div>
-                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-                        <div className="relative group">
-                          <input type="text" placeholder="Search..." value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            className="w-full sm:w-48 pl-10 pr-4 py-2.5 bg-gray-50 border-none rounded-2xl focus:ring-4 focus:ring-brand-700/10 focus:bg-white transition-all text-sm outline-none" />
-                          <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-3 group-focus-within:text-brand-700 transition-colors" />
-                        </div>
-                        <select value={bookingFilter} onChange={(e) => setBookingFilter(e.target.value)}
-                          className="px-4 py-2.5 bg-gray-50 border-none rounded-2xl focus:ring-4 focus:ring-brand-700/10 focus:bg-white transition-all text-sm outline-none cursor-pointer">
-                          <option value="all">Status: All</option>
-                          <option value="completed">Completed</option>
-                          <option value="pending">Pending</option>
-                          <option value="confirmed">Confirmed</option>
-                          <option value="cancelled">Cancelled</option>
-                        </select>
-                      </div>
+                      <button
+                        onClick={() => router.push('/bookings')}
+                        className="px-4 py-2 bg-gray-900 hover:bg-black text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-all shadow-sm"
+                      >
+                        View All Bookings
+                      </button>
                     </div>
 
                     {statsLoading ? (
@@ -1278,61 +1268,56 @@ const ProfilePage: React.FC = () => {
                           <div key={i} className="h-32 bg-gray-50 rounded-[28px] animate-pulse" />
                         ))}
                       </div>
-                    ) : filteredBookings.length > 0 ? (
-                      <div className="space-y-6">
-                        {filteredBookings.map((booking) => (
-                          <div key={booking.id} className="group p-6 bg-white border border-gray-100 rounded-[32px] hover:border-brand-100 hover:shadow-xl hover:shadow-brand-500/5 transition-all duration-300">
-                            <div className="flex flex-col sm:flex-row items-start justify-between gap-6">
+                    ) : recentBookings.length > 0 ? (
+                      <div className="space-y-4">
+                        {recentBookings.slice(0, 5).map((booking) => (
+                          <div key={booking.id} className="group p-5 bg-white border border-gray-100 rounded-2xl hover:border-brand-100 hover:shadow-lg hover:shadow-brand-500/5 transition-all duration-300">
+                            <div className="flex flex-col sm:flex-row items-start justify-between gap-4">
                               <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-3 mb-3">
-                                  <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight truncate">{booking.origin} → {booking.destination}</h3>
-                                  <div className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border flex items-center gap-1.5 ${getStatusColor(booking.status)}`}>
+                                <div className="flex flex-wrap items-center gap-2 mb-2">
+                                  <h3 className="text-base font-black text-gray-900 uppercase tracking-tight truncate">{booking.origin} → {booking.destination}</h3>
+                                  <div className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border flex items-center gap-1 ${getStatusColor(booking.status)}`}>
                                     {getStatusIcon(booking.status)}
                                     <span>{booking.status}</span>
                                   </div>
                                 </div>
-                                <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-gray-500 font-medium">
-                                  <span className="flex items-center"><BusIcon className="w-4 h-4 mr-2 text-gray-300" /> {booking.companyName}</span>
-                                  <span className="flex items-center"><Calendar className="w-4 h-4 mr-2 text-gray-300" /> {booking.departureDate.toLocaleDateString()}</span>
-                                  <span className="flex items-center"><Clock className="w-4 h-4 mr-2 text-gray-300" /> {booking.departureDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-400 font-medium">
+                                  <span className="flex items-center"><BusIcon className="w-3.5 h-3.5 mr-1.5 text-gray-300" /> {booking.companyName}</span>
+                                  <span className="flex items-center"><Calendar className="w-3.5 h-3.5 mr-1.5 text-gray-300" /> {booking.departureDate.toLocaleDateString()}</span>
+                                  <span className="flex items-center"><Clock className="w-3.5 h-3.5 mr-1.5 text-gray-300" /> {booking.departureDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                                 </div>
                               </div>
-                              <div className="flex flex-col items-end gap-2 shrink-0">
-                                <p className="text-2xl font-black text-gray-900 tracking-tighter">MWK {booking.amount.toLocaleString()}</p>
+                              <div className="flex flex-col items-end gap-1.5 shrink-0">
+                                <p className="text-lg font-black text-gray-900 tracking-tighter">MWK {booking.amount.toLocaleString()}</p>
                                 <button onClick={() => copyBookingReference(booking.bookingReference)}
-                                  className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-50 text-brand-700 hover:bg-brand-50 rounded-xl transition-all text-[10px] font-black uppercase tracking-widest">
+                                  className="flex items-center gap-1 px-2 py-1 bg-gray-50 text-brand-700 hover:bg-brand-50 rounded-lg transition-all text-[9px] font-bold uppercase tracking-wider">
                                   <Copy className="w-3 h-3" />
                                   <span>{booking.bookingReference}</span>
                                 </button>
                               </div>
                             </div>
 
-                            <div className="mt-6 pt-6 border-t border-gray-50 flex flex-col sm:flex-row items-center justify-between gap-4">
+                            <div className="mt-4 pt-4 border-t border-gray-50 flex flex-col sm:flex-row items-center justify-between gap-3">
                               <div className="flex items-center gap-2">
                                 {booking.seatNumbers.length > 0 && (
                                   <div className="flex flex-wrap gap-1">
-                                    {booking.seatNumbers.map(s => <span key={s} className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded-md font-bold text-[10px]">Seat {s}</span>)}
+                                    {booking.seatNumbers.map(s => <span key={s} className="px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded font-bold text-[9px]">Seat {s}</span>)}
                                   </div>
                                 )}
-                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Paid via {booking.paymentStatus}</span>
+                                <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider ml-1">Paid via {booking.paymentStatus}</span>
                               </div>
-                              <div className="flex items-center gap-3 w-full sm:w-auto">
-                                {!['cancelled', 'canceled'].includes(booking.status.toLowerCase()) && (
-                                  <button
-                                    onClick={() => initiateCancel(booking.id)}
-                                    className="flex-1 sm:flex-none px-5 py-2 text-xs font-black uppercase tracking-[0.1em] text-red-600 hover:bg-red-50 rounded-xl transition-all border border-transparent hover:border-red-100">
-                                    Cancel Trip
-                                  </button>
-                                )}
+                              <div className="flex items-center gap-2 w-full sm:w-auto">
                                 <button
                                   onClick={() => router.push(`/bookings?ref=${booking.bookingReference}`)}
-                                  className="flex-1 sm:flex-none px-5 py-2 text-xs font-black uppercase tracking-[0.1em] bg-gray-900 text-white rounded-xl hover:bg-black transition-all shadow-lg shadow-black/10">
-                                  Info
+                                  className="flex-1 sm:flex-none px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider bg-gray-900 text-white rounded-lg hover:bg-black transition-all shadow-sm">
+                                  View Booking
                                 </button>
                                 <button
                                   onClick={() => router.push(`/bookings?ref=${booking.bookingReference}&action=download`)}
-                                  className="p-2 sm:px-4 py-2 text-brand-700 bg-brand-50 hover:bg-brand-100 rounded-xl transition-all flex items-center justify-center">
-                                  <Download className="w-4 h-4" />
+                                  className="p-1.5 text-brand-700 bg-brand-50 hover:bg-brand-100 rounded-lg transition-all flex items-center justify-center"
+                                  title="Download Ticket"
+                                >
+                                  <Download className="w-3.5 h-3.5" />
                                 </button>
                               </div>
                             </div>
@@ -1340,9 +1325,9 @@ const ProfilePage: React.FC = () => {
                         ))}
                       </div>
                     ) : (
-                      <div className="text-center py-20 bg-gray-50/50 rounded-[32px] border border-dashed border-gray-200">
-                        <BusIcon className="w-12 h-12 mx-auto mb-4 text-gray-200" />
-                        <p className="text-gray-500 font-medium font-bold uppercase tracking-widest">No bookings found matching your filters.</p>
+                      <div className="text-center py-16 bg-gray-50/50 rounded-3xl border border-dashed border-gray-200">
+                        <BusIcon className="w-10 h-10 mx-auto mb-3 text-gray-200" />
+                        <p className="text-gray-400 font-bold text-xs uppercase tracking-widest">No bookings found.</p>
                       </div>
                     )}
                   </>
@@ -1352,8 +1337,8 @@ const ProfilePage: React.FC = () => {
                 {activeTab === 'payments' && (
                   <>
                     <div className="mb-10">
-                      <h2 className="text-2xl font-bold text-gray-900">Wallet & Payments</h2>
-                      <p className="text-gray-500 text-sm mt-1">Manage your payment methods and view transaction history.</p>
+                      <h2 className="text-base font-bold text-gray-900">Wallet & Payments</h2>
+                      <p className="text-gray-500 text-xs mt-1">Manage your payment methods and view transaction history.</p>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
@@ -1427,7 +1412,7 @@ const ProfilePage: React.FC = () => {
                 {activeTab === 'settings' && (
                   <>
                     <div className="mb-10">
-                      <h2 className="text-2xl font-bold text-gray-900">Preferences</h2>
+                      <h2 className="text-lg font-bold text-gray-900">Preferences</h2>
                       <p className="text-gray-500 text-sm mt-1">Customize your experience on the platform.</p>
                     </div>
 
@@ -1482,7 +1467,7 @@ const ProfilePage: React.FC = () => {
                 {activeTab === 'security' && (
                   <>
                     <div className="mb-10">
-                      <h2 className="text-2xl font-bold text-gray-900">Security</h2>
+                      <h2 className="text-lg font-bold text-gray-900">Security</h2>
                       <p className="text-gray-500 text-sm mt-1">Keep your account safe and monitor your sessions.</p>
                     </div>
 
@@ -1498,7 +1483,7 @@ const ProfilePage: React.FC = () => {
                             <Key className="w-6 h-6" />
                           </div>
                           <div>
-                            <p className="text-lg font-black text-gray-900 tracking-tight">Login Password</p>
+                            <p className="text-base font-black text-gray-900 tracking-tight">Login Password</p>
                             <p className="text-xs text-gray-400 font-bold uppercase tracking-wider mt-0.5">
                               Update your password directly below
                             </p>
