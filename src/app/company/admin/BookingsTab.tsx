@@ -152,6 +152,49 @@ export default function BookingsTab({ dashboard }: BookingsTabProps) {
     return schedules.find((schedule: Schedule) => schedule.id === requestedScheduleId) || null;
   }, [requestedScheduleId, schedules]);
 
+  const futureBookingsSummary = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const futureDatesMap: Record<string, { dateStr: string; count: number; scheduleId: string }> = {};
+
+    bookings.forEach((b: Booking) => {
+      if (b.bookingStatus === 'cancelled') return;
+
+      const schedule = schedules.find((s: Schedule) => 
+        bookingMatchesSchedule(b, s.id) && 
+        s.status !== 'completed' && 
+        s.status !== 'cancelled'
+      );
+      if (!schedule) return;
+
+      const depDate = new Date(schedule.departureDateTime);
+      depDate.setHours(0, 0, 0, 0);
+
+      if (depDate.getTime() > today.getTime()) {
+        const year = depDate.getFullYear();
+        const month = String(depDate.getMonth() + 1).padStart(2, '0');
+        const day = String(depDate.getDate()).padStart(2, '0');
+        const dateStr = `${year}-${month}-${day}`;
+
+        if (dateStr === selectedDate) return;
+
+        if (!futureDatesMap[dateStr]) {
+          futureDatesMap[dateStr] = {
+            dateStr,
+            count: 0,
+            scheduleId: schedule.id,
+          };
+        }
+        futureDatesMap[dateStr].count += 1;
+      }
+    });
+
+    return Object.values(futureDatesMap)
+      .filter((item) => item.count > 0)
+      .sort((a, b) => a.dateStr.localeCompare(b.dateStr));
+  }, [bookings, schedules, selectedDate]);
+
   const allActiveSchedules = schedules
     .filter((s: Schedule) => {
       if (preferredSchedule?.id === s.id) return true;
@@ -303,13 +346,42 @@ export default function BookingsTab({ dashboard }: BookingsTabProps) {
     <div className="space-y-6 animate-in fade-in duration-500">
       <div>
         <h2 className="text-xl font-bold tracking-tight text-gray-900 flex items-center gap-2">
-          <Users className="w-6 h-6 text-indigo-600" />
+          <Users className="w-6 h-6 text-brand-700" />
           Bookings &amp; Trip Manifests
         </h2>
         <p className="mt-1 text-sm text-gray-500">
           Manage bookings by upcoming trips and search by date. Use the date filter to locate archived trips on a specific day.
         </p>
       </div>
+
+      {futureBookingsSummary.length > 0 && (
+        <div className="p-4 bg-brand-50 border border-brand-200 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <Bell className="w-5 h-5 text-brand-700 animate-bounce" />
+            <div>
+              <p className="text-sm font-bold text-brand-950">Upcoming Bookings Notice</p>
+              <p className="text-xs text-brand-700 font-medium">There are active bookings on future dates that are not currently displayed.</p>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {futureBookingsSummary.map((item) => (
+              <button
+                key={item.dateStr}
+                onClick={() => {
+                  setSelectedDate(item.dateStr);
+                  setSelectedScheduleId(item.scheduleId);
+                }}
+                className="px-3 py-1.5 text-xs font-semibold bg-white border border-brand-200 hover:border-brand-600 hover:bg-brand-50 rounded-xl text-brand-800 transition-all flex items-center gap-1.5 shadow-sm active:scale-95 cursor-pointer"
+              >
+                <span>{new Date(item.dateStr).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                <span className="bg-coral-500 text-white rounded-full px-1.5 py-0.5 text-[10px] font-bold">
+                  {item.count}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {activeSchedules.length === 0 && bookings.length === 0 ? (
         <div className="py-16 text-center bg-white rounded-2xl border border-dashed border-gray-200">
