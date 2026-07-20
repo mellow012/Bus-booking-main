@@ -84,16 +84,16 @@ export const EmailVerificationPrompt: React.FC<EmailVerificationPromptProps> = (
   if (!showBannerState) return null;
 
   return (
-    <div className="fixed top-0 left-0 right-0 z-50 bg-gradient-to-r from-blue-50 via-indigo-50 to-blue-50 border-b border-blue-200 shadow-sm">
+    <div className="fixed top-0 left-0 right-0 z-50 bg-gradient-to-r from-brand-50 via-slate-50 to-brand-50 border-b border-brand-200 shadow-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5">
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-3 flex-1 min-w-0">
-            <EnvelopeIcon className="w-5 h-5 text-blue-600 flex-shrink-0" />
+            <EnvelopeIcon className="w-5 h-5 text-brand-700 flex-shrink-0" />
             <div className="min-w-0">
-              <p className="text-sm font-medium text-gray-900">
+              <p className="text-sm font-medium text-brand-950">
                 Please verify your email
               </p>
-              <p className="text-xs text-gray-600 truncate">
+              <p className="text-xs text-brand-700 truncate">
                 We sent a link to {email}
               </p>
             </div>
@@ -108,7 +108,7 @@ export const EmailVerificationPrompt: React.FC<EmailVerificationPromptProps> = (
               className={`text-xs h-8 px-4 ${
                 resendStatus === 'success'
                   ? 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100'
-                  : ''
+                  : 'bg-coral-500 hover:bg-coral-600 text-white transition-colors'
               }`}
             >
               {isResending ? (
@@ -125,7 +125,7 @@ export const EmailVerificationPrompt: React.FC<EmailVerificationPromptProps> = (
 
             <button
               onClick={handleDismiss}
-              className="text-gray-500 hover:text-gray-700 p-1 rounded-full hover:bg-gray-100 transition-colors"
+              className="text-brand-500 hover:text-brand-700 p-1 rounded-full hover:bg-brand-100 transition-colors"
               aria-label="Dismiss banner"
             >
               <XMarkIcon className="w-5 h-5" />

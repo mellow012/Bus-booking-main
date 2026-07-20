@@ -59,7 +59,7 @@ function getEmailHeaderHtml(title: string): string {
   const logoUrl = `${baseUrl}/tibhukebus_logo_transparent.png`;
   return `
     <div style="background: linear-gradient(135deg, #005a5b, #009091); padding: 32px 24px; text-align: center;">
-      <img src="${logoUrl}" alt="TibhukeBus Logo" style="height: 56px; max-width: 56px; object-fit: contain; margin-bottom: 12px; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.15));" />
+      <img src="${logoUrl}" alt="TibhukeBus Logo" style="height: 64px; max-width: 240px; object-fit: contain; margin-bottom: 12px; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.15));" />
       <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 700; font-family: 'Inter', system-ui, -apple-system, sans-serif; letter-spacing: -0.5px;">${title}</h1>
     </div>
   `;
