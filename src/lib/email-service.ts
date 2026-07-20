@@ -22,9 +22,10 @@ function getResendApiKey(): string {
 }
 
 function getFromAddress(): string {
-  return (
-    process.env.RESEND_FROM?.trim() || 'TibhukeBus <admin@tibhukebus.com>'
-  );
+  let from = process.env.RESEND_FROM?.trim() || 'TibhukeBus <admin@tibhukebus.com>';
+  // Remove wrapping quotes if any (common when configured in Vercel/env managers)
+  from = from.replace(/^['"]|['"]$/g, '').trim();
+  return from;
 }
 
 function getResendClient(): Resend {
