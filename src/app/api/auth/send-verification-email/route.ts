@@ -1,8 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
+import { authRateLimiter, getClientIp } from '@/lib/rateLimit';
 
 export async function POST(request: NextRequest) {
   try {
+    const ip = getClientIp(request);
+    const { success, reset } = await authRateLimiter.limit(ip);
+    if (!success) {
+      const retryAfter = Math.ceil((reset - Date.now()) / 1000);
+      return NextResponse.json(
+        { error: 'Too many requests. Please try again later.' },
+        { status: 429, headers: { 'Retry-After': String(retryAfter > 0 ? retryAfter : 60) } }
+      );
+    }
     const supabase = await createClient();
     const { data: { user }, error } = await supabase.auth.getUser();
 

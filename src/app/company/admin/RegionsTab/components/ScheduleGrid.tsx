@@ -17,7 +17,7 @@ export default function ScheduleGrid({ schedules, buses, bookings, emptyMessage 
   }
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
+    <div className="flex flex-col gap-3 mt-4">
       {schedules.map((schedule: Schedule) => {
         const bus = buses.find((b: Bus) => b.id === schedule.busId);
         const scheduleBookings = bookings.filter((b: Booking) => bookingMatchesSchedule(b, schedule.id));

@@ -1,9 +1,19 @@
 // app/api/payments/paychangu/charge/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { paymentRateLimiter, getClientIp } from "@/lib/rateLimit";
 
 export async function POST(req: NextRequest) {
   try {
+    const ip = getClientIp(req);
+    const { success, reset } = await paymentRateLimiter.limit(ip);
+    if (!success) {
+      const retryAfter = Math.ceil((reset - Date.now()) / 1000);
+      return NextResponse.json(
+        { error: "Too many payment requests. Please try again later." },
+        { status: 429, headers: { "Retry-After": String(retryAfter > 0 ? retryAfter : 60) } }
+      );
+    }
     const body = await req.json();
     const { bookingId, customerDetails, metadata } = body;
 

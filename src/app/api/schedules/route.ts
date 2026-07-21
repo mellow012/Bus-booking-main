@@ -23,8 +23,11 @@ import { logger } from '@/lib/logger';
 import { isSegmentBookable } from '@/lib/schedule-utils';
 import { checkAndRollSchedules } from '@/lib/schedule-generator';
 import { serverCache, createScheduleCacheKey } from '@/lib/cache';
+import { getRouteDistanceAndDuration } from '@/lib/route-utils';
 
 export const dynamic = 'force-dynamic';
+
+
 
 const DEFAULT_LIMIT = 30;
 const MAX_LIMIT = 100;
@@ -166,6 +169,7 @@ async function querySchedules(params: {
         route: true,
         bus: { include: { company: true } },
         company: true,
+        bookings: true,
       },
       orderBy: orderByQuery,
       skip: pageOffset,
@@ -190,8 +194,24 @@ async function querySchedules(params: {
 
       const dep = new Date(sch.departureDateTime);
       const arr = new Date(sch.arrivalDateTime);
-      const durationMs = arr.getTime() - dep.getTime();
-      const durationMin = Math.round(durationMs / 60000);
+      
+      // Calculate dynamic real-time seats remaining
+      const activeBookings = (sch.bookings || []).filter((b: any) => b.bookingStatus !== 'cancelled');
+      let bookedSeatsCount = 0;
+      activeBookings.forEach((b: any) => {
+        const seats = Array.isArray(b.seatNumbers) ? b.seatNumbers : [];
+        const passengerCount = Array.isArray(b.passengerDetails) ? b.passengerDetails.length : 1;
+        bookedSeatsCount += seats.length > 0 ? seats.length : passengerCount;
+      });
+      const totalSeats = bus?.capacity || 40;
+      const availableSeats = Math.max(totalSeats - bookedSeatsCount, 0);
+
+      // Estimate distance and duration if missing or 0
+      const dbDistance = route.distance || 0;
+      const dbDuration = route.duration || 0;
+      const routeInfo = getRouteDistanceAndDuration(route.origin, route.destination);
+      const distance = dbDistance || routeInfo.distance;
+      const duration = dbDuration || routeInfo.durationMinutes;
 
       // Smart Segment Filtering
       let originStopId: string | undefined;
@@ -214,15 +234,15 @@ async function querySchedules(params: {
         busId: sch.busId,
         routeId: sch.routeId,
         price: sch.price,
-        availableSeats: sch.availableSeats,
+        availableSeats,
         status: sch.status,
         date: dep.toISOString().split('T')[0],
         departureDateTime: sch.departureDateTime,
         arrivalDateTime: sch.arrivalDateTime,
         departureTime: dep.toTimeString().slice(0, 5),
         arrivalTime: arr.toTimeString().slice(0, 5),
-        duration: durationMin,
-        distance: route.distance || 0,
+        duration,
+        distance,
         companyName: company?.name || 'Unknown',
         companyLogo: company?.logo,
         origin: route.origin,
@@ -230,7 +250,7 @@ async function querySchedules(params: {
         busNumber: bus?.licensePlate || 'N/A',
         busType: bus?.busType || 'Standard',
         amenities: (bus?.amenities as string[]) || [],
-        totalSeats: bus?.capacity || 40,
+        totalSeats,
         departureLocation: sch.departureLocation || company.address || `${route.origin} Main Terminal`,
         arrivalLocation: sch.arrivalLocation || `${route.destination} Main Terminal`,
       };

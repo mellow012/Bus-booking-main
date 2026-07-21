@@ -123,29 +123,30 @@ export function useConductorDashboard() {
     if (!selectedTrip || selectedTrip.tripStatus !== 'in_transit') return;
     if (typeof window === 'undefined' || !navigator.geolocation || !user) return;
 
-    const syncLocation = () => {
-      if (document.visibilityState !== 'visible') return;
-      navigator.geolocation.getCurrentPosition(
-        async (pos) => {
-          await dbActions.syncBusLocation({
-            busId: selectedTrip.busId,
-            scheduleId: selectedTrip.id,
-            userId: user.id,
-            latitude: pos.coords.latitude,
-            longitude: pos.coords.longitude,
-            speed: pos.coords.speed || undefined,
-            heading: pos.coords.heading || undefined,
-          });
-        },
-        (err) => console.warn("Location sync failed:", err),
-        { enableHighAccuracy: true }
-      );
+    const handleSuccess = async (pos: GeolocationPosition) => {
+      await dbActions.syncBusLocation({
+        busId: selectedTrip.busId,
+        scheduleId: selectedTrip.id,
+        userId: user.id,
+        latitude: pos.coords.latitude,
+        longitude: pos.coords.longitude,
+        speed: pos.coords.speed ?? undefined,
+        heading: pos.coords.heading ?? undefined,
+      });
     };
 
-    syncLocation();
-    const id = setInterval(syncLocation, 60000); // Sync every minute
-    return () => clearInterval(id);
-  }, [selectedTrip?.id, selectedTrip?.tripStatus]);
+    const handleError = (err: GeolocationPositionError) => {
+      console.warn("Location sync failed:", err);
+    };
+
+    const watchId = navigator.geolocation.watchPosition(handleSuccess, handleError, {
+      enableHighAccuracy: true,
+      maximumAge: 30000,
+      timeout: 27000,
+    });
+
+    return () => navigator.geolocation.clearWatch(watchId);
+  }, [selectedTrip?.id, selectedTrip?.tripStatus, user?.id]);
 
   useEffect(() => {
     const fetchBookings = async () => {

@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { isSegmentBookable } from '@/lib/schedule-utils';
 import { checkAndRollSchedules } from '@/lib/schedule-generator';
+import { getRouteDistanceAndDuration } from '@/lib/route-utils';
 
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 100;
@@ -10,6 +11,16 @@ const MAX_LIMIT = 100;
 interface StopInfo {
   id: string;
   name: string;
+}
+
+function getEstimatedDuration(origin: string, destination: string, dbDuration?: number, dbDistance?: number): number {
+  if (dbDuration && dbDuration > 0) return dbDuration;
+  const { distance } = getRouteDistanceAndDuration(origin, destination);
+  const dist = (dbDistance && dbDistance > 0) ? dbDistance : distance;
+  if (dist > 0) {
+    return Math.round((dist / 80) * 60); // Assume average speed of 80 km/h
+  }
+  return 120; // fallback to 2 hours
 }
 
 export async function GET(request: NextRequest) {
@@ -77,6 +88,7 @@ export async function GET(request: NextRequest) {
         route: true,
         bus: { include: { company: true } },
         company: true,
+        bookings: true,
       },
       orderBy,
       skip: pageOffset,
@@ -92,6 +104,24 @@ export async function GET(request: NextRequest) {
       const company = sch.company || bus?.company;
       const dep = new Date(sch.departureDateTime);
       const arr = new Date(sch.arrivalDateTime);
+
+      // Calculate dynamic real-time seats remaining
+      const activeBookings = (sch.bookings || []).filter((b: any) => b.bookingStatus !== 'cancelled');
+      let bookedSeatsCount = 0;
+      activeBookings.forEach((b: any) => {
+        const seats = Array.isArray(b.seatNumbers) ? b.seatNumbers : [];
+        const passengerCount = Array.isArray(b.passengerDetails) ? b.passengerDetails.length : 1;
+        bookedSeatsCount += seats.length > 0 ? seats.length : passengerCount;
+      });
+      const totalSeats = bus?.capacity || 40;
+      const availableSeats = Math.max(totalSeats - bookedSeatsCount, 0);
+
+      // Estimate distance and duration if missing or 0
+      const dbDistance = route.distance || 0;
+      const dbDuration = route.duration || 0;
+      const { distance: calculatedDistance } = getRouteDistanceAndDuration(route.origin, route.destination);
+      const distance = dbDistance || calculatedDistance;
+      const duration = getEstimatedDuration(route.origin, route.destination, dbDuration, dbDistance);
 
       // Smart Segment Filtering: If we have an origin city, check if it's still bookable
       // This allows booking a bus that has already started but hasn't reached the user's stop yet.
@@ -111,17 +141,18 @@ export async function GET(request: NextRequest) {
         busId: sch.busId,
         routeId: sch.routeId,
         price: sch.price,
-        availableSeats: sch.availableSeats,
-        totalSeats: bus?.capacity || 40,
+        availableSeats,
+        totalSeats,
         status: sch.status,
         tripStatus: sch.tripStatus, // Return raw tripStatus for UI
         date: dep.toISOString().split('T')[0],
         departureTime: dep.toTimeString().slice(0, 5),
         arrivalTime: arr.toTimeString().slice(0, 5),
-        duration: Math.round((arr.getTime() - dep.getTime()) / 60000),
-        distance: route.distance || 0,
+        duration,
+        distance,
         companyName: company?.name || 'Unknown',
         companyLogo: company?.logo,
+        companyRating: (company?.contactSettings as any)?.rating || 4.5,
         origin: route.origin,
         destination: route.destination,
         busNumber: bus?.licensePlate || 'N/A',

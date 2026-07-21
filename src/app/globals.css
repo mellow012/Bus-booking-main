@@ -152,7 +152,6 @@
   svg,
   img {
     display: block;
-    vertical-align: baseline;
   }
 }
 

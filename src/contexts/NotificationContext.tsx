@@ -165,7 +165,13 @@ export const NotificationProvider: React.FC<{ children: ReactNode; userId?: stri
           return;
         }
 
-        const subscription = await registration.pushManager.subscribe({
+        const serviceWorkerRegistration = await navigator.serviceWorker.ready;
+        if (!serviceWorkerRegistration || !serviceWorkerRegistration.active) {
+          console.warn('[NotificationProvider] No active service worker found for push subscription');
+          return;
+        }
+
+        const subscription = await serviceWorkerRegistration.pushManager.subscribe({
           userVisibleOnly: true,
           applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
         });
@@ -176,7 +182,7 @@ export const NotificationProvider: React.FC<{ children: ReactNode; userId?: stri
           body: JSON.stringify({ subscription }),
         });
       } catch (err: any) {
-        console.error('[NotificationProvider] push registration failed:', err);
+        console.warn('[NotificationProvider] Push notification subscription skipped/failed:', err?.message || err);
       }
     };
 

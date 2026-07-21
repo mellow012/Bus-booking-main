@@ -207,3 +207,85 @@ export async function sendNotificationToToken(
 export async function deleteUserToken(_userId: string, _token: string): Promise<void> {
   // No-op: Web Push subscriptions are managed client-side
 }
+
+/**
+ * Periodically scans for upcoming departures and pushes departure reminders
+ * to passengers exactly 1 hour before departure.
+ */
+export async function sendDepartureReminders(): Promise<{ processedSchedules: number; sentNotifications: number }> {
+  const now = new Date();
+  const targetTime = new Date(now.getTime() + 65 * 60 * 1000);
+
+  try {
+    const schedules = await prisma.schedule.findMany({
+      where: {
+        departureDateTime: {
+          gte: now,
+          lte: targetTime,
+        },
+        reminderSent: false,
+        tripStatus: 'scheduled',
+      },
+      include: {
+        bookings: {
+          where: {
+            bookingStatus: { in: ['confirmed', 'pending'] },
+            paymentStatus: { in: ['paid', 'pending'] },
+          },
+          select: {
+            userId: true,
+            bookingStatus: true,
+            paymentStatus: true,
+          },
+        },
+        route: true,
+      },
+    });
+
+    let sentNotifications = 0;
+
+    for (const schedule of schedules) {
+      const departureTimeStr = new Date(schedule.departureDateTime).toLocaleTimeString([], {
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+
+      // Send to each passenger booking
+      for (const booking of schedule.bookings) {
+        try {
+          const isPendingPayment = booking.paymentStatus === 'pending';
+          const payload = {
+            title: 'Upcoming Departure Reminder 🚌',
+            body: isPendingPayment
+              ? `Your bus to ${schedule.route.destination} departs at ${departureTimeStr}. Payment is currently pending—please complete payment or prepare cash on boarding, and arrive at least 15 minutes before departure.`
+              : `Your bus to ${schedule.route.destination} departs at ${departureTimeStr}. Please arrive at least 15 minutes before departure.`,
+            type: 'departure_reminder',
+            priority: 'high' as const,
+            clickAction: `/bookings`,
+          };
+
+          await sendNotificationToUser(booking.userId, payload);
+          sentNotifications++;
+        } catch (sendErr) {
+          console.error(`[Reminders] Failed to send reminder to user ${booking.userId} on schedule ${schedule.id}:`, sendErr);
+        }
+      }
+
+      // Mark reminderSent = true regardless of individual failures to avoid retry storms
+      try {
+        await prisma.schedule.update({
+          where: { id: schedule.id },
+          data: { reminderSent: true },
+        });
+      } catch (updateErr) {
+        console.error(`[Reminders] Failed to update reminderSent flag for schedule ${schedule.id}:`, updateErr);
+      }
+    }
+
+    return { processedSchedules: schedules.length, sentNotifications };
+  } catch (err: any) {
+    console.error('[Reminders] Error running sendDepartureReminders:', err);
+    throw err;
+  }
+}
+

@@ -35,8 +35,9 @@ export const ScheduleCard = React.memo(({ s, onBook, userCity }: {
               <p className="font-semibold text-gray-900 text-xs sm:text-sm truncate group-hover:text-brand-700 transition-colors">{s.companyName}</p>
               <div className="flex items-center gap-1 sm:gap-1.5 mt-0.5">
                 <span className="text-[10px] sm:text-[11px] text-gray-500 bg-gray-100 px-1.5 sm:px-2 py-0.5 rounded-full">{s.busType}</span>
-                <span className="flex items-center gap-0.5 text-[10px] sm:text-[11px] text-gray-500">
-                  <Star className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-yellow-400 fill-yellow-400" />4.6
+                <span className="flex items-center gap-0.5 text-[10px] sm:text-[11px] text-gray-500 font-medium">
+                  <Star className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-yellow-400 fill-yellow-400" />
+                  {(s as any).companyRating ?? (s as any).company?.contactSettings?.rating ?? '4.5'}
                 </span>
               </div>
             </div>

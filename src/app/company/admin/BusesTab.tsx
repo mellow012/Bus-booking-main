@@ -115,7 +115,7 @@ export default function BusesTab({ dashboard }: BusesTabProps) {
           companyId,
         } as any);
         if (res.success) {
-          dashboard.setAlert({ type: 'success', message: 'Bus updated successfully' });
+          dashboard.showAlert('success', 'Bus updated successfully');
           setIsModalOpen(false);
           dashboard.refreshData?.();
         } else {
@@ -128,7 +128,7 @@ export default function BusesTab({ dashboard }: BusesTabProps) {
           companyId,
         } as any);
         if (res.success) {
-          dashboard.setAlert({ type: 'success', message: 'Bus added successfully' });
+          dashboard.showAlert('success', 'Bus added successfully');
           setIsModalOpen(false);
           dashboard.refreshData?.();
         } else {
@@ -147,14 +147,14 @@ export default function BusesTab({ dashboard }: BusesTabProps) {
     try {
       const res = await deleteBus(id);
       if (res.success) {
-        dashboard.setAlert({ type: 'success', message: 'Bus deleted successfully' });
+        dashboard.showAlert('success', 'Bus deleted successfully');
         setIsDeletingId(null);
         dashboard.refreshData?.();
       } else {
-        dashboard.setAlert({ type: 'error', message: res.error || 'Failed to delete bus' });
+        dashboard.showAlert('error', res.error || 'Failed to delete bus');
       }
     } catch (err: any) {
-      dashboard.setAlert({ type: 'error', message: err.message || 'Failed to delete' });
+      dashboard.showAlert('error', err.message || 'Failed to delete');
     } finally {
       setSubmitting(false);
     }

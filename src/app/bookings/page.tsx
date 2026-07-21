@@ -10,15 +10,19 @@ import {
   Bus as BusIcon, MapPin, Clock, Download, XCircle, CheckCircle, Loader2,
   Search, CreditCard, Armchair, Bell, AlertTriangle, Calendar, Users,
   RefreshCw, Zap, Shield, Smartphone, ArrowRight, ArrowLeft, Trash2,
-  ChevronRight, Building2, Wallet,
+  ChevronRight, Building2, Wallet, Star, Navigation,
 } from 'lucide-react';
+import dynamic from 'next/dynamic';
 
 import Modal from '../../components/Modals';
 import AlertMessage from '../../components/AlertMessage';
 import { useAppToast } from '@/contexts/ToastContext';
-import useBookingsList, { BookingWithDetails, SearchFilters, resolveStopName } from './useBookingsList';
+import useBookingsList, { BookingWithDetails, SearchFilters, resolveStopName, getEstimatedDuration } from './useBookingsList';
 import BookingCheckoutDrawer from './BookingCheckoutFlow';
 import BookingStatsGrid from './BookingStatsGrid';
+import { useJourneyTracker } from './useJourneyTracker';
+
+const JourneyMap = dynamic(() => import('./JourneyMap'), { ssr: false, loading: () => <div className="w-full h-48 bg-gray-100 rounded-xl animate-pulse flex items-center justify-center"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div> });
 
 // ─── BookingCard ──────────────────────────────────────────────────────────────
 const BookingCard = memo<{
@@ -32,8 +36,9 @@ const BookingCard = memo<{
   formatDate: (dateTime: unknown) => string;
   getStatusColor: (status: string) => string;
   getPaymentStatusColor: (status: string) => string;
+  router: ReturnType<typeof useRouter>;
 }>(({ booking, onCancel, onDelete, onDownload, onPayment, actionLoading,
-  formatTime, formatDate, getStatusColor, getPaymentStatusColor }) => {
+  formatTime, formatDate, getStatusColor, getPaymentStatusColor, router }) => {
 
   const handleCancel = useCallback(() => onCancel(booking.id, booking.scheduleId, booking.seatNumbers), [booking.id, booking.scheduleId, booking.seatNumbers, onCancel]);
   const handleDelete = useCallback(() => onDelete(booking.id), [booking.id, onDelete]);
@@ -45,6 +50,25 @@ const BookingCard = memo<{
   const alightName = resolveStopName(booking.destinationStopId, booking.destinationStopName, booking.route, booking.route?.destination || 'N/A');
   const isSegment = originName !== (booking.route?.origin || '') || alightName !== (booking.route?.destination || '');
   const isCash = (booking as any).paymentMethod === 'cash_on_boarding';
+
+  const outboundCompleted =
+    booking.schedule.tripStatus === 'completed' ||
+    (booking.schedule.tripStatus !== 'in_transit' && new Date() >= new Date(booking.schedule.arrivalDateTime));
+
+  const activeSegment = (outboundCompleted && booking.returnSegment) ? booking.returnSegment : null;
+
+  const journey = useJourneyTracker({
+    bookingId: booking.id,
+    scheduleId: activeSegment ? activeSegment.scheduleId : booking.scheduleId,
+    departureDateTime: activeSegment ? activeSegment.schedule.departureDateTime : booking.schedule.departureDateTime,
+    arrivalDateTime: activeSegment ? activeSegment.schedule.arrivalDateTime : booking.schedule.arrivalDateTime,
+    tripStatus: activeSegment ? activeSegment.schedule.tripStatus : booking.schedule.tripStatus,
+    bookingStatus: booking.bookingStatus,
+    paymentStatus: booking.paymentStatus,
+    reviewRating: (booking as any).reviewRating,
+  });
+
+  const [reviewForm, setReviewForm] = useState({ rating: 0, hover: 0, text: '' });
 
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-all duration-300">
@@ -67,9 +91,21 @@ const BookingCard = memo<{
             </div>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getStatusColor(booking.bookingStatus)}`}>
-              {booking.bookingStatus.charAt(0).toUpperCase() + booking.bookingStatus.slice(1)}
-            </span>
+            {/* Show Journey state if active, otherwise fallback to booking status */}
+            {journey.state === 'in_transit' ? (
+              <span className="px-3 py-1 rounded-full text-xs font-medium border bg-brand-50 text-brand-700 border-brand-200 flex items-center gap-1 animate-pulse">
+                <Navigation className="w-3 h-3" /> In Transit
+              </span>
+            ) : journey.state === 'arrived' || journey.state === 'completed' ? (
+              <span className="px-3 py-1 rounded-full text-xs font-medium border bg-emerald-50 text-emerald-700 border-emerald-200">
+                Completed
+              </span>
+            ) : (
+              <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getStatusColor(booking.bookingStatus)}`}>
+                {booking.bookingStatus.charAt(0).toUpperCase() + booking.bookingStatus.slice(1)}
+              </span>
+            )}
+            
             <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getPaymentStatusColor(booking.paymentStatus)}`}>
               {booking.paymentStatus.charAt(0).toUpperCase() + booking.paymentStatus.slice(1)}
             </span>
@@ -94,9 +130,40 @@ const BookingCard = memo<{
           <div className="flex-1 mx-2 hidden sm:block">
             <div className="relative">
               <div className="absolute inset-0 flex items-center"><div className="w-full border-t-2 border-dashed border-gray-300" /></div>
-              <div className="relative flex justify-center"><div className="bg-white px-3 py-1 rounded-full border border-gray-200"><BusIcon className="w-4 h-4 text-gray-500" /></div></div>
+              
+              {/* Progress bar fill for active journeys */}
+              {(journey.state === 'in_transit' || journey.state === 'arrived' || journey.state === 'completed') && (
+                <div className="absolute inset-0 flex items-center">
+                  <div className="h-0.5 bg-brand-600 transition-all duration-1000" style={{ width: `${journey.progress * 100}%` }} />
+                </div>
+              )}
+
+              <div className="relative flex justify-center">
+                <div className={`px-3 py-1 rounded-full border transition-colors ${journey.state === 'in_transit' ? 'bg-brand-50 border-brand-200' : 'bg-white border-gray-200'}`}>
+                  <BusIcon className={`w-4 h-4 ${journey.state === 'in_transit' ? 'text-brand-600 animate-pulse' : 'text-gray-500'}`} />
+                </div>
+              </div>
             </div>
-            <div className="text-center mt-2"><span className="text-xs text-gray-500">{Math.floor((booking.route.duration || 0) / 60)}h {(booking.route.duration || 0) % 60}m</span></div>
+            
+            {(() => {
+              const depTime = new Date(booking.schedule.departureDateTime).getTime();
+              const arrTime = new Date(booking.schedule.arrivalDateTime).getTime();
+              const calcMinutes = (arrTime && depTime && arrTime > depTime)
+                ? Math.round((arrTime - depTime) / (1000 * 60))
+                : getEstimatedDuration(originName, alightName, booking.route?.duration, booking.route?.distance);
+              const durationHrs = Math.floor(calcMinutes / 60);
+              const durationMins = calcMinutes % 60;
+              return (
+                <div className="text-center mt-2 flex justify-center gap-2">
+                  <span className="text-xs text-gray-500">{durationHrs}h {durationMins}m</span>
+                  {journey.countdownText && (
+                    <span className={`text-xs font-medium ${journey.state === 'in_transit' ? 'text-brand-600' : 'text-gray-600'}`}>
+                      • {journey.countdownText}
+                    </span>
+                  )}
+                </div>
+              );
+            })()}
           </div>
           <div className="text-center min-w-[80px]">
             <div className="text-lg sm:text-xl font-bold text-gray-900">{formatTime(booking.schedule.arrivalDateTime)}</div>
@@ -136,6 +203,112 @@ const BookingCard = memo<{
         {isSegment && (
           <div className="mb-4 px-3 py-2 bg-orange-50 border border-orange-100 rounded-lg text-xs text-orange-700">
             Full route: {booking.route?.origin} → {booking.route?.destination}
+          </div>
+        )}
+
+        {/* Journey Map & Tracker */}
+        {journey.state === 'in_transit' && (
+          <div className="mb-6 space-y-3">
+            <div className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-xl">
+              <div className="flex items-center gap-3">
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center ${journey.locationConsent ? 'bg-brand-100 text-brand-600' : 'bg-gray-200 text-gray-500'}`}>
+                  <Navigation className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-900">Live Journey Tracking</h4>
+                  <p className="text-xs text-gray-500">Enable location to track your exact position</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => journey.setLocationConsent(!journey.locationConsent)}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${journey.locationConsent ? 'bg-brand-600' : 'bg-gray-300'}`}
+                >
+                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${journey.locationConsent ? 'translate-x-6' : 'translate-x-1'}`} />
+                </button>
+              </div>
+            </div>
+
+            {journey.locationConsent && (
+              <JourneyMap 
+                key={`map-${booking.id}`}
+                origin={activeSegment ? (activeSegment.route?.origin || '') : (booking.route?.origin || '')}
+                destination={activeSegment ? (activeSegment.route?.destination || '') : (booking.route?.destination || '')}
+                progress={journey.progress}
+                livePosition={journey.livePosition}
+                onClick={() => router.push(`/bookings/${booking.id}/journey`)}
+              />
+            )}
+          </div>
+        )}
+
+        {/* Review Section */}
+        {journey.state === 'arrived' && !journey.hasReview && (
+          <div className="mb-6 p-4 bg-brand-50 border border-brand-100 rounded-xl">
+            <h4 className="text-sm font-semibold text-brand-800 mb-1">How was your trip?</h4>
+            <p className="text-xs text-brand-600 mb-4">Rate your journey with {booking.company.name}</p>
+            
+            <div className="flex gap-2 mb-4">
+              {[1, 2, 3, 4, 5].map((star) => (
+                <button
+                  key={star}
+                  type="button"
+                  onClick={() => setReviewForm(p => ({ ...p, rating: star }))}
+                  onMouseEnter={() => setReviewForm(p => ({ ...p, hover: star }))}
+                  onMouseLeave={() => setReviewForm(p => ({ ...p, hover: 0 }))}
+                  className="focus:outline-none transition-transform hover:scale-110"
+                >
+                  <Star className={`w-8 h-8 ${(reviewForm.hover || reviewForm.rating) >= star ? 'text-amber-400 fill-amber-400' : 'text-gray-300'}`} />
+                </button>
+              ))}
+            </div>
+
+            {reviewForm.rating > 0 && (
+              <div className="space-y-3 animate-in fade-in slide-in-from-top-2 duration-300">
+                <textarea
+                  value={reviewForm.text}
+                  onChange={(e) => setReviewForm(p => ({ ...p, text: e.target.value }))}
+                  placeholder="Share details about your experience (optional)"
+                  className="w-full p-3 text-sm bg-white border border-brand-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500/50 resize-none"
+                  rows={2}
+                />
+                <button
+                  onClick={async () => {
+                    const ok = await journey.submitReview(reviewForm.rating, reviewForm.text);
+                    if (ok) {
+                      setReviewForm({ rating: 0, hover: 0, text: '' });
+                    }
+                  }}
+                  disabled={journey.reviewSubmitting}
+                  className="px-4 py-2 bg-brand-600 text-white text-sm font-medium rounded-lg hover:bg-brand-700 disabled:opacity-50 flex items-center gap-2 transition-colors shadow-sm"
+                >
+                  {journey.reviewSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+                  Submit Review
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Existing rating display */}
+        {journey.hasReview && (
+          <div className="mb-6 p-4 bg-gray-50 border border-gray-200 rounded-xl flex items-start gap-4">
+            <div className="flex gap-1 mt-0.5">
+              {[1, 2, 3, 4, 5].map((star) => (
+                <Star
+                  key={star}
+                  className={`w-4 h-4 ${booking.reviewRating && star <= booking.reviewRating ? 'text-amber-400 fill-amber-400' : (booking.reviewRating ? 'text-gray-300' : 'text-amber-400 fill-amber-400')}`}
+                />
+              ))}
+            </div>
+            <div>
+              <p className="text-sm font-medium text-gray-900">
+                {booking.reviewRating ? 'You reviewed this trip' : 'You have already reviewed this trip'}
+              </p>
+              {booking.reviewText && (
+                <p className="text-sm text-gray-600 mt-1">"{booking.reviewText}"</p>
+              )}
+            </div>
           </div>
         )}
 
@@ -201,13 +374,20 @@ const BookingCard = memo<{
                   {actionLoading === booking.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <><XCircle className="w-4 h-4" /><span>Cancel</span></>}
                 </button>
               )}
-              {/* Request refund — paid */}
-              {booking.bookingStatus === 'confirmed' && booking.paymentStatus === 'paid' && !isCash && (
-                <button onClick={handleCancel} disabled={actionLoading === booking.id}
-                  className="w-full px-3 py-2 bg-amber-50 text-amber-700 rounded-lg hover:bg-amber-100 transition-colors border border-amber-200 flex items-center justify-center gap-2">
-                  {actionLoading === booking.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <><AlertTriangle className="w-4 h-4" /><span>Request Refund</span></>}
-                </button>
-              )}
+              {/* Request refund — paid (allowed up to 2 hours before departure) */}
+              {(() => {
+                if (booking.bookingStatus !== 'confirmed' || booking.paymentStatus !== 'paid' || isCash) return null;
+                const departureTime = new Date(booking.schedule.departureDateTime).getTime();
+                const twoHoursInMs = 2 * 60 * 60 * 1000;
+                const canRequestRefund = departureTime - Date.now() > twoHoursInMs;
+
+                return canRequestRefund ? (
+                  <button onClick={handleCancel} disabled={actionLoading === booking.id}
+                    className="w-full px-3 py-2 bg-amber-50 text-amber-700 rounded-lg hover:bg-amber-100 transition-colors border border-amber-200 flex items-center justify-center gap-2">
+                    {actionLoading === booking.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <><AlertTriangle className="w-4 h-4" /><span>Request Refund</span></>}
+                  </button>
+                ) : null;
+              })()}
               {/* Delete — cancelled */}
               {booking.bookingStatus === 'cancelled' && (
                 <button onClick={handleDelete} disabled={actionLoading === booking.id}
@@ -552,6 +732,7 @@ const BookingsPage: React.FC = () => {
                     <BookingCard key={b.id} booking={b} onCancel={handleCancelBooking} onDelete={handleDeleteBooking}
                       onDownload={handleDownloadTicket} onPayment={handleProcessPayment} actionLoading={actionLoading}
                       formatTime={formatTime} formatDate={formatDate} getStatusColor={getStatusColor} getPaymentStatusColor={getPaymentStatusColor}
+                      router={router}
                     />
                   ))}
                   {searchedBookings.length > bookingsPerPage && (

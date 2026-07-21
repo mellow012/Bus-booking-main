@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Booking } from '@/types';
 import { RealtimeStatus, TabType } from '../_lib/constants';
@@ -46,6 +46,11 @@ export const useRealtimeBookings = (
     isConnected: false, lastUpdate: null, pendingUpdates: 0,
   });
   const [bookings, setBookings] = useState<Booking[]>([]);
+  const activeTabRef = useRef(activeTab);
+
+  useEffect(() => {
+    activeTabRef.current = activeTab;
+  }, [activeTab]);
 
   useEffect(() => {
     if (!companyId?.trim()) return;
@@ -75,7 +80,7 @@ export const useRealtimeBookings = (
         const processed = data.map(processBooking);
 
         setBookings(prev => {
-          if (prev.length > 0 && processed.length > prev.length && activeTab === 'bookings') {
+          if (prev.length > 0 && processed.length > prev.length && activeTabRef.current === 'bookings') {
             const newB = processed.find(b => !prev.some(old => old.id === b.id));
             if (newB)
               showAlert('info', `New booking received from ${newB.passengerDetails?.[0]?.name || 'customer'}`);
@@ -97,7 +102,7 @@ export const useRealtimeBookings = (
 
       setBookings(prev => {
         if (eventType === 'INSERT' && newRow) {
-          if (activeTab === 'bookings' && !prev.some(b => b.id === newRow.id)) {
+          if (activeTabRef.current === 'bookings' && !prev.some(b => b.id === newRow.id)) {
             showAlert('info', `New booking received from ${newRow.passengerDetails?.[0]?.name || 'customer'}`);
           }
           return [newRow, ...prev.filter(b => b.id !== newRow.id)].slice(0, 100);
@@ -137,7 +142,7 @@ export const useRealtimeBookings = (
       supabase.removeChannel(channel);
       document.removeEventListener('visibilitychange', handleVisibility);
     };
-  }, [companyId, showAlert, activeTab]);
+  }, [companyId, showAlert]);
 
   return { bookings, setBookings, realtimeStatus };
 };

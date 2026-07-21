@@ -30,6 +30,7 @@ interface EnhancedSchedule {
   availableSeats: number;
   price: number;
   duration: number;
+  distance: number;
   date: string;
   companyLogo?: string | null;
   companyId: string;

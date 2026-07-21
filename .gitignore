@@ -39,3 +39,6 @@ next-env.d.ts
 
 # prisma
 /prisma/dev.db
+
+# pwa build output
+public/worker-*.js

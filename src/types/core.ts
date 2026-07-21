@@ -440,6 +440,8 @@
     confirmedDate?: Date;
     boardedAt?: Date;
     noShowAt?: Date;
+    reviewRating?: number | null;
+    reviewText?: string | null;
     cancellationDate?: Date;
     refundDate?: Date;
 

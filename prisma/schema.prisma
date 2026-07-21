@@ -199,6 +199,7 @@ model Schedule {
   status            String            @default("active")
   tripStatus        String            @default("scheduled")
   isActive          Boolean           @default(true)
+  reminderSent      Boolean           @default(false)
   isArchived        Boolean           @default(false)
   isCompleted       Boolean           @default(false)
   actualDepartureTime DateTime?
@@ -227,6 +228,7 @@ model Schedule {
   reservations      SeatReservation[]
   bookingSegments   BookingSegment[]  @relation("BookingSegmentSchedule")
   activities        ActivityLog[]
+  positionSamples   TripPositionSample[]
 
   @@index([companyId])
   @@index([busId])
@@ -264,6 +266,8 @@ model Booking {
   destinationStopId String?
   returnDate       DateTime?
   metadata         Json?
+  reviewRating     Int?
+  reviewText       String?
   segments         BookingSegment[] @relation("BookingSegmentBooking")
   company          Company   @relation(fields: [companyId], references: [id])
   schedule         Schedule  @relation(fields: [scheduleId], references: [id])
@@ -507,3 +511,21 @@ model GroupCharterQuote {
   @@index([requestId])
   @@index([companyId])
 }
+
+model TripPositionSample {
+  id          String   @id @default(uuid())
+  scheduleId  String
+  latitude    Float
+  longitude   Float
+  accuracy    Float?
+  heading     Float?
+  speed       Float?
+  source      String   @default("rider") // "rider" or "conductor"
+  createdAt   DateTime @default(now())
+
+  schedule    Schedule @relation(fields: [scheduleId], references: [id])
+
+  @@index([scheduleId])
+  @@index([createdAt])
+}
+

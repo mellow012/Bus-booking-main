@@ -380,6 +380,7 @@ export default function BookingsTab({ dashboard, defaultScheduleId }: BookingsTa
               {activeSchedules.map((schedule: Schedule) => {
                 const route = routes.find((r: Route) => r.id === schedule.routeId);
                 const bus = buses.find((b: Bus) => b.id === schedule.busId);
+                const tripBookings = bookings.filter((b: Booking) => bookingMatchesSchedule(b, schedule.id) && b.bookingStatus !== 'cancelled');
                 const isSelected = selectedScheduleId === schedule.id;
                 const isToday = (() => {
                   const dep = new Date(schedule.departureDateTime);
@@ -396,8 +397,13 @@ export default function BookingsTab({ dashboard, defaultScheduleId }: BookingsTa
                     }`}
                   >
                     <div className="flex justify-between items-start mb-2">
-                      <div className="font-bold text-gray-900 line-clamp-1">{route?.name || 'Unknown Route'}</div>
-                      <div className="flex gap-1.5">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <div className="font-bold text-gray-900 line-clamp-1">{route?.name || 'Unknown Route'}</div>
+                        {tripBookings.length > 0 && (
+                          <span className="h-2 w-2 rounded-full bg-coral-500 shrink-0" title={`${tripBookings.length} booking(s)`} />
+                        )}
+                      </div>
+                      <div className="flex gap-1.5 shrink-0">
                         {isToday && (
                           <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide bg-indigo-100 text-indigo-700">
                             Today
@@ -410,7 +416,7 @@ export default function BookingsTab({ dashboard, defaultScheduleId }: BookingsTa
                         </span>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2 text-xs text-gray-600">
+                    <div className="flex items-center gap-2 text-xs text-gray-600 mb-3">
                       <Calendar className="w-3 h-3" />
                       {new Date(schedule.departureDateTime).toLocaleDateString()}
                       <span className="mx-1">•</span>
@@ -419,6 +425,24 @@ export default function BookingsTab({ dashboard, defaultScheduleId }: BookingsTa
                       <span className="mx-1">•</span>
                       <BusIcon className="w-3 h-3" />
                       {bus?.licensePlate || 'TBA'}
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <div className="flex -space-x-2 overflow-hidden">
+                        {tripBookings.slice(0, 4).map((b: Booking, i: number) => (
+                          <div key={i} className="inline-block h-6 w-6 rounded-full ring-2 ring-white bg-gray-200 flex items-center justify-center text-[8px] font-bold text-gray-600">
+                            {b.passengerDetails?.[0]?.name?.[0] || 'P'}
+                          </div>
+                        ))}
+                        {tripBookings.length > 4 && (
+                          <div className="inline-block h-6 w-6 rounded-full ring-2 ring-white bg-gray-100 flex items-center justify-center text-[10px] font-medium text-gray-600">
+                            +{tripBookings.length - 4}
+                          </div>
+                        )}
+                      </div>
+                      <div className="text-xs font-semibold text-gray-900">
+                        {tripBookings.length} / {bus?.capacity || '?'} Seats
+                      </div>
                     </div>
                   </div>
                 );

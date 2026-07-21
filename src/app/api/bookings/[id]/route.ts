@@ -35,15 +35,27 @@ export async function GET(
       return NextResponse.json({ error: 'Booking not found' }, { status: 404 });
     }
 
-    // Verify ownership
-    if (booking.userId !== user.id) {
+    // Verify ownership (support both database user id and external auth uid)
+    const userData = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { id: user.id },
+          { uid: user.id },
+        ],
+      },
+    });
+
+    if (!userData || booking.userId !== userData.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
     return NextResponse.json({
       data: booking,
     });
-  } catch (error) {
+  } catch (error: any) {
+    if (error?.code === 'ECONNRESET' || error?.name === 'AbortError' || req.signal.aborted) {
+      return new Response(null, { status: 499 });
+    }
     await logger.logError('booking', 'GET /api/bookings/[id] error', error);
     return NextResponse.json(
       { error: 'Failed to fetch booking' },

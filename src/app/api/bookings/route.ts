@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth-utils';
 import prisma from '@/lib/prisma';
 import { logger } from '@/lib/logger';
+import { apiRateLimiter, getClientIp } from '@/lib/rateLimit';
 
 /**
  * GET /api/bookings
@@ -10,7 +11,18 @@ import { logger } from '@/lib/logger';
  */
 export async function GET(req: NextRequest) {
   try {
+    const ip = getClientIp(req);
     const user = await getCurrentUser(req);
+    const rateLimitKey = user?.id ? `${ip}:${user.id}` : ip;
+    const { success, reset } = await apiRateLimiter.limit(rateLimitKey);
+    if (!success) {
+      const retryAfter = Math.ceil((reset - Date.now()) / 1000);
+      return NextResponse.json(
+        { error: 'Too many requests. Please try again later.' },
+        { status: 429, headers: { 'Retry-After': String(retryAfter > 0 ? retryAfter : 60) } }
+      );
+    }
+
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -63,6 +75,7 @@ export async function GET(req: NextRequest) {
                   origin: true,
                   destination: true,
                   distance: true,
+                  duration: true,
                   stops: true,
                   operators: {
                     select: {

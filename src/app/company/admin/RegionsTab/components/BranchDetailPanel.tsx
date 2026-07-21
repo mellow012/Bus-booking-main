@@ -5,7 +5,6 @@ import { Booking, Bus, Route, Schedule } from '@/types';
 import { RouteWithScheduleInfo } from '../types';
 import RouteTabStrip from './RouteTabStrip';
 import RouteScheduleSection from './RouteScheduleSection';
-import BranchUpcomingTrips from './BranchUpcomingTrips';
 
 interface BranchDetailPanelProps {
   branch: any;
@@ -132,8 +131,6 @@ export default function BranchDetailPanel({
           </div>
         )}
       </div>
-
-      <BranchUpcomingTrips branchName={branch.name} schedules={branchUpcomingTrips} routes={routes} buses={buses} />
     </div>
   );
 }

@@ -1,7 +1,7 @@
-import { Suspense } from "react";
 import { prisma } from "@/lib/prisma";
 import SchedulesClient from "./SchedulesClient";
 import { isSegmentBookable } from "@/lib/schedule-utils";
+import { getRouteDistanceAndDuration } from "@/lib/route-utils";
 
 export const dynamic = 'force-dynamic';
 
@@ -79,6 +79,7 @@ export default async function SchedulesPage({
       route: true,
       bus: { include: { company: true } },
       company: true,
+      _count: { select: { reservations: true } },
     },
     orderBy: { departureDateTime: 'asc' },
     take: 150,
@@ -112,6 +113,10 @@ export default async function SchedulesPage({
         // Ignore error
       }
 
+      const routeInfo = getRouteDistanceAndDuration(route.origin, route.destination);
+      const distanceKm = routeInfo.distance;
+      const actualAvailableSeats = Math.max(0, bus.capacity - (sch._count?.reservations || 0));
+
       return {
         id: sch.id,
         companyName: company.name || 'Unknown',
@@ -121,9 +126,10 @@ export default async function SchedulesPage({
         destination: route.destination,
         departureTime: dep.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }),
         arrivalTime: arr.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }),
-        availableSeats: sch.availableSeats,
+        availableSeats: actualAvailableSeats,
         price: sch.price,
         duration: durationMin,
+        distance: distanceKm,
         date: dep.toISOString().split('T')[0],
         companyLogo: company.logo || null,
         companyId: sch.companyId,

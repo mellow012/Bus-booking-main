@@ -447,8 +447,13 @@ export default function BookingsTab({ dashboard }: BookingsTabProps) {
                         }`}
                     >
                       <div className="flex justify-between items-start mb-2">
-                        <div className="font-bold text-gray-900 line-clamp-1">{route?.name || 'Unknown Route'}</div>
-                        <div className="flex gap-1.5">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <div className="font-bold text-gray-900 line-clamp-1">{route?.name || 'Unknown Route'}</div>
+                          {tripBookings.length > 0 && (
+                            <span className="h-2 w-2 rounded-full bg-coral-500 shrink-0" title={`${tripBookings.length} booking(s)`} />
+                          )}
+                        </div>
+                        <div className="flex gap-1.5 shrink-0">
                           {isToday && (
                             <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide bg-indigo-100 text-indigo-700">
                               Today

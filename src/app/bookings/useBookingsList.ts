@@ -30,6 +30,8 @@ export interface BookingWithDetails extends Booking {
   originStopName?: string;
   destinationStopName?: string;
   pricePerPerson?: number;
+  reviewRating?: number | null;
+  reviewText?: string | null;
   segments?: BookingSegmentWithDetails[];
   returnSegment?: BookingSegmentWithDetails;
 }
@@ -44,10 +46,11 @@ export interface SearchFilters {
 export function resolveStopName(
   stopId: string | undefined,
   savedName: string | undefined,
-  route: Route,
+  route: Route | undefined | null,
   fallback: string,
 ): string {
   if (savedName) return savedName;
+  if (!route) return fallback;
   if (stopId === '__origin__') return route.origin || fallback;
   if (stopId === '__destination__') return route.destination || fallback;
   if (stopId && route.stops) {
@@ -55,6 +58,29 @@ export function resolveStopName(
     if (f) return f.name;
   }
   return fallback;
+}
+
+const CITY_DISTANCES: Record<string, Record<string, number>> = {
+  lilongwe: { blantyre: 310, mzuzu: 360, zomba: 290, kasungu: 130, salima: 110, mangochi: 190 },
+  blantyre: { lilongwe: 310, mzuzu: 670, zomba: 70, kasungu: 440, salima: 350, mangochi: 190 },
+  mzuzu: { lilongwe: 360, blantyre: 670, zomba: 610, kasungu: 230, salima: 310, karonga: 220 },
+};
+
+export function estimateDistance(origin: string, destination: string): number {
+  const o = origin.toLowerCase().trim();
+  const d = destination.toLowerCase().trim();
+  if (CITY_DISTANCES[o]?.[d]) return CITY_DISTANCES[o][d];
+  if (CITY_DISTANCES[d]?.[o]) return CITY_DISTANCES[d][o];
+  return 0;
+}
+
+export function getEstimatedDuration(origin: string, destination: string, dbDuration?: number, dbDistance?: number): number {
+  if (dbDuration && dbDuration > 0) return dbDuration;
+  const dist = (dbDistance && dbDistance > 0) ? dbDistance : estimateDistance(origin, destination);
+  if (dist > 0) {
+    return Math.round((dist / 80) * 60); // Assume average speed of 80 km/h
+  }
+  return 120; // fallback to 2 hours
 }
 
 function normalizeText(value: string | undefined, fallback = ''): string {
@@ -200,11 +226,24 @@ export const useBookingsList = () => {
                 id: segment.schedule?.route?.id || '',
                 origin: normalizeText(segment.schedule?.route?.origin, 'Unknown'),
                 destination: normalizeText(segment.schedule?.route?.destination, 'Unknown'),
-                distance: segment.schedule?.route?.distance || 0,
+                distance: segment.schedule?.route?.distance || estimateDistance(normalizeText(segment.schedule?.route?.origin), normalizeText(segment.schedule?.route?.destination)),
+                duration: getEstimatedDuration(
+                  normalizeText(segment.schedule?.route?.origin),
+                  normalizeText(segment.schedule?.route?.destination),
+                  segment.schedule?.route?.duration,
+                  segment.schedule?.route?.distance
+                ),
                 stops: segment.schedule?.route?.stops || [],
               } as any,
             }))
           : [];
+
+        const mainOrigin = normalizeText(b.schedule?.route?.origin, 'Unknown');
+        const mainDestination = normalizeText(b.schedule?.route?.destination, 'Unknown');
+        const mainDbDistance = b.schedule?.route?.distance || 0;
+        const mainDbDuration = b.schedule?.route?.duration || 0;
+        const resolvedDistance = mainDbDistance || estimateDistance(mainOrigin, mainDestination);
+        const resolvedDuration = getEstimatedDuration(mainOrigin, mainDestination, mainDbDuration, mainDbDistance);
 
         return {
           id: b.id,
@@ -224,6 +263,8 @@ export const useBookingsList = () => {
           destinationStopId: b.destinationStopId,
           originStopName: b.originStopName,
           destinationStopName: b.destinationStopName,
+          reviewRating: b.reviewRating ?? null,
+          reviewText: b.reviewText ?? null,
           schedule: {
             id: b.scheduleId,
             departureDateTime: new Date(b.schedule?.departureDateTime),
@@ -234,9 +275,10 @@ export const useBookingsList = () => {
           } as any,
           route: {
             id: b.schedule?.route?.id || '',
-            origin: normalizeText(b.schedule?.route?.origin, 'Unknown'),
-            destination: normalizeText(b.schedule?.route?.destination, 'Unknown'),
-            distance: b.schedule?.route?.distance || 0,
+            origin: mainOrigin,
+            destination: mainDestination,
+            distance: resolvedDistance,
+            duration: resolvedDuration,
             stops: b.schedule?.route?.stops || [],
           } as any,
           bus: {
@@ -278,6 +320,11 @@ export const useBookingsList = () => {
       : new Date(b.schedule?.departureDateTime as unknown as string);
     if (dep < new Date()) { setError('Cannot cancel a past departure.'); return; }
     const isPaid = b.paymentStatus === 'paid';
+    const twoHoursInMs = 2 * 60 * 60 * 1000;
+    if (isPaid && dep.getTime() - Date.now() <= twoHoursInMs) {
+      setError('Refund requests are only allowed up to 2 hours prior to departure.');
+      return;
+    }
     if (isPaid && !window.confirm('This booking has been paid for. Cancelling may affect your refund eligibility. Continue?')) return;
     setActionLoading(bookingId);
     setError('');
