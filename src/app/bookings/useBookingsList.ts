@@ -174,13 +174,26 @@ export const useBookingsList = () => {
   const applyFiltersLogic = useCallback((src: BookingWithDetails[], af: string, cf: SearchFilters) => {
     let f = [...src];
     const now = new Date();
-    if (af === 'confirmed') f = f.filter((b) => b.bookingStatus === 'confirmed' && (b.paymentStatus === 'paid' || (b as any).paymentMethod === 'cash_on_boarding'));
-    else if (af === 'pending') f = f.filter((b) => b.bookingStatus === 'pending' || (b.bookingStatus === 'confirmed' && b.paymentStatus === 'pending' && (b as any).paymentMethod !== 'cash_on_boarding'));
-    else if (af === 'cancelled') f = f.filter((b) => b.bookingStatus === 'cancelled');
-    else if (af === 'upcoming') f = f.filter((b) => {
-      const d = b.schedule?.departureDateTime instanceof Date ? b.schedule.departureDateTime : new Date(b.schedule?.departureDateTime as unknown as string);
-      return d > now && b.bookingStatus === 'confirmed' && (b.paymentStatus === 'paid' || (b as any).paymentMethod === 'cash_on_boarding');
-    });
+    const isArchived = (b: BookingWithDetails) => (b.reviewRating != null && b.reviewRating > 0) || (b.bookingStatus as string) === 'archived';
+
+    if (af === 'archived') {
+      f = f.filter((b) => isArchived(b));
+    } else if (af === 'confirmed') {
+      f = f.filter((b) => !isArchived(b) && b.bookingStatus === 'confirmed' && (b.paymentStatus === 'paid' || (b as any).paymentMethod === 'cash_on_boarding'));
+    } else if (af === 'pending') {
+      f = f.filter((b) => !isArchived(b) && (b.bookingStatus === 'pending' || (b.bookingStatus === 'confirmed' && b.paymentStatus === 'pending' && (b as any).paymentMethod !== 'cash_on_boarding')));
+    } else if (af === 'cancelled') {
+      f = f.filter((b) => b.bookingStatus === 'cancelled');
+    } else if (af === 'upcoming') {
+      f = f.filter((b) => {
+        const d = b.schedule?.departureDateTime instanceof Date ? b.schedule.departureDateTime : new Date(b.schedule?.departureDateTime as unknown as string);
+        return !isArchived(b) && d > now && b.bookingStatus === 'confirmed' && (b.paymentStatus === 'paid' || (b as any).paymentMethod === 'cash_on_boarding');
+      });
+    } else {
+      // Default: 'all' -> Show active non-archived bookings
+      f = f.filter((b) => !isArchived(b));
+    }
+
     if (cf.busType) { const t = Array.isArray(cf.busType) ? cf.busType : [cf.busType]; f = f.filter((b) => b.bus?.busType && t.includes(b.bus.busType)); }
     if (cf.priceRange) { f = f.filter((b) => b.schedule?.price !== undefined && b.schedule.price >= ((cf.priceRange as any)?.min ?? 0) && b.schedule.price <= ((cf.priceRange as any)?.max ?? Infinity)); }
     if (cf.company) f = f.filter((b) => b.company?.name === cf.company);
@@ -720,15 +733,18 @@ export const useBookingsList = () => {
 
   const bookingStats = useMemo(() => {
     const now = new Date();
+    const isArchived = (b: BookingWithDetails) => (b.reviewRating != null && b.reviewRating > 0) || (b.bookingStatus as string) === 'archived';
+
     return {
-      all: bookings.length,
-      confirmed: bookings.filter((b) => b.bookingStatus === 'confirmed' && (b.paymentStatus === 'paid' || (b as any).paymentMethod === 'cash_on_boarding')).length,
-      pending: bookings.filter((b) => b.bookingStatus === 'pending' || (b.bookingStatus === 'confirmed' && b.paymentStatus === 'pending' && (b as any).paymentMethod !== 'cash_on_boarding')).length,
+      all: bookings.filter((b) => !isArchived(b)).length,
+      confirmed: bookings.filter((b) => !isArchived(b) && b.bookingStatus === 'confirmed' && (b.paymentStatus === 'paid' || (b as any).paymentMethod === 'cash_on_boarding')).length,
+      pending: bookings.filter((b) => !isArchived(b) && (b.bookingStatus === 'pending' || (b.bookingStatus === 'confirmed' && b.paymentStatus === 'pending' && (b as any).paymentMethod !== 'cash_on_boarding'))).length,
       cancelled: bookings.filter((b) => b.bookingStatus === 'cancelled').length,
       upcoming: bookings.filter((b) => {
         const d = b.schedule?.departureDateTime instanceof Date ? b.schedule.departureDateTime : new Date(b.schedule?.departureDateTime as unknown as string);
-        return d > now && b.bookingStatus === 'confirmed' && (b.paymentStatus === 'paid' || (b as any).paymentMethod === 'cash_on_boarding');
+        return !isArchived(b) && d > now && b.bookingStatus === 'confirmed' && (b.paymentStatus === 'paid' || (b as any).paymentMethod === 'cash_on_boarding');
       }).length,
+      archived: bookings.filter((b) => isArchived(b)).length,
     };
   }, [bookings]);
 

@@ -10,7 +10,7 @@ import {
   Bus as BusIcon, MapPin, Clock, Download, XCircle, CheckCircle, Loader2,
   Search, CreditCard, Armchair, Bell, AlertTriangle, Calendar, Users,
   RefreshCw, Zap, Shield, Smartphone, ArrowRight, ArrowLeft, Trash2,
-  ChevronRight, Building2, Wallet, Star, Navigation,
+  ChevronRight, Building2, Wallet, Star, Navigation, Archive,
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 
@@ -31,13 +31,14 @@ const BookingCard = memo<{
   onDelete: (bookingId: string) => Promise<void>;
   onDownload: (booking: BookingWithDetails, includeQR: boolean) => Promise<void>;
   onPayment: (booking: BookingWithDetails) => void;
+  onReviewSubmitted?: () => void;
   actionLoading: string | null;
   formatTime: (dateTime: unknown) => string;
   formatDate: (dateTime: unknown) => string;
   getStatusColor: (status: string) => string;
   getPaymentStatusColor: (status: string) => string;
   router: ReturnType<typeof useRouter>;
-}>(({ booking, onCancel, onDelete, onDownload, onPayment, actionLoading,
+}>(({ booking, onCancel, onDelete, onDownload, onPayment, onReviewSubmitted, actionLoading,
   formatTime, formatDate, getStatusColor, getPaymentStatusColor, router }) => {
 
   const handleCancel = useCallback(() => onCancel(booking.id, booking.scheduleId, booking.seatNumbers), [booking.id, booking.scheduleId, booking.seatNumbers, onCancel]);
@@ -277,6 +278,7 @@ const BookingCard = memo<{
                     const ok = await journey.submitReview(reviewForm.rating, reviewForm.text);
                     if (ok) {
                       setReviewForm({ rating: 0, hover: 0, text: '' });
+                      onReviewSubmitted?.();
                     }
                   }}
                   disabled={journey.reviewSubmitting}
@@ -628,11 +630,12 @@ const BookingsPage: React.FC = () => {
   );
 
   const statCards = [
-    { label: 'All Bookings', value: bookingStats.all, key: 'all', Icon: BusIcon },
+    { label: 'All Active', value: bookingStats.all, key: 'all', Icon: BusIcon },
     { label: 'Confirmed', value: bookingStats.confirmed, key: 'confirmed', Icon: CheckCircle },
     { label: 'Pending', value: bookingStats.pending, key: 'pending', Icon: Clock },
-    { label: 'Cancelled', value: bookingStats.cancelled, key: 'cancelled', Icon: XCircle },
     { label: 'Upcoming', value: bookingStats.upcoming, key: 'upcoming', Icon: Calendar },
+    { label: 'Archived', value: bookingStats.archived, key: 'archived', Icon: Archive },
+    { label: 'Cancelled', value: bookingStats.cancelled, key: 'cancelled', Icon: XCircle },
   ];
 
   return (
@@ -730,7 +733,7 @@ const BookingsPage: React.FC = () => {
                 <>
                   {pageBookings.map((b) => (
                     <BookingCard key={b.id} booking={b} onCancel={handleCancelBooking} onDelete={handleDeleteBooking}
-                      onDownload={handleDownloadTicket} onPayment={handleProcessPayment} actionLoading={actionLoading}
+                      onDownload={handleDownloadTicket} onPayment={handleProcessPayment} onReviewSubmitted={fetchBookings} actionLoading={actionLoading}
                       formatTime={formatTime} formatDate={formatDate} getStatusColor={getStatusColor} getPaymentStatusColor={getPaymentStatusColor}
                       router={router}
                     />
