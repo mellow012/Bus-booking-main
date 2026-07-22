@@ -13,7 +13,7 @@ jobs:
         run: |
           APP_URL="${{ secrets.APP_URL }}"
           if [ -z "$APP_URL" ]; then
-            APP_URL="https://bus-booking-main-mofb.vercel.app"
+            APP_URL="https://www.tibhukebus.com"
           fi
           curl -f -X POST "$APP_URL/api/cron/reminders" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
