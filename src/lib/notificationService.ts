@@ -245,7 +245,8 @@ export async function sendDepartureReminders(): Promise<{ processedSchedules: nu
     let sentNotifications = 0;
 
     for (const schedule of schedules) {
-      const departureTimeStr = new Date(schedule.departureDateTime).toLocaleTimeString([], {
+      const departureTimeStr = new Date(schedule.departureDateTime).toLocaleTimeString('en-GB', {
+        timeZone: 'Africa/Blantyre',
         hour: '2-digit',
         minute: '2-digit',
       });
