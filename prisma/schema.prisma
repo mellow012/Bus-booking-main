@@ -200,6 +200,7 @@ model Schedule {
   tripStatus        String            @default("scheduled")
   isActive          Boolean           @default(true)
   reminderSent      Boolean           @default(false)
+  boardingReminderSent Boolean        @default(false)
   isArchived        Boolean           @default(false)
   isCompleted       Boolean           @default(false)
   actualDepartureTime DateTime?

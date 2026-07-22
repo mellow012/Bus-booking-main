@@ -9,6 +9,7 @@ import React, {
 import { Bell, X, Check, CheckCheck, Trash2 } from 'lucide-react';
 import type { Notification } from '@/types/index';
 import { createClient } from '@/utils/supabase/client';
+import { useRouter } from 'next/navigation';
 
 function urlBase64ToUint8Array(base64String: string) {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
@@ -268,6 +269,7 @@ export const NotificationBell: React.FC<{ userId: string; className?: string }> 
   userId,
   className,
 }) => {
+  const router = useRouter();
   const { notifications, markAsRead, markAllAsRead, clearAll, unreadCount, isLoading, error } =
     useNotifications();
   const [isOpen, setIsOpen] = useState(false);
@@ -356,7 +358,13 @@ export const NotificationBell: React.FC<{ userId: string; className?: string }> 
               notifications.map(n => (
                 <div
                   key={n.id}
-                  onClick={() => { markAsRead(n.id); setIsOpen(false); }}
+                  onClick={() => {
+                    markAsRead(n.id);
+                    setIsOpen(false);
+                    if (n.actionUrl) {
+                      router.push(n.actionUrl);
+                    }
+                  }}
                   className={`px-4 py-3 hover:bg-gray-50 cursor-pointer flex items-start gap-3 border-b border-gray-50 last:border-0 transition-colors ${!n.isRead ? 'bg-brand-50/40' : ''
                     }`}
                 >

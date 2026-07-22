@@ -215,9 +215,12 @@ export async function deleteUserToken(_userId: string, _token: string): Promise<
 export async function sendDepartureReminders(): Promise<{ processedSchedules: number; sentNotifications: number }> {
   const now = new Date();
   const targetTime = new Date(now.getTime() + 65 * 60 * 1000);
+  let processedSchedules = 0;
+  let sentNotifications = 0;
 
   try {
-    const schedules = await prisma.schedule.findMany({
+    // Block 1: 1-hour upcoming departure reminders
+    const upcomingSchedules = await prisma.schedule.findMany({
       where: {
         departureDateTime: {
           gte: now,
@@ -242,16 +245,15 @@ export async function sendDepartureReminders(): Promise<{ processedSchedules: nu
       },
     });
 
-    let sentNotifications = 0;
+    processedSchedules += upcomingSchedules.length;
 
-    for (const schedule of schedules) {
+    for (const schedule of upcomingSchedules) {
       const departureTimeStr = new Date(schedule.departureDateTime).toLocaleTimeString('en-GB', {
         timeZone: 'Africa/Blantyre',
         hour: '2-digit',
         minute: '2-digit',
       });
 
-      // Send to each passenger booking
       for (const booking of schedule.bookings) {
         try {
           const isPendingPayment = booking.paymentStatus === 'pending';
@@ -272,7 +274,6 @@ export async function sendDepartureReminders(): Promise<{ processedSchedules: nu
         }
       }
 
-      // Mark reminderSent = true regardless of individual failures to avoid retry storms
       try {
         await prisma.schedule.update({
           where: { id: schedule.id },
@@ -283,7 +284,75 @@ export async function sendDepartureReminders(): Promise<{ processedSchedules: nu
       }
     }
 
-    return { processedSchedules: schedules.length, sentNotifications };
+    // Block 2: Immediate boarding/departure reminders (15 mins before or up to 15 mins after departure time)
+    const boardingTargetTime = new Date(now.getTime() + 15 * 60 * 1000);
+    const boardingPastTime = new Date(now.getTime() - 15 * 60 * 1000);
+
+    const boardingSchedules = await prisma.schedule.findMany({
+      where: {
+        departureDateTime: {
+          gte: boardingPastTime,
+          lte: boardingTargetTime,
+        },
+        boardingReminderSent: false,
+        tripStatus: { in: ['scheduled', 'boarding'] },
+      },
+      include: {
+        bookings: {
+          where: {
+            bookingStatus: { in: ['confirmed', 'pending'] },
+            paymentStatus: { in: ['paid', 'pending'] },
+          },
+          select: {
+            userId: true,
+            bookingStatus: true,
+            paymentStatus: true,
+          },
+        },
+        route: true,
+      },
+    });
+
+    processedSchedules += boardingSchedules.length;
+
+    for (const schedule of boardingSchedules) {
+      const departureTimeStr = new Date(schedule.departureDateTime).toLocaleTimeString('en-GB', {
+        timeZone: 'Africa/Blantyre',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+
+      for (const booking of schedule.bookings) {
+        try {
+          const isPendingPayment = booking.paymentStatus === 'pending';
+          const payload = {
+            title: 'Bus Departing Shortly! 🚌⚠️',
+            body: isPendingPayment
+              ? `Your bus to ${schedule.route.destination} departs at ${departureTimeStr}. Payment is currently pending. Please proceed to the boarding area immediately and pay the conductor.`
+              : `Your bus to ${schedule.route.destination} is departing shortly at ${departureTimeStr}. Please proceed to the boarding area immediately.`,
+            type: 'departure_reminder',
+            priority: 'high' as const,
+            clickAction: `/bookings`,
+          };
+
+          await sendNotificationToUser(booking.userId, payload);
+          sentNotifications++;
+        } catch (sendErr) {
+          console.error(`[Reminders] Failed to send boarding reminder to user ${booking.userId} on schedule ${schedule.id}:`, sendErr);
+        }
+      }
+
+      try {
+        await prisma.schedule.update({
+          where: { id: schedule.id },
+          data: { boardingReminderSent: true },
+        });
+      } catch (updateErr) {
+        console.error(`[Reminders] Failed to update boardingReminderSent flag for schedule ${schedule.id}:`, updateErr);
+      }
+    }
+
+    return { processedSchedules, sentNotifications };
   } catch (err: any) {
     console.error('[Reminders] Error running sendDepartureReminders:', err);
     throw err;

@@ -4,6 +4,7 @@ import prisma from '../prisma';
 import { revalidatePath } from 'next/cache';
 import { TripStatus, BusStatus } from '@/types';
 import { createNotification, createActivityLog } from './activity.actions';
+import { sendNotificationToUser } from '../notificationService';
 
 /**
  * Updates the lifecycle state of a trip (Schedule).
@@ -32,6 +33,14 @@ export async function updateTripLifecycle(params: {
           }
         },
         bus: true,
+        bookings: {
+          where: {
+            bookingStatus: { in: ['confirmed', 'pending'] },
+          },
+          select: {
+            userId: true,
+          },
+        },
       }
     });
 
@@ -136,6 +145,26 @@ export async function updateTripLifecycle(params: {
         })
       );
       await Promise.all(notificationPromises);
+    }
+
+    // 6. Notify passengers if boarding or in_transit
+    if (['boarding', 'in_transit'].includes(newStatus) && schedule.bookings && schedule.bookings.length > 0) {
+      const passengerUserIds = Array.from(new Set(schedule.bookings.map((b: any) => b.userId)));
+      const passengerPromises = passengerUserIds.map((passengerId: string) => {
+        const title = newStatus === 'boarding' ? 'Boarding Started! 🚌' : 'Bus Departed! 🚌💨';
+        const message = newStatus === 'boarding'
+          ? `Boarding has started for your bus from ${schedule.route.origin} to ${schedule.route.destination}. Please proceed to the boarding area immediately.`
+          : `Your bus from ${schedule.route.origin} to ${schedule.route.destination} has departed. Safe travels!`;
+
+        return sendNotificationToUser(passengerId, {
+          title,
+          body: message,
+          type: 'trip_update',
+          priority: 'high',
+          clickAction: '/bookings',
+        });
+      });
+      await Promise.allSettled(passengerPromises);
     }
 
     revalidatePath('/company/conductor/dashboard');

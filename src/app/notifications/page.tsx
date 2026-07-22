@@ -3,6 +3,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Bell, Trash2, Check, CheckCheck, Loader2, AlertCircle } from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
+import { useRouter } from 'next/navigation';
 import { Notification } from '@/types';
 
 interface NotificationResponse {
@@ -13,10 +14,12 @@ interface NotificationResponse {
   message: string;
   isRead: boolean;
   createdAt: string;
+  actionUrl?: string;
   data?: Record<string, unknown>;
 }
 
 export default function NotificationsPage() {
+  const router = useRouter();
   const { user } = useAuth();
   const [notifications, setNotifications] = useState<NotificationResponse[]>([]);
   const [loading, setLoading] = useState(true);
@@ -250,11 +253,16 @@ export default function NotificationsPage() {
               {notifications.map(notification => (
                 <div
                   key={notification.id}
+                  onClick={() => {
+                    if (notification.actionUrl) {
+                      router.push(notification.actionUrl);
+                    }
+                  }}
                   className={`bg-white rounded-lg shadow-sm border transition-all ${
                     notification.isRead
                       ? 'border-gray-200'
                       : 'border-brand-200 bg-brand-50'
-                  } p-4 hover:shadow-md`}
+                  } p-4 hover:shadow-md ${notification.actionUrl ? 'cursor-pointer' : ''}`}
                 >
                   <div className="flex gap-4">
                     {/* Icon */}
@@ -284,7 +292,10 @@ export default function NotificationsPage() {
                     {/* Actions */}
                     {!notification.isRead && (
                       <button
-                        onClick={() => handleMarkRead(notification.id)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleMarkRead(notification.id);
+                        }}
                         disabled={actionLoading === notification.id}
                         className="ml-4 shrink-0 px-3 py-1 text-sm bg-coral-500 text-white rounded hover:bg-coral-600 disabled:opacity-50 transition"
                       >
