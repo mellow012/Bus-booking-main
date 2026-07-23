@@ -8,6 +8,8 @@ import { CityPickerModal } from "@/components/CityPickerModal";
 import { GeoStatus, MALAWI_CITIES, nearestCity } from "@/utils/homeHelpers";
 import { storePendingSearch } from "@/lib/searchStorage";
 
+import { getTodayDateString, getTomorrowDateString } from "@/lib/timezone";
+
 const LS_CITY_KEY = "tb_user_city";
 const LS_GEO_ASKED_KEY = "tb_geo_asked";
 
@@ -18,12 +20,8 @@ export default function HomeSearch() {
   const [geoStatus, setGeoStatus] = useState<GeoStatus>("idle");
   const [showCityPicker, setShowCityPicker] = useState(false);
 
-  const todayStr = new Date().toISOString().split('T')[0];
-  const tomorrowStr = useMemo(() => {
-    const d = new Date();
-    d.setDate(d.getDate() + 1);
-    return d.toISOString().split('T')[0];
-  }, []);
+  const todayStr = getTodayDateString();
+  const tomorrowStr = useMemo(() => getTomorrowDateString(), []);
 
   // Sync with general city preference changes from other components
   useEffect(() => {

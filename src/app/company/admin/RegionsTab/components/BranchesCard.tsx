@@ -24,14 +24,18 @@ export default function BranchCard({ branch, routeCount, operatorCount, tripSumm
         <div className="w-10 h-10 bg-indigo-50 rounded-lg flex items-center justify-center text-indigo-600">
           <MapPin className="w-5 h-5" />
         </div>
-        {branch.isActive !== undefined && (
+        {branch.isActive !== false ? (
           <span
-            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide ${
-              branch.isActive ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-400'
-            }`}
+            className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide bg-emerald-50 text-emerald-700"
           >
-            {branch.isActive && <BadgeCheck className="w-3 h-3" />}
-            {branch.isActive ? 'Active' : 'Inactive'}
+            <BadgeCheck className="w-3 h-3" />
+            Active
+          </span>
+        ) : (
+          <span
+            className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide bg-gray-100 text-gray-400"
+          >
+            Inactive
           </span>
         )}
       </div>

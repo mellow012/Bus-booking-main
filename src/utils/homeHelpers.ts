@@ -53,7 +53,9 @@ export function nearestCity(lat: number, lng: number): string {
   return best;
 }
 
-export const isToday = (d: string) => { const a = new Date(d), n = new Date(); return a.getFullYear()===n.getFullYear()&&a.getMonth()===n.getMonth()&&a.getDate()===n.getDate(); };
+import { isTodayMalawi } from "@/lib/timezone";
+
+export const isToday = (d: string | Date) => isTodayMalawi(d);
 export const cityMatch  = (s: EnhancedSchedule, city: string) => { const q = city.toLowerCase(); return s.origin.toLowerCase().includes(q)||s.destination.toLowerCase().includes(q); };
 export const formatDuration = (m: number) => { const h=Math.floor(m/60),mn=m%60; return h>0?(mn>0?`${h}h ${mn}m`:`${h}h`):`${mn}m`; };
 export const seatColor  = (a: number, t: number) => { const p=(a/t)*100; return p>50?"text-emerald-600":p>20?"text-amber-500":"text-rose-500"; };

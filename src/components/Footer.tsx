@@ -4,11 +4,17 @@ import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
-  BusIcon, Phone, Mail, MapPin, Clock, Shield, CreditCard,
-  Globe, Facebook, Twitter, Instagram, Linkedin, MessageCircle,
-  ArrowRight, Heart, Zap, Users, Award, CheckCircle, ChevronRight
+  BusIcon, Phone, Mail, MapPin, Clock, Shield,
+  Facebook, Instagram, Linkedin, MessageCircle,
+  ArrowRight, Heart, Award, CheckCircle, ChevronRight
 } from 'lucide-react';
 import Image from 'next/image';
+
+const XIcon: React.FC<{ className?: string }> = ({ className = "w-5 h-5" }) => (
+  <svg className={className} fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+  </svg>
+);
 
 const Footer: React.FC = () => {
   const currentYear = new Date().getFullYear();
@@ -48,10 +54,10 @@ const Footer: React.FC = () => {
   ];
 
   const features = [
-    { icon: Shield, title: 'Secure Payments', desc: '256-bit SSL encryption' },
-    { icon: Clock, title: '24/7 Support', desc: 'Round-the-clock assistance' },
-    { icon: CheckCircle, title: 'Instant Booking', desc: 'Confirm in seconds' },
-    { icon: Award, title: 'Trusted Platform', desc: '10M+ happy travelers' }
+    { icon: Shield, title: 'Secure Payments', desc: 'Encrypted & protected checkout' },
+    { icon: Clock, title: '24/7 Support', desc: 'Round-the-clock customer assistance' },
+    { icon: CheckCircle, title: 'Instant Booking', desc: 'Real-time e-ticket confirmation' },
+    { icon: Award, title: 'Trusted Platform', desc: 'Verified bus operator partners' }
   ];
 
   return (
@@ -106,14 +112,14 @@ const Footer: React.FC = () => {
               <Link
                 href="/"
                 className="inline-flex items-center space-x-3 group mb-6"
-                aria-label="Go to BooknPay homepage"
+                aria-label="Go to TibhukeBus homepage"
               >
                 <div className="relative">
                   <div className="w-20 h-20 flex items-center justify-center transition-all duration-300 group-hover:scale-105">
                     <img
-                      src="/tibhukebus_logo_transparent.png"
+                      src="/tibhukebus_logo_footer.png"
                       alt="TibhukeBus Logo"
-                      className="object-contain w-auto h-auto"
+                      className="object-contain w-auto h-auto drop-shadow-md"
                       style={{ height: 'auto' }}
                     />
                   </div>
@@ -166,8 +172,8 @@ const Footer: React.FC = () => {
                 <div className="text-white font-semibold mb-4">Follow Us</div>
                 <div className="flex space-x-3">
                   {[
-                    { icon: Facebook, href: '#', color: 'hover:bg-brand-600', ariaLabel: 'Facebook page' },
-                    { icon: Twitter, href: '#', color: 'hover:bg-brand-500', ariaLabel: 'Twitter page' },
+                    { icon: Facebook, href: 'https://facebook.com/tibhukebus', color: 'hover:bg-brand-600', ariaLabel: 'Follow TibhukeBus on Facebook (@tibhukebus)' },
+                    { icon: XIcon, href: 'https://x.com/tibhukebus', color: 'hover:bg-black hover:text-white', ariaLabel: 'Follow TibhukeBus on X (@tibhukebus)' },
                     { icon: Instagram, href: '#', color: 'hover:bg-coral-600', ariaLabel: 'Instagram page' },
                     { icon: Linkedin, href: '#', color: 'hover:bg-brand-700', ariaLabel: 'LinkedIn page' }
                   ].map((social, index) => (
@@ -252,15 +258,22 @@ const Footer: React.FC = () => {
                 {/* Payment Methods */}
                 <div>
                   <h4 className="text-gray-300 font-semibold mb-3">We Accept</h4>
-                  <div className="flex flex-wrap gap-2">
-                    <div className="px-3 py-2 bg-white/10 rounded-lg text-xs text-gray-300 backdrop-blur-sm border border-white/10">
-                      💳 Visa
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex items-center space-x-2 px-3 py-1.5 bg-white/10 rounded-lg text-xs text-gray-200 backdrop-blur-sm border border-white/10 hover:bg-white/15 transition-colors">
+                      <img src="/airtel-money-logo.png" alt="Airtel Money" className="w-5 h-5 object-contain rounded-sm" />
+                      <span>Airtel Money</span>
                     </div>
-                    <div className="px-3 py-2 bg-white/10 rounded-lg text-xs text-gray-300 backdrop-blur-sm border border-white/10">
-                      💳 Stripe
+                    <div className="flex items-center space-x-2 px-3 py-1.5 bg-white/10 rounded-lg text-xs text-gray-200 backdrop-blur-sm border border-white/10 hover:bg-white/15 transition-colors">
+                      <img src="/mpamba%20logo.jpg" alt="TNM Mpamba" className="w-5 h-5 object-contain rounded-sm" />
+                      <span>TNM Mpamba</span>
                     </div>
-                    <div className="px-3 py-2 bg-white/10 rounded-lg text-xs text-gray-300 backdrop-blur-sm border border-white/10">
-                      📱 PayChangu
+                    <div className="flex items-center space-x-2 px-3 py-1.5 bg-white/10 rounded-lg text-xs text-gray-200 backdrop-blur-sm border border-white/10 hover:bg-white/15 transition-colors">
+                      <img src="/Visa.svg" alt="Visa" className="w-5 h-5 object-contain" />
+                      <span>Visa</span>
+                    </div>
+                    <div className="flex items-center space-x-2 px-3 py-1.5 bg-white/10 rounded-lg text-xs text-gray-200 backdrop-blur-sm border border-white/10 hover:bg-white/15 transition-colors">
+                      <img src="/PayChangu%20Logo.png" alt="PayChangu" className="h-4 w-auto object-contain" />
+                      <span>PayChangu</span>
                     </div>
                   </div>
                 </div>
@@ -302,24 +315,14 @@ const Footer: React.FC = () => {
 
         {/* Bottom Section */}
         <div className="py-8 border-t border-gray-800/50">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-            <div className="flex items-center space-x-2 text-gray-300">
-              <span>© {currentYear} TibhukeBus. Made with</span>
-              <Heart className="w-4 h-4 text-red-500 animate-pulse" />
-              <span>for travelers everywhere.</span>
-            </div>
-            <div className="flex items-center space-x-6 text-sm text-gray-400">
-              <div className="flex items-center space-x-2">
-                <Globe className="w-4 h-4" />
-                <span>country wide- Coverage</span>
-              </div>
-              <div className="flex items-center space-x-2">
-                <Users className="w-4 h-4" />
-                <span>100 + Users</span>
-              </div>
-              <div className="flex items-center space-x-2">
-                <Zap className="w-4 h-4" />
-                <span>Instant Booking</span>
+          <div className="flex items-center justify-center text-center">
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-2 text-gray-300 text-sm text-center">
+              <span>© {currentYear} TibhukeBus. All Rights Reserved.</span>
+              <span className="hidden sm:inline text-gray-600">|</span>
+              <div className="flex items-center space-x-1">
+                <span>Made with</span>
+                <Heart className="w-4 h-4 text-red-500 animate-pulse" />
+                <span>for travelers everywhere.</span>
               </div>
             </div>
           </div>

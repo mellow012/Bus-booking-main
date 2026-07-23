@@ -1,6 +1,5 @@
 import React from "react";
 import { Hero } from "@/components/home/Hero";
-import { Stats } from "@/components/home/Stats";
 import HomeSearch from "@/components/home/HomeSearch";
 import HomeSchedules from "@/components/home/HomeSchedules";
 import HowItWorks from "@/components/HowItWorks";
@@ -18,8 +17,7 @@ export default async function HomePage() {
       {/* 2. Search */}
       <HomeSearch />
 
-      {/* 3. Stats */}
-      <Stats />
+      {/* 3. Schedules/Trips */}
 
       {/* 4. Promo section temporarily hidden for next version */}
 

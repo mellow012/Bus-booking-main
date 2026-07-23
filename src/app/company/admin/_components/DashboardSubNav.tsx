@@ -48,6 +48,11 @@ export default function DashboardSubNav({
                     {statistics.newPayments}
                   </span>
                 )}
+                {tab.id === 'regions' && (statistics as any).missedSchedules > 0 && (
+                  <span className="w-4 h-4 bg-amber-500 text-white text-[9px] font-black rounded-full flex items-center justify-center">
+                    {(statistics as any).missedSchedules}
+                  </span>
+                )}
                 {tab.id === 'reports' && statistics.pendingReports > 0 && (
                   <span className="w-2 h-2 bg-indigo-400 rounded-full" />
                 )}

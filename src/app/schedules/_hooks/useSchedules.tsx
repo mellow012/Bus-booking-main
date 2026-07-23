@@ -6,6 +6,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useNotifications } from "@/contexts/NotificationContext";
 import { useAppToast } from "@/contexts/ToastContext";
 import { MALAWI_CITIES, getScheduleCategory } from "@/utils/homeHelpers";
+import { getTodayDateString, getTomorrowDateString, formatTime24, formatDateISO } from "@/lib/timezone";
 
 export default function useSchedules(initialSchedules: any[], initialCompanies: any[]) {
   const router = useRouter();
@@ -44,14 +45,10 @@ export default function useSchedules(initialSchedules: any[], initialCompanies: 
 
   const [popularRoutes, setPopularRoutes] = useState<any[]>([]);
   const [userCity, setUserCity] = useState<string | null>(null);
-  const todayDate = new Date().toISOString().split('T')[0];
-  const tomorrowDateStr = useMemo(() => {
-    const d = new Date();
-    d.setDate(d.getDate() + 1);
-    return d.toISOString().split('T')[0];
-  }, []);
+  const todayDate = getTodayDateString();
+  const tomorrowDateStr = useMemo(() => getTomorrowDateString(), []);
   const isFutureDateSearch = Boolean(searchDate && searchDate > todayDate);
-const hasActiveSearch = Boolean(searchFrom || searchTo || searchDate || returnDate);
+  const hasActiveSearch = Boolean(searchFrom || searchTo || searchDate || returnDate);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -73,6 +70,7 @@ const hasActiveSearch = Boolean(searchFrom || searchTo || searchDate || returnDa
 
   const handleSearch = useCallback(async () => {
     setSearching(true);
+    setShowFilters(false);
     setError("");
     try {
       const queryParams = new URLSearchParams();
@@ -95,12 +93,12 @@ const hasActiveSearch = Boolean(searchFrom || searchTo || searchDate || returnDa
         busType: schedule.busType,
         origin: schedule.origin,
         destination: schedule.destination,
-        departureTime: new Date(schedule.departureDateTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }),
-        arrivalTime: new Date(schedule.arrivalDateTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }),
+        departureTime: schedule.departureTime || formatTime24(schedule.departureDateTime),
+        arrivalTime: schedule.arrivalTime || formatTime24(schedule.arrivalDateTime),
         availableSeats: schedule.availableSeats,
         price: schedule.price,
         duration: schedule.duration || 0,
-        date: new Date(schedule.departureDateTime).toISOString().split('T')[0],
+        date: schedule.date || formatDateISO(schedule.departureDateTime),
         companyLogo: schedule.companyLogo || null,
         companyId: schedule.companyId,
         routeId: schedule.routeId,

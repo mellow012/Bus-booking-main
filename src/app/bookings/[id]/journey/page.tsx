@@ -50,6 +50,16 @@ export default function DedicatedJourneyPage() {
         const busObj = raw.bus || raw.schedule?.bus;
         const companyObj = raw.company || raw.schedule?.company;
 
+        const isCash = (raw as any).paymentMethod === 'cash_on_boarding';
+        const hasSecuredSeat = raw.bookingStatus === 'confirmed' &&
+          (raw.paymentStatus === 'paid' || isCash);
+
+        if (!hasSecuredSeat) {
+          setError('Live tracking is restricted to confirmed and paid bookings or cash-on-boarding reservations.');
+          setLoading(false);
+          return;
+        }
+
         setBooking({
           ...raw,
           route: routeObj,

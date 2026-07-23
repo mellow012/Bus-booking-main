@@ -24,6 +24,7 @@ import { isSegmentBookable } from '@/lib/schedule-utils';
 import { checkAndRollSchedules } from '@/lib/schedule-generator';
 import { serverCache, createScheduleCacheKey } from '@/lib/cache';
 import { getRouteDistanceAndDuration } from '@/lib/route-utils';
+import { formatTime24, formatDateISO } from '@/lib/timezone';
 
 export const dynamic = 'force-dynamic';
 
@@ -236,11 +237,11 @@ async function querySchedules(params: {
         price: sch.price,
         availableSeats,
         status: sch.status,
-        date: dep.toISOString().split('T')[0],
+        date: formatDateISO(sch.departureDateTime),
         departureDateTime: sch.departureDateTime,
         arrivalDateTime: sch.arrivalDateTime,
-        departureTime: dep.toTimeString().slice(0, 5),
-        arrivalTime: arr.toTimeString().slice(0, 5),
+        departureTime: formatTime24(sch.departureDateTime),
+        arrivalTime: formatTime24(sch.arrivalDateTime),
         duration,
         distance,
         companyName: company?.name || 'Unknown',

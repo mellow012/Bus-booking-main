@@ -51,6 +51,8 @@ const BookingCard = memo<{
   const alightName = resolveStopName(booking.destinationStopId, booking.destinationStopName, booking.route, booking.route?.destination || 'N/A');
   const isSegment = originName !== (booking.route?.origin || '') || alightName !== (booking.route?.destination || '');
   const isCash = (booking as any).paymentMethod === 'cash_on_boarding';
+  const hasSecuredSeat = booking.bookingStatus === 'confirmed' &&
+    (booking.paymentStatus === 'paid' || isCash);
 
   const outboundCompleted =
     booking.schedule.tripStatus === 'completed' ||
@@ -173,34 +175,6 @@ const BookingCard = memo<{
           </div>
         </div>
 
-        {booking.returnSegment ? (
-          <div className="mb-4 p-4 bg-brand-50 border border-brand-100 rounded-xl">
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                {/* brand-800/brand-600/brand-700 on brand-50 = 9:1 / 7:1 (AAA) ✓ */}
-                <p className="text-sm font-semibold text-brand-800">Return trip</p>
-                <p className="text-xs text-brand-600">{resolveStopName(booking.returnSegment.originStopId, undefined, booking.returnSegment.route, booking.returnSegment.route.origin || 'N/A')} → {resolveStopName(booking.returnSegment.destinationStopId, undefined, booking.returnSegment.route, booking.returnSegment.route.destination || 'N/A')}</p>
-              </div>
-              <div className="text-right text-sm text-brand-700">{formatDate(booking.returnSegment.schedule.departureDateTime)}</div>
-            </div>
-            <div className="grid grid-cols-2 gap-4 mt-3 text-sm text-gray-700">
-              <div>
-                <div className="text-[10px] uppercase tracking-wider text-slate-400">Departs</div>
-                <div className="font-semibold">{formatTime(booking.returnSegment.schedule.departureDateTime)}</div>
-              </div>
-              <div>
-                <div className="text-[10px] uppercase tracking-wider text-slate-400">Arrives</div>
-                <div className="font-semibold">{formatTime(booking.returnSegment.schedule.arrivalDateTime)}</div>
-              </div>
-            </div>
-          </div>
-        ) : booking.returnDate ? (
-          <div className="mb-4 px-4 py-3 bg-brand-50 border border-brand-100 rounded-lg text-sm text-brand-800">
-            <div className="font-semibold">Return trip booked</div>
-            <div className="mt-1 text-sm">Return date: {formatDate(booking.returnDate)}</div>
-          </div>
-        ) : null}
-
         {isSegment && (
           <div className="mb-4 px-3 py-2 bg-orange-50 border border-orange-100 rounded-lg text-xs text-orange-700">
             Full route: {booking.route?.origin} → {booking.route?.destination}
@@ -208,7 +182,7 @@ const BookingCard = memo<{
         )}
 
         {/* Journey Map & Tracker */}
-        {journey.state === 'in_transit' && (
+        {journey.state === 'in_transit' && hasSecuredSeat && (
           <div className="mb-6 space-y-3">
             <div className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-xl">
               <div className="flex items-center gap-3">
@@ -242,6 +216,35 @@ const BookingCard = memo<{
             )}
           </div>
         )}
+
+        {/* Return Trip Details (Placed below outbound journey map & live tracker) */}
+        {booking.returnSegment ? (
+          <div className="mb-6 p-4 bg-brand-50 border border-brand-100 rounded-xl">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                {/* brand-800/brand-600/brand-700 on brand-50 = 9:1 / 7:1 (AAA) ✓ */}
+                <p className="text-sm font-semibold text-brand-800">Return trip</p>
+                <p className="text-xs text-brand-600">{resolveStopName(booking.returnSegment.originStopId, undefined, booking.returnSegment.route, booking.returnSegment.route.origin || 'N/A')} → {resolveStopName(booking.returnSegment.destinationStopId, undefined, booking.returnSegment.route, booking.returnSegment.route.destination || 'N/A')}</p>
+              </div>
+              <div className="text-right text-sm text-brand-700">{formatDate(booking.returnSegment.schedule.departureDateTime)}</div>
+            </div>
+            <div className="grid grid-cols-2 gap-4 mt-3 text-sm text-gray-700">
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-slate-400">Departs</div>
+                <div className="font-semibold">{formatTime(booking.returnSegment.schedule.departureDateTime)}</div>
+              </div>
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-slate-400">Arrives</div>
+                <div className="font-semibold">{formatTime(booking.returnSegment.schedule.arrivalDateTime)}</div>
+              </div>
+            </div>
+          </div>
+        ) : booking.returnDate ? (
+          <div className="mb-6 px-4 py-3 bg-brand-50 border border-brand-100 rounded-lg text-sm text-brand-800">
+            <div className="font-semibold">Return trip booked</div>
+            <div className="mt-1 text-sm">Return date: {formatDate(booking.returnDate)}</div>
+          </div>
+        ) : null}
 
         {/* Review Section */}
         {journey.state === 'arrived' && !journey.hasReview && (

@@ -67,7 +67,7 @@ export default function SchedulesClient({ initialSchedules, initialCompanies }: 
 
       {/* ─── Hero / Quick Search Bar ────────────────────────────────────────── */}
       {/* brand-900 → brand-800 → brand-700 | white text = 12:1 → 7.8:1 (AAA) ✓ */}
-      <div className="bg-gradient-to-br from-brand-900 via-brand-800 to-brand-700 text-white pt-16 pb-20 px-4 sm:px-6 lg:px-8">
+      <div className="bg-gradient-to-br from-brand-900 via-brand-800 to-brand-700 text-white pt-28 sm:pt-32 lg:pt-36 pb-20 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
           <div className="flex flex-col md:flex-row md:justify-between md:items-center mb-8 gap-4">
             <div>
@@ -91,10 +91,10 @@ export default function SchedulesClient({ initialSchedules, initialCompanies }: 
             </div>
           </div>
 
-          <div className="bg-white rounded-2xl shadow-2xl p-4 sm:p-6 w-full max-w-5xl mx-auto mt-12">
-            <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-5 gap-4">
-              <div className="col-span-1 md:col-span-2 lg:col-span-1">
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">From</label>
+          <div className="bg-white/95 glass rounded-[2rem] shadow-premium p-5 sm:p-8 border border-white/40 w-full max-w-6xl mx-auto mt-8 backdrop-blur-md">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
+              <div className="col-span-1">
+                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5 ml-1">From</label>
                 <LocationAutocomplete
                   value={searchFrom}
                   onChange={setSearchFrom}
@@ -105,8 +105,8 @@ export default function SchedulesClient({ initialSchedules, initialCompanies }: 
                   exclude={searchTo}
                 />
               </div>
-              <div className="col-span-1 md:col-span-2 lg:col-span-1">
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">To</label>
+              <div className="col-span-1">
+                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5 ml-1">To</label>
                 <LocationAutocomplete
                   value={searchTo}
                   onChange={setSearchTo}
@@ -117,15 +117,14 @@ export default function SchedulesClient({ initialSchedules, initialCompanies }: 
                   exclude={searchFrom}
                 />
               </div>
-              <div className="col-span-1 lg:col-span-1">
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">Depart</label>
+              <div className="col-span-1">
+                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5 ml-1">Depart</label>
                 <div className="space-y-2">
                   <div className="relative">
-                    <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                    {/* focus:ring-brand-700 on white = visible teal ring */}
-                    <input type="date" value={searchDate} onChange={e => setSearchDate(e.target.value)} min={new Date().toISOString().split('T')[0]} className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-brand-700 outline-none text-gray-900 accent-brand-700" placeholder="Depart date" />
+                    <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <input type="date" value={searchDate} onChange={e => setSearchDate(e.target.value)} min={new Date().toISOString().split('T')[0]} className="w-full pl-9 pr-3 h-11 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-700 outline-none text-gray-900 accent-brand-700" placeholder="Depart date" />
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex gap-1.5">
                     <button
                       onClick={() => setSearchDate(todayDate)}
                       className={`flex-1 text-[10px] font-black uppercase tracking-widest py-2.5 rounded-xl border transition-all duration-200 ${
@@ -149,27 +148,26 @@ export default function SchedulesClient({ initialSchedules, initialCompanies }: 
                   </div>
                 </div>
               </div>
-              <div className="col-span-1 lg:col-span-1">
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">Return</label>
+              <div className="col-span-1">
+                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5 ml-1">Return</label>
                 <div className="relative">
-                  <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  <input type="date" value={returnDate} onChange={e => setReturnDate(e.target.value)} min={new Date().toISOString().split('T')[0]} className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-brand-700 outline-none text-gray-900 accent-brand-700" placeholder="Return date" />
+                  <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <input type="date" value={returnDate} onChange={e => setReturnDate(e.target.value)} min={new Date().toISOString().split('T')[0]} className="w-full pl-9 pr-3 h-11 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-700 outline-none text-gray-900 accent-brand-700" placeholder="Return date" />
                 </div>
               </div>
-              <div className="col-span-1 lg:col-span-1">
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">Passengers</label>
+              <div className="col-span-1">
+                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5 ml-1">Passengers</label>
                 <div className="relative">
-                  <Users className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  <input type="number" min="1" value={passengers} onChange={e => setPassengers(parseInt(e.target.value) || 1)} className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-brand-700 outline-none text-gray-900" />
+                  <Users className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <input type="number" min="1" value={passengers} onChange={e => setPassengers(parseInt(e.target.value) || 1)} className="w-full pl-9 pr-3 h-11 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-700 outline-none text-gray-900" />
                 </div>
               </div>
-              <div className="col-span-1 md:col-span-4 lg:col-span-1 flex items-end">
-                {/* coral-500 | white bold text = 3.4:1 (large-text AA ✓) */}
+              <div className="col-span-1 sm:col-span-2 md:col-span-3 lg:col-span-1 flex items-end">
                 <button
                   onClick={handleSearch}
-                  className="w-full bg-coral-500 hover:bg-coral-600 active:scale-[0.98] active:shadow-inner text-white py-3 rounded-xl font-bold flex items-center justify-center transition duration-150 shadow-lg shadow-coral-100"
+                  className="w-full h-11 bg-coral-500 hover:bg-coral-600 active:scale-[0.98] text-white font-bold rounded-xl flex items-center justify-center gap-2 transition duration-150 shadow-lg shadow-coral-500/20"
                 >
-                  <Search className="w-5 h-5 mr-2" /> Search
+                  <Search className="w-4 h-4" /> Search
                 </button>
               </div>
             </div>
@@ -203,8 +201,15 @@ export default function SchedulesClient({ initialSchedules, initialCompanies }: 
           />
           {/* Sorting Header */}
           <div className="flex justify-between items-center bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3">
               <span className="text-sm font-bold text-gray-900">{filteredSchedules.length} schedules found</span>
+              <button
+                onClick={() => setShowFilters((prev: boolean) => !prev)}
+                className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 transition-colors"
+              >
+                <Filter className="w-3.5 h-3.5 text-gray-500" />
+                {showFilters ? 'Hide filters' : 'Filter results'}
+              </button>
               {selectedTerminal && (
                 <button
                   onClick={() => setSelectedTerminal("")}

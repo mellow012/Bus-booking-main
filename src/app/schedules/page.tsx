@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import SchedulesClient from "./SchedulesClient";
 import { isSegmentBookable } from "@/lib/schedule-utils";
 import { getRouteDistanceAndDuration } from "@/lib/route-utils";
+import { formatTime24, formatDateISO } from "@/lib/timezone";
 
 export const dynamic = 'force-dynamic';
 
@@ -124,13 +125,13 @@ export default async function SchedulesPage({
         busType: bus.busType || 'Standard',
         origin: route.origin,
         destination: route.destination,
-        departureTime: dep.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }),
-        arrivalTime: arr.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }),
+        departureTime: formatTime24(sch.departureDateTime),
+        arrivalTime: formatTime24(sch.arrivalDateTime),
         availableSeats: actualAvailableSeats,
         price: sch.price,
         duration: durationMin,
         distance: distanceKm,
-        date: dep.toISOString().split('T')[0],
+        date: formatDateISO(sch.departureDateTime),
         companyLogo: company.logo || null,
         companyId: sch.companyId,
         routeId: sch.routeId,
