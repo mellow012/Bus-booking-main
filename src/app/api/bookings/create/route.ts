@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createBookingFull } from '@/lib/actions/booking.actions';
+import { getCurrentUser } from '@/lib/auth-utils';
 
 import { z } from 'zod';
 
@@ -40,6 +41,11 @@ const createBookingSchema = z.object({
 
 export async function POST(req: NextRequest) {
   try {
+    const user = await getCurrentUser(req);
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const body = await req.json();
     
     // Validate request body

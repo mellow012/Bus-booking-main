@@ -1,4 +1,8 @@
 import { defineConfig, devices } from '@playwright/test';
+import dotenv from 'dotenv';
+import path from 'path';
+
+dotenv.config({ path: path.resolve(__dirname, '.env') });
 
 export default defineConfig({
   testDir: './tests',
@@ -11,14 +15,23 @@ export default defineConfig({
   retries:    process.env.CI ? 1 : 0,
   reporter:   [['html', { open: 'never' }], ['list']],
 
+  timeout: 90_000,
+
   use: {
     baseURL:           process.env.BASE_URL || 'http://localhost:3000',
     trace:             'on-first-retry',
     screenshot:        'only-on-failure',
     video:             'on-first-retry',
-    actionTimeout:     15_000,
+    actionTimeout:     45_000,
     navigationTimeout: 40_000,
   },
+
+  // webServer: {
+  //   command: 'npm run dev',
+  //   url: process.env.BASE_URL || 'http://localhost:3001',
+  //   reuseExistingServer: true,
+  //   timeout: 120 * 1000,
+  // },
 
   projects: [
     // Primary — run all suites

@@ -57,9 +57,19 @@ export async function getAuthUserFromRequest(request: NextRequest): Promise<Auth
       await logger.logError('auth', 'Failed to parse or validate session cookie', err);
     }
 
-    // Fallback to Supabase server auth
+    // Fast check: if request has no Supabase auth cookies or Authorization header, skip Supabase API call entirely
+    const hasSupabaseAuth = request?.cookies?.getAll()?.some(c => c.name.startsWith('sb-')) || request?.headers?.has('authorization');
+    if (!hasSupabaseAuth) {
+      return null;
+    }
+
+    // Fallback to Supabase server auth (with 3-second timeout guard)
     const supabase = await createClient();
-    const { data: { user: authUser }, error } = await supabase.auth.getUser();
+    const authUserPromise = supabase.auth.getUser();
+    const timeoutPromise = new Promise<{ data: { user: null }; error: any }>((resolve) =>
+      setTimeout(() => resolve({ data: { user: null }, error: new Error('Supabase auth timeout') }), 3000)
+    );
+    const { data: { user: authUser }, error } = await Promise.race([authUserPromise, timeoutPromise]);
     if (error || !authUser) {
       await logger.logWarning('auth', `Supabase auth verification failed: ${error?.message ?? 'no user'}`);
       return null;
@@ -107,6 +117,34 @@ export async function getCurrentUser(request: NextRequest): Promise<AuthUser | n
  */
 export async function getCurrentUserFromServer(): Promise<AuthUser | null> {
   try {
+    try {
+      const { cookies } = await import('next/headers');
+      const cookieStore = await cookies();
+      const cookieVal = cookieStore.get(COOKIE_NAME)?.value;
+      if (cookieVal) {
+        const meta = await parseSessionCookieValue(cookieVal);
+        if (meta && meta.userId) {
+          const profile = await prisma.user.findFirst({
+            where: { OR: [{ id: meta.userId }, { uid: meta.userId }] },
+            select: { id: true, role: true, companyId: true, firstName: true, lastName: true, email: true },
+          });
+          if (profile) {
+            return {
+              id: profile.id,
+              email: profile.email ?? undefined,
+              emailVerified: true,
+              role: normalizeRole(profile.role) ?? undefined,
+              companyId: profile.companyId ?? null,
+              firstName: profile.firstName ?? undefined,
+              lastName: profile.lastName ?? undefined,
+            };
+          }
+        }
+      }
+    } catch {
+      // Fall through to Supabase auth check
+    }
+
     const supabase = await createClient();
     const { data: { user: authUser }, error } = await supabase.auth.getUser();
     if (error || !authUser) return null;

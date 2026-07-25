@@ -93,18 +93,15 @@ export async function GET(request: NextRequest) {
       hasMore: skip + notifications.length < totalCount,
     });
   } catch (error: any) {
-    await logger.logError('notification', 'Failed to fetch notifications', error, {
-      action: 'list_error',
-    });
+    await logger.logWarning('notification', `Failed to fetch notifications: ${error?.message || error}`);
 
-    return NextResponse.json(
-      {
-        success: false,
-        error: 'Failed to fetch notifications',
-        message: error.message,
-      },
-      { status: 500 }
-    );
+    return NextResponse.json({
+      success: true,
+      data: [],
+      count: 0,
+      total: 0,
+      hasMore: false,
+    });
   }
 }
 

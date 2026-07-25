@@ -5,6 +5,7 @@ import type { Prisma } from '@prisma/client';
 import { revalidatePath } from 'next/cache';
 import { Booking, BookingStatus } from '@/types';
 import { createClient } from '@/utils/supabase/server';
+import { getCurrentUserFromServer } from '@/lib/auth-utils';
 import { logger } from '@/lib/logger';
 import { serverCache } from '@/lib/cache';
 import { sendNotificationToUser, notifyCompanyStaff } from '@/lib/notificationService';
@@ -141,11 +142,18 @@ export async function createBookingFull(body: CreateBookingPayload): Promise<{
   error?: string;
 }> {
   // ── Auth ───────────────────────────────────────────────────────────────────
-  const supabase = await createClient();
-  const { data: { user: supabaseUser } } = await supabase.auth.getUser();
-  if (!supabaseUser) return { error: 'Unauthorized' };
+  let authUser = await getCurrentUserFromServer();
+  if (!authUser) {
+    const supabase = await createClient();
+    const { data: { user: supabaseUser } } = await supabase.auth.getUser();
+    if (supabaseUser) {
+      authUser = { id: supabaseUser.id, email: supabaseUser.email };
+    }
+  }
 
-  const userId = supabaseUser.id;
+  if (!authUser) return { error: 'Unauthorized' };
+
+  const userId = authUser.id;
   const userData = await prisma.user.findFirst({ where: { OR: [{ id: userId }, { uid: userId }] } });
   if (!userData) return { error: 'User profile not found in database.' };
 
@@ -364,6 +372,14 @@ export async function createBookingFull(body: CreateBookingPayload): Promise<{
             },
           });
 
+          // Acquire transactional advisory locks for each confirmed seat
+          const seatArray = Array.isArray(segment.seatNumbers) ? (segment.seatNumbers as string[]) : [];
+          const sortedSeats = [...seatArray].sort();
+          for (const seat of sortedSeats) {
+            const lockKey = `${segment.scheduleId}:${seat}`;
+            await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
+          }
+
           const txRow = await tx.schedule.findUnique({ where: { id: segment.scheduleId } });
           if (!txRow) throw new Error('Schedule not found during booking update');
 
@@ -371,7 +387,7 @@ export async function createBookingFull(body: CreateBookingPayload): Promise<{
             ? txRow.bookedSeats.filter((s): s is string => typeof s === 'string') : [];
           const updatedBooked = Array.from(new Set([
             ...existingBooked,
-            ...(Array.isArray(segment.seatNumbers) ? segment.seatNumbers : []),
+            ...seatArray,
           ]));
 
           await tx.schedule.update({

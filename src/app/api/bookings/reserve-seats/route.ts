@@ -92,45 +92,59 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Execute atomic reservation transaction with row-locking (FOR UPDATE)
+    // Execute atomic reservation transaction with per-seat non-blocking transactional advisory locks
     const result = await prisma.$transaction(
       async (tx) => {
-        // 1. Acquire pessimistic lock on the Schedule row to serialize concurrent reservations for this schedule
-        const locked: any[] = await tx.$queryRaw`
-          SELECT "id" FROM "Schedule" WHERE "id" = ${scheduleId} FOR UPDATE
-        `;
-
-        if (!locked || locked.length === 0) {
-          throw new ReservationError(404, { error: 'Schedule not found' });
+        // 1. Try to acquire per-seat non-blocking transactional advisory lock for each requested seat.
+        // If another user is currently in the middle of reserving the exact same seat, fail immediately with 400.
+        // Two users requesting DIFFERENT seats proceed concurrently in parallel (0s lock wait).
+        const sortedSeatNumbers = [...seatNumbers].sort();
+        for (const seat of sortedSeatNumbers) {
+          const lockKey = `${scheduleId}:${seat}`;
+          const res = await tx.$queryRaw<[{ locked: boolean }]>`
+            SELECT pg_try_advisory_xact_lock(hashtext(${lockKey})) as locked
+          `;
+          if (!res || !res[0] || !res[0].locked) {
+            throw new ReservationError(400, {
+              error: 'One or more seats are currently being reserved by another customer',
+              conflictingSeats: [seat],
+            });
+          }
         }
 
-        // 2. Clean up expired stale reservations for this schedule
-        await tx.seatReservation.deleteMany({
-          where: {
-            scheduleId,
-            expiresAt: { lt: new Date() },
-          },
-        });
-
-        // 3. Fetch schedule within the transaction
+        // 2. Fetch schedule along with active non-expired reservations in a single query
         const schedule = await tx.schedule.findUnique({
           where: { id: scheduleId },
+          include: {
+            bus: true,
+            reservations: {
+              where: {
+                status: 'reserved',
+                expiresAt: { gt: new Date() },
+              },
+            },
+          },
         });
 
         if (!schedule) {
           throw new ReservationError(404, { error: 'Schedule not found' });
         }
 
-        // 4. Check available seat count
-        if (schedule.availableSeats < seatNumbers.length) {
+        // 3. Check requested seat numbers against bus total capacity limit
+        const busCapacity = schedule.bus?.capacity || 60;
+        const invalidSeats = seatNumbers.filter(s => {
+          const num = parseInt(s, 10);
+          return isNaN(num) || num <= 0 || num > busCapacity;
+        });
+
+        if (invalidSeats.length > 0) {
           throw new ReservationError(400, {
-            error: 'Not enough seats available',
-            available: schedule.availableSeats,
-            requested: seatNumbers.length,
+            error: 'One or more requested seat numbers exceed bus capacity',
+            invalidSeats,
           });
         }
 
-        // 5. Check if seats are already permanently booked
+        // 4. Check if seats are already permanently booked
         const bookedSeats = Array.isArray(schedule.bookedSeats) ? (schedule.bookedSeats as string[]) : [];
         const conflictingBookedSeats = seatNumbers.filter(seat => bookedSeats.includes(seat));
 
@@ -141,15 +155,8 @@ export async function POST(req: NextRequest) {
           });
         }
 
-        // 6. Check for active temporary reservations on the same schedule
-        const activeReservations = await tx.seatReservation.findMany({
-          where: {
-            scheduleId,
-            status: 'reserved',
-            expiresAt: { gt: new Date() },
-          },
-        });
-
+        // 5. Check for active temporary reservations on the same schedule by other users
+        const activeReservations = schedule.reservations || [];
         const otherReservations = activeReservations.filter((r: any) => r.userId !== user.id);
         const reservedSeats = otherReservations.flatMap((reservation: any) =>
           parseSeatNumbers(reservation.seatNumbers)
@@ -163,7 +170,18 @@ export async function POST(req: NextRequest) {
           });
         }
 
-        // 7. Delete existing reservations for this user and schedule
+        // 6. Explicit atomic capacity check: total occupied (booked + reserved) vs schedule capacity
+        const totalOccupiedCount = bookedSeats.length + reservedSeats.length;
+        const effectiveAvailable = schedule.availableSeats - totalOccupiedCount;
+        if (effectiveAvailable < seatNumbers.length) {
+          throw new ReservationError(400, {
+            error: 'Not enough seats available on this schedule',
+            available: Math.max(0, effectiveAvailable),
+            requested: seatNumbers.length,
+          });
+        }
+
+        // 6. Delete existing reservations for this user and schedule
         await tx.seatReservation.deleteMany({
           where: {
             scheduleId,
@@ -171,7 +189,7 @@ export async function POST(req: NextRequest) {
           },
         });
 
-        // 8. Create new seat reservation
+        // 7. Create new seat reservation
         const expiresAt = new Date(Date.now() + SEAT_HOLD_DURATION);
         const reservation = await tx.seatReservation.create({
           data: {
@@ -186,7 +204,8 @@ export async function POST(req: NextRequest) {
         return reservation;
       },
       {
-        timeout: 5000,
+        maxWait: 10000,
+        timeout: 15000,
       }
     );
 

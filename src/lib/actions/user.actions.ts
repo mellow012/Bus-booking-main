@@ -14,7 +14,7 @@ export async function getAuthenticatedUserProfile() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { success: false as const, error: 'Unauthorized', data: null };
-  return getUserById(user.id);
+  return getUserById(user.id, user.email);
 }
 
 /** PATCH /api/auth/profile equivalent — whitelists fields, reads session server-side */
@@ -72,19 +72,33 @@ export async function markPasswordSet(email?: string) {
 /**
  * --- Users ---
  */
-export async function getUserById(id: string) {
+export async function getUserById(id: string, email?: string) {
   try {
     const user = await prisma.user.findFirst({
       where: {
         OR: [
           { id },
-          { uid: id }
+          { uid: id },
+          ...(email ? [{ email }] : [])
         ]
       },
       orderBy: {
         setupCompleted: 'desc'
       }
     });
+
+    if (user && id && user.uid !== id) {
+      try {
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { uid: id, updatedAt: new Date() }
+        });
+        user.uid = id;
+      } catch (syncErr) {
+        console.warn('[getUserById] non-fatal error syncing uid:', syncErr);
+      }
+    }
+
     return { success: true, data: user as User | null };
   } catch (error: unknown) {
     console.error('Error fetching user by id:', error);
@@ -115,28 +129,52 @@ export async function syncUser(id: string, data: Partial<User>) {
     }
 
     // If still not found but we have an id, try searching all users with that id pattern
-    // This handles cases where the id might be stored differently
     if (!existing && id && email) {
       existing = await prisma.user.findUnique({ where: { email } });
     }
 
-    const updateData: any = {
-      ...(updatableData as any),
-      updatedAt: new Date(),
-    };
-
     if (existing) {
-      // Update existing record
+      // Build non-destructive update data
+      const safeUpdateData: any = {
+        updatedAt: new Date(),
+      };
+
       if (existing.uid !== id) {
-        updateData.uid = id;
+        safeUpdateData.uid = id;
       }
-      // Ensure id is set if it's not already
-      if (existing.id !== id) {
-        // Don't change the primary id, but sync the uid
+
+      // Fields to sync only if provided and non-empty, unless existing value is empty
+      const textFields = ['firstName', 'lastName', 'phone', 'nationalId', 'sex', 'currentAddress', 'role', 'companyId', 'region'];
+      for (const field of textFields) {
+        const incomingVal = (updatableData as any)[field];
+        const existingVal = (existing as any)[field];
+
+        if (incomingVal !== undefined && incomingVal !== null) {
+          const strVal = String(incomingVal).trim();
+          // If incoming value is non-empty, OR if existing value is missing/empty, apply update
+          if (strVal !== '' || !existingVal || String(existingVal).trim() === '') {
+            safeUpdateData[field] = incomingVal;
+          }
+        }
       }
+
+      // Preserve setupCompleted = true if either incoming or existing is true
+      if (updatableData.setupCompleted === true || existing.setupCompleted === true) {
+        safeUpdateData.setupCompleted = true;
+      } else if (updatableData.setupCompleted !== undefined) {
+        safeUpdateData.setupCompleted = updatableData.setupCompleted;
+      }
+
+      // Sync other boolean / object flags if defined
+      if (updatableData.isActive !== undefined) safeUpdateData.isActive = updatableData.isActive;
+      if (updatableData.emailVerified !== undefined) safeUpdateData.emailVerified = updatableData.emailVerified;
+      if (updatableData.passwordSet !== undefined) safeUpdateData.passwordSet = updatableData.passwordSet;
+      if ((updatableData as any).fcmTokens !== undefined) safeUpdateData.fcmTokens = (updatableData as any).fcmTokens;
+      if ((updatableData as any).preferences !== undefined) safeUpdateData.preferences = (updatableData as any).preferences;
+
       const user = await prisma.user.update({
         where: { id: existing.id },
-        data: updateData,
+        data: safeUpdateData,
       });
       return { success: true, data: user as User };
     }

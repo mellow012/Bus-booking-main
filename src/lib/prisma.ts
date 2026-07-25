@@ -19,6 +19,10 @@ const pool =
     connectionTimeoutMillis: 5000,
   });
 
+pool.on('error', (err) => {
+  console.warn('[Prisma pg pool] Handled connection error:', err.message);
+});
+
 const adapter = new PrismaPg(pool);
 
 export const prisma = globalForPrisma.prisma ?? new PrismaClient({ adapter });

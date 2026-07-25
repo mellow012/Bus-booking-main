@@ -1,7 +1,7 @@
 // tests/helpers.ts — shared utilities for all test suites
 import { Page, expect } from '@playwright/test';
 
-export const BASE_URL = 'https://bus-booking-main-five.vercel.app';
+export const BASE_URL = process.env.BASE_URL || 'http://localhost:3000';
 
 export const ACCOUNTS = {
   customer: { email: 'wiz116mlambia@gmail.com',     password: 'Abcd1234' },

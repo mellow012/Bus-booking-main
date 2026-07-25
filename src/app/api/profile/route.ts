@@ -212,7 +212,8 @@ export async function PUT(req: NextRequest) {
       where: {
         OR: [
           { id: user.id },
-          { uid: user.id }
+          { uid: user.id },
+          ...(user.email ? [{ email: user.email }] : [])
         ]
       }
     });
@@ -224,6 +225,7 @@ export async function PUT(req: NextRequest) {
     const updated = await prisma.user.update({
       where: { id: existing.id },
       data: {
+        ...(existing.uid !== user.id && { uid: user.id }),
         ...(firstName && { firstName }),
         ...(lastName && { lastName }),
         ...(phone && { phone }),
@@ -237,6 +239,20 @@ export async function PUT(req: NextRequest) {
         setupCompleted: true,
       },
     });
+
+    // Also update Supabase Auth metadata for consistency
+    try {
+      const adminClient = createAdminClient();
+      await adminClient.auth.admin.updateUserById(user.id, {
+        user_metadata: {
+          ...(firstName && { first_name: firstName }),
+          ...(lastName && { last_name: lastName }),
+          ...(phone && { phone }),
+        }
+      });
+    } catch (adminErr) {
+      console.warn('[PUT /api/profile] Admin client auth metadata sync warning:', adminErr);
+    }
 
     return NextResponse.json({
       data: {

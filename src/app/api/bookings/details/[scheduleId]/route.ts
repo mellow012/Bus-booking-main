@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { getCurrentUser } from '@/lib/auth-utils';
 
 /**
  * GET /api/bookings/details/[scheduleId]
@@ -101,6 +102,8 @@ export async function GET(
       return [];
     }
 
+    const user = await getCurrentUser(req);
+
     const activeReservations = await prisma.seatReservation.findMany({
       where: {
         scheduleId,
@@ -109,9 +112,25 @@ export async function GET(
       },
     });
 
-    const reservedSeats = activeReservations.flatMap((reservation) =>
+    const userReservation = user
+      ? activeReservations.find((r) => r.userId === user.id)
+      : null;
+
+    const otherReservations = userReservation
+      ? activeReservations.filter((r) => r.id !== userReservation.id)
+      : activeReservations;
+
+    const reservedSeats = otherReservations.flatMap((reservation) =>
       parseSeatArray(reservation.seatNumbers)
     );
+
+    const myActiveReservation = userReservation
+      ? {
+          id: userReservation.id,
+          seatNumbers: parseSeatArray(userReservation.seatNumbers),
+          expiresAt: userReservation.expiresAt,
+        }
+      : null;
 
     return NextResponse.json({
       schedule: {
@@ -132,6 +151,7 @@ export async function GET(
       bus: schedule.bus,
       route: schedule.route,
       company: schedule.company,
+      myActiveReservation,
     });
   } catch (error) {
     console.error('GET /api/bookings/details/[scheduleId] error:', error);

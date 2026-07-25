@@ -331,13 +331,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const updateUserProfile = async (profile: UpdateProfilePayload): Promise<void> => {
     if (!user?.id) throw new Error('No authenticated user found');
+    const formattedPhone = formatPhoneToE164(profile.phone);
+    const cleanFirst = profile.firstName.trim();
+    const cleanLast = profile.lastName.trim();
+
     const response = await fetch('/api/profile', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', 'x-csrf-token': getCookie('__csrf_token') || '' },
       body: JSON.stringify({
-        firstName: profile.firstName.trim(),
-        lastName: profile.lastName.trim(),
-        phone: formatPhoneToE164(profile.phone),
+        firstName: cleanFirst,
+        lastName: cleanLast,
+        phone: formattedPhone,
         setupCompleted: true,
         nationalId: profile.nationalId,
         sex: profile.sex,
@@ -345,6 +349,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }),
     });
     if (!response.ok) throw new Error('Failed to update profile');
+
+    try {
+      await supabase.auth.updateUser({
+        data: {
+          first_name: cleanFirst,
+          last_name: cleanLast,
+          phone: formattedPhone,
+        }
+      });
+    } catch (metaErr) {
+      console.warn('[updateUserProfile] Failed to sync Supabase user metadata:', metaErr);
+    }
+
     await refreshUserProfile();
   };
 

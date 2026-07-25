@@ -28,9 +28,16 @@ const redis = new Redis({
 // Fails open: if Redis errors, allow the request but log server-side
 
 function createSafeLimiter(options: ConstructorParameters<typeof Ratelimit>[0]) {
-  const ratelimit = new Ratelimit(options);
+  const isConfigured = Boolean(
+    process.env.UPSTASH_REDIS_REST_URL?.trim() &&
+    process.env.UPSTASH_REDIS_REST_TOKEN?.trim()
+  );
+  const ratelimit = isConfigured ? new Ratelimit(options) : null;
   return {
     limit: async (identifier: string) => {
+      if (!ratelimit) {
+        return { success: true, limit: 100, remaining: 99, reset: Date.now() + 60000 };
+      }
       try {
         return await ratelimit.limit(identifier);
       } catch (error: any) {
