@@ -144,9 +144,26 @@ export async function POST(req: NextRequest) {
           });
         }
 
-        // 4. Check if seats are already permanently booked
-        const bookedSeats = Array.isArray(schedule.bookedSeats) ? (schedule.bookedSeats as string[]) : [];
-        const conflictingBookedSeats = seatNumbers.filter(seat => bookedSeats.includes(seat));
+        // 4. Check if seats are already permanently booked (direct + segment bookings)
+        const [activeDirectBookings, activeSegmentBookings] = await Promise.all([
+          tx.booking.findMany({
+            where: { scheduleId, bookingStatus: { not: 'cancelled' } },
+            select: { seatNumbers: true },
+          }),
+          tx.bookingSegment.findMany({
+            where: { scheduleId, booking: { bookingStatus: { not: 'cancelled' } } },
+            select: { seatNumbers: true },
+          }),
+        ]);
+
+        const staticBookedSeats = parseSeatNumbers(schedule.bookedSeats);
+        const allBookedSeatsSet = new Set<string>([
+          ...staticBookedSeats,
+          ...activeDirectBookings.flatMap((b) => parseSeatNumbers(b.seatNumbers)),
+          ...activeSegmentBookings.flatMap((s) => parseSeatNumbers(s.seatNumbers)),
+        ]);
+
+        const conflictingBookedSeats = seatNumbers.filter((seat) => allBookedSeatsSet.has(seat));
 
         if (conflictingBookedSeats.length > 0) {
           throw new ReservationError(400, {
@@ -170,9 +187,10 @@ export async function POST(req: NextRequest) {
           });
         }
 
-        // 6. Explicit atomic capacity check: total occupied (booked + reserved) vs schedule capacity
-        const totalOccupiedCount = bookedSeats.length + reservedSeats.length;
-        const effectiveAvailable = schedule.availableSeats - totalOccupiedCount;
+        // 6. Explicit atomic capacity check: total occupied (booked + reserved) vs bus capacity
+        const busCap = schedule.bus?.capacity || 40;
+        const totalOccupiedCount = allBookedSeatsSet.size + reservedSeats.length;
+        const effectiveAvailable = Math.max(0, busCap - totalOccupiedCount);
         if (effectiveAvailable < seatNumbers.length) {
           throw new ReservationError(400, {
             error: 'Not enough seats available on this schedule',

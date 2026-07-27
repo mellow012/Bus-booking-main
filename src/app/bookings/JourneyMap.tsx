@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useMemo, useRef } from 'react';
+import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { Maximize2, Minimize2 } from 'lucide-react';
@@ -122,6 +122,75 @@ function resolveCoords(cityName: string | null | undefined): [number, number] | 
   return null;
 }
 
+// ─── Haversine distance between two lat/lng points (in metres) ───
+function haversineM(a: [number, number], b: [number, number]): number {
+  const R = 6371000;
+  const φ1 = (a[0] * Math.PI) / 180;
+  const φ2 = (b[0] * Math.PI) / 180;
+  const Δφ = ((b[0] - a[0]) * Math.PI) / 180;
+  const Δλ = ((b[1] - a[1]) * Math.PI) / 180;
+  const s =
+    Math.sin(Δφ / 2) ** 2 +
+    Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(s), Math.sqrt(1 - s));
+}
+
+/**
+ * Interpolate a position along a polyline at a given fractional progress (0–1).
+ * Walks the polyline by cumulative Haversine distance so the result sits exactly
+ * on the road geometry rather than cutting across it.
+ *
+ * Falls back to straight-line interpolation between origin and destination
+ * when routePoints is null or has fewer than 2 points.
+ */
+function interpolateAlongPolyline(
+  routePoints: [number, number][] | null,
+  originCoords: [number, number],
+  destCoords: [number, number],
+  progress: number  // 0..1
+): [number, number] | null {
+  // Clamp progress
+  const t = Math.min(Math.max(progress, 0), 1);
+
+  // Use road polyline if available
+  if (routePoints && routePoints.length >= 2) {
+    // Build cumulative distance array
+    let totalLen = 0;
+    const cumulative: number[] = [0];
+    for (let i = 1; i < routePoints.length; i++) {
+      totalLen += haversineM(routePoints[i - 1], routePoints[i]);
+      cumulative.push(totalLen);
+    }
+
+    if (totalLen === 0) return routePoints[0];
+
+    const target = t * totalLen;
+
+    // Find the segment where the target distance lies
+    for (let i = 1; i < routePoints.length; i++) {
+      if (cumulative[i] >= target) {
+        const segLen = cumulative[i] - cumulative[i - 1];
+        if (segLen === 0) return routePoints[i];
+        const segT = (target - cumulative[i - 1]) / segLen;
+        const a = routePoints[i - 1];
+        const b = routePoints[i];
+        return [
+          a[0] + (b[0] - a[0]) * segT,
+          a[1] + (b[1] - a[1]) * segT,
+        ];
+      }
+    }
+
+    // Progress >= 1 — return last point
+    return routePoints[routePoints.length - 1];
+  }
+
+  // Fallback: straight-line interpolation
+  const lat = originCoords[0] + (destCoords[0] - originCoords[0]) * t;
+  const lng = originCoords[1] + (destCoords[1] - originCoords[1]) * t;
+  return isValidLatLng(lat, lng) ? [lat, lng] : null;
+}
+
 export interface JourneyMapProps {
   origin: string;
   destination: string;
@@ -134,6 +203,11 @@ export interface JourneyMapProps {
 }
 
 const STALE_THRESHOLD_MS = 3 * 60 * 1000; // 3 minutes
+
+// ─── routePoints state meanings ───
+// undefined  = not yet fetched / fetch in flight
+// null       = fallback (fetch failed or no route found) → use straight dashed line
+// [...]      = road-following polyline with ≥ 2 points
 
 const JourneyMap: React.FC<JourneyMapProps> = ({
   origin,
@@ -149,6 +223,9 @@ const JourneyMap: React.FC<JourneyMapProps> = ({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
+  // undefined = loading, null = fallback, array = road route
+  const [routePoints, setRoutePoints] = useState<[number, number][] | null | undefined>(undefined);
+
   useEffect(() => {
     setMounted(true);
   }, []);
@@ -163,6 +240,47 @@ const JourneyMap: React.FC<JourneyMapProps> = ({
 
   const originCoords = useMemo(() => resolveCoords(origin), [origin]);
   const destCoords = useMemo(() => resolveCoords(destination), [destination]);
+
+  // ─── Fetch road-following route from server-side proxy ───
+  useEffect(() => {
+    if (!origin || !destination) return;
+
+    // Reset to "loading" on route change
+    setRoutePoints(undefined);
+
+    let cancelled = false;
+
+    const fetchRoute = async () => {
+      try {
+        const params = new URLSearchParams({ origin, destination });
+        const res = await fetch(`/api/routing?${params.toString()}`);
+        if (cancelled) return;
+
+        if (!res.ok) {
+          setRoutePoints(null); // fallback
+          return;
+        }
+
+        const data = await res.json() as {
+          points?: [number, number][] | null;
+          fallback?: boolean;
+        };
+
+        if (cancelled) return;
+
+        if (data.fallback || !data.points || data.points.length < 2) {
+          setRoutePoints(null); // fallback to straight line
+        } else {
+          setRoutePoints(data.points);
+        }
+      } catch {
+        if (!cancelled) setRoutePoints(null); // network error → fallback
+      }
+    };
+
+    fetchRoute();
+    return () => { cancelled = true; };
+  }, [origin, destination]);
 
   const safeProgress = isFiniteNumber(progress)
     ? Math.min(Math.max(progress, 0), 1)
@@ -183,10 +301,11 @@ const JourneyMap: React.FC<JourneyMapProps> = ({
   if (isLivePositionUsable && livePosition) {
     busPosition = [livePosition.latitude, livePosition.longitude];
   } else if (safeProgress !== null && safeProgress > 0 && safeProgress < 1 && originCoords && destCoords) {
-    const lat = originCoords[0] + (destCoords[0] - originCoords[0]) * safeProgress;
-    const lng = originCoords[1] + (destCoords[1] - originCoords[1]) * safeProgress;
-    if (isValidLatLng(lat, lng)) {
-      busPosition = [lat, lng];
+    // Use road-following interpolation when routePoints are available,
+    // straight-line interpolation when routePoints is null (fallback).
+    // Don't interpolate while routePoints is still undefined (loading).
+    if (routePoints !== undefined) {
+      busPosition = interpolateAlongPolyline(routePoints, originCoords, destCoords, safeProgress);
     }
   }
 
@@ -194,8 +313,41 @@ const JourneyMap: React.FC<JourneyMapProps> = ({
 
   const mapRef = useRef<L.Map | null>(null);
   const busMarkerRef = useRef<L.Marker | null>(null);
+  const routeLayerRef = useRef<L.Polyline | null>(null);
 
-  // Effect 1: Initialize map instance, static layers, and fit initial route bounds ONCE per route
+  // Stable callback to update/replace route polyline without destroying the map
+  const updateRouteLayer = useCallback(
+    (map: L.Map, pts: [number, number][] | null | undefined) => {
+      // Remove old route layer
+      if (routeLayerRef.current) {
+        routeLayerRef.current.remove();
+        routeLayerRef.current = null;
+      }
+
+      if (!originCoords || !destCoords) return;
+
+      if (pts && pts.length >= 2) {
+        // Road-following polyline — solid line
+        routeLayerRef.current = L.polyline(pts, {
+          color: '#005A5B',
+          weight: 4,
+          opacity: 0.85,
+        }).addTo(map);
+      } else if (pts === null) {
+        // Fallback: dashed straight line between origin and destination
+        routeLayerRef.current = L.polyline([originCoords, destCoords], {
+          color: '#005A5B',
+          weight: 3,
+          opacity: 0.7,
+          dashArray: '8, 6',
+        }).addTo(map);
+      }
+      // If pts === undefined (loading), draw nothing — keeps the map clean during fetch
+    },
+    [originCoords, destCoords]
+  );
+
+  // Effect 1: Initialize map instance, static layers (markers, attribution), fit bounds ONCE per route
   useEffect(() => {
     if (!mounted || !containerRef.current || !originCoords || !destCoords) return;
 
@@ -212,17 +364,17 @@ const JourneyMap: React.FC<JourneyMapProps> = ({
       scrollWheelZoom: false,
       dragging: true,
       zoomControl: false,
-      attributionControl: false,
+      attributionControl: true,
     });
     mapRef.current = map;
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+    // Attribution control: OpenStreetMap tiles + GraphHopper routing credit
+    map.attributionControl.setPrefix(
+      '<a href="https://www.graphhopper.com" target="_blank" rel="noopener">Routing © GraphHopper</a>'
+    );
 
-    L.polyline([originCoords, destCoords], {
-      color: '#005A5B',
-      weight: 3,
-      opacity: 0.7,
-      dashArray: '8, 6',
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
     }).addTo(map);
 
     L.marker(originCoords).addTo(map);
@@ -235,10 +387,17 @@ const JourneyMap: React.FC<JourneyMapProps> = ({
       // Ignore fitBounds errors on degenerate coordinates
     }
 
+    // Draw initial route state (may be loading/fallback/road)
+    updateRouteLayer(map, routePoints);
+
     return () => {
       if (busMarkerRef.current) {
         busMarkerRef.current.remove();
         busMarkerRef.current = null;
+      }
+      if (routeLayerRef.current) {
+        routeLayerRef.current.remove();
+        routeLayerRef.current = null;
       }
       map.remove();
       mapRef.current = null;
@@ -246,9 +405,17 @@ const JourneyMap: React.FC<JourneyMapProps> = ({
         (el as any)._leaflet_id = null;
       }
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mounted, origin, destination]);
 
-  // Effect 2: Dynamically update or add/remove ONLY the bus marker when position changes without recreating the map
+  // Effect 2: Update route polyline when routePoints changes (after fetch resolves)
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    updateRouteLayer(map, routePoints);
+  }, [routePoints, updateRouteLayer]);
+
+  // Effect 3: Dynamically update or add/remove ONLY the bus marker when position changes
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;

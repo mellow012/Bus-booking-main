@@ -389,7 +389,7 @@ export default function BookBus() {
                           </div>
                         )}
 
-                        {returnSchedule && (
+                        {returnSchedule && returnBus && returnRoute && (
                           <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
                               <div>
@@ -400,12 +400,12 @@ export default function BookBus() {
                             </div>
 
                             <SeatSelection
-                              bus={returnBus!} schedule={returnSchedule} passengers={passengers}
+                              bus={returnBus} schedule={returnSchedule} passengers={passengers}
                               onSeatSelection={handleReturnSeatSelection}
                               selectedSeats={selectedReturnSeats}
                               originStopId="__origin__"
                               destinationStopId="__destination__"
-                              route={returnRoute!}
+                              route={returnRoute}
                               reservedSeats={returnSchedule.reservedSeats || []}
                             />
                           </div>

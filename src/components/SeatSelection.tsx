@@ -26,8 +26,12 @@ interface SeatLayoutConfig {
 
 const SEAT_LAYOUT_CONFIGS: Record<string, SeatLayoutConfig> = {
   standard: { seatsPerRow: 4, aislePosition: 2, seatLabels: ['A', 'B', 'C', 'D'] },
-  luxury: { seatsPerRow: 3, aislePosition: 1, seatLabels: ['A', 'B', 'C'] },
   express: { seatsPerRow: 4, aislePosition: 2, seatLabels: ['A', 'B', 'C', 'D'] },
+  luxury: { seatsPerRow: 3, aislePosition: 1, seatLabels: ['A', 'B', 'C'] },
+  executive: { seatsPerRow: 3, aislePosition: 1, seatLabels: ['A', 'B', 'C'] },
+  coaster: { seatsPerRow: 3, aislePosition: 2, seatLabels: ['A', 'B', 'C'] },
+  minibus: { seatsPerRow: 3, aislePosition: 2, seatLabels: ['A', 'B', 'C'] },
+  high_capacity: { seatsPerRow: 5, aislePosition: 2, seatLabels: ['A', 'B', 'C', 'D', 'E'] },
 };
 
 const SeatSelection: React.FC<SeatSelectionProps> = ({
@@ -51,13 +55,36 @@ const SeatSelection: React.FC<SeatSelectionProps> = ({
 
   // ── Layout config ──────────────────────────────────────────────────────────
   const layoutConfig = useMemo(() => {
-    const busType = bus.busType?.toLowerCase() || 'standard';
+    // 1. Check if bus has dynamic custom seatLayout in registrationDetails or metadata
+    const customConfig = (bus?.registrationDetails as any)?.seatLayout || (bus as any)?.seatLayout;
+    if (customConfig && typeof customConfig === 'object' && customConfig.seatsPerRow) {
+      const seatsPerRow = Number(customConfig.seatsPerRow) || 4;
+      return {
+        seatsPerRow,
+        aislePosition: Number(customConfig.aislePosition) || Math.floor(seatsPerRow / 2),
+        seatLabels: Array.isArray(customConfig.seatLabels)
+          ? customConfig.seatLabels
+          : ['A', 'B', 'C', 'D', 'E', 'F'].slice(0, seatsPerRow),
+      };
+    }
+
+    // 2. Fuzzy match busType string
+    const busType = (bus?.busType || 'standard').toLowerCase().trim();
+    if (busType.includes('luxury') || busType.includes('vip') || busType.includes('executive')) {
+      return SEAT_LAYOUT_CONFIGS.luxury;
+    }
+    if (busType.includes('coaster') || busType.includes('minibus')) {
+      return SEAT_LAYOUT_CONFIGS.coaster;
+    }
+    if (busType.includes('high') || busType.includes('5-across') || busType.includes('60')) {
+      return SEAT_LAYOUT_CONFIGS.high_capacity;
+    }
     return SEAT_LAYOUT_CONFIGS[busType] || SEAT_LAYOUT_CONFIGS.standard;
-  }, [bus.busType]);
+  }, [bus]);
 
   // ── Seat grid ──────────────────────────────────────────────────────────────
   const seatLayout = useMemo(() => {
-    const totalSeats = bus.capacity || 40;
+    const totalSeats = bus?.capacity || 40;
     const { seatsPerRow, seatLabels } = layoutConfig;
     const rows = Math.ceil(totalSeats / seatsPerRow);
     const seats: (string | null)[][] = [];
@@ -73,7 +100,7 @@ const SeatSelection: React.FC<SeatSelectionProps> = ({
       seats.push(rowSeats);
     }
     return seats;
-  }, [bus.capacity, layoutConfig]);
+  }, [bus?.capacity, layoutConfig]);
 
   function normalizeSeatArray(value: unknown): string[] {
     if (Array.isArray(value)) return value.filter((seat): seat is string => typeof seat === 'string');
@@ -90,8 +117,8 @@ const SeatSelection: React.FC<SeatSelectionProps> = ({
 
   // ── Booked seats ───────────────────────────────────────────────────────────
   const bookedSeats = useMemo(
-    () => new Set(normalizeSeatArray(schedule.bookedSeats)),
-    [schedule.bookedSeats]
+    () => new Set(normalizeSeatArray(schedule?.bookedSeats)),
+    [schedule?.bookedSeats]
   );
 
   const reservedSeatsSet = useMemo(
@@ -223,7 +250,7 @@ const SeatSelection: React.FC<SeatSelectionProps> = ({
             Choose {passengers} seat{passengers > 1 ? 's' : ''} for your journey
           </p>
           <div className="text-sm text-gray-500">
-            {bus.busType || 'Standard'} Bus · {bus.capacity || 40} seats
+            {bus?.busType || 'Standard'} Bus · {bus?.capacity || 40} seats
           </div>
         </div>
       </div>

@@ -77,12 +77,11 @@ export async function GET(
       );
     }
 
-    // Verify schedule hasn't arrived (allow booking while in transit if stops ahead exist)
-    const now = new Date();
-    if (new Date(schedule.arrivalDateTime) < now) {
+    // Verify schedule hasn't been completed or cancelled
+    if (schedule.status === 'completed' || schedule.status === 'cancelled') {
       return NextResponse.json(
         {
-          error: 'Schedule has already reached its destination',
+          error: `Schedule is no longer available for booking (${schedule.status})`,
           departureTime: schedule.departureDateTime,
         },
         { status: 410 }
@@ -104,13 +103,42 @@ export async function GET(
 
     const user = await getCurrentUser(req);
 
-    const activeReservations = await prisma.seatReservation.findMany({
-      where: {
-        scheduleId,
-        status: 'reserved',
-        expiresAt: { gt: new Date() },
-      },
-    });
+    // Dynamically consolidate all active booked seats (direct + segment bookings)
+    const [activeDirectBookings, activeSegmentBookings, activeReservations] = await Promise.all([
+      prisma.booking.findMany({
+        where: {
+          scheduleId,
+          bookingStatus: { not: 'cancelled' },
+        },
+        select: { seatNumbers: true },
+      }),
+      prisma.bookingSegment.findMany({
+        where: {
+          scheduleId,
+          booking: {
+            bookingStatus: { not: 'cancelled' },
+          },
+        },
+        select: { seatNumbers: true },
+      }),
+      prisma.seatReservation.findMany({
+        where: {
+          scheduleId,
+          status: 'reserved',
+          expiresAt: { gt: new Date() },
+        },
+      }),
+    ]);
+
+    const staticBookedSeats = parseSeatArray(schedule.bookedSeats);
+    const allBookedSeatsSet = new Set<string>([
+      ...staticBookedSeats,
+      ...activeDirectBookings.flatMap((b) => parseSeatArray(b.seatNumbers)),
+      ...activeSegmentBookings.flatMap((s) => parseSeatArray(s.seatNumbers)),
+    ]);
+    const consolidatedBookedSeats = Array.from(allBookedSeatsSet);
+    const busCapacity = schedule.bus?.capacity || 40;
+    const dynamicAvailableSeats = Math.max(busCapacity - consolidatedBookedSeats.length, 0);
 
     const userReservation = user
       ? activeReservations.find((r) => r.userId === user.id)
@@ -137,8 +165,8 @@ export async function GET(
         id: schedule.id,
         departureDateTime: schedule.departureDateTime,
         arrivalDateTime: schedule.arrivalDateTime,
-        availableSeats: schedule.availableSeats,
-        bookedSeats: parseSeatArray(schedule.bookedSeats),
+        availableSeats: dynamicAvailableSeats,
+        bookedSeats: consolidatedBookedSeats,
         reservedSeats,
         price: schedule.price,
         baseFare: schedule.baseFare,

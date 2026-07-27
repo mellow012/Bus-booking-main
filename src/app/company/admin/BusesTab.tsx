@@ -3,7 +3,7 @@
 import React, { useState, useMemo } from 'react';
 import { 
   Bus as BusIcon, Plus, Search, Edit2, Trash2, 
-  Settings, CheckCircle, AlertTriangle, AlertCircle, Wrench, Shield, Fuel 
+  Settings, CheckCircle, AlertTriangle, AlertCircle, Wrench, Shield, Fuel, Star 
 } from 'lucide-react';
 import { Bus } from '@/types';
 import { Button } from '@/components/ui/button';
@@ -308,6 +308,23 @@ export default function BusesTab({ dashboard }: BusesTabProps) {
                         <p className="font-bold text-gray-900">{bus.fuelType || 'Diesel'}</p>
                       </div>
                     </div>
+
+                    {(() => {
+                      const allBookings = dashboard.dashboardData?.bookings || [];
+                      const busReviews = allBookings.filter((b: any) => (b.schedule?.busId === bus.id || b.bus?.id === bus.id) && b.reviewRating != null && b.reviewRating > 0);
+                      const totalRating = busReviews.reduce((acc: number, b: any) => acc + Number(b.reviewRating), 0);
+                      const count = busReviews.length;
+                      const avg = count > 0 ? (totalRating / count).toFixed(1) : null;
+                      return (
+                        <div className="flex items-center gap-2 text-gray-600 sm:col-span-2">
+                          <Star className="w-4 h-4 text-amber-500 fill-amber-400" />
+                          <div>
+                            <p className="text-[10px] text-gray-400 uppercase font-semibold">Vehicle Rating</p>
+                            <p className="font-bold text-gray-900">{avg ? `${avg} ★ (${count} review${count > 1 ? 's' : ''})` : 'No reviews'}</p>
+                          </div>
+                        </div>
+                      );
+                    })()}
 
                     {bus.lastMaintenanceDate && (
                       <div className="flex items-center gap-2 text-gray-600 sm:col-span-2">

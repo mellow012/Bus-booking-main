@@ -60,6 +60,10 @@ const BookingCard = memo<{
 
   const activeSegment = (outboundCompleted && booking.returnSegment) ? booking.returnSegment : null;
 
+  const activeLegReviewRating = activeSegment
+    ? ((booking as any).metadata?.returnReview?.rating ?? null)
+    : ((booking as any).metadata?.outboundReview?.rating ?? (booking as any).reviewRating ?? null);
+
   const journey = useJourneyTracker({
     bookingId: booking.id,
     scheduleId: activeSegment ? activeSegment.scheduleId : booking.scheduleId,
@@ -68,7 +72,8 @@ const BookingCard = memo<{
     tripStatus: activeSegment ? activeSegment.schedule.tripStatus : booking.schedule.tripStatus,
     bookingStatus: booking.bookingStatus,
     paymentStatus: booking.paymentStatus,
-    reviewRating: (booking as any).reviewRating,
+    reviewRating: activeLegReviewRating,
+    destinationCity: activeSegment ? (activeSegment.route?.destination || '') : (booking.route?.destination || ''),
   });
 
   const [reviewForm, setReviewForm] = useState({ rating: 0, hover: 0, text: '' });
@@ -98,6 +103,10 @@ const BookingCard = memo<{
             {journey.state === 'in_transit' ? (
               <span className="px-3 py-1 rounded-full text-xs font-medium border bg-brand-50 text-brand-700 border-brand-200 flex items-center gap-1 animate-pulse">
                 <Navigation className="w-3 h-3" /> In Transit
+              </span>
+            ) : journey.state === 'delayed' ? (
+              <span className="px-3 py-1 rounded-full text-xs font-medium border bg-amber-50 text-amber-700 border-amber-200 flex items-center gap-1 animate-pulse">
+                <Clock className="w-3 h-3 text-amber-600" /> Delayed
               </span>
             ) : journey.state === 'arrived' || journey.state === 'completed' ? (
               <span className="px-3 py-1 rounded-full text-xs font-medium border bg-emerald-50 text-emerald-700 border-emerald-200">
@@ -278,7 +287,7 @@ const BookingCard = memo<{
                 />
                 <button
                   onClick={async () => {
-                    const ok = await journey.submitReview(reviewForm.rating, reviewForm.text);
+                    const ok = await journey.submitReview(reviewForm.rating, reviewForm.text, activeSegment ? 'return' : 'outbound');
                     if (ok) {
                       setReviewForm({ rating: 0, hover: 0, text: '' });
                       onReviewSubmitted?.();

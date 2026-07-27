@@ -2,6 +2,7 @@ import React from "react";
 import Image from "next/image";
 import { CheckCircle, Bus as BusIcon } from "lucide-react";
 import { AutoTour } from "./AutoTour";
+import StorysetCredit from "@/components/ui/StorysetCredit";
 
 export function Hero() {
   return (
@@ -36,6 +37,12 @@ export function Hero() {
               height={500}
               className="w-full h-auto drop-shadow-2xl"
               style={{ filter: "hue-rotate(15deg) saturate(1.1) brightness(1.05)" }}
+            />
+            <StorysetCredit
+              href="https://storyset.com/job"
+              label="Job illustrations by Storyset"
+              placement="top"
+              className="absolute bottom-2 right-2"
             />
             {/* Floating badges */}
             <div className="absolute top-2 -right-2 sm:top-4 sm:-right-4 bg-white rounded-2xl shadow-xl px-3 sm:px-4 py-2 sm:py-3 flex items-center gap-2 sm:gap-2.5 anim-scale-in delay-300">

@@ -179,6 +179,28 @@ async function querySchedules(params: {
     prisma.schedule.count({ where }),
   ]);
 
+  // Aggregate bus review ratings for vehicles in this schedule set
+  const busIds = Array.from(new Set(schedules.map((s) => s.busId).filter(Boolean)));
+  const busReviews = await prisma.booking.findMany({
+    where: {
+      schedule: { busId: { in: busIds } },
+      reviewRating: { not: null },
+    },
+    select: {
+      reviewRating: true,
+      schedule: { select: { busId: true } },
+    },
+  });
+
+  const busRatingMap: Record<string, { avgRating: number; count: number }> = {};
+  busReviews.forEach((b) => {
+    const bId = b.schedule?.busId;
+    if (!bId || b.reviewRating == null) return;
+    if (!busRatingMap[bId]) busRatingMap[bId] = { avgRating: 0, count: 0 };
+    busRatingMap[bId].avgRating += Number(b.reviewRating);
+    busRatingMap[bId].count += 1;
+  });
+
   interface StopInfo {
     id: string;
     name: string;

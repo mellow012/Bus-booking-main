@@ -10,6 +10,7 @@ import { ScheduleCard } from "@/components/ScheduleCard";
 import AlertMessage from "@/components/AlertMessage";
 import { EnhancedSchedule, isToday, getScheduleCategory, GeoStatus, cityMatch, nearestCity } from "@/utils/homeHelpers";
 import { CityPickerModal } from "@/components/CityPickerModal";
+import StorysetCredit from "@/components/ui/StorysetCredit";
 import Image from "next/image";
 import { createClient } from "@/utils/supabase/client";
 
@@ -397,11 +398,17 @@ export default function HomeSchedules() {
       ) : (
         <div className="bg-white rounded-3xl border border-gray-100 p-10 sm:p-16 text-center mb-8 shadow-sm flex flex-col items-center">
           <Image 
-            src="/Bus stop-rafiki.svg" 
+            src="/Bus Stop-rafiki.svg" 
             alt="No schedules" 
             width={300} height={300}
-            className="w-full max-w-[240px] h-auto mb-6 opacity-80"
+            className="w-full max-w-[240px] h-auto mb-2 opacity-80"
             style={{ filter: "hue-rotate(10deg)" }}
+          />
+          <StorysetCredit
+            href="https://storyset.com/bus"
+            label="Bus illustrations by Storyset"
+            placement="top"
+            className="mb-4"
           />
           <h3 className="font-display text-xl font-extrabold text-gray-900 mb-2">No upcoming buses found</h3>
           <p className="text-gray-500 text-sm max-w-xs mx-auto mb-8">We couldn't find any active or upcoming schedules. Try refreshing or check back later.</p>

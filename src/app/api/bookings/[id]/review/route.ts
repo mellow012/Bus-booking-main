@@ -9,7 +9,8 @@ export async function POST(
   try {
     const { id: bookingId } = await params;
     const body = await request.json();
-    const { rating, reviewText } = body;
+    const { rating, reviewText, leg } = body;
+    const isReturnLeg = leg === 'return';
 
     if (typeof rating !== 'number' || rating < 1 || rating > 5) {
       return NextResponse.json(
@@ -26,6 +27,7 @@ export async function POST(
         companyId: true,
         bookingStatus: true,
         reviewRating: true,
+        metadata: true,
         schedule: {
           select: { companyId: true, arrivalDateTime: true, tripStatus: true },
         },
@@ -34,6 +36,19 @@ export async function POST(
 
     if (!booking) {
       return NextResponse.json({ error: 'Booking not found' }, { status: 404 });
+    }
+
+    const currentMetadata = (booking.metadata as Record<string, any>) || {};
+    const existingReturnReview = currentMetadata.returnReview;
+    const existingOutboundReview = currentMetadata.outboundReview;
+
+    // Check if the specific leg has already been reviewed
+    if (isReturnLeg ? existingReturnReview?.rating : (booking.reviewRating || existingOutboundReview?.rating)) {
+      console.warn(`[POST Review] Booking ${bookingId} (${isReturnLeg ? 'return' : 'outbound'} leg) already reviewed`);
+      return NextResponse.json(
+        { error: `You have already reviewed the ${isReturnLeg ? 'return' : 'outbound'} trip` },
+        { status: 400 }
+      );
     }
 
     // Only allow reviews on confirmed or completed bookings where the trip has completed
@@ -62,20 +77,20 @@ export async function POST(
       );
     }
 
-    if (booking.reviewRating) {
-      console.warn(`[POST Review] Booking ${bookingId} already reviewed`);
-      return NextResponse.json(
-        { error: 'You have already reviewed this booking' },
-        { status: 400 }
-      );
-    }
+    // Update the booking with the review data
+    const newRating = Math.round(rating);
+    const cleanedText = typeof reviewText === 'string' ? reviewText.trim().slice(0, 500) : null;
+    const reviewData = { rating: newRating, reviewText: cleanedText, createdAt: new Date().toISOString() };
 
-    // Update the booking with the review
+    const updatedMetadata = isReturnLeg
+      ? { ...currentMetadata, returnReview: reviewData }
+      : { ...currentMetadata, outboundReview: reviewData };
+
     await prisma.booking.update({
       where: { id: bookingId },
       data: {
-        reviewRating: Math.round(rating),
-        reviewText: typeof reviewText === 'string' ? reviewText.trim().slice(0, 500) : null,
+        ...(!isReturnLeg ? { reviewRating: newRating, reviewText: cleanedText } : {}),
+        metadata: updatedMetadata,
       },
     });
 

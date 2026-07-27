@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import BackButton from '@/components/BackButton';
@@ -107,7 +107,46 @@ export default function DedicatedJourneyPage() {
     bookingStatus: booking?.bookingStatus || 'pending',
     paymentStatus: booking?.paymentStatus || 'pending',
     reviewRating: (booking as any)?.reviewRating,
+    destinationCity: activeSegment ? (activeSegment.route?.destination || '') : (booking?.route?.destination || ''),
   });
+
+  // ─── Reverse geocoding: "Currently near" label ───────────────────────────
+  // nearbyName: null = not yet resolved, string = resolved area name
+  const [nearbyName, setNearbyName] = useState<string | null>(null);
+  // lastGeoKey tracks the last rounded-coordinate key we fetched, so we only
+  // call /api/geocode when the bus has moved >5.5 km (0.05° grid cell change).
+  // This is a useRef equality gate — NOT a setTimeout debounce.
+  const lastGeoKeyRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const pos = journey.livePosition;
+    if (!pos) return;
+
+    // Round to 0.05° grid (≈5.5 km) — same rounding the server applies
+    const STEP = 0.05;
+    const rlat = Math.round(pos.latitude / STEP) * STEP;
+    const rlng = Math.round(pos.longitude / STEP) * STEP;
+    const key = `${rlat.toFixed(2)}|${rlng.toFixed(2)}`;
+
+    // Gate: skip fetch if position hasn't moved to a new grid cell
+    if (key === lastGeoKeyRef.current) return;
+    lastGeoKeyRef.current = key;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(
+          `/api/geocode?lat=${pos.latitude.toFixed(5)}&lng=${pos.longitude.toFixed(5)}`
+        );
+        if (cancelled || !res.ok) return;
+        const data = await res.json() as { name: string; source: string };
+        if (!cancelled && data.name) setNearbyName(data.name);
+      } catch {
+        // Silent fail — nearbyName stays at its last known value
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [journey.livePosition?.latitude, journey.livePosition?.longitude]);
 
   if (loading) {
     return (
@@ -204,23 +243,37 @@ export default function DedicatedJourneyPage() {
           <div className="bg-white rounded-2xl p-5 border border-gray-200 shadow-sm space-y-4">
             <div className="flex items-center justify-between border-b border-gray-100 pb-3">
               <span className="text-xs font-bold uppercase tracking-wider text-gray-400">Live Journey Status</span>
-              <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${journey.state === 'in_transit' ? 'bg-brand-50 text-brand-700 border-brand-200 animate-pulse' : 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}>
-                {journey.state === 'in_transit' ? 'In Transit' : 'Completed'}
+              <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${
+                journey.state === 'in_transit'
+                  ? 'bg-brand-50 text-brand-700 border-brand-200 animate-pulse'
+                  : journey.state === 'delayed'
+                  ? 'bg-amber-50 text-amber-700 border-amber-200 animate-pulse'
+                  : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+              }`}>
+                {journey.state === 'in_transit'
+                  ? 'In Transit'
+                  : journey.state === 'delayed'
+                  ? 'Running Late'
+                  : 'Completed'}
               </span>
             </div>
 
             <div className="space-y-3">
               <div>
                 <p className="text-xs text-gray-500">Estimated Arrival / ETA</p>
-                <p className="text-xl font-bold text-brand-700 mt-0.5">
+                <p className={`text-xl font-bold mt-0.5 ${journey.state === 'delayed' ? 'text-amber-600' : 'text-brand-700'}`}>
                   {journey.countdownText || 'En route'}
                 </p>
               </div>
 
               <div className="grid grid-cols-2 gap-3 pt-2">
                 <div className="bg-gray-50 p-3 rounded-xl">
-                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Current Point</p>
-                  <p className="text-sm font-semibold text-gray-900 truncate mt-0.5">{originName}</p>
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                    {nearbyName ? 'Currently Near' : 'Departure'}
+                  </p>
+                  <p className="text-sm font-semibold text-gray-900 truncate mt-0.5">
+                    {nearbyName ?? originName}
+                  </p>
                 </div>
                 <div className="bg-gray-50 p-3 rounded-xl">
                   <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Next Stop</p>

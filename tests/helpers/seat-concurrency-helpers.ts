@@ -122,7 +122,7 @@ export async function createTestSchedule(capacity: number = 32) {
   // Ensure company exists
   const company = await prisma.company.upsert({
     where: { id: companyId },
-    update: {},
+    update: { status: 'active' },
     create: {
       id: companyId,
       name: 'Concurrency Test Company',
@@ -134,7 +134,7 @@ export async function createTestSchedule(capacity: number = 32) {
   // Ensure bus exists
   const bus = await prisma.bus.upsert({
     where: { id: busId },
-    update: { capacity },
+    update: { capacity, status: 'active' },
     create: {
       id: busId,
       companyId: company.id,
@@ -148,7 +148,7 @@ export async function createTestSchedule(capacity: number = 32) {
   // Ensure route exists
   const route = await prisma.route.upsert({
     where: { id: routeId },
-    update: {},
+    update: { status: 'active', isActive: true },
     create: {
       id: routeId,
       companyId: company.id,
@@ -159,6 +159,7 @@ export async function createTestSchedule(capacity: number = 32) {
       duration: 240,
       baseFare: 15000,
       status: 'active',
+      isActive: true,
     }
   });
 

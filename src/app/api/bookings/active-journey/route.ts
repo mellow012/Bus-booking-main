@@ -113,15 +113,17 @@ export async function GET(req: NextRequest) {
       const depTime = new Date(currentSchedule.departureDateTime);
       const arrTime = new Date(currentSchedule.arrivalDateTime);
 
-      // In transit check: schedule tripStatus is 'in_transit' or current time is between departure and arrival
-      const isInTransit =
+      // In transit or delayed check: schedule tripStatus is 'in_transit'/'delayed', or current time is past departure
+      // and trip has not been completed/cancelled (within 24 hours of scheduled arrival).
+      const isInTransitOrDelayed =
         currentSchedule.tripStatus === 'in_transit' ||
+        currentSchedule.tripStatus === 'delayed' ||
         (now >= depTime &&
-          now < arrTime &&
           currentSchedule.tripStatus !== 'completed' &&
-          currentSchedule.tripStatus !== 'cancelled');
+          currentSchedule.tripStatus !== 'cancelled' &&
+          now.getTime() - arrTime.getTime() < 24 * 60 * 60 * 1000);
 
-      if (isInTransit) {
+      if (isInTransitOrDelayed) {
         candidateJourneys.push({
           bookingId: booking.id,
           scheduleId: currentSchedule.id,

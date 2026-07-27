@@ -9,6 +9,8 @@ const globalForPrisma = globalThis as unknown as {
   pool?: Pool;
 };
 
+const isNewPool = !globalForPrisma.pool;
+
 const pool =
   globalForPrisma.pool ??
   new Pool({
@@ -19,9 +21,15 @@ const pool =
     connectionTimeoutMillis: 5000,
   });
 
-pool.on('error', (err) => {
-  console.warn('[Prisma pg pool] Handled connection error:', err.message);
-});
+// Only attach once — re-runs on hot-reload reuse the same pool object,
+// so attaching here every time stacks listeners and triggers the
+// MaxListenersExceededWarning on BoundPool.
+if (isNewPool) {
+  pool.setMaxListeners(20); // headroom for adapter internals
+  pool.on('error', (err) => {
+    console.warn('[Prisma pg pool] Handled connection error:', err.message);
+  });
+}
 
 const adapter = new PrismaPg(pool);
 

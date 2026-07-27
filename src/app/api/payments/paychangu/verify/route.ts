@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { sendNotificationToUser } from "@/lib/notificationService";
 
 const PAYCHANGU_API    = "https://api.paychangu.com";
 const SUCCESS_STATUSES = ["success", "successful", "completed"];
@@ -119,6 +120,19 @@ export async function GET(req: NextRequest) {
         updatedAt: new Date(),
       }
     });
+
+    try {
+      await sendNotificationToUser(booking.userId, {
+        title: 'Payment Confirmed! ✅',
+        body: `We've successfully verified your payment for booking ${booking.bookingReference || txRef.slice(-8)}. Happy traveling!`,
+        type: 'payment',
+        priority: 'high',
+        clickAction: '/bookings',
+        data: { bookingId: booking.id, txRef },
+      });
+    } catch (notifErr) {
+      console.error("[paychangu/verify] Notification send error:", notifErr);
+    }
 
     if (jsonResponse) {
       return NextResponse.json({ success: true, status: "paid", message: "Payment verified" });

@@ -14,6 +14,7 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries:    process.env.CI ? 1 : 0,
   reporter:   [['html', { open: 'never' }], ['list']],
+  globalTeardown: './tests/global-teardown.ts',
 
   timeout: 90_000,
 

@@ -1,9 +1,6 @@
-// use intrinsic image for logo to render at natural size
+'use client';
 
-export const metadata = {
-  title: 'Offline - TibhukeBus',
-  description: 'You are currently offline',
-};
+// Offline fallback page for TibhukeBus PWA
 
 export default function OfflinePage() {
   return (

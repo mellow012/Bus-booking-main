@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { DollarSign, Download, TrendingUp, PieChart, AlertCircle, FileText, Calendar } from 'lucide-react';
+import { DollarSign, Download, TrendingUp, PieChart, AlertCircle, FileText, Calendar, Star } from 'lucide-react';
 import { Booking, Route, Schedule } from '@/types';
 import { 
   useCompanySchedules, 
@@ -60,13 +60,19 @@ export default function RevenueTab({ dashboard }: RevenueTabProps) {
     return Object.entries(map).sort((a, b) => b[1].revenue - a[1].revenue);
   }, [branches, paidBookings, routes]);
 
-  // Route performance table data
+  // Route performance table data (with review ratings & counts)
   const routePerformance = useMemo(() => {
     return routes.map((route: Route) => {
       const routePaid = paidBookings.filter((b: Booking) => b.routeId === route.id);
       const routeRev = routePaid.reduce((acc: number, b: Booking) => acc + (b.totalAmount || 0), 0);
       const branch = branches.find((br: any) => br.id === route.regionId);
       const routeSchedules = schedules.filter((s: Schedule) => s.routeId === route.id);
+      
+      const routeReviews = bookings.filter((b: Booking) => b.routeId === route.id && (b as any).reviewRating != null && (b as any).reviewRating > 0);
+      const totalRating = routeReviews.reduce((sum: number, b: any) => sum + Number(b.reviewRating), 0);
+      const reviewCount = routeReviews.length;
+      const avgRating = reviewCount > 0 ? (totalRating / reviewCount).toFixed(1) : null;
+
       return {
         id: route.id,
         name: route.name,
@@ -76,16 +82,26 @@ export default function RevenueTab({ dashboard }: RevenueTabProps) {
         bookings: routePaid.length,
         schedules: routeSchedules.length,
         revenue: routeRev,
+        avgRating,
+        reviewCount,
       };
     }).filter((r: any) => r.bookings > 0 || r.schedules > 0)
       .filter((r: any) => !searchQuery || r.name?.toLowerCase().includes(searchQuery) || r.branchName?.toLowerCase().includes(searchQuery) || r.origin?.toLowerCase().includes(searchQuery) || r.destination?.toLowerCase().includes(searchQuery))
       .sort((a: any, b: any) => b.revenue - a.revenue);
-  }, [routes, paidBookings, branches, schedules]);
+  }, [routes, paidBookings, bookings, branches, schedules, searchQuery]);
 
   const handleGenerateCSV = () => {
     try {
-      const header = ['Route', 'Branch', 'Paid Bookings', 'Revenue (MWK)'];
-      const rows = routePerformance.map((r: any) => [r.name, r.branchName, r.bookings, r.revenue]);
+      const header = ['Route', 'Branch', 'Schedules', 'Paid Bookings', 'Revenue (MWK)', 'Avg Rating', 'Total Reviews'];
+      const rows = routePerformance.map((r: any) => [
+        r.name,
+        r.branchName,
+        r.schedules,
+        r.bookings,
+        r.revenue,
+        r.avgRating ? `${r.avgRating} / 5` : 'No reviews',
+        r.reviewCount
+      ]);
       const csvContent = [header, ...rows].map(row => row.join(',')).join('\n');
       
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -108,29 +124,28 @@ export default function RevenueTab({ dashboard }: RevenueTabProps) {
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl font-bold tracking-tight text-gray-900 flex items-center gap-2">
-            <DollarSign className="w-6 h-6 text-green-600" />
-            Revenue &amp; Analytics
-          </h2>
-          <p className="mt-1 text-sm text-gray-500">
-            Detailed breakdown of your company&apos;s generated revenue.
-          </p>
+          <h2 className="text-2xl font-black text-gray-900 tracking-tight">Revenue & Performance Reports</h2>
+          <p className="text-sm text-gray-500 mt-1">Financial analytics, route revenue, and customer rating summaries</p>
         </div>
+
         <div className="flex items-center gap-3">
-          <select
-            value={dateRange}
-            onChange={(e) => setDateRange(e.target.value as any)}
-            className="block w-full rounded-lg border-gray-300 py-2 pl-3 pr-10 text-base focus:border-indigo-500 focus:outline-none focus:ring-indigo-500 sm:text-sm shadow-sm"
-          >
-            <option value="today">Today</option>
-            <option value="week">Last 7 Days</option>
-            <option value="month">Last 30 Days</option>
-            <option value="all">All Time</option>
-          </select>
+          <div className="bg-white border border-gray-200 rounded-xl p-1 flex items-center gap-1 text-xs">
+            {(['today', 'week', 'month', 'all'] as const).map((r) => (
+              <button
+                key={r}
+                onClick={() => setDateRange(r)}
+                className={`px-3 py-1.5 rounded-lg capitalize font-semibold transition-all ${
+                  dateRange === r ? 'bg-indigo-600 text-white shadow-sm' : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                {r}
+              </button>
+            ))}
+          </div>
+
           <button
             onClick={handleGenerateCSV}
-            disabled={routePerformance.length === 0}
-            className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-green-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-xs font-bold rounded-xl hover:bg-indigo-700 transition-all shadow-sm"
           >
             <Download className="w-4 h-4" />
             Export CSV
@@ -139,47 +154,49 @@ export default function RevenueTab({ dashboard }: RevenueTabProps) {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm relative overflow-hidden">
-          <div className="absolute -right-4 -top-4 opacity-5">
-            <DollarSign className="w-32 h-32" />
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+        <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between">
+          <div>
+            <p className="text-xs text-gray-400 font-semibold uppercase tracking-wider">Total Revenue</p>
+            <p className="text-2xl font-black text-gray-900 mt-1">MWK {totalRevenue.toLocaleString()}</p>
+            <p className="text-xs text-emerald-600 font-semibold mt-1 flex items-center gap-1">
+              <TrendingUp className="w-3 h-3" /> Paid bookings: {paidBookingsCount}
+            </p>
           </div>
-          <div className="flex items-center gap-2 text-sm font-medium text-gray-500 mb-2">
-            <TrendingUp className="w-4 h-4 text-green-500" />
-            Total Revenue
+          <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center shrink-0">
+            <DollarSign className="w-6 h-6" />
           </div>
-          <div className="text-4xl font-black text-gray-900">
-            MWK {totalRevenue.toLocaleString()}
-          </div>
-          <p className="text-sm text-gray-400 mt-1">{paidBookingsCount} paid bookings</p>
         </div>
 
-        <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm">
-          <div className="flex items-center gap-2 text-sm font-medium text-gray-500 mb-2">
-            <Calendar className="w-4 h-4 text-indigo-500" />
-            Total Bookings
+        <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between">
+          <div>
+            <p className="text-xs text-gray-400 font-semibold uppercase tracking-wider">Total Bookings</p>
+            <p className="text-2xl font-black text-gray-900 mt-1">{totalBookingsCount}</p>
+            <p className="text-xs text-gray-500 mt-1">{paidBookingsCount} paid, {totalBookingsCount - paidBookingsCount} unpaid</p>
           </div>
-          <div className="text-4xl font-black text-gray-900">{totalBookingsCount}</div>
-          <p className="text-sm text-gray-400 mt-1">{totalBookingsCount - paidBookingsCount} unpaid</p>
+          <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center shrink-0">
+            <PieChart className="w-6 h-6" />
+          </div>
         </div>
-        
-        <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm">
-          <div className="flex items-center gap-2 text-sm font-medium text-gray-500 mb-2">
-            <PieChart className="w-4 h-4 text-indigo-500" />
-            Avg per Booking
+
+        <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between">
+          <div>
+            <p className="text-xs text-gray-400 font-semibold uppercase tracking-wider">Active Routes</p>
+            <p className="text-2xl font-black text-gray-900 mt-1">{routePerformance.length}</p>
+            <p className="text-xs text-gray-500 mt-1">Across {branches.length} branches</p>
           </div>
-          <div className="text-4xl font-black text-gray-900">
-            MWK {paidBookingsCount > 0 ? Math.round(totalRevenue / paidBookingsCount).toLocaleString() : '0'}
+          <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center shrink-0">
+            <FileText className="w-6 h-6" />
           </div>
         </div>
       </div>
 
       {/* Revenue by Branch */}
-      <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm">
-        <div className="flex items-center gap-2 text-sm font-medium text-gray-900 mb-4">
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+        <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
           <PieChart className="w-4 h-4 text-indigo-500" />
           Revenue by Branch
-        </div>
+        </h3>
         {revenueByBranch.length === 0 ? (
           <div className="text-center py-8 text-gray-500">
             <AlertCircle className="w-8 h-8 mx-auto mb-2 text-gray-300" />
@@ -215,7 +232,7 @@ export default function RevenueTab({ dashboard }: RevenueTabProps) {
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
         <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
           <FileText className="w-5 h-5 text-gray-400" />
-          Route Performance
+          Route Performance & Ratings
         </h3>
         {routePerformance.length === 0 ? (
           <div className="text-center py-8 text-gray-500">
@@ -231,6 +248,7 @@ export default function RevenueTab({ dashboard }: RevenueTabProps) {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Branch</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Schedules</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Paid Bookings</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rating</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Revenue</th>
                 </tr>
               </thead>
@@ -244,6 +262,17 @@ export default function RevenueTab({ dashboard }: RevenueTabProps) {
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{row.branchName}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{row.schedules}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{row.bookings}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {row.avgRating ? (
+                        <div className="flex items-center gap-1 text-amber-600 font-semibold">
+                          <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
+                          <span>{row.avgRating}</span>
+                          <span className="text-xs text-gray-400 font-normal">({row.reviewCount})</span>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-gray-400">No reviews</span>
+                      )}
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-green-600">MWK {row.revenue.toLocaleString()}</td>
                   </tr>
                 ))}
