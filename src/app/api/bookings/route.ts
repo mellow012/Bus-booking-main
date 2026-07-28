@@ -179,7 +179,9 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // Attach operatorPhone to each booking
+    const now = Date.now();
+
+    // Attach operatorPhone to each booking and dynamically resolve auto-completed delayed schedules
     const enrichedBookings = bookings.map((b: any) => {
       // 1. Try direct schedule operator phone
       const opUid = b.schedule?.operator?.uid;
@@ -198,10 +200,20 @@ export async function GET(req: NextRequest) {
         }
       }
 
+      const arr = b.schedule?.arrivalDateTime ? new Date(b.schedule.arrivalDateTime) : null;
+      const dep = b.schedule?.departureDateTime ? new Date(b.schedule.departureDateTime) : null;
+      const tripTime = (arr && !isNaN(arr.getTime())) ? arr.getTime() : (dep && !isNaN(dep.getTime())) ? dep.getTime() : null;
+
+      let effectiveStatus = b.schedule?.tripStatus;
+      if (effectiveStatus === 'delayed' && tripTime && now > tripTime + 5 * 60 * 60 * 1000) {
+        effectiveStatus = 'completed';
+      }
+
       return {
         ...b,
         schedule: {
           ...b.schedule,
+          tripStatus: effectiveStatus,
           operatorPhone: phone,
         },
       };

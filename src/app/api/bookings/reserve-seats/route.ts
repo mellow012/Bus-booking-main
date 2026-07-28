@@ -174,7 +174,8 @@ export async function POST(req: NextRequest) {
 
         // 5. Check for active temporary reservations on the same schedule by other users
         const activeReservations = schedule.reservations || [];
-        const otherReservations = activeReservations.filter((r: any) => r.userId !== user.id);
+        const targetUserId = userRecord.id;
+        const otherReservations = activeReservations.filter((r: any) => r.userId !== targetUserId && r.userId !== user.id);
         const reservedSeats = otherReservations.flatMap((reservation: any) =>
           parseSeatNumbers(reservation.seatNumbers)
         );
@@ -203,7 +204,10 @@ export async function POST(req: NextRequest) {
         await tx.seatReservation.deleteMany({
           where: {
             scheduleId,
-            userId: user.id,
+            OR: [
+              { userId: targetUserId },
+              { userId: user.id },
+            ],
           },
         });
 
@@ -212,7 +216,7 @@ export async function POST(req: NextRequest) {
         const reservation = await tx.seatReservation.create({
           data: {
             scheduleId,
-            userId: user.id,
+            userId: targetUserId,
             seatNumbers,
             status: 'reserved',
             expiresAt,

@@ -12,7 +12,7 @@ import {
   RefreshCw, Zap, Shield, Smartphone, ArrowRight, ArrowLeft, Trash2,
   ChevronRight, Building2, Wallet, Star, Navigation, Archive,
 } from 'lucide-react';
-import dynamic from 'next/dynamic';
+import nextDynamic from 'next/dynamic';
 
 import Modal from '../../components/Modals';
 import AlertMessage from '../../components/AlertMessage';
@@ -22,7 +22,7 @@ import BookingCheckoutDrawer from './BookingCheckoutFlow';
 import BookingStatsGrid from './BookingStatsGrid';
 import { useJourneyTracker } from './useJourneyTracker';
 
-const JourneyMap = dynamic(() => import('./JourneyMap'), { ssr: false, loading: () => <div className="w-full h-48 bg-gray-100 rounded-xl animate-pulse flex items-center justify-center"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div> });
+const JourneyMap = nextDynamic(() => import('./JourneyMap'), { ssr: false, loading: () => <div className="w-full h-48 bg-gray-100 rounded-xl animate-pulse flex items-center justify-center"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div> });
 
 // ─── BookingCard ──────────────────────────────────────────────────────────────
 const BookingCard = memo<{
@@ -793,4 +793,12 @@ const BookingsPage: React.FC = () => {
   );
 };
 
-export default BookingsPage;
+export const dynamic = 'force-dynamic';
+
+export default function BookingsPageWrapper() {
+  return (
+    <React.Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-gray-50"><Loader2 className="w-8 h-8 animate-spin text-brand-700" /></div>}>
+      <BookingsPage />
+    </React.Suspense>
+  );
+}

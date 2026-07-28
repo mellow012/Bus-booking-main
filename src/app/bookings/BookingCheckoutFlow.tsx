@@ -8,16 +8,16 @@ export const PAYMENT_CATEGORIES = [
     label: 'Mobile Money',
     hint: 'Pay via PayChangu (Airtel / TNM)',
     Icon: Smartphone,
-    accent: 'from-violet-500 to-purple-600',
-    border: 'border-violet-200 hover:border-violet-400',
-    bg: 'hover:bg-violet-50',
+    accent: 'from-brand-700 to-brand-600',
+    border: 'border-brand-200 hover:border-brand-400',
+    bg: 'hover:bg-brand-50',
   },
   {
     id: 'cash',
     label: 'Cash on Boarding',
     hint: 'Pay the conductor when you board',
     Icon: Wallet,
-    accent: 'from-amber-400 to-orange-500',
+    accent: 'from-amber-400 to-amber-500',
     border: 'border-amber-200 hover:border-amber-400',
     bg: 'hover:bg-amber-50',
   },
@@ -50,7 +50,7 @@ export const PaymentMethodSelector: React.FC<{
             <div className="font-bold text-gray-900 text-sm">{c.label}</div>
             <div className="text-xs text-gray-500 mt-0.5">{c.hint}</div>
           </div>
-          <CheckCircle2 className="w-5 h-5 text-gray-300 group-hover:text-violet-400 transition-colors shrink-0" />
+          <CheckCircle2 className="w-5 h-5 text-gray-300 group-hover:text-brand-700 transition-colors shrink-0" />
         </button>
       ))}
     </div>
@@ -94,19 +94,19 @@ export const ConfirmAndPayForm: React.FC<{
             name="name" value={userDetails.name}
             onChange={(e) => onChange({ ...userDetails, name: e.target.value })}
             placeholder="Full name" required
-            className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
+            className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-700/40 focus:border-brand-700"
           />
           <input
             name="email" type="email" value={userDetails.email}
             onChange={(e) => onChange({ ...userDetails, email: e.target.value })}
             placeholder="Email address" required
-            className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
+            className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-700/40 focus:border-brand-700"
           />
           <input
             name="phone" type="tel" value={userDetails.phone}
             onChange={(e) => onChange({ ...userDetails, phone: e.target.value })}
             placeholder="Phone e.g. +265 999 000 111" required
-            className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
+            className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-700/40 focus:border-brand-700"
           />
           <p className="text-xs text-gray-400">
             You'll be redirected to PayChangu to complete payment securely via Airtel or TNM mobile money.
@@ -123,7 +123,7 @@ export const ConfirmAndPayForm: React.FC<{
 
       <button
         type="submit" disabled={loading}
-        className="w-full flex items-center justify-center gap-2 px-4 py-4 bg-gradient-to-r from-violet-500 to-purple-600 text-white rounded-2xl hover:from-violet-600 hover:to-purple-700 transition-all shadow-lg font-bold disabled:opacity-50 active:scale-[.98] text-sm"
+        className="w-full flex items-center justify-center gap-2 px-4 py-3.5 bg-coral-500 hover:bg-coral-600 text-white rounded-xl shadow-md font-bold transition-all disabled:opacity-50 active:scale-[.98] text-sm"
       >
         {loading ? 'Processing…' : isCash ? '✓ Confirm — Pay on Boarding' : `Pay MWK ${booking.totalAmount.toLocaleString()} via Mobile Money`}
       </button>

@@ -54,8 +54,10 @@ export async function sendNotificationToUser(
       },
     });
 
-    // Optionally send Web Push if subscription exists
-    await sendWebPushToUser(userId, payload);
+    // Dispatch Web Push in background without blocking DB write / API response
+    sendWebPushToUser(userId, payload).catch((err) => {
+      console.warn('[NotificationService] Background Web Push failed:', err?.message);
+    });
 
     await logger.logSuccess('notification', 'Notification sent to user', {
       userId,
@@ -172,7 +174,7 @@ async function sendWebPushToUser(userId: string, payload: NotificationPayload): 
       title: payload.title,
       body: payload.body,
       icon: payload.icon || '/tibhukebus_logo_transparent.png',
-      badge: '/badge-72x72.png',
+      badge: '/tibhukebus_logo_transparent.png',
       data: { url: payload.clickAction || '/', ...payload.data },
     });
 
@@ -350,6 +352,26 @@ export async function sendDepartureReminders(): Promise<{ processedSchedules: nu
       } catch (updateErr) {
         console.error(`[Reminders] Failed to update boardingReminderSent flag for schedule ${schedule.id}:`, updateErr);
       }
+    }
+
+    // Block 3: Auto-complete delayed trips 5 hours past scheduled arrival time
+    const fiveHoursAgo = new Date(now.getTime() - 5 * 60 * 60 * 1000);
+    try {
+      const autoCompleteRes = await prisma.schedule.updateMany({
+        where: {
+          tripStatus: 'delayed',
+          arrivalDateTime: { lte: fiveHoursAgo },
+        },
+        data: {
+          tripStatus: 'completed',
+          updatedAt: new Date(),
+        },
+      });
+      if (autoCompleteRes.count > 0) {
+        console.log(`[Reminders/Auto-Complete] Auto-marked ${autoCompleteRes.count} delayed schedules as completed (5h past arrival).`);
+      }
+    } catch (autoCompleteErr) {
+      console.error('[Reminders/Auto-Complete] Failed to auto-complete delayed schedules:', autoCompleteErr);
     }
 
     return { processedSchedules, sentNotifications };

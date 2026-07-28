@@ -37,21 +37,45 @@ export async function POST(req: NextRequest) {
     // ── Fetch booking from PostgreSQL ──────────────────────────────────────────
     const booking = await prisma.booking.findUnique({
       where: { id: bookingId },
-      include: { company: true },
+      include: { company: true, schedule: true },
     });
     
     if (!booking) {
       return NextResponse.json({ error: "Booking not found" }, { status: 404 });
     }
     
-    const companyId = booking.companyId;
-    const amount    = Number(booking.totalAmount);
+    const companyId = booking.companyId || booking.schedule?.companyId || booking.company?.id;
+    const rawAmount = booking.totalAmount;
+    const amount    = typeof rawAmount === "number" ? rawAmount : Number(rawAmount ?? 0);
 
-    if (!amount || !companyId) {
-      return NextResponse.json({ error: "Booking is missing amount or company" }, { status: 400 });
+    if (!companyId) {
+      return NextResponse.json({ error: "Booking is missing associated bus company information" }, { status: 400 });
     }
+
+    if (isNaN(amount) || amount < 0) {
+      return NextResponse.json({ error: "Booking total amount is invalid" }, { status: 400 });
+    }
+
     if (booking.paymentStatus === "paid") {
       return NextResponse.json({ error: "This booking has already been paid" }, { status: 409 });
+    }
+
+    if (amount === 0) {
+      // Zero-cost booking (100% promo discount or free ticket) — auto-confirm ticket
+      await prisma.booking.update({
+        where: { id: bookingId },
+        data: {
+          paymentStatus: "paid",
+          bookingStatus: "confirmed",
+          paidAt: new Date(),
+          updatedAt: new Date(),
+        },
+      });
+      return NextResponse.json({
+        success: true,
+        isFree: true,
+        message: "Booking confirmed (No payment required)",
+      });
     }
 
     const secretKey = process.env.PAYCHANGU_SECRET_KEY;

@@ -105,14 +105,32 @@ function normalizeText(value: string | undefined, fallback = ''): string {
 export const ARCHIVED_AGE_DAYS = 30;
 
 export function checkIsArchived(b: BookingWithDetails): boolean {
-  if ((b.reviewRating != null && b.reviewRating > 0) || (b.bookingStatus as string) === 'archived') {
+  if (
+    (b.reviewRating != null && b.reviewRating > 0) ||
+    (b.bookingStatus as string) === 'archived' ||
+    b.bookingStatus === 'completed' ||
+    b.schedule?.tripStatus === 'completed'
+  ) {
     return true;
   }
-  const isConcluded = b.bookingStatus === 'completed' || b.bookingStatus === 'cancelled';
+
+  // Auto-archive any trip whose scheduled arrival (or departure) time passed > 5 hours ago
+  const arrRaw = b.schedule?.arrivalDateTime || (b as any).arrivalDateTime;
+  const depRaw = b.schedule?.departureDateTime || (b as any).departureDateTime;
+  const arr = arrRaw ? (arrRaw instanceof Date ? arrRaw : new Date(arrRaw as unknown as string)) : null;
+  const dep = depRaw ? (depRaw instanceof Date ? depRaw : new Date(depRaw as unknown as string)) : null;
+
+  const tripTime = (arr && !isNaN(arr.getTime())) ? arr.getTime() : (dep && !isNaN(dep.getTime())) ? dep.getTime() : null;
+
+  if (tripTime !== null) {
+    const fiveHoursMs = 5 * 60 * 60 * 1000;
+    if (Date.now() > tripTime + fiveHoursMs) {
+      return true;
+    }
+  }
+
+  const isConcluded = (b.bookingStatus as string) === 'cancelled' || (b.bookingStatus as string) === 'payment_failed';
   if (!isConcluded) return false;
-  const dep = b.schedule?.departureDateTime instanceof Date
-    ? b.schedule.departureDateTime
-    : new Date(b.schedule?.departureDateTime as unknown as string);
   if (!dep || isNaN(dep.getTime())) return false;
   const ageMs = Date.now() - dep.getTime();
   return ageMs > ARCHIVED_AGE_DAYS * 24 * 60 * 60 * 1000;
@@ -167,7 +185,7 @@ export const useBookingsList = () => {
   }, []);
 
   const getStatusColor = useCallback((s: string): string => (
-    ({ confirmed: 'bg-emerald-100 text-emerald-800 border-emerald-200', cancelled: 'bg-red-100 text-red-800 border-red-200', pending: 'bg-amber-100 text-amber-800 border-amber-200' } as Record<string, string>)[s]
+    ({ confirmed: 'bg-emerald-100 text-emerald-800 border-emerald-200', cancelled: 'bg-red-100 text-red-800 border-red-200', pending: 'bg-amber-100 text-amber-800 border-amber-200', payment_failed: 'bg-red-100 text-red-800 border-red-200' } as Record<string, string>)[s]
     ?? 'bg-gray-100 text-gray-800 border-gray-200'
   ), []);
 
@@ -198,7 +216,7 @@ export const useBookingsList = () => {
     } else if (af === 'pending') {
       f = f.filter((b) => !checkIsArchived(b) && (b.bookingStatus === 'pending' || (b.bookingStatus === 'confirmed' && b.paymentStatus === 'pending' && (b as any).paymentMethod !== 'cash_on_boarding')));
     } else if (af === 'cancelled') {
-      f = f.filter((b) => !checkIsArchived(b) && b.bookingStatus === 'cancelled');
+      f = f.filter((b) => !checkIsArchived(b) && ((b.bookingStatus as string) === 'cancelled' || (b.bookingStatus as string) === 'payment_failed'));
     } else if (af === 'upcoming') {
       f = f.filter((b) => {
         const d = b.schedule?.departureDateTime instanceof Date ? b.schedule.departureDateTime : new Date(b.schedule?.departureDateTime as unknown as string);
@@ -208,7 +226,7 @@ export const useBookingsList = () => {
       f = f.filter((b) => {
         const dep = b.schedule?.departureDateTime instanceof Date ? b.schedule.departureDateTime : new Date(b.schedule?.departureDateTime as unknown as string);
         const arr = b.schedule?.arrivalDateTime instanceof Date ? b.schedule.arrivalDateTime : new Date(b.schedule?.arrivalDateTime as unknown as string);
-        return !checkIsArchived(b) && b.schedule?.tripStatus === 'in_transit' || (dep <= now && now < arr && b.bookingStatus === 'confirmed');
+        return !checkIsArchived(b) && (b.schedule?.tripStatus === 'in_transit' || (dep <= now && now < arr && b.bookingStatus === 'confirmed'));
       });
     } else {
       // Default: 'all' -> Show active non-archived bookings
@@ -713,6 +731,13 @@ export const useBookingsList = () => {
         body: JSON.stringify({ bookingId: selectedBooking.id, paymentProvider: selectedProvider, customerDetails: { email: userDetails.email.toLowerCase().trim(), name: userDetails.name.trim(), phone: userDetails.phone.trim() }, metadata: { route: `${selectedBooking.route.origin}-${selectedBooking.route.destination}`, departure: selectedBooking.schedule.departureDateTime instanceof Date ? selectedBooking.schedule.departureDateTime.toISOString() : new Date(selectedBooking.schedule.departureDateTime as unknown as string).toISOString(), passengerCount: String(selectedBooking.passengerDetails.length), seatNumbers: selectedBooking.seatNumbers.join(','), subMethod: selectedSubId } }),
       });
       const result = await res.json(); if (!res.ok) throw new Error(result.error || result.message || 'Payment session failed');
+      if (result.success && result.isFree) {
+        setConfirmModalOpen(false);
+        setSuccess('Booking confirmed! No payment required.');
+        toast.success('Confirmed', 'Your ticket has been confirmed.');
+        fetchBookings();
+        return;
+      }
       if (result.success && result.checkoutUrl) {
         setConfirmModalOpen(false);
         setSuccess('Redirecting to PayChangu…');
@@ -759,7 +784,7 @@ export const useBookingsList = () => {
       all: bookings.filter((b) => !checkIsArchived(b)).length,
       confirmed: bookings.filter((b) => !checkIsArchived(b) && b.bookingStatus === 'confirmed' && (b.paymentStatus === 'paid' || (b as any).paymentMethod === 'cash_on_boarding')).length,
       pending: bookings.filter((b) => !checkIsArchived(b) && (b.bookingStatus === 'pending' || (b.bookingStatus === 'confirmed' && b.paymentStatus === 'pending' && (b as any).paymentMethod !== 'cash_on_boarding'))).length,
-      cancelled: bookings.filter((b) => !checkIsArchived(b) && b.bookingStatus === 'cancelled').length,
+      cancelled: bookings.filter((b) => !checkIsArchived(b) && ((b.bookingStatus as string) === 'cancelled' || (b.bookingStatus as string) === 'payment_failed')).length,
       upcoming: bookings.filter((b) => {
         const d = b.schedule?.departureDateTime instanceof Date ? b.schedule.departureDateTime : new Date(b.schedule?.departureDateTime as unknown as string);
         return !checkIsArchived(b) && d > now && b.bookingStatus === 'confirmed' && (b.paymentStatus === 'paid' || (b as any).paymentMethod === 'cash_on_boarding');
@@ -767,7 +792,7 @@ export const useBookingsList = () => {
       in_transit: bookings.filter((b) => {
         const dep = b.schedule?.departureDateTime instanceof Date ? b.schedule.departureDateTime : new Date(b.schedule?.departureDateTime as unknown as string);
         const arr = b.schedule?.arrivalDateTime instanceof Date ? b.schedule.arrivalDateTime : new Date(b.schedule?.arrivalDateTime as unknown as string);
-        return !checkIsArchived(b) && b.schedule?.tripStatus === 'in_transit' || (dep <= now && now < arr && b.bookingStatus === 'confirmed');
+        return !checkIsArchived(b) && (b.schedule?.tripStatus === 'in_transit' || (dep <= now && now < arr && b.bookingStatus === 'confirmed'));
       }).length,
       archived: bookings.filter((b) => checkIsArchived(b)).length,
     };

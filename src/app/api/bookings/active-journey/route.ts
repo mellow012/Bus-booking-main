@@ -33,12 +33,12 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ activeJourney: null });
     }
 
-    // Fetch user's confirmed bookings
+    // Fetch user's paid & confirmed bookings strictly
     const bookings = await prisma.booking.findMany({
       where: {
         userId: userData.id,
         bookingStatus: 'confirmed',
-        paymentStatus: { in: ['paid', 'pending'] },
+        paymentStatus: 'paid',
       },
       include: {
         schedule: {
@@ -82,11 +82,9 @@ export async function GET(req: NextRequest) {
     const candidateJourneys: any[] = [];
 
     for (const booking of bookings) {
-      const isCash = (booking as any).paymentMethod === 'cash_on_boarding';
-      const hasSecuredSeat = booking.bookingStatus === 'confirmed' &&
-        (booking.paymentStatus === 'paid' || isCash);
+      const hasPaidTicket = booking.bookingStatus === 'confirmed' && booking.paymentStatus === 'paid';
 
-      if (!hasSecuredSeat) continue;
+      if (!hasPaidTicket) continue;
 
       const outboundSchedule = booking.schedule;
       if (!outboundSchedule) continue;
@@ -112,18 +110,18 @@ export async function GET(req: NextRequest) {
 
       const depTime = new Date(currentSchedule.departureDateTime);
       const arrTime = new Date(currentSchedule.arrivalDateTime);
+      const fifteenMinsBeforeDep = new Date(depTime.getTime() - 15 * 60 * 1000);
+      const oneHourAfterArr = new Date(arrTime.getTime() + 60 * 60 * 1000);
 
-      // In transit or delayed check: schedule tripStatus is 'in_transit'/'delayed', or current time is past departure
-      // and trip has not been completed/cancelled (within 24 hours of scheduled arrival).
-      const isInTransitOrDelayed =
-        currentSchedule.tripStatus === 'in_transit' ||
-        currentSchedule.tripStatus === 'delayed' ||
-        (now >= depTime &&
-          currentSchedule.tripStatus !== 'completed' &&
-          currentSchedule.tripStatus !== 'cancelled' &&
-          now.getTime() - arrTime.getTime() < 24 * 60 * 60 * 1000);
+      // Strict time-bound windows:
+      // 1. Upcoming: T-15 mins before departure up to departure time
+      // 2. In Transit: Between departure and arrival time
+      // 3. Arrived: Between arrival time and 1 hour post-arrival
+      const isUpcoming  = now >= fifteenMinsBeforeDep && now < depTime && currentSchedule.tripStatus !== 'cancelled';
+      const isInTransit = (currentSchedule.tripStatus === 'in_transit' || (now >= depTime && now < arrTime)) && currentSchedule.tripStatus !== 'completed' && currentSchedule.tripStatus !== 'cancelled';
+      const isArrived   = now >= arrTime && now <= oneHourAfterArr && currentSchedule.tripStatus !== 'cancelled';
 
-      if (isInTransitOrDelayed) {
+      if (isUpcoming || isInTransit || isArrived) {
         candidateJourneys.push({
           bookingId: booking.id,
           scheduleId: currentSchedule.id,
@@ -135,7 +133,7 @@ export async function GET(req: NextRequest) {
           arrivalDateTime: currentSchedule.arrivalDateTime,
           companyName: currentCompany?.name || 'Bus Operator',
           companyLogo: currentCompany?.logo || null,
-          tripStatus: currentSchedule.tripStatus || 'in_transit',
+          tripStatus: isArrived ? 'completed' : isUpcoming ? 'scheduled' : (currentSchedule.tripStatus || 'in_transit'),
           bookingStatus: booking.bookingStatus,
           paymentStatus: booking.paymentStatus,
           isReturnSegment: !!activeSegment,

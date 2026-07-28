@@ -7,6 +7,7 @@ const connectionString = process.env.DATABASE_URL || process.env.DIRECT_URL;
 const globalForPrisma = globalThis as unknown as {
   prisma?: PrismaClient;
   pool?: Pool;
+  adapter?: PrismaPg;
 };
 
 const isNewPool = !globalForPrisma.pool;
@@ -16,26 +17,27 @@ const pool =
   new Pool({
     connectionString,
     ssl: { rejectUnauthorized: false },
-    max: 10,
-    idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 5000,
+    max: 20,
+    idleTimeoutMillis: 60000,
+    connectionTimeoutMillis: 20000,
+    keepAlive: true,
   });
 
-// Only attach once — re-runs on hot-reload reuse the same pool object,
-// so attaching here every time stacks listeners and triggers the
-// MaxListenersExceededWarning on BoundPool.
 if (isNewPool) {
-  pool.setMaxListeners(20); // headroom for adapter internals
+  pool.setMaxListeners(30);
   pool.on('error', (err) => {
     console.warn('[Prisma pg pool] Handled connection error:', err.message);
   });
 }
 
-const adapter = new PrismaPg(pool);
+const adapter = globalForPrisma.adapter ?? new PrismaPg(pool);
 
 export const prisma = globalForPrisma.prisma ?? new PrismaClient({ adapter });
 
-globalForPrisma.prisma = prisma;
-globalForPrisma.pool = pool;
+if (process.env.NODE_ENV !== 'production') {
+  globalForPrisma.prisma = prisma;
+  globalForPrisma.pool = pool;
+  globalForPrisma.adapter = adapter;
+}
 
 export default prisma;

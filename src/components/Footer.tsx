@@ -145,7 +145,7 @@ const Footer: React.FC = () => {
                   </div>
                   <div>
                     <div className="text-sm text-gray-400">24/7 Support</div>
-                    <div className="font-medium">+265 99 145 74 95</div>
+                    <a href="tel:+265883344063" className="font-medium hover:underline">+265 883 34 40 63</a>
                   </div>
                 </div>
                 <div className="flex items-center space-x-3 text-gray-300 hover:text-brand-100 transition-colors group">
@@ -172,9 +172,9 @@ const Footer: React.FC = () => {
                 <div className="text-white font-semibold mb-4">Follow Us</div>
                 <div className="flex space-x-3">
                   {[
-                    { icon: Facebook, href: 'https://facebook.com/tibhukebus', color: 'hover:bg-brand-600', ariaLabel: 'Follow TibhukeBus on Facebook (@tibhukebus)' },
+                    { icon: Facebook, href: 'https://facebook.com/Tibhukebus', color: 'hover:bg-brand-600', ariaLabel: 'Follow TibhukeBus on Facebook (@Tibhukebus)' },
                     { icon: XIcon, href: 'https://x.com/tibhukebus', color: 'hover:bg-black hover:text-white', ariaLabel: 'Follow TibhukeBus on X (@tibhukebus)' },
-                    { icon: Instagram, href: '#', color: 'hover:bg-coral-600', ariaLabel: 'Instagram page' },
+                    { icon: Instagram, href: 'https://www.instagram.com/tibhukebus265/#', color: 'hover:bg-coral-600', ariaLabel: 'Follow TibhukeBus on Instagram (@tibhukebus265)' },
                     { icon: Linkedin, href: '#', color: 'hover:bg-brand-700', ariaLabel: 'LinkedIn page' }
                   ].map((social, index) => (
                     <a

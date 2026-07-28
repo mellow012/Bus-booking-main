@@ -15,7 +15,14 @@ export type TripStatus =
 export function calculateTripStatus(schedule: any): TripStatus {
   if (schedule.status === 'cancelled') return 'cancelled';
   if (schedule.isCompleted) return 'completed';
-  if (schedule.tripStatus === 'delayed') return 'delayed';
+  if (schedule.tripStatus === 'delayed') {
+    const arrival = new Date(schedule.arrivalDateTime);
+    const fiveHoursMs = 5 * 60 * 60 * 1000;
+    if (new Date().getTime() > arrival.getTime() + fiveHoursMs) {
+      return 'completed';
+    }
+    return 'delayed';
+  }
 
   const now = new Date();
   const departure = new Date(schedule.departureDateTime);

@@ -414,7 +414,7 @@
     email?: string;
   }
 
-  export type BookingStatus = 'pending' | 'confirmed' | 'completed' | 'cancelled' | 'no-show';
+  export type BookingStatus = 'pending' | 'confirmed' | 'completed' | 'cancelled' | 'no-show' | 'payment_failed' | 'archived';
 
   export interface Booking extends BaseEntity {
     id: string;

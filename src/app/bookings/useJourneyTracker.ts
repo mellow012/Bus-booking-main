@@ -191,6 +191,9 @@ export function useJourneyTracker({
 
     // 2. Usable live GPS signal exists, but bus is NOT near destination (>5km)
     if (isPositionUsable) {
+      if (now.getTime() > arr.getTime() + 5 * 60 * 60 * 1000) {
+        return 'completed';
+      }
       if (now >= arr) {
         // Clock passed arrival time, but live GPS indicates bus is still en route -> DELAYED
         return 'delayed';
@@ -202,7 +205,11 @@ export function useJourneyTracker({
     if (now < arr) {
       return 'in_transit';
     } else {
-      // Clock passed arrival time, but NO live GPS signal ever confirmed arrival -> DELAYED
+      // If 5 hours have passed since arrival time, trip is completed
+      if (now.getTime() > arr.getTime() + 5 * 60 * 60 * 1000) {
+        return 'completed';
+      }
+      // Clock passed arrival time (within 5h window) -> DELAYED
       return 'delayed';
     }
   }, [now, departureDateTime, arrivalDateTime, tripStatus, bookingStatus, paymentStatus, reviewRating, livePosition, destinationCity, destinationCoords]);

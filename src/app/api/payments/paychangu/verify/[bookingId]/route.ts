@@ -88,12 +88,14 @@ export async function GET(
       return buildErrorRedirect("verification_failed", { reason: "invalid_response" });
     }
 
+    const paidAmount = Number(result.data?.amount ?? 0);
     const verified =
       result.status === "success" &&
-      SUCCESS_STATUSES.includes((result.data?.status ?? "").toLowerCase());
+      SUCCESS_STATUSES.includes((result.data?.status ?? "").toLowerCase()) &&
+      (paidAmount <= 0 || paidAmount >= booking.totalAmount);
 
     if (!verified) {
-      console.warn("[paychangu/verify] Not verified:", result);
+      console.warn("[paychangu/verify] Verification failed or amount mismatch:", result, { expected: booking.totalAmount, paid: paidAmount });
       await prisma.booking.update({
         where: { id: bookingId },
         data: {

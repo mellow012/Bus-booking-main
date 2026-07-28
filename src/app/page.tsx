@@ -1,6 +1,7 @@
 import React from "react";
 import { Hero } from "@/components/home/Hero";
 import HomeSearch from "@/components/home/HomeSearch";
+import ActiveJourneyCard from "@/components/home/ActiveJourneyCard";
 import HomeSchedules from "@/components/home/HomeSchedules";
 import HowItWorks from "@/components/HowItWorks";
 import Partners from "@/components/Partners";
@@ -17,9 +18,10 @@ export default async function HomePage() {
       {/* 2. Search */}
       <HomeSearch />
 
-      {/* 3. Schedules/Trips */}
+      {/* 3. Live Active Transit Card (placed right under search) */}
+      <ActiveJourneyCard />
 
-      {/* 4. Promo section temporarily hidden for next version */}
+      {/* 4. Schedules/Trips */}
 
       {/* 5. Schedules/Trips */}
       <HomeSchedules />

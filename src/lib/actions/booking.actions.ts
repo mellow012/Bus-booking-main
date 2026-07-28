@@ -421,28 +421,28 @@ export async function createBookingFull(body: CreateBookingPayload): Promise<{
     throw error;
   }
 
-  // ── Post-transaction side effects ──────────────────────────────────────────
+  // ── Post-transaction side effects (non-blocking) ───────────────────────────
   serverCache.invalidate('schedules');
 
-  try {
-    await sendNotificationToUser(userData.id, {
+  // Dispatch notifications in background so booking response is instant (< 100ms)
+  Promise.allSettled([
+    sendNotificationToUser(userData.id, {
       title: 'Booking created',
       body: `Your booking ${bookingReference} for ${routeData?.name ?? 'your trip'} is pending payment.`,
       type: 'booking', priority: 'high',
       clickAction: `/bookings/${result.id}`,
       data: { bookingId: result.id, scheduleId: finalSegments[0].scheduleId, companyId },
-    });
-
-    await notifyCompanyStaff(companyId, {
+    }),
+    notifyCompanyStaff(companyId, {
       title: 'New Booking Created 🚌',
       body: `A new booking (${bookingReference}) was created for ${routeData?.name ?? 'a route'}. Awaiting payment.`,
       type: 'system', priority: 'medium',
       clickAction: `/company/admin?tab=bookings`,
       data: { bookingId: result.id }
-    });
-  } catch (sendError) {
+    }),
+  ]).catch((sendError) => {
     console.warn('[createBookingFull] Notification send failed:', sendError);
-  }
+  });
 
   const isSegmentRoute = pricedSegments.some((s) =>
     !!s.originStopId && !!s.destinationStopId &&
@@ -613,10 +613,20 @@ export async function updateBooking(id: string, data: Partial<Booking>) {
   }
 }
 
-export async function cancelBooking(bookingId: string, scheduleId: string, seatNumbers: string[]) {
+export async function cancelBooking(bookingId: string, scheduleId?: string, seatNumbers?: string[]) {
   try {
     const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      // 1. Update booking status
+      // 1. Fetch booking with segments to release all associated schedule seats
+      const existingBooking = await tx.booking.findUnique({
+        where: { id: bookingId },
+        include: { segments: true },
+      });
+
+      if (!existingBooking) {
+        throw new Error('Booking not found');
+      }
+
+      // 2. Update booking status
       const booking = await tx.booking.update({
         where: { id: bookingId },
         data: {
@@ -625,19 +635,49 @@ export async function cancelBooking(bookingId: string, scheduleId: string, seatN
         },
       });
 
-      // 2. Release seats in schedule
-      await tx.schedule.update({
-        where: { id: scheduleId },
-        data: {
-          availableSeats: { increment: seatNumbers.length },
-        },
-      });
+      // 3. Build target schedule releases
+      const releases: Array<{ scheduleId: string; seatNumbers: string[] }> = [];
+
+      if (Array.isArray(existingBooking.segments) && existingBooking.segments.length > 0) {
+        for (const seg of existingBooking.segments) {
+          const sns = parseSeatArray(seg.seatNumbers);
+          releases.push({ scheduleId: seg.scheduleId, seatNumbers: sns });
+        }
+      } else {
+        const targetSchedId = scheduleId || existingBooking.scheduleId;
+        const targetSeats = seatNumbers && seatNumbers.length > 0 ? seatNumbers : parseSeatArray(existingBooking.seatNumbers);
+        if (targetSchedId) {
+          releases.push({ scheduleId: targetSchedId, seatNumbers: targetSeats });
+        }
+      }
+
+      // 4. Release seats and update bookedSeats on each schedule
+      for (const rel of releases) {
+        if (!rel.scheduleId || rel.seatNumbers.length === 0) continue;
+        const sched = await tx.schedule.findUnique({ where: { id: rel.scheduleId } });
+        if (!sched) continue;
+
+        const currentBooked = parseSeatArray(sched.bookedSeats);
+        const updatedBooked = currentBooked.filter((s) => !rel.seatNumbers.includes(s));
+
+        await tx.schedule.update({
+          where: { id: rel.scheduleId },
+          data: {
+            availableSeats: { increment: rel.seatNumbers.length },
+            bookedSeats: updatedBooked as any,
+          },
+        });
+      }
 
       return booking;
     });
 
-    revalidatePath('/bookings');
-    revalidatePath('/admin');
+    try {
+      revalidatePath('/bookings');
+      revalidatePath('/admin');
+    } catch {
+      // Safe fallback when executed in non-Next.js context (e.g. background tasks or unit tests)
+    }
     return { success: true, data: result };
   } catch (error: unknown) {
     console.error('Error cancelling booking:', error);
@@ -697,7 +737,7 @@ export async function createSeatReservation(data: {
         userId: data.userId,
         seatNumbers: data.seatNumbers,
         status: data.status || 'reserved',
-        expiresAt: new Date(Date.now() + 10 * 60 * 1000), // 10 mins default
+        expiresAt: new Date(Date.now() + 5 * 60 * 1000), // 5 mins default
       },
     });
     return { success: true, data: reservation };

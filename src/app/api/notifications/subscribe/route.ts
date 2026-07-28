@@ -5,9 +5,9 @@ import { createClient } from '@/utils/supabase/server';
 export async function POST(request: Request) {
   try {
     const supabase = await createClient();
-    const { data: { session } } = await supabase.auth.getSession();
+    const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
 
-    if (!session?.user) {
+    if (authError || !authUser) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -17,7 +17,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid subscription object' }, { status: 400 });
     }
 
-    const userId = session.user.id;
+    const userId = authUser.id;
 
     // Fetch existing user to get fcmTokens array
     const user = await prisma.user.findUnique({
