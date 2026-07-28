@@ -186,10 +186,12 @@ export default function useBookBus() {
       }
 
       const data = await response.json();
-      const schedules = Array.isArray(data?.data) ? data.data : [];
+      const rawSchedules = Array.isArray(data?.data) ? data.data : [];
+      const outboundArrivalMs = new Date(schedule.arrivalDateTime).getTime();
+      const schedules = rawSchedules.filter((s: any) => new Date(s.departureDateTime).getTime() >= outboundArrivalMs);
       setReturnSchedules(schedules);
       if (!schedules.length) {
-        setReturnScheduleError("No return schedules found for the selected date and route.");
+        setReturnScheduleError("No return schedules found for the selected date after outbound arrival.");
       }
     } catch (error: any) {
       setReturnSchedules([]);
@@ -741,9 +743,11 @@ export default function useBookBus() {
           setBookingLoading(false);
           return;
         }
-        const departureDate = new Date(schedule.departureDateTime);
-        if (parsedReturn < departureDate) {
-          setError("Return date must be on or after the departure date.");
+        const outboundArrival = new Date(schedule.arrivalDateTime);
+        const returnDeparture = new Date(returnSchedule.departureDateTime);
+        if (returnDeparture < outboundArrival) {
+          const formattedTime = outboundArrival.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          setError(`Return departure must be after your outbound bus arrives at ${formattedTime}.`);
           setBookingLoading(false);
           return;
         }

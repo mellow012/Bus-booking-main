@@ -195,13 +195,58 @@ export default function BookingsTab({ dashboard }: BookingsTabProps) {
       .sort((a, b) => a.dateStr.localeCompare(b.dateStr));
   }, [bookings, schedules, selectedDate]);
 
-  const allActiveSchedules = schedules
-    .filter((s: Schedule) => {
+  const DEFAULT_RECENCY_WINDOW_DAYS = 60;
+  const recencyThresholdDate = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - DEFAULT_RECENCY_WINDOW_DAYS);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }, []);
+
+  const allActiveSchedules = useMemo(() => {
+    const filtered = schedules.filter((s: Schedule) => {
       if (preferredSchedule?.id === s.id) return true;
       if (selectedDate) return scheduleMatchesDate(s);
-      return new Date(s.departureDateTime) >= todayStart && s.status !== 'completed';
-    })
-    .sort((a: Schedule, b: Schedule) => new Date(a.departureDateTime).getTime() - new Date(b.departureDateTime).getTime());
+      const dep = new Date(s.departureDateTime);
+      return dep >= recencyThresholdDate && s.status !== 'completed';
+    });
+
+    const scheduleBookingActivityMap = new Map<string, number>();
+
+    bookings.forEach((b: Booking) => {
+      const createdMs = new Date(b.createdAt).getTime();
+      if (isNaN(createdMs)) return;
+      schedules.forEach((s: Schedule) => {
+        if (bookingMatchesSchedule(b, s.id)) {
+          const currentMax = scheduleBookingActivityMap.get(s.id) || 0;
+          if (createdMs > currentMax) {
+            scheduleBookingActivityMap.set(s.id, createdMs);
+          }
+        }
+      });
+    });
+
+    const withBookings: Schedule[] = [];
+    const withoutBookings: Schedule[] = [];
+
+    filtered.forEach((s: Schedule) => {
+      if (scheduleBookingActivityMap.has(s.id)) {
+        withBookings.push(s);
+      } else {
+        withoutBookings.push(s);
+      }
+    });
+
+    withBookings.sort((a, b) => {
+      const aActivity = scheduleBookingActivityMap.get(a.id) || 0;
+      const bActivity = scheduleBookingActivityMap.get(b.id) || 0;
+      return bActivity - aActivity;
+    });
+
+    withoutBookings.sort((a, b) => new Date(a.departureDateTime).getTime() - new Date(b.departureDateTime).getTime());
+
+    return [...withBookings, ...withoutBookings];
+  }, [schedules, preferredSchedule, selectedDate, recencyThresholdDate, bookings]);
 
   // Apply search filter to schedules
   const activeSchedules = allActiveSchedules.filter((s: Schedule) => {

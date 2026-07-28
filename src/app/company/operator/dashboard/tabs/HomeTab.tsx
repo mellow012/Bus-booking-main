@@ -59,11 +59,18 @@ export default function HomeTab({ dashboard }: HomeTabProps) {
     bookings.filter((b: Booking) => b.bookingStatus === 'pending').slice(0, 6),
   [bookings]);
 
-  const latestBookings = useMemo(() =>
-    [...bookings]
+  const LATEST_BOOKINGS_MAX_HOURS = 72;
+
+  const latestBookings = useMemo(() => {
+    const recentThresholdMs = LATEST_BOOKINGS_MAX_HOURS * 60 * 60 * 1000;
+    return [...bookings]
+      .filter((b: Booking) => {
+        const createdMs = new Date(b.createdAt).getTime();
+        return !isNaN(createdMs) && (now.getTime() - createdMs) <= recentThresholdMs;
+      })
       .sort((a: Booking, b: Booking) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-      .slice(0, 8),
-  [bookings]);
+      .slice(0, 8);
+  }, [bookings]);
 
   const schedulesWithoutBuses = todaysSchedules.filter((s: Schedule) => !s.busId);
 

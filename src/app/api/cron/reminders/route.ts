@@ -4,12 +4,24 @@ import { logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 
+function isAuthorized(request: NextRequest): boolean {
+  const cronSecret = process.env.CRON_SECRET;
+  if (!cronSecret) return true;
+
+  const authHeader = request.headers.get('authorization') || '';
+  const xCronSecret = request.headers.get('x-cron-secret') || '';
+  const querySecret = request.nextUrl.searchParams.get('secret') || '';
+
+  if (authHeader === `Bearer ${cronSecret}` || authHeader === cronSecret) return true;
+  if (xCronSecret === cronSecret) return true;
+  if (querySecret === cronSecret) return true;
+
+  return false;
+}
+
 export async function GET(request: NextRequest) {
   try {
-    const authHeader = request.headers.get('authorization');
-    
-    // Validate Vercel Cron authorization header if CRON_SECRET is configured
-    if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+    if (!isAuthorized(request)) {
       await logger.logError('api', 'Unauthorized access attempt to reminders cron endpoint', new Error('Unauthorized'));
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }

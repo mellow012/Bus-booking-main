@@ -92,27 +92,6 @@ export default function DashboardSidebar({
 
         {/* Nav */}
         <nav className="flex-1 overflow-y-auto pt-2 space-y-1 px-3">
-          {/* Back to Client Site */}
-          <a
-            href="/"
-            className={`w-full flex items-center group transition-all duration-200 relative rounded-2xl h-12 border border-indigo-100 bg-indigo-50/25 hover:bg-indigo-50 text-indigo-600 mb-3
-              ${isCollapsed && !isMobileOpen ? 'justify-center px-0' : 'px-4 space-x-3'}`}
-            title={isCollapsed && !isMobileOpen ? 'Booking Portal' : undefined}
-          >
-            <ExternalLink className="w-5 h-5 flex-shrink-0 text-indigo-500" />
-            {(!isCollapsed || isMobileOpen) && (
-              <span className="text-[13px] font-bold flex-1 text-left truncate animate-in slide-in-from-left-2 duration-300">
-                Booking Portal
-              </span>
-            )}
-            {isCollapsed && !isMobileOpen && (
-              <div className="absolute left-[72px] top-1/2 -translate-y-1/2 bg-gray-900 text-white text-[11px] font-bold py-1.5 px-3 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
-                Booking Portal
-                <div className="absolute left-[-4px] top-1/2 -translate-y-1/2 w-2 h-2 bg-gray-900 rotate-45" />
-              </div>
-            )}
-          </a>
-
           {CATEGORIES.map((cat) => {
             const Icon       = cat.icon;
             const isActive   = activeCategory === cat.id;
@@ -162,8 +141,28 @@ export default function DashboardSidebar({
             );
           })}
 
-          {/* Sign Out */}
-          <div className="pt-4 mt-4 border-t border-gray-50 flex flex-col gap-1">
+          {/* Bottom Actions: Booking Portal & Sign Out */}
+          <div className="pt-4 mt-4 border-t border-gray-100 flex flex-col gap-1">
+            <a
+              href="/"
+              className={`w-full flex items-center group transition-all duration-200 relative rounded-2xl h-11 border border-indigo-100 bg-indigo-50/25 hover:bg-indigo-50 text-indigo-600 mb-1
+                ${isCollapsed && !isMobileOpen ? 'justify-center px-0' : 'px-4 space-x-3'}`}
+              title={isCollapsed && !isMobileOpen ? 'Booking Portal' : undefined}
+            >
+              <ExternalLink className="w-5 h-5 flex-shrink-0 text-indigo-500" />
+              {(!isCollapsed || isMobileOpen) && (
+                <span className="text-[13px] font-bold flex-1 text-left truncate animate-in slide-in-from-left-2 duration-300">
+                  Booking Portal
+                </span>
+              )}
+              {isCollapsed && !isMobileOpen && (
+                <div className="absolute left-[72px] top-1/2 -translate-y-1/2 bg-gray-900 text-white text-[11px] font-bold py-1.5 px-3 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
+                  Booking Portal
+                  <div className="absolute left-[-4px] top-1/2 -translate-y-1/2 w-2 h-2 bg-gray-900 rotate-45" />
+                </div>
+              )}
+            </a>
+
             <button
               onClick={onSignOut}
               className={`w-full flex items-center group transition-all duration-200 relative rounded-xl h-11 text-red-500 hover:bg-red-50

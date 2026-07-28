@@ -47,18 +47,26 @@ const BookingCard = memo<{
   const handleDLOnly = useCallback(() => onDownload(booking, false), [booking, onDownload]);
   const handlePayment = useCallback(() => onPayment(booking), [booking, onPayment]);
 
+  const outboundCompleted =
+    booking.schedule.tripStatus === 'completed' ||
+    (booking.schedule.tripStatus !== 'in_transit' && new Date() >= new Date(booking.schedule.arrivalDateTime));
+
+  const activeSegment = (outboundCompleted && booking.returnSegment) ? booking.returnSegment : null;
+
+  const displaySchedule = activeSegment ? activeSegment.schedule : booking.schedule;
+  const displayRoute = activeSegment ? activeSegment.route : booking.route;
+  const displayOriginStopId = activeSegment ? activeSegment.originStopId : booking.originStopId;
+  const displayDestinationStopId = activeSegment ? activeSegment.destinationStopId : booking.destinationStopId;
+
+  const displayOriginName = resolveStopName(displayOriginStopId, activeSegment ? undefined : booking.originStopName, displayRoute, displayRoute?.origin || 'N/A');
+  const displayAlightName = resolveStopName(displayDestinationStopId, activeSegment ? undefined : booking.destinationStopName, displayRoute, displayRoute?.destination || 'N/A');
+
   const originName = resolveStopName(booking.originStopId, booking.originStopName, booking.route, booking.route?.origin || 'N/A');
   const alightName = resolveStopName(booking.destinationStopId, booking.destinationStopName, booking.route, booking.route?.destination || 'N/A');
   const isSegment = originName !== (booking.route?.origin || '') || alightName !== (booking.route?.destination || '');
   const isCash = (booking as any).paymentMethod === 'cash_on_boarding';
   const hasSecuredSeat = booking.bookingStatus === 'confirmed' &&
     (booking.paymentStatus === 'paid' || isCash);
-
-  const outboundCompleted =
-    booking.schedule.tripStatus === 'completed' ||
-    (booking.schedule.tripStatus !== 'in_transit' && new Date() >= new Date(booking.schedule.arrivalDateTime));
-
-  const activeSegment = (outboundCompleted && booking.returnSegment) ? booking.returnSegment : null;
 
   const activeLegReviewRating = activeSegment
     ? ((booking as any).metadata?.returnReview?.rating ?? null)
@@ -135,9 +143,9 @@ const BookingCard = memo<{
         {/* Route timeline */}
         <div className="flex flex-col sm:flex-row items-center gap-4 p-3 bg-gray-50 rounded-xl mb-4">
           <div className="text-center min-w-[80px]">
-            <div className="text-lg sm:text-xl font-bold text-gray-900">{formatTime(booking.schedule.departureDateTime)}</div>
-            <div className="text-sm text-gray-600 flex items-center justify-center gap-1"><MapPin className="w-3 h-3" /><span className="truncate">{originName}</span></div>
-            <div className="text-xs text-gray-500 mt-1">{formatDate(booking.schedule.departureDateTime)}</div>
+            <div className="text-lg sm:text-xl font-bold text-gray-900">{formatTime(displaySchedule.departureDateTime)}</div>
+            <div className="text-sm text-gray-600 flex items-center justify-center gap-1"><MapPin className="w-3 h-3" /><span className="truncate">{displayOriginName}</span></div>
+            <div className="text-xs text-gray-500 mt-1">{formatDate(displaySchedule.departureDateTime)}</div>
           </div>
           <div className="flex-1 mx-2 hidden sm:block">
             <div className="relative">
@@ -158,11 +166,11 @@ const BookingCard = memo<{
             </div>
             
             {(() => {
-              const depTime = new Date(booking.schedule.departureDateTime).getTime();
-              const arrTime = new Date(booking.schedule.arrivalDateTime).getTime();
+              const depTime = new Date(displaySchedule.departureDateTime).getTime();
+              const arrTime = new Date(displaySchedule.arrivalDateTime).getTime();
               const calcMinutes = (arrTime && depTime && arrTime > depTime)
                 ? Math.round((arrTime - depTime) / (1000 * 60))
-                : getEstimatedDuration(originName, alightName, booking.route?.duration, booking.route?.distance);
+                : getEstimatedDuration(displayOriginName, displayAlightName, displayRoute?.duration, displayRoute?.distance);
               const durationHrs = Math.floor(calcMinutes / 60);
               const durationMins = calcMinutes % 60;
               return (
@@ -178,9 +186,9 @@ const BookingCard = memo<{
             })()}
           </div>
           <div className="text-center min-w-[80px]">
-            <div className="text-lg sm:text-xl font-bold text-gray-900">{formatTime(booking.schedule.arrivalDateTime)}</div>
-            <div className="text-sm text-gray-600 flex items-center justify-center gap-1"><MapPin className="w-3 h-3" /><span className="truncate">{alightName}</span></div>
-            <div className="text-xs text-gray-500 mt-1">{formatDate(booking.schedule.arrivalDateTime)}</div>
+            <div className="text-lg sm:text-xl font-bold text-gray-900">{formatTime(displaySchedule.arrivalDateTime)}</div>
+            <div className="text-sm text-gray-600 flex items-center justify-center gap-1"><MapPin className="w-3 h-3" /><span className="truncate">{displayAlightName}</span></div>
+            <div className="text-xs text-gray-500 mt-1">{formatDate(displaySchedule.arrivalDateTime)}</div>
           </div>
         </div>
 
@@ -646,7 +654,8 @@ const BookingsPage: React.FC = () => {
     { label: 'Confirmed', value: bookingStats.confirmed, key: 'confirmed', Icon: CheckCircle },
     { label: 'Pending', value: bookingStats.pending, key: 'pending', Icon: Clock },
     { label: 'Upcoming', value: bookingStats.upcoming, key: 'upcoming', Icon: Calendar },
-    { label: 'Archived', value: bookingStats.archived, key: 'archived', Icon: Archive },
+    { label: 'In Transit', value: (bookingStats as any).in_transit ?? 0, key: 'in_transit', Icon: Navigation },
+    { label: 'Archived / Past', value: bookingStats.archived, key: 'archived', Icon: Archive },
     { label: 'Cancelled', value: bookingStats.cancelled, key: 'cancelled', Icon: XCircle },
   ];
 

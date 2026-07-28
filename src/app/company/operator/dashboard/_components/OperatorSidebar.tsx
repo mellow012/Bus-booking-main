@@ -57,48 +57,52 @@ export default function OperatorSidebar({
           </button>
         </div>
 
-        <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
+        <nav className="flex-1 p-4 space-y-1 overflow-y-auto flex flex-col">
           <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3 px-3">Main Navigation</div>
-          
-          {/* Back to Client Site */}
-          <a
-            href="/"
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all font-semibold text-sm text-indigo-600 hover:bg-indigo-50 border border-indigo-100/50 mb-3 bg-indigo-50/20"
-          >
-            <ExternalLink className="w-5 h-5 text-indigo-500" />
-            Booking Portal
-          </a>
 
-          {tabs.map((tab) => {
-            const Icon = tab.icon;
-            const isSelected = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                id={`tour-${tab.id}`}
-                onClick={() => {
-                  setActiveTab(tab.id);
-                  setIsMobileOpen(false);
-                }}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all font-semibold text-sm ${
-                  isSelected
-                    ? 'bg-indigo-50 text-indigo-700 shadow-sm'
-                    : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'
-                }`}
-              >
-                <Icon className={`w-5 h-5 ${isSelected ? 'text-indigo-600' : 'text-gray-400'}`} />
-                {tab.label}
-              </button>
-            );
-          })}
+          <div className="flex-1 space-y-1">
+            {tabs.map((tab) => {
+              const Icon = tab.icon;
+              const isSelected = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  id={`tour-${tab.id}`}
+                  onClick={() => {
+                    setActiveTab(tab.id);
+                    setIsMobileOpen(false);
+                  }}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all font-semibold text-sm ${
+                    isSelected
+                      ? 'bg-indigo-50 text-indigo-700 shadow-sm'
+                      : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'
+                  }`}
+                >
+                  <Icon className={`w-5 h-5 ${isSelected ? 'text-indigo-600' : 'text-gray-400'}`} />
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
 
-          <button
-            onClick={onSignOut}
-            className="w-full flex items-center gap-3 px-4 py-3 text-red-500 font-semibold hover:bg-red-50 rounded-xl transition-all text-sm mt-4 border-t border-gray-50 pt-4"
-          >
-            <LogOut className="w-5 h-5" />
-            Sign Out
-          </button>
+          <div className="pt-4 mt-4 border-t border-gray-100 space-y-1">
+            {/* Back to Client Site */}
+            <a
+              href="/"
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all font-semibold text-sm text-indigo-600 hover:bg-indigo-50 border border-indigo-100/50 bg-indigo-50/20"
+            >
+              <ExternalLink className="w-5 h-5 text-indigo-500" />
+              Booking Portal
+            </a>
+
+            <button
+              onClick={onSignOut}
+              className="w-full flex items-center gap-3 px-4 py-3 text-red-500 font-semibold hover:bg-red-50 rounded-xl transition-all text-sm"
+            >
+              <LogOut className="w-5 h-5" />
+              Sign Out
+            </button>
+          </div>
         </nav>
       </aside>
     </>

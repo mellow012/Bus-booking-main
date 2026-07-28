@@ -198,9 +198,57 @@ export default function BookingsTab({ dashboard, defaultScheduleId }: BookingsTa
     return departure.getTime() === selected.getTime();
   };
 
-  const allActiveSchedules = schedules
-    .filter((s: Schedule) => scheduleMatchesDate(s))
-    .sort((a: Schedule, b: Schedule) => new Date(a.departureDateTime).getTime() - new Date(b.departureDateTime).getTime());
+  const DEFAULT_RECENCY_WINDOW_DAYS = 60;
+  const recencyThresholdDate = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - DEFAULT_RECENCY_WINDOW_DAYS);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }, []);
+
+  const allActiveSchedules = useMemo(() => {
+    const filtered = schedules.filter((s: Schedule) => {
+      if (selectedDate) return scheduleMatchesDate(s);
+      const dep = new Date(s.departureDateTime);
+      return dep >= recencyThresholdDate && s.status !== 'completed';
+    });
+
+    const scheduleBookingActivityMap = new Map<string, number>();
+
+    bookings.forEach((b: Booking) => {
+      const createdMs = new Date(b.createdAt).getTime();
+      if (isNaN(createdMs)) return;
+      schedules.forEach((s: Schedule) => {
+        if (bookingMatchesSchedule(b, s.id)) {
+          const currentMax = scheduleBookingActivityMap.get(s.id) || 0;
+          if (createdMs > currentMax) {
+            scheduleBookingActivityMap.set(s.id, createdMs);
+          }
+        }
+      });
+    });
+
+    const withBookings: Schedule[] = [];
+    const withoutBookings: Schedule[] = [];
+
+    filtered.forEach((s: Schedule) => {
+      if (scheduleBookingActivityMap.has(s.id)) {
+        withBookings.push(s);
+      } else {
+        withoutBookings.push(s);
+      }
+    });
+
+    withBookings.sort((a, b) => {
+      const aActivity = scheduleBookingActivityMap.get(a.id) || 0;
+      const bActivity = scheduleBookingActivityMap.get(b.id) || 0;
+      return bActivity - aActivity;
+    });
+
+    withoutBookings.sort((a, b) => new Date(a.departureDateTime).getTime() - new Date(b.departureDateTime).getTime());
+
+    return [...withBookings, ...withoutBookings];
+  }, [schedules, selectedDate, recencyThresholdDate, bookings]);
 
   // Apply search filter
   const activeSchedules = allActiveSchedules.filter((s: Schedule) => {
@@ -217,11 +265,22 @@ export default function BookingsTab({ dashboard, defaultScheduleId }: BookingsTa
     );
   });
 
+  const OPERATOR_SCHEDULES_PER_PAGE = 6;
+  const [schedulePage, setSchedulePage] = useState(1);
+
+  const totalSchedulesPages = Math.ceil(activeSchedules.length / OPERATOR_SCHEDULES_PER_PAGE);
+  const pagedActiveSchedules = useMemo(() => {
+    return activeSchedules.slice((schedulePage - 1) * OPERATOR_SCHEDULES_PER_PAGE, schedulePage * OPERATOR_SCHEDULES_PER_PAGE);
+  }, [activeSchedules, schedulePage]);
+
+  useEffect(() => {
+    setSchedulePage(1);
+  }, [selectedDate, searchQuery]);
+
   const [selectedScheduleId, setSelectedScheduleId] = useState<string | null>(
     defaultScheduleId ?? (activeSchedules.length > 0 ? activeSchedules[0].id : null)
   );
 
-  // If a defaultScheduleId arrives from outside (e.g. HomeTab navigation), apply it once
   useEffect(() => {
     if (defaultScheduleId) setSelectedScheduleId(defaultScheduleId);
   }, [defaultScheduleId]);
@@ -376,77 +435,105 @@ export default function BookingsTab({ dashboard, defaultScheduleId }: BookingsTa
               No active schedules found.
             </div>
           ) : (
-            <div className="space-y-3 max-h-[600px] overflow-y-auto pr-2">
-              {activeSchedules.map((schedule: Schedule) => {
-                const route = routes.find((r: Route) => r.id === schedule.routeId);
-                const bus = buses.find((b: Bus) => b.id === schedule.busId);
-                const tripBookings = bookings.filter((b: Booking) => bookingMatchesSchedule(b, schedule.id) && b.bookingStatus !== 'cancelled');
-                const isSelected = selectedScheduleId === schedule.id;
-                const isToday = (() => {
-                  const dep = new Date(schedule.departureDateTime);
-                  const today = new Date();
-                  return dep.toDateString() === today.toDateString();
-                })();
-                
-                return (
-                  <div 
-                    key={schedule.id}
-                    onClick={() => setSelectedScheduleId(schedule.id)}
-                    className={`p-4 rounded-xl border cursor-pointer transition-all duration-200 ${
-                      isSelected ? 'bg-indigo-50 border-indigo-200 shadow-sm ring-1 ring-indigo-500' : 'bg-white border-gray-200 hover:border-indigo-300 hover:shadow-md hover:bg-indigo-50/50'
-                    }`}
-                  >
-                    <div className="flex justify-between items-start mb-2">
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        <div className="font-bold text-gray-900 line-clamp-1">{route?.name || 'Unknown Route'}</div>
-                        {tripBookings.length > 0 && (
-                          <span className="h-2 w-2 rounded-full bg-coral-500 shrink-0" title={`${tripBookings.length} booking(s)`} />
-                        )}
-                      </div>
-                      <div className="flex gap-1.5 shrink-0">
-                        {isToday && (
-                          <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide bg-indigo-100 text-indigo-700">
-                            Today
+            <div>
+              <div className="space-y-3 max-h-[600px] overflow-y-auto pr-2">
+                {pagedActiveSchedules.map((schedule: Schedule) => {
+                  const route = routes.find((r: Route) => r.id === schedule.routeId);
+                  const bus = buses.find((b: Bus) => b.id === schedule.busId);
+                  const tripBookings = bookings.filter((b: Booking) => bookingMatchesSchedule(b, schedule.id) && b.bookingStatus !== 'cancelled');
+                  const isSelected = selectedScheduleId === schedule.id;
+                  const isToday = (() => {
+                    const dep = new Date(schedule.departureDateTime);
+                    const today = new Date();
+                    return dep.toDateString() === today.toDateString();
+                  })();
+                  
+                  return (
+                    <div 
+                      key={schedule.id}
+                      onClick={() => setSelectedScheduleId(schedule.id)}
+                      className={`p-4 rounded-xl border cursor-pointer transition-all duration-200 ${
+                        isSelected ? 'bg-indigo-50 border-indigo-200 shadow-sm ring-1 ring-indigo-500' : 'bg-white border-gray-200 hover:border-indigo-300 hover:shadow-md hover:bg-indigo-50/50'
+                      }`}
+                    >
+                      <div className="flex justify-between items-start mb-2">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <div className="font-bold text-gray-900 line-clamp-1">{route?.name || 'Unknown Route'}</div>
+                          {tripBookings.length > 0 && (
+                            <span className="h-2 w-2 rounded-full bg-coral-500 shrink-0" title={`${tripBookings.length} booking(s)`} />
+                          )}
+                        </div>
+                        <div className="flex gap-1.5 shrink-0">
+                          {isToday && (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide bg-indigo-100 text-indigo-700">
+                              Today
+                            </span>
+                          )}
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide ${
+                            schedule.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
+                          }`}>
+                            {schedule.tripStatus || schedule.status}
                           </span>
-                        )}
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide ${
-                          schedule.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
-                        }`}>
-                          {schedule.tripStatus || schedule.status}
-                        </span>
+                        </div>
                       </div>
-                    </div>
-                    <div className="flex items-center gap-2 text-xs text-gray-600 mb-3">
-                      <Calendar className="w-3 h-3" />
-                      {new Date(schedule.departureDateTime).toLocaleDateString()}
-                      <span className="mx-1">•</span>
-                      <Clock className="w-3 h-3" />
-                      {new Date(schedule.departureDateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      <span className="mx-1">•</span>
-                      <BusIcon className="w-3 h-3" />
-                      {bus?.licensePlate || 'TBA'}
-                    </div>
+                      <div className="flex items-center gap-2 text-xs text-gray-600 mb-3">
+                        <Calendar className="w-3 h-3" />
+                        {new Date(schedule.departureDateTime).toLocaleDateString()}
+                        <span className="mx-1">•</span>
+                        <Clock className="w-3 h-3" />
+                        {new Date(schedule.departureDateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        <span className="mx-1">•</span>
+                        <BusIcon className="w-3 h-3" />
+                        {bus?.licensePlate || 'TBA'}
+                      </div>
 
-                    <div className="flex items-center justify-between">
-                      <div className="flex -space-x-2 overflow-hidden">
-                        {tripBookings.slice(0, 4).map((b: Booking, i: number) => (
-                          <div key={i} className="inline-block h-6 w-6 rounded-full ring-2 ring-white bg-gray-200 flex items-center justify-center text-[8px] font-bold text-gray-600">
-                            {b.passengerDetails?.[0]?.name?.[0] || 'P'}
-                          </div>
-                        ))}
-                        {tripBookings.length > 4 && (
-                          <div className="inline-block h-6 w-6 rounded-full ring-2 ring-white bg-gray-100 flex items-center justify-center text-[10px] font-medium text-gray-600">
-                            +{tripBookings.length - 4}
-                          </div>
-                        )}
-                      </div>
-                      <div className="text-xs font-semibold text-gray-900">
-                        {tripBookings.length} / {bus?.capacity || '?'} Seats
+                      <div className="flex items-center justify-between">
+                        <div className="flex -space-x-2 overflow-hidden">
+                          {tripBookings.slice(0, 4).map((b: Booking, i: number) => (
+                            <div key={i} className="inline-block h-6 w-6 rounded-full ring-2 ring-white bg-gray-200 flex items-center justify-center text-[8px] font-bold text-gray-600">
+                              {b.passengerDetails?.[0]?.name?.[0] || 'P'}
+                            </div>
+                          ))}
+                          {tripBookings.length > 4 && (
+                            <div className="inline-block h-6 w-6 rounded-full ring-2 ring-white bg-gray-100 flex items-center justify-center text-[10px] font-medium text-gray-600">
+                              +{tripBookings.length - 4}
+                            </div>
+                          )}
+                        </div>
+                        <div className="text-xs font-semibold text-gray-900">
+                          {tripBookings.length} / {bus?.capacity || '?'} Seats
+                        </div>
                       </div>
                     </div>
+                  );
+                })}
+              </div>
+
+              {totalSchedulesPages > 1 && (
+                <div className="mt-3 flex items-center justify-between rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-xs">
+                  <span className="text-gray-600 font-medium">
+                    Page <span className="font-bold text-gray-900">{schedulePage}</span> of <span className="font-bold text-gray-900">{totalSchedulesPages}</span>
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setSchedulePage((p) => Math.max(p - 1, 1))}
+                      disabled={schedulePage === 1}
+                      className="rounded-lg border border-gray-200 bg-white px-2.5 py-1 font-semibold text-gray-700 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                    >
+                      Prev
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSchedulePage((p) => Math.min(p + 1, totalSchedulesPages))}
+                      disabled={schedulePage >= totalSchedulesPages}
+                      className="rounded-lg border border-gray-200 bg-white px-2.5 py-1 font-semibold text-gray-700 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                    >
+                      Next
+                    </button>
                   </div>
-                );
-              })}
+                </div>
+              )}
             </div>
           )}
         </div>

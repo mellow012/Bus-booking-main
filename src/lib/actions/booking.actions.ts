@@ -247,8 +247,18 @@ export async function createBookingFull(body: CreateBookingPayload): Promise<{
   if (returnDate) {
     const parsedReturn = new Date(returnDate);
     if (Number.isNaN(parsedReturn.getTime())) return { error: 'Return date must be a valid date' };
-    if (parsedReturn < new Date(firstSchedule.departureDateTime))
-      return { error: 'Return date must be on or after the departure date' };
+  }
+
+  for (let i = 1; i < finalSegments.length; i++) {
+    const prevSchedule = scheduleMap.get(finalSegments[i - 1].scheduleId);
+    const currSchedule = scheduleMap.get(finalSegments[i].scheduleId);
+    if (prevSchedule && currSchedule) {
+      const prevArrival = new Date(prevSchedule.arrivalDateTime).getTime();
+      const currDeparture = new Date(currSchedule.departureDateTime).getTime();
+      if (currDeparture < prevArrival) {
+        return { error: 'Return departure must be after outbound bus arrives' };
+      }
+    }
   }
 
   // ── Pricing ────────────────────────────────────────────────────────────────

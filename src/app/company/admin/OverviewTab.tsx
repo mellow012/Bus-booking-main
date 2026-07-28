@@ -161,14 +161,24 @@ export default function OverviewTab({ dashboard }: OverviewTabProps) {
     : selectedBooking?.passengerDetails?.map((p) => p.seatNumber).filter(Boolean).join(', ') || 'Auto assigned';
 
   const [bookingFilterDate, setBookingFilterDate] = useState<string>('');
+  const LATEST_BOOKINGS_MAX_HOURS = 72;
+  const LATEST_BOOKINGS_LIMIT = 20;
 
   const filteredBookings = useMemo(() => {
+    const now = new Date();
+    const recentThresholdMs = LATEST_BOOKINGS_MAX_HOURS * 60 * 60 * 1000;
+
     return bookings
       .filter((b: Booking) => {
-        if (!bookingFilterDate) return true;
-        return new Date(b.createdAt).toISOString().split('T')[0] === bookingFilterDate;
+        if (bookingFilterDate) {
+          return new Date(b.createdAt).toISOString().split('T')[0] === bookingFilterDate;
+        }
+
+        const createdMs = new Date(b.createdAt).getTime();
+        return !isNaN(createdMs) && (now.getTime() - createdMs) <= recentThresholdMs;
       })
-      .sort((a: Booking, b: Booking) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      .sort((a: Booking, b: Booking) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, bookingFilterDate ? undefined : LATEST_BOOKINGS_LIMIT);
   }, [bookings, bookingFilterDate]);
 
   const groupedBookings = useMemo(() => {
@@ -335,7 +345,7 @@ export default function OverviewTab({ dashboard }: OverviewTabProps) {
           className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm cursor-pointer hover:border-amber-300 hover:shadow-sm transition-all"
         >
           <div className="flex items-center gap-2 text-sm text-amber-600 mb-1">
-            <Clock className="w-4 h-4" /> Missed Schedules
+            <Clock className="w-4 h-4" /> Missed Schedules (Last 7 Days)
           </div>
           <div className="text-2xl font-bold text-amber-600">{statistics.missedSchedules}</div>
         </div>

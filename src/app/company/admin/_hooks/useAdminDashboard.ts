@@ -55,11 +55,16 @@ export function useAdminDashboard() {
     const yesterday = new Date(now);
     yesterday.setDate(yesterday.getDate() - 1);
     yesterday.setHours(0, 0, 0, 0);
+
+    const MISSED_SCHEDULES_WINDOW_DAYS = 7;
+    const missedWindowStart = new Date(now);
+    missedWindowStart.setDate(missedWindowStart.getDate() - MISSED_SCHEDULES_WINDOW_DAYS);
+
     return {
       pendingBookings: bookings.filter(b => b.bookingStatus === 'pending').length,
       missedSchedules: dashboardData.schedules.filter(s => {
         const dep = new Date(s.departureDateTime);
-        return dep < now && s.status === 'active' && s.tripStatus === 'scheduled';
+        return dep >= missedWindowStart && dep < now && s.status === 'active' && s.tripStatus === 'scheduled';
       }).length,
       newPayments: bookings.filter(b => {
         if (b.paymentStatus !== 'paid' || !b.paidAt) return false;

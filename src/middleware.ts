@@ -42,6 +42,7 @@ export async function middleware(request: NextRequest) {
   if (
     pathname.startsWith('/_next') ||
     pathname.startsWith('/api/webhooks') ||
+    pathname.startsWith('/api/cron') ||
     pathname.startsWith('/api/auth/supabase-email-hook') || 
     pathname.startsWith('/auth/callback') || 
     pathname.includes('.')

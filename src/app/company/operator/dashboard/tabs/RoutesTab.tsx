@@ -33,6 +33,22 @@ export default function RoutesTab({ dashboard }: RoutesTabProps) {
   const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
   const [scheduleFilterDate, setScheduleFilterDate] = useState<string>('');
 
+  const ROUTES_PER_PAGE = 6;
+  const SCHEDULES_PER_PAGE = 6;
+  const [routesPage, setRoutesPage] = useState(1);
+  const [schedulesPage, setSchedulesPage] = useState(1);
+
+  const totalRoutesPages = Math.ceil(filteredRoutes.length / ROUTES_PER_PAGE);
+  const pagedRoutes = filteredRoutes.slice((routesPage - 1) * ROUTES_PER_PAGE, routesPage * ROUTES_PER_PAGE);
+
+  useEffect(() => {
+    setRoutesPage(1);
+  }, [searchQuery]);
+
+  useEffect(() => {
+    setSchedulesPage(1);
+  }, [selectedRouteId, scheduleFilterDate]);
+
   useEffect(() => {
     if (filteredRoutes.length > 0 && (!selectedRouteId || !filteredRoutes.find((r: Route) => r.id === selectedRouteId))) {
       setSelectedRouteId(filteredRoutes[0].id);
@@ -75,33 +91,60 @@ export default function RoutesTab({ dashboard }: RoutesTabProps) {
         </div>
       ) : (
         <div className="space-y-6">
-          {/* Horizontal Routes Scroll */}
-          <div className="flex overflow-x-auto gap-4 pb-4 snap-x snap-mandatory">
-            {filteredRoutes.map((route: Route) => {
-              const isSelected = selectedRouteId === route.id;
-              return (
-                <div 
-                  key={route.id} 
-                  onClick={() => setSelectedRouteId(route.id)}
-                  className={`flex-shrink-0 w-72 p-4 rounded-2xl border cursor-pointer transition-all duration-200 snap-start ${
-                    isSelected ? 'bg-indigo-50 border-indigo-200 shadow-md ring-1 ring-indigo-500' : 'bg-white border-gray-200 hover:border-indigo-300 hover:shadow-sm'
-                  }`}
-                >
-                  <div className="flex justify-between items-start mb-2">
-                    <h3 className="font-bold text-gray-900 text-base line-clamp-1">{route.name}</h3>
-                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
-                      route.isActive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                    }`}>
-                      {route.isActive ? 'Active' : 'Inactive'}
-                    </span>
+          {/* Routes Carousel / Grid */}
+          <div>
+            <div className="flex overflow-x-auto gap-4 pb-2 snap-x snap-mandatory">
+              {pagedRoutes.map((route: Route) => {
+                const isSelected = selectedRouteId === route.id;
+                return (
+                  <div 
+                    key={route.id} 
+                    onClick={() => setSelectedRouteId(route.id)}
+                    className={`flex-shrink-0 w-72 p-4 rounded-2xl border cursor-pointer transition-all duration-200 snap-start ${
+                      isSelected ? 'bg-indigo-50 border-indigo-200 shadow-md ring-1 ring-indigo-500' : 'bg-white border-gray-200 hover:border-indigo-300 hover:shadow-sm'
+                    }`}
+                  >
+                    <div className="flex justify-between items-start mb-2">
+                      <h3 className="font-bold text-gray-900 text-base line-clamp-1">{route.name}</h3>
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                        route.isActive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                      }`}>
+                        {route.isActive ? 'Active' : 'Inactive'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-500 flex items-center gap-1 mt-2">
+                      <MapPin className="w-3 h-3 flex-shrink-0 text-gray-400"/> 
+                      <span className="line-clamp-1">{route.origin} → {route.destination}</span>
+                    </p>
                   </div>
-                  <p className="text-xs text-gray-500 flex items-center gap-1 mt-2">
-                    <MapPin className="w-3 h-3 flex-shrink-0 text-gray-400"/> 
-                    <span className="line-clamp-1">{route.origin} → {route.destination}</span>
-                  </p>
+                );
+              })}
+            </div>
+            {totalRoutesPages > 1 && (
+              <div className="mt-2 flex items-center justify-between rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-xs">
+                <span className="text-gray-600 font-medium">
+                  Showing page <span className="font-bold text-gray-900">{routesPage}</span> of <span className="font-bold text-gray-900">{totalRoutesPages}</span>
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setRoutesPage((p) => Math.max(p - 1, 1))}
+                    disabled={routesPage === 1}
+                    className="rounded-lg border border-gray-200 bg-white px-2.5 py-1 font-semibold text-gray-700 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                  >
+                    Previous
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRoutesPage((p) => Math.min(p + 1, totalRoutesPages))}
+                    disabled={routesPage >= totalRoutesPages}
+                    className="rounded-lg border border-gray-200 bg-white px-2.5 py-1 font-semibold text-gray-700 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                  >
+                    Next
+                  </button>
                 </div>
-              );
-            })}
+              </div>
+            )}
           </div>
 
           {/* Schedules for Selected Route */}
@@ -119,6 +162,9 @@ export default function RoutesTab({ dashboard }: RoutesTabProps) {
               return s.departureDateTime >= now || ['boarding', 'in_transit', 'arrived'].includes(s.tripStatus || '');
             });
             const routeTemplates = templates?.filter((t: any) => t.routeId === selectedRouteId) || [];
+
+            const totalSchedulesPages = Math.ceil(routeSchedules.length / SCHEDULES_PER_PAGE);
+            const pagedSchedules = routeSchedules.slice((schedulesPage - 1) * SCHEDULES_PER_PAGE, schedulesPage * SCHEDULES_PER_PAGE);
 
             return (
               <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden animate-in fade-in duration-300">
@@ -162,27 +208,54 @@ export default function RoutesTab({ dashboard }: RoutesTabProps) {
                         {scheduleFilterDate ? 'No schedules found for this date.' : 'No active or upcoming schedules.'}
                       </div>
                     ) : (
-                      <div className="space-y-3">
-                        {routeSchedules.map((schedule: Schedule) => {
-                          const bus = buses.find((b:Bus) => b.id === schedule.busId);
-                          return (
-                            <div key={schedule.id} className="p-3 bg-white rounded-xl border border-gray-200 flex justify-between items-center hover:border-indigo-200 transition-colors group shadow-sm">
-                              <div className="flex items-center gap-3 text-sm">
-                                <div className="w-8 h-8 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-600 group-hover:bg-indigo-100 transition-colors">
-                                  <Calendar className="w-4 h-4" />
+                      <div>
+                        <div className="space-y-3">
+                          {pagedSchedules.map((schedule: Schedule) => {
+                            const bus = buses.find((b:Bus) => b.id === schedule.busId);
+                            return (
+                              <div key={schedule.id} className="p-3 bg-white rounded-xl border border-gray-200 flex justify-between items-center hover:border-indigo-200 transition-colors group shadow-sm">
+                                <div className="flex items-center gap-3 text-sm">
+                                  <div className="w-8 h-8 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-600 group-hover:bg-indigo-100 transition-colors">
+                                    <Calendar className="w-4 h-4" />
+                                  </div>
+                                  <div>
+                                    <div className="font-bold text-gray-900">{new Date(schedule.departureDateTime).toLocaleString([], {dateStyle:'medium', timeStyle:'short'})}</div>
+                                    <div className="text-xs text-gray-500 mt-0.5 uppercase tracking-wide">{schedule.tripStatus || schedule.status}</div>
+                                  </div>
                                 </div>
-                                <div>
-                                  <div className="font-bold text-gray-900">{new Date(schedule.departureDateTime).toLocaleString([], {dateStyle:'medium', timeStyle:'short'})}</div>
-                                  <div className="text-xs text-gray-500 mt-0.5 uppercase tracking-wide">{schedule.tripStatus || schedule.status}</div>
+                                <div className="flex items-center gap-2 text-xs font-medium text-gray-600 bg-gray-50 px-2 py-1 rounded-md border border-gray-100">
+                                  <BusIcon className="w-3 h-3" />
+                                  {bus?.licensePlate || 'Unassigned'}
                                 </div>
                               </div>
-                              <div className="flex items-center gap-2 text-xs font-medium text-gray-600 bg-gray-50 px-2 py-1 rounded-md border border-gray-100">
-                                <BusIcon className="w-3 h-3" />
-                                {bus?.licensePlate || 'Unassigned'}
-                              </div>
+                            );
+                          })}
+                        </div>
+                        {totalSchedulesPages > 1 && (
+                          <div className="mt-3 flex items-center justify-between rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-xs">
+                            <span className="text-gray-600 font-medium">
+                              Showing page <span className="font-bold text-gray-900">{schedulesPage}</span> of <span className="font-bold text-gray-900">{totalSchedulesPages}</span>
+                            </span>
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => setSchedulesPage((p) => Math.max(p - 1, 1))}
+                                disabled={schedulesPage === 1}
+                                className="rounded-lg border border-gray-200 bg-white px-2.5 py-1 font-semibold text-gray-700 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                              >
+                                Previous
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setSchedulesPage((p) => Math.min(p + 1, totalSchedulesPages))}
+                                disabled={schedulesPage >= totalSchedulesPages}
+                                className="rounded-lg border border-gray-200 bg-white px-2.5 py-1 font-semibold text-gray-700 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                              >
+                                Next
+                              </button>
                             </div>
-                          );
-                        })}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

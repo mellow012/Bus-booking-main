@@ -21,14 +21,15 @@ export default function RevenueTab({ dashboard }: RevenueTabProps) {
   const { data: branches = [] } = useCompanyRegions(companyId || '');
   const searchQuery = dashboard.searchQuery?.toLowerCase() || '';
 
-  const [dateRange, setDateRange] = useState<'today' | 'week' | 'month' | 'all'>('month');
+  const [dateRange, setDateRange] = useState<'today' | 'week' | 'month' | '60_days' | 'all'>('month');
 
   // Filter bookings by date range
   const now = new Date();
   const startDate = new Date();
   if (dateRange === 'today') startDate.setHours(0,0,0,0);
   else if (dateRange === 'week') startDate.setDate(now.getDate() - 7);
-  else if (dateRange === 'month') startDate.setMonth(now.getMonth() - 1);
+  else if (dateRange === 'month') startDate.setDate(now.getDate() - 30);
+  else if (dateRange === '60_days') startDate.setDate(now.getDate() - 60);
   else startDate.setFullYear(2000); // 'all' — effectively no filter
 
   const filteredBookings = bookings.filter((b: Booking) => new Date(b.createdAt) >= startDate);
@@ -130,7 +131,7 @@ export default function RevenueTab({ dashboard }: RevenueTabProps) {
 
         <div className="flex items-center gap-3">
           <div className="bg-white border border-gray-200 rounded-xl p-1 flex items-center gap-1 text-xs">
-            {(['today', 'week', 'month', 'all'] as const).map((r) => (
+            {(['today', 'week', 'month', '60_days', 'all'] as const).map((r) => (
               <button
                 key={r}
                 onClick={() => setDateRange(r)}
@@ -138,7 +139,7 @@ export default function RevenueTab({ dashboard }: RevenueTabProps) {
                   dateRange === r ? 'bg-indigo-600 text-white shadow-sm' : 'text-gray-600 hover:text-gray-900'
                 }`}
               >
-                {r}
+                {r === '60_days' ? '60 Days' : r}
               </button>
             ))}
           </div>
