@@ -183,7 +183,12 @@ export default function BookingDetailsModal({
                 </span>
               </div>
               <p className="mt-3 text-sm text-gray-500">Total Seats: {booking.seatNumbers?.join(', ') || 'Auto assigned'}</p>
-              <p className="mt-2 text-sm text-gray-500">Amount: MWK {booking.totalAmount?.toLocaleString()}</p>
+              <p className="mt-2 text-sm font-bold text-gray-900">Total Charged: MWK {booking.totalAmount?.toLocaleString()}</p>
+              {((booking.discountAmount ?? (booking as any).metadata?.discountAmount) > 0) && (
+                <p className="mt-1 text-xs text-amber-600 font-semibold">
+                  Return Discount ({booking.discountPercent ?? (booking as any).metadata?.discountPercent}%): -MWK {(booking.discountAmount ?? (booking as any).metadata?.discountAmount)?.toLocaleString()}
+                </p>
+              )}
             </div>
             <div className="rounded-3xl border border-gray-100 bg-gray-50 p-4">
               <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-gray-500">Passenger details</p>

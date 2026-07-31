@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { Bus, Schedule, Route } from '@/types';
 import AlertMessage from './AlertMessage';
+import { generateSeatGrid } from '@/lib/seatLayout';
 
 interface SeatSelectionProps {
   bus: Bus;
@@ -17,22 +18,6 @@ interface SeatSelectionProps {
   destinationStopId: string;
   route: Route;
 }
-
-interface SeatLayoutConfig {
-  seatsPerRow: number;
-  aislePosition: number;
-  seatLabels: string[];
-}
-
-const SEAT_LAYOUT_CONFIGS: Record<string, SeatLayoutConfig> = {
-  standard: { seatsPerRow: 4, aislePosition: 2, seatLabels: ['A', 'B', 'C', 'D'] },
-  express: { seatsPerRow: 4, aislePosition: 2, seatLabels: ['A', 'B', 'C', 'D'] },
-  luxury: { seatsPerRow: 3, aislePosition: 1, seatLabels: ['A', 'B', 'C'] },
-  executive: { seatsPerRow: 3, aislePosition: 1, seatLabels: ['A', 'B', 'C'] },
-  coaster: { seatsPerRow: 3, aislePosition: 2, seatLabels: ['A', 'B', 'C'] },
-  minibus: { seatsPerRow: 3, aislePosition: 2, seatLabels: ['A', 'B', 'C'] },
-  high_capacity: { seatsPerRow: 5, aislePosition: 2, seatLabels: ['A', 'B', 'C', 'D', 'E'] },
-};
 
 const SeatSelection: React.FC<SeatSelectionProps> = ({
   bus,
@@ -53,54 +38,43 @@ const SeatSelection: React.FC<SeatSelectionProps> = ({
   const [error, setError] = useState('');
   const [hoveredSeat, setHoveredSeat] = useState<string | null>(null);
 
-  // ── Layout config ──────────────────────────────────────────────────────────
-  const layoutConfig = useMemo(() => {
-    // 1. Check if bus has dynamic custom seatLayout in registrationDetails or metadata
-    const customConfig = (bus?.registrationDetails as any)?.seatLayout || (bus as any)?.seatLayout;
-    if (customConfig && typeof customConfig === 'object' && customConfig.seatsPerRow) {
-      const seatsPerRow = Number(customConfig.seatsPerRow) || 4;
-      return {
-        seatsPerRow,
-        aislePosition: Number(customConfig.aislePosition) || Math.floor(seatsPerRow / 2),
-        seatLabels: Array.isArray(customConfig.seatLabels)
-          ? customConfig.seatLabels
-          : ['A', 'B', 'C', 'D', 'E', 'F'].slice(0, seatsPerRow),
-      };
+  // ── Layout & grid resolution ─────────────────────────────────────────────
+  const { grid: seatLayout, rowMeta, preset: layoutConfig } = useMemo(() => {
+    const customConfig =
+      (bus?.registrationDetails as any)?.seatLayout ||
+      (bus as any)?.seatLayout ||
+      (bus as any)?.metadata?.seatLayout;
+
+    let seatLayoutKey: string = 'coach';
+    let firstRowSeats: number | undefined = undefined;
+    let lastRowSeats: number | undefined = undefined;
+    let rowOverrides: any[] | undefined = undefined;
+
+    if (customConfig && typeof customConfig === 'object') {
+      if (customConfig.preset) seatLayoutKey = customConfig.preset;
+      else if (customConfig.key) seatLayoutKey = customConfig.key;
+      else if (customConfig.type) seatLayoutKey = customConfig.type;
+
+      if (Array.isArray(customConfig.rowOverrides)) rowOverrides = customConfig.rowOverrides;
+      if (customConfig.firstRowSeats != null) firstRowSeats = Number(customConfig.firstRowSeats);
+      if (customConfig.lastRowSeats != null) lastRowSeats = Number(customConfig.lastRowSeats);
+    } else {
+      // Fallback matching if legacy dataset
+      const typeStr = (bus?.busType || '').toLowerCase();
+      if (typeStr.includes('minibus')) seatLayoutKey = 'minibus';
+      else if (typeStr.includes('coaster')) seatLayoutKey = 'coaster';
+      else if (typeStr.includes('luxury') || typeStr.includes('vip')) seatLayoutKey = 'luxury';
+      else seatLayoutKey = 'coach';
     }
 
-    // 2. Fuzzy match busType string
-    const busType = (bus?.busType || 'standard').toLowerCase().trim();
-    if (busType.includes('luxury') || busType.includes('vip') || busType.includes('executive')) {
-      return SEAT_LAYOUT_CONFIGS.luxury;
-    }
-    if (busType.includes('coaster') || busType.includes('minibus')) {
-      return SEAT_LAYOUT_CONFIGS.coaster;
-    }
-    if (busType.includes('high') || busType.includes('5-across') || busType.includes('60')) {
-      return SEAT_LAYOUT_CONFIGS.high_capacity;
-    }
-    return SEAT_LAYOUT_CONFIGS[busType] || SEAT_LAYOUT_CONFIGS.standard;
+    return generateSeatGrid({
+      capacity: bus?.capacity || 40,
+      seatLayoutKey,
+      firstRowSeats,
+      lastRowSeats,
+      rowOverrides,
+    });
   }, [bus]);
-
-  // ── Seat grid ──────────────────────────────────────────────────────────────
-  const seatLayout = useMemo(() => {
-    const totalSeats = bus?.capacity || 40;
-    const { seatsPerRow, seatLabels } = layoutConfig;
-    const rows = Math.ceil(totalSeats / seatsPerRow);
-    const seats: (string | null)[][] = [];
-    let counter = 1;
-
-    for (let row = 1; row <= rows; row++) {
-      const rowSeats: (string | null)[] = [];
-      for (let col = 0; col < seatsPerRow && counter <= totalSeats; col++) {
-        rowSeats.push(`${row}${seatLabels[col]}`);
-        counter++;
-      }
-      while (rowSeats.length < seatsPerRow) rowSeats.push(null);
-      seats.push(rowSeats);
-    }
-    return seats;
-  }, [bus?.capacity, layoutConfig]);
 
   function normalizeSeatArray(value: unknown): string[] {
     if (Array.isArray(value)) return value.filter((seat): seat is string => typeof seat === 'string');
@@ -139,7 +113,7 @@ const SeatSelection: React.FC<SeatSelectionProps> = ({
     setInternalSelectedSeats(selectedSeats);
   }, [selectedSeats]);
 
-  // ── Notify parent of live selection (fires as seats are toggled, before "Continue") ──
+  // ── Notify parent of live selection (fires as seats are toggled) ───────────
   useEffect(() => {
     onSelectionChange?.(internalSelectedSeats);
   }, [internalSelectedSeats, onSelectionChange]);
@@ -180,8 +154,6 @@ const SeatSelection: React.FC<SeatSelectionProps> = ({
     [disabled, isSeatUnavailable, passengers]
   );
 
-  // FIX 2: Removed the useEffect that was calling onSeatSelection reactively.
-  // Selection is now submitted only when the user explicitly clicks "Continue".
   const handleContinue = () => {
     onSeatSelection(internalSelectedSeats);
   };
@@ -201,7 +173,7 @@ const SeatSelection: React.FC<SeatSelectionProps> = ({
 
   const getSeatClassName = useCallback((status: string) => {
     const base =
-      'w-8 h-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12 rounded-xl text-[10px] sm:text-xs lg:text-sm font-semibold transition-all duration-200 border-2 focus:outline-none focus:ring-2 focus:ring-brand-700 focus:ring-offset-2';
+      'w-8 h-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12 rounded-xl text-[10px] sm:text-xs lg:text-sm font-semibold transition-all duration-200 border-2 focus:outline-none focus:ring-2 focus:ring-brand-700 focus:ring-offset-2 flex items-center justify-center';
     switch (status) {
       case 'booked':
         return `${base} bg-gray-200 text-gray-500 border-gray-300 cursor-not-allowed opacity-75`;
@@ -234,7 +206,6 @@ const SeatSelection: React.FC<SeatSelectionProps> = ({
   const selectionProgress = Math.min((internalSelectedSeats.length / passengers) * 100, 100);
   const remaining = passengers - internalSelectedSeats.length;
 
-  // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <section
       className={`bg-white rounded-2xl shadow-lg border border-gray-100 p-6 ${className}`}
@@ -305,7 +276,6 @@ const SeatSelection: React.FC<SeatSelectionProps> = ({
           </div>
         </div>
       )}
-
       {/* Front-of-bus marker */}
       <div className="text-center mb-6">
         <div className="inline-flex items-center px-4 py-2 bg-gray-100 rounded-full border">
@@ -322,7 +292,18 @@ const SeatSelection: React.FC<SeatSelectionProps> = ({
           </div>
           <div className="space-y-3">
             {seatLayout.map((row: (string | null)[], rowIndex: number) => {
-              const { aislePosition } = layoutConfig;
+              const { seatsPerRow, aislePosition } = layoutConfig;
+              const meta = rowMeta?.[rowIndex];
+
+              // Trust the authoritative row type computed by generateSeatGrid —
+              // do NOT fall back to positional heuristics (isLastRow /
+              // validSeatsInRow > seatsPerRow). Those heuristics can misfire
+              // (e.g. a 'block' or 'asymmetric' row that happens to be the last
+              // generated row would incorrectly be force-rendered as a bench)
+              // now that generateSeatGrid already returns a correct rowMeta for
+              // every row.
+              const isBenchRow = meta?.type === 'bench';
+
               return (
                 <div key={rowIndex} className="flex items-center gap-2 min-w-max">
                   {/* Row number */}
@@ -330,69 +311,183 @@ const SeatSelection: React.FC<SeatSelectionProps> = ({
                     {rowIndex + 1}
                   </div>
 
-                  {/* Seating area (centered) */}
-                  <div className="flex-1 flex items-center justify-center">
-                    {/* Left seats */}
-                    <div className="flex gap-1">
-                      {row.slice(0, aislePosition).map((seat: string | null, colIndex: number) => {
-                        if (!seat)
-                          return (
-                            <div
-                              key={`spacer-left-${rowIndex}-${colIndex}`}
-                              className="w-8 h-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12"
-                            />
-                          );
-                        const status = getSeatStatus(seat);
-                        return (
-                          <button
-                            key={seat}
-                            className={getSeatClassName(status)}
-                            onClick={() => handleSeatClick(seat)}
-                            onMouseEnter={() => setHoveredSeat(seat)}
-                            onMouseLeave={() => setHoveredSeat(null)}
-                            disabled={status === 'booked' || status === 'reserved' || disabled}
-                            aria-label={getSeatAriaLabel(seat, status)}
-                            aria-pressed={status === 'selected'}
-                          >
-                            {seat}
-                          </button>
+                  {/* Seating area */}
+                  <div className="flex-1 flex justify-center">
+                    {meta?.type === 'block' ? (
+                      <div className="w-full max-w-[18rem] sm:max-w-[22rem] py-2 px-4 rounded-xl bg-slate-200/90 border border-slate-300 text-center text-xs font-bold text-slate-600 flex items-center justify-center gap-2 shadow-inner">
+                        <span className="inline-block w-2 h-2 rounded-full bg-slate-400"></span>
+                        <span>{meta.label || 'W/C'}</span>
+                      </div>
+                    ) : isBenchRow ? (
+                      /* Rear Bench Layout — aligned with standard row grid columns */
+                      (() => {
+                        const benchSeats = row.filter(
+                          (seat): seat is string => Boolean(seat)
                         );
-                      })}
+                        const hasMiddleAisleSeat = benchSeats.length > seatsPerRow;
+                        const leftSeats = benchSeats.slice(0, aislePosition);
+                        const middleSeat = hasMiddleAisleSeat ? benchSeats[aislePosition] : null;
+                        const rightSeats = hasMiddleAisleSeat
+                          ? benchSeats.slice(aislePosition + 1)
+                          : benchSeats.slice(aislePosition);
 
-                    </div>
+                        // Fill arrays to match exact column count
+                        const leftItems: (string | null)[] = [...leftSeats];
+                        while (leftItems.length < aislePosition) leftItems.push(null);
 
-                    {/* Aisle */}
-                    <div className="w-8 flex justify-center mx-3" aria-hidden="true">
-                      <div className="w-px h-8 sm:h-10 lg:h-12 bg-gradient-to-b from-gray-200 via-gray-300 to-gray-200" />
-                    </div>
+                        const rightCount = seatsPerRow - aislePosition;
+                        const rightItems: (string | null)[] = [...rightSeats];
+                        while (rightItems.length < rightCount) rightItems.push(null);
 
-                    {/* Right seats */}
-                    <div className="flex gap-1">
-                      {row.slice(aislePosition).map((seat: string | null, colIndex: number) => {
-                        if (!seat)
-                          return (
-                            <div
-                              key={`spacer-right-${rowIndex}-${colIndex}`}
-                              className="w-8 h-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12"
-                            />
-                          );
-                        const status = getSeatStatus(seat);
                         return (
-                          <button
-                            key={seat}
-                            className={getSeatClassName(status)}
-                            onClick={() => handleSeatClick(seat)}
-                            onMouseEnter={() => setHoveredSeat(seat)}
-                            onMouseLeave={() => setHoveredSeat(null)}
-                            disabled={status === 'booked' || status === 'reserved' || disabled}
-                            aria-label={getSeatAriaLabel(seat, status)}
-                            aria-pressed={status === 'selected'}
+                          <div
+                            className="grid gap-1 justify-center items-center justify-items-center w-[18rem] sm:w-[22rem]"
+                            style={{
+                              gridTemplateColumns: `repeat(${aislePosition}, minmax(2rem, 3rem)) minmax(1.5rem, 2rem) repeat(${seatsPerRow - aislePosition}, minmax(2rem, 3rem))`,
+                            }}
                           >
-                            {seat}
-                          </button>
+                            {/* Left bench seats */}
+                            {leftItems.map((seat: string | null, colIndex: number) => {
+                              if (!seat) return <div key={`bench-left-space-${colIndex}`} className="w-8 h-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12 pointer-events-none" />;
+                              const status = getSeatStatus(seat);
+                              return (
+                                <button
+                                  key={`${seat}-${colIndex}`}
+                                  className={getSeatClassName(status)}
+                                  onClick={() => handleSeatClick(seat)}
+                                  onMouseEnter={() => setHoveredSeat(seat)}
+                                  onMouseLeave={() => setHoveredSeat(null)}
+                                  disabled={status === 'booked' || status === 'reserved' || disabled}
+                                  aria-label={getSeatAriaLabel(seat, status)}
+                                  aria-pressed={status === 'selected'}
+                                >
+                                  {seat}
+                                </button>
+                              );
+                            })}
+
+                            {/* Middle Aisle seat or spacer */}
+                            {middleSeat ? (() => {
+                              const status = getSeatStatus(middleSeat);
+                              return (
+                                <button
+                                  key={`${middleSeat}-mid`}
+                                  className={getSeatClassName(status)}
+                                  onClick={() => handleSeatClick(middleSeat)}
+                                  onMouseEnter={() => setHoveredSeat(middleSeat)}
+                                  onMouseLeave={() => setHoveredSeat(null)}
+                                  disabled={status === 'booked' || status === 'reserved' || disabled}
+                                  aria-label={getSeatAriaLabel(middleSeat, status)}
+                                  aria-pressed={status === 'selected'}
+                                >
+                                  {middleSeat}
+                                </button>
+                              );
+                            })() : (
+                              <div className="w-4 sm:w-6 h-8 sm:h-10 lg:h-12 pointer-events-none" />
+                            )}
+
+                            {/* Right bench seats */}
+                            {rightItems.map((seat: string | null, colIndex: number) => {
+                              if (!seat) return <div key={`bench-right-space-${colIndex}`} className="w-8 h-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12 pointer-events-none" />;
+                              const status = getSeatStatus(seat);
+                              return (
+                                <button
+                                  key={`${seat}-${colIndex}`}
+                                  className={getSeatClassName(status)}
+                                  onClick={() => handleSeatClick(seat)}
+                                  onMouseEnter={() => setHoveredSeat(seat)}
+                                  onMouseLeave={() => setHoveredSeat(null)}
+                                  disabled={status === 'booked' || status === 'reserved' || disabled}
+                                  aria-label={getSeatAriaLabel(seat, status)}
+                                  aria-pressed={status === 'selected'}
+                                >
+                                  {seat}
+                                </button>
+                              );
+                            })}
+                          </div>
                         );
-                      })}
-                    </div>
+                      })()
+                    ) : (
+                      /* Standard Row Layout (With Aisle Split) */
+                      (() => {
+                        const leftCount = aislePosition;
+                        const rightCount = seatsPerRow - aislePosition;
+
+                        const leftSeats = [...row.slice(0, leftCount)];
+                        while (leftSeats.length < leftCount) leftSeats.push(null);
+
+                        const rightSeats = [...row.slice(leftCount)];
+                        while (rightSeats.length < rightCount) rightSeats.push(null);
+
+                        return (
+                          <div
+                            className="grid gap-1 justify-center items-center justify-items-center w-[18rem] sm:w-[22rem]"
+                            style={{
+                              gridTemplateColumns: `repeat(${aislePosition}, minmax(2rem, 3rem)) minmax(1.5rem, 2rem) repeat(${seatsPerRow - aislePosition}, minmax(2rem, 3rem))`,
+                            }}
+                          >
+                            {/* Left seats */}
+                            {leftSeats.map((seat: string | null, colIndex: number) => {
+                              if (!seat)
+                                return (
+                                  <div
+                                    key={`spacer-left-${rowIndex}-${colIndex}`}
+                                    className="w-8 h-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12 pointer-events-none"
+                                  />
+                                );
+                              const status = getSeatStatus(seat);
+                              return (
+                                <button
+                                  key={`${seat}-${colIndex}`}
+                                  className={getSeatClassName(status)}
+                                  onClick={() => handleSeatClick(seat)}
+                                  onMouseEnter={() => setHoveredSeat(seat)}
+                                  onMouseLeave={() => setHoveredSeat(null)}
+                                  disabled={status === 'booked' || status === 'reserved' || disabled}
+                                  aria-label={getSeatAriaLabel(seat, status)}
+                                  aria-pressed={status === 'selected'}
+                                >
+                                  {seat}
+                                </button>
+                              );
+                            })}
+
+                            {/* Dedicated Aisle Column */}
+                            <div className="flex justify-center items-center w-full h-full px-1" aria-hidden="true">
+                              <div className="w-px h-8 sm:h-10 lg:h-12 bg-gradient-to-b from-gray-200 via-gray-300 to-gray-200" />
+                            </div>
+
+                            {/* Right seats */}
+                            {rightSeats.map((seat: string | null, colIndex: number) => {
+                              if (!seat)
+                                return (
+                                  <div
+                                    key={`spacer-right-${rowIndex}-${colIndex}`}
+                                    className="w-8 h-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12 pointer-events-none"
+                                  />
+                                );
+                              const status = getSeatStatus(seat);
+                              return (
+                                <button
+                                  key={`${seat}-${colIndex}`}
+                                  className={getSeatClassName(status)}
+                                  onClick={() => handleSeatClick(seat)}
+                                  onMouseEnter={() => setHoveredSeat(seat)}
+                                  onMouseLeave={() => setHoveredSeat(null)}
+                                  disabled={status === 'booked' || status === 'reserved' || disabled}
+                                  aria-label={getSeatAriaLabel(seat, status)}
+                                  aria-pressed={status === 'selected'}
+                                >
+                                  {seat}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        );
+                      })()
+                    )}
                   </div>
                 </div>
               );
@@ -431,7 +526,7 @@ const SeatSelection: React.FC<SeatSelectionProps> = ({
         <span>{reservedSeatsCount} seats reserved</span>
       </div>
 
-      {/* FIX 2: Explicit Continue button — onSeatSelection only fires here, not reactively */}
+      {/* Continue button */}
       {!hideContinue && (
         <button
           onClick={handleContinue}

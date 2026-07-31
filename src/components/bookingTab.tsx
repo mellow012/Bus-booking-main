@@ -68,16 +68,7 @@ function isSegmentBooking(booking: Booking, route?: Route): boolean {
   return norm(seg.from) !== norm(route.origin) || norm(seg.to) !== norm(route.destination);
 }
 
-// ─── Seat layout ──────────────────────────────────────────────────────────────
-
-const SEAT_CONFIGS: Record<string, { cols: number; labels: string[] }> = {
-  standard: { cols: 4, labels: ["A","B","C","D"] },
-  luxury:   { cols: 3, labels: ["A","B","C"]     },
-  sleeper:  { cols: 3, labels: ["A","B","C"]     },
-  express:  { cols: 4, labels: ["A","B","C","D"] },
-  minibus:  { cols: 3, labels: ["A","B","C"]     },
-  economy:  { cols: 4, labels: ["A","B","C","D"] },
-};
+import { generateSeatGrid } from "@/lib/seatLayout";
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -117,25 +108,41 @@ const SeatMap: FC<{
   bus: Bus; schedule: Schedule; bookings: Booking[]; route?: Route;
   onSeatClick: (b: Booking) => void;
 }> = ({ bus, schedule, bookings, route, onSeatClick }) => {
-  const cfg      = SEAT_CONFIGS[bus.busType?.toLowerCase() ?? "standard"] ?? SEAT_CONFIGS.standard;
   const capacity = bus.capacity ?? 40;
   const booked   = bookings.reduce((n, b) => n + (b.seatNumbers?.length ?? 0), 0);
   const fill     = capacity > 0 ? (booked / capacity) * 100 : 0;
 
-  const rows = useMemo(() => {
-    const grid: (string | null)[][] = [];
-    let n = 1;
-    while (n <= capacity) {
-      const row: (string | null)[] = [];
-      for (let c = 0; c < cfg.cols && n <= capacity; c++) {
-        row.push(`${Math.ceil(n / cfg.cols)}${cfg.labels[c]}`);
-        n++;
-      }
-      while (row.length < cfg.cols) row.push(null);
-      grid.push(row);
+  const { grid: rows, rowMeta, seatsPerRow, aislePosition } = useMemo(() => {
+    const customConfig = (bus?.registrationDetails as any)?.seatLayout || (bus as any)?.seatLayout || (bus as any)?.metadata?.seatLayout;
+    let seatLayoutKey: string = 'coach';
+    let firstRowSeats: number | undefined = undefined;
+    let lastRowSeats: number | undefined = undefined;
+    let rowOverrides: any[] | undefined = undefined;
+
+    if (customConfig && typeof customConfig === 'object') {
+      if (customConfig.preset) seatLayoutKey = customConfig.preset;
+      else if (customConfig.key) seatLayoutKey = customConfig.key;
+      else if (customConfig.type) seatLayoutKey = customConfig.type;
+      
+      if (Array.isArray(customConfig.rowOverrides)) rowOverrides = customConfig.rowOverrides;
+      if (customConfig.firstRowSeats != null) firstRowSeats = Number(customConfig.firstRowSeats);
+      if (customConfig.lastRowSeats != null) lastRowSeats = Number(customConfig.lastRowSeats);
+    } else {
+      const typeStr = (bus?.busType || '').toLowerCase();
+      if (typeStr.includes('minibus')) seatLayoutKey = 'minibus';
+      else if (typeStr.includes('coaster')) seatLayoutKey = 'coaster';
+      else if (typeStr.includes('luxury') || typeStr.includes('vip')) seatLayoutKey = 'luxury';
+      else seatLayoutKey = 'coach';
     }
-    return grid;
-  }, [capacity, cfg]);
+
+    return generateSeatGrid({
+      capacity,
+      seatLayoutKey,
+      firstRowSeats,
+      lastRowSeats,
+      rowOverrides,
+    });
+  }, [bus, capacity]);
 
   const seatMap = useMemo(() => {
     const m = new Map<string, Booking>();
@@ -182,29 +189,113 @@ const SeatMap: FC<{
           <span className="px-5 py-1.5 bg-gray-900 rounded-xl text-white text-[10px] font-bold uppercase tracking-widest shadow-lg">🚌 Driver</span>
         </div>
         <div className="max-w-[280px] mx-auto space-y-2">
-          {rows.map((row, ri) => (
-            <div key={ri} className="flex justify-center gap-2">
-              {row.map((seat, ci) => {
-                if (!seat) return <div key={ci} className="w-10 h-10 sm:w-12 sm:h-12" />;
-                const booking = seatMap.get(seat);
-                const pax = booking?.passengerDetails?.find((p: any) => p.seatNumber === seat);
-                const seg = booking ? passengerSegment(booking, route) : null;
-                return (
-                  <button key={ci}
-                    disabled={!booking}
-                    onClick={() => booking && onSeatClick(booking)}
-                    title={seg ? `${pax?.name ?? "Passenger"} · ${seg.from} → ${seg.to}` : "Available"}
-                    className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl text-xs font-bold border-2 transition-all duration-300 ${
-                      booking
-                        ? "bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100 hover:scale-110 cursor-pointer shadow-sm"
-                        : "bg-gray-50 border-gray-100 text-gray-300 cursor-default"
-                    }`}>
-                    {seat}
-                  </button>
-                );
-              })}
-            </div>
-          ))}
+          {rows.map((row, ri) => {
+            const meta = rowMeta?.[ri];
+            if (meta?.type === 'block') {
+              return (
+                <div key={ri} className="w-full py-1.5 px-3 rounded-lg bg-gray-100 border border-gray-200 text-center text-[10px] font-bold text-gray-500 flex items-center justify-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-gray-400"></span>
+                  <span>{meta.label || 'W/C'}</span>
+                </div>
+              );
+            }
+
+            if (meta?.type === 'bench') {
+              return (
+                <div 
+                  key={ri}
+                  className="grid gap-1.5 items-center justify-items-center w-full"
+                  style={{ gridTemplateColumns: `repeat(${row.length}, minmax(0, 1fr))` }}
+                >
+                  {row.map((seat, ci) => {
+                    if (!seat) return <div key={ci} className="w-10 h-10 sm:w-12 sm:h-12 pointer-events-none" />;
+                    const booking = seatMap.get(seat);
+                    const pax = booking?.passengerDetails?.find((p: any) => p.seatNumber === seat);
+                    const seg = booking ? passengerSegment(booking, route) : null;
+                    return (
+                      <button key={ci}
+                        disabled={!booking}
+                        onClick={() => booking && onSeatClick(booking)}
+                        title={seg ? `${pax?.name ?? "Passenger"} · ${seg.from} → ${seg.to}` : "Available"}
+                        className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl text-xs font-bold border-2 transition-all duration-300 ${
+                          booking
+                            ? "bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100 hover:scale-110 cursor-pointer shadow-sm"
+                            : "bg-gray-50 border-gray-100 text-gray-300 cursor-default"
+                        }`}>
+                        {seat}
+                      </button>
+                    );
+                  })}
+                </div>
+              );
+            }
+
+            const leftCount = aislePosition;
+            const rightCount = seatsPerRow - aislePosition;
+
+            const leftSeats = [...row.slice(0, leftCount)];
+            while (leftSeats.length < leftCount) leftSeats.push(null);
+
+            const rightSeats = [...row.slice(leftCount)];
+            while (rightSeats.length < rightCount) rightSeats.push(null);
+
+            return (
+              <div 
+                key={ri}
+                className="grid gap-1.5 items-center justify-items-center w-full"
+                style={{
+                  gridTemplateColumns: `repeat(${aislePosition}, minmax(0, 1fr)) minmax(1.25rem, auto) repeat(${seatsPerRow - aislePosition}, minmax(0, 1fr))`
+                }}
+              >
+                {/* Left seats */}
+                {leftSeats.map((seat, ci) => {
+                  if (!seat) return <div key={`left-${ci}`} className="w-10 h-10 sm:w-12 sm:h-12 pointer-events-none" />;
+                  const booking = seatMap.get(seat);
+                  const pax = booking?.passengerDetails?.find((p: any) => p.seatNumber === seat);
+                  const seg = booking ? passengerSegment(booking, route) : null;
+                  return (
+                    <button key={ci}
+                      disabled={!booking}
+                      onClick={() => booking && onSeatClick(booking)}
+                      title={seg ? `${pax?.name ?? "Passenger"} · ${seg.from} → ${seg.to}` : "Available"}
+                      className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl text-xs font-bold border-2 transition-all duration-300 ${
+                        booking
+                          ? "bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100 hover:scale-110 cursor-pointer shadow-sm"
+                          : "bg-gray-50 border-gray-100 text-gray-300 cursor-default"
+                      }`}>
+                      {seat}
+                    </button>
+                  );
+                })}
+
+                {/* Dedicated Aisle Grid Column */}
+                <div className="w-8 flex justify-center items-center h-full" aria-hidden="true">
+                  <div className="w-px h-8 sm:h-10 border-r border-dashed border-slate-300" />
+                </div>
+
+                {/* Right seats */}
+                {rightSeats.map((seat, ci) => {
+                  if (!seat) return <div key={`right-${ci}`} className="w-10 h-10 sm:w-12 sm:h-12 pointer-events-none" />;
+                  const booking = seatMap.get(seat);
+                  const pax = booking?.passengerDetails?.find((p: any) => p.seatNumber === seat);
+                  const seg = booking ? passengerSegment(booking, route) : null;
+                  return (
+                    <button key={ci}
+                      disabled={!booking}
+                      onClick={() => booking && onSeatClick(booking)}
+                      title={seg ? `${pax?.name ?? "Passenger"} · ${seg.from} → ${seg.to}` : "Available"}
+                      className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl text-xs font-bold border-2 transition-all duration-300 ${
+                        booking
+                          ? "bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100 hover:scale-110 cursor-pointer shadow-sm"
+                          : "bg-gray-50 border-gray-100 text-gray-300 cursor-default"
+                      }`}>
+                      {seat}
+                    </button>
+                  );
+                })}
+              </div>
+            );
+          })}
         </div>
         <div className="flex justify-center gap-8 mt-8 text-[10px] font-bold uppercase tracking-widest text-gray-400">
           <span className="flex items-center gap-2"><span className="w-4 h-4 rounded-lg border-2 border-gray-100 bg-gray-50 inline-block" />Free</span>

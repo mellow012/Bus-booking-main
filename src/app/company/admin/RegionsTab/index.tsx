@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { MapPin, Bus as BusIcon, Calendar } from 'lucide-react';
+import { MapPin, Calendar } from 'lucide-react';
 import { Route, Bus, Schedule, Booking } from '@/types';
 import { useRouter, useSearchParams } from 'next/navigation';
 
@@ -295,9 +295,6 @@ export default function RegionsTab({ dashboard }: RegionsTabProps) {
           <p className="mt-1 text-sm text-gray-500">Select a branch to manage its routes, buses, and schedules.</p>
         </div>
         <div className="flex gap-2">
-          <button onClick={() => openModal('addBus')} className="inline-flex items-center gap-2 rounded-lg bg-white border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 shadow-sm">
-            <BusIcon className="h-4 w-4" /> Add Bus
-          </button>
           <button
             onClick={() => {
               if (selectedBranchId) {

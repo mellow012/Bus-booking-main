@@ -6,7 +6,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Dialog, Transition } from '@headlessui/react';
-import { Loader2, X } from 'lucide-react';
+import { Loader2, Users, X } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { Operator, Region } from '@prisma/client';
 import { useAppToast } from '@/contexts/ToastContext';
 
@@ -116,38 +117,59 @@ export default function EditOperatorModal({ isOpen, onClose, operator, companyId
 
   return (
     <Transition.Root show={isOpen} as={Fragment}>
-      <Dialog as="div" className="relative z-10" onClose={onClose}>
-        <Transition.Child as={Fragment} enter="ease-out duration-300" enterFrom="opacity-0" enterTo="opacity-100" leave="ease-in duration-200" leaveFrom="opacity-100" leaveTo="opacity-0"><div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" /></Transition.Child>
-        <div className="fixed inset-0 z-10 overflow-y-auto">
-          <div className="flex min-h-full items-center justify-center p-4 text-center sm:p-0">
-            <Transition.Child as={Fragment} enter="ease-out duration-300" enterFrom="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95" enterTo="opacity-100 translate-y-0 sm:scale-100" leave="ease-in duration-200" leaveFrom="opacity-100 translate-y-0 sm:scale-100" leaveTo="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95">
-              <Dialog.Panel className="relative transform overflow-hidden rounded-lg bg-white px-4 pb-4 pt-5 text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg sm:p-6">
-                <div className="absolute right-0 top-0 hidden pr-4 pt-4 sm:block"><button type="button" className="rounded-md bg-white text-gray-400 hover:text-gray-500 focus:outline-none" onClick={onClose}><X className="h-6 w-6" /></button></div>
-                <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-                  <Dialog.Title as="h3" className="text-lg font-medium leading-6 text-gray-900">Edit Operator: {operator?.name}</Dialog.Title>
+      <Dialog as="div" className="relative z-50" onClose={onClose}>
+        <Transition.Child as={Fragment} enter="ease-out duration-300" enterFrom="opacity-0" enterTo="opacity-100" leave="ease-in duration-200" leaveFrom="opacity-100" leaveTo="opacity-0">
+          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity" />
+        </Transition.Child>
+
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex min-h-full items-center justify-center p-4 text-center">
+            <Transition.Child as={Fragment} enter="ease-out duration-300" enterFrom="opacity-0 scale-95" enterTo="opacity-100 scale-100" leave="ease-in duration-200" leaveFrom="opacity-100 scale-100" leaveTo="opacity-0 scale-95">
+              <Dialog.Panel className="relative transform overflow-hidden rounded-2xl bg-white text-left shadow-xl transition-all w-full max-w-md border border-gray-100">
+                <div className="px-6 py-4 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
+                  <Dialog.Title as="h3" className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                    <Users className="w-5 h-5 text-indigo-600" />
+                    Edit Operator: {operator?.name}
+                  </Dialog.Title>
+                  <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-600 text-lg font-semibold">×</button>
+                </div>
+
+                <form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-4">
                   <div>
                     <label htmlFor="role" className="block text-sm font-medium text-gray-700">Role</label>
-                    <select id="role" {...register('role')} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm sm:text-sm"><option value="operator">Operator</option><option value="conductor">Conductor</option></select>
-                    {errors.role && <p className="mt-1 text-sm text-red-600">{errors.role.message}</p>}
+                    <select id="role" {...register('role')} className="h-10 mt-1 block w-full rounded-xl border border-gray-200 px-3 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white">
+                      <option value="operator">Operator</option>
+                      <option value="conductor">Conductor</option>
+                    </select>
+                    {errors.role && <p className="mt-1 text-xs text-red-600">{errors.role.message}</p>}
                   </div>
                   <div>
                     <label htmlFor="status" className="block text-sm font-medium text-gray-700">Status</label>
-                    <select id="status" {...register('status')} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm sm:text-sm"><option value="invited">Invited</option><option value="active">Active</option><option value="inactive">Inactive</option><option value="suspended">Suspended</option></select>
-                    {errors.status && <p className="mt-1 text-sm text-red-600">{errors.status.message}</p>}
+                    <select id="status" {...register('status')} className="h-10 mt-1 block w-full rounded-xl border border-gray-200 px-3 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white">
+                      <option value="invited">Invited</option>
+                      <option value="active">Active</option>
+                      <option value="inactive">Inactive</option>
+                      <option value="suspended">Suspended</option>
+                    </select>
+                    {errors.status && <p className="mt-1 text-xs text-red-600">{errors.status.message}</p>}
                   </div>
                   <div>
                     <label htmlFor="regionId" className="block text-sm font-medium text-gray-700">Region</label>
-                    <select id="regionId" {...register('regionId')} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm sm:text-sm" disabled={isLoadingRegions}>
+                    <select id="regionId" {...register('regionId')} className="h-10 mt-1 block w-full rounded-xl border border-gray-200 px-3 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white" disabled={isLoadingRegions}>
                       <option value="">No Region</option>
                       {regions?.map(region => <option key={region.id} value={region.id}>{region.name}</option>)}
                     </select>
-                    {errors.regionId && <p className="mt-1 text-sm text-red-600">{errors.regionId.message}</p>}
+                    {errors.regionId && <p className="mt-1 text-xs text-red-600">{errors.regionId.message}</p>}
                   </div>
-                  {mutation.isError && <p className="text-sm text-red-600">Error: {mutation.error.message}</p>}
-                  <div className="mt-5 sm:mt-6">
-                    <button type="submit" disabled={isSubmitting} className="inline-flex w-full justify-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50">
-                      {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Save Changes'}
-                    </button>
+                  {mutation.isError && <p className="text-xs text-red-600">Error: {mutation.error.message}</p>}
+                  
+                  <div className="flex justify-end gap-3 pt-4 border-t border-gray-50 mt-6">
+                    <Button type="button" variant="outline" onClick={onClose} className="rounded-xl h-10">
+                      Cancel
+                    </Button>
+                    <Button type="submit" disabled={isSubmitting} className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl h-10 min-w-[100px]">
+                      {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save Changes'}
+                    </Button>
                   </div>
                 </form>
               </Dialog.Panel>

@@ -34,9 +34,13 @@ export const metadata: Metadata = {
     title: "TibhukeBus",
   },
   icons: {
-    icon: "/tibhukebus_logo_transparent.png",
+    icon: [
+      { url: "/tibhukebus_logo_transparent.png", type: "image/png" },
+    ],
     shortcut: "/tibhukebus_logo_transparent.png",
-    apple: "/tibhukebus_logo_transparent.png",
+    apple: [
+      { url: "/tibhukebus_logo_transparent.png", type: "image/png" },
+    ],
   },
   openGraph: {
     type: "website",
@@ -67,6 +71,7 @@ export const metadata: Metadata = {
 };
 
 import { MobileBottomNav } from "@/components/MobileBottomNav";
+import { NavigationProgressBar } from "@/components/NavigationProgressBar";
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const locale   = await getLocale();
@@ -79,6 +84,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <AuthProvider>
             <NotificationProviderWrapper>
               <ToastProvider>
+                <NavigationProgressBar />
                 <div className="min-h-screen flex flex-col">
                   <Header />
                   <main className="flex-grow pb-12 page-content">

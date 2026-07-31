@@ -24,6 +24,7 @@ export default function ProfileTab({ dashboard }: ProfileTabProps) {
     description: company?.description || '',
     whatsapp: company?.contactSettings?.whatsapp || '',
     website: company?.contactSettings?.website || '',
+    returnTripDiscountPercent: company?.returnTripDiscountPercent ?? 0,
   });
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(company?.logo || null);
@@ -50,6 +51,7 @@ export default function ProfileTab({ dashboard }: ProfileTabProps) {
         description: company.description || '',
         whatsapp: company.contactSettings?.whatsapp || '',
         website: company.contactSettings?.website || '',
+        returnTripDiscountPercent: company.returnTripDiscountPercent ?? 0,
       });
       setOperatingHours(() => {
         const defaults: Record<string, { open: string; close: string; closed: boolean }> = {};
@@ -89,11 +91,20 @@ export default function ProfileTab({ dashboard }: ProfileTabProps) {
     try {
       dashboard.setIsBusy?.(true);
 
+      const discountVal = parseFloat(String(formData.returnTripDiscountPercent || 0));
+      if (isNaN(discountVal) || discountVal < 0 || discountVal > 100) {
+        dashboard.showAlert('error', 'Return trip discount percentage must be between 0 and 100');
+        setIsSaving(false);
+        dashboard.setIsBusy?.(false);
+        return;
+      }
+
       const updatedData: Record<string, any> = {
         name: formData.name,
         phone: formData.contactPhone,
         address: formData.address,
         description: formData.description,
+        returnTripDiscountPercent: discountVal,
         operatingHours,
         contactSettings: {
           ...(company?.contactSettings || {}),
@@ -264,6 +275,39 @@ export default function ProfileTab({ dashboard }: ProfileTabProps) {
             </div>
           </div>
 
+          {/* Pricing & Discounts */}
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+            <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider border-b pb-2 mb-4 flex items-center gap-2">
+              <Settings className="w-4 h-4 text-indigo-600" /> Pricing & Discounts
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Return Trip Discount (%)
+                </label>
+                <div className="relative rounded-lg shadow-sm">
+                  <input
+                    type="number"
+                    name="returnTripDiscountPercent"
+                    min="0"
+                    max="100"
+                    step="0.5"
+                    value={formData.returnTripDiscountPercent}
+                    onChange={handleChange}
+                    className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border pr-8"
+                    placeholder="0"
+                  />
+                  <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-gray-400 font-bold text-sm">
+                    %
+                  </div>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Automatically applied to the combined total fare whenever a customer books a round trip returning with your company (0 = no discount).
+                </p>
+              </div>
+            </div>
+          </div>
+
           {/* Operating Hours */}
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
             <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider border-b pb-2 mb-4 flex items-center gap-2">
@@ -394,6 +438,23 @@ export default function ProfileTab({ dashboard }: ProfileTabProps) {
               <div>
                 <div className="text-xs text-gray-500">WhatsApp Business</div>
                 <div className="text-sm font-medium text-gray-900">{whatsapp}</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+            <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider border-b pb-2 mb-4 flex items-center gap-2">
+              <Settings className="w-4 h-4 text-indigo-600" /> Pricing & Discounts
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <div className="text-xs text-gray-500">Return Trip Discount</div>
+                <div className="text-sm font-bold text-indigo-600">
+                  {company.returnTripDiscountPercent ? `${company.returnTripDiscountPercent}%` : '0% (No discount)'}
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Applied to round-trip bookings returning with your company.
+                </p>
               </div>
             </div>
           </div>

@@ -38,8 +38,14 @@ export const CATEGORIES = [
   { id: 'config',    label: 'Profile',              icon: User,            subTabs: ['profile'] },
 ] as const;
 
-export const BUS_TYPES    = ['AC', 'Non-AC', 'Sleeper', 'Semi-Sleeper', 'Luxury', 'Economy', 'Minibus'] as const;
-export const BUS_STATUSES = ['active', 'inactive', 'maintenance'] as const;
+export const BUS_TYPES          = ['Standard', 'VIP', 'Semi-Luxury', 'Sleeper', 'AC', 'Non-AC', 'Economy'] as const;
+export const SEAT_LAYOUT_TYPES  = [
+  { key: 'minibus', label: 'Minibus (1+3 Layout)' },
+  { key: 'coaster', label: 'Coaster (2+2 Layout)' },
+  { key: 'coach',   label: 'Coach (2+3 Layout)' },
+  { key: 'luxury',  label: 'Luxury (2+1 Layout)' },
+] as const;
+export const BUS_STATUSES       = ['active', 'inactive', 'maintenance'] as const;
 export const CAPACITY_LIMITS = { min: 10, max: 100 } as const;
 
 // ── Derived types ─────────────────────────────────────────────────────────────

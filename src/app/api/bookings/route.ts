@@ -200,6 +200,11 @@ export async function GET(req: NextRequest) {
         }
       }
 
+      // 3. Fallback to company phone if no direct operator user phone found
+      if (!phone) {
+        phone = b.schedule?.company?.phone || b.company?.phone || '';
+      }
+
       const arr = b.schedule?.arrivalDateTime ? new Date(b.schedule.arrivalDateTime) : null;
       const dep = b.schedule?.departureDateTime ? new Date(b.schedule.departureDateTime) : null;
       const tripTime = (arr && !isNaN(arr.getTime())) ? arr.getTime() : (dep && !isNaN(dep.getTime())) ? dep.getTime() : null;

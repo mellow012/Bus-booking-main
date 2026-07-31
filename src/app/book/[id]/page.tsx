@@ -19,6 +19,7 @@ import {
 import InlinePassengerForm, { PassengerFormState } from "./InlinePassengerForm";
 import useBookBus from "./useBookBus";
 import BookingConfirmModal from "./BookingConfirmModal";
+import BookBusLoading from "./loading";
 import { formatTime, formatDate, formatDuration } from "./utils";
 
 // ================================
@@ -74,21 +75,7 @@ export default function BookBus() {
   // ── Render: loading ────────────────────────────────────────────────────────
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-brand-50 to-brand-100/50 pt-28 sm:pt-32 lg:pt-36">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="animate-pulse space-y-6">
-            <Card><CardContent className="p-6">
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="space-y-3"><div className="h-6 bg-gray-200 rounded w-3/4" /><div className="h-4 bg-gray-200 rounded w-1/2" /></div>
-                <div className="text-center space-y-3"><div className="h-6 bg-gray-200 rounded w-1/3 mx-auto" /></div>
-                <div className="text-right space-y-3"><div className="h-6 bg-gray-200 rounded w-1/4 ml-auto" /></div>
-              </div>
-            </CardContent></Card>
-          </div>
-        </div>
-      </div>
-    );
+    return <BookBusLoading />;
   }
 
   if (!schedule || !bus || !route || !company) {
@@ -523,8 +510,9 @@ export default function BookBus() {
         {/* ── Step 3: Confirm booking modal ── */}
         <BookingConfirmModal
           isOpen={confirmModalOpen}
-          onClose={() => { if (!bookingLoading) setConfirmModalOpen(false); }}
+          onClose={() => { if (!bookingLoading) { setConfirmModalOpen(false); setCurrentStep("passengers"); } }}
           schedule={schedule}
+          company={company}
           originStopId={originStopId}
           destinationStopId={destinationStopId}
           stopName={stopName}

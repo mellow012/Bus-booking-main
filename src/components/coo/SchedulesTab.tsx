@@ -44,18 +44,49 @@ export default function SchedulesTab({ companyId, routes = [], buses = [] }: Pro
   };
   const [formData, setFormData] = useState(initialFormState);
 
+  const { data: fetchedBusesData } = useQuery({
+    queryKey: ['cooBuses', { companyId }],
+    queryFn: async () => {
+      const url = new URL('/api/admin/coo/buses', window.location.origin);
+      if (companyId) url.searchParams.set('companyId', companyId);
+      url.searchParams.set('limit', '500');
+      const res = await fetch(url.toString(), { credentials: 'same-origin' });
+      if (!res.ok) return [];
+      const json = await res.json();
+      return json.buses || json || [];
+    },
+    enabled: buses.length === 0,
+  });
+
+  const { data: fetchedRoutesData } = useQuery({
+    queryKey: ['cooRoutes', { companyId }],
+    queryFn: async () => {
+      const url = new URL('/api/admin/coo/routes', window.location.origin);
+      if (companyId) url.searchParams.set('companyId', companyId);
+      url.searchParams.set('limit', '500');
+      const res = await fetch(url.toString(), { credentials: 'same-origin' });
+      if (!res.ok) return [];
+      const json = await res.json();
+      return json.routes || json || [];
+    },
+    enabled: routes.length === 0,
+  });
+
+  const effectiveBuses = buses.length > 0 ? buses : (fetchedBusesData || []);
+  const effectiveRoutes = routes.length > 0 ? routes : (fetchedRoutesData || []);
+
   // Auto-populate price and seats from route/bus
   const handleRouteChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const rid = e.target.value;
     setFormData(prev => ({ ...prev, routeId: rid }));
-    const route = routes.find(r => r.id === rid);
+    const route = effectiveRoutes.find((r: any) => r.id === rid);
     if (route) setFormData(prev => ({ ...prev, price: route.baseFare || 0 }));
   };
 
   const handleBusChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const bid = e.target.value;
     setFormData(prev => ({ ...prev, busId: bid }));
-    const bus = buses.find(b => b.id === bid);
+    const bus = effectiveBuses.find((b: any) => b.id === bid);
     if (bus) setFormData(prev => ({ ...prev, availableSeats: bus.seatCount || bus.capacity || 0 }));
   };
 
@@ -260,14 +291,14 @@ export default function SchedulesTab({ companyId, routes = [], buses = [] }: Pro
                 <label className="block text-sm font-bold text-gray-700 mb-1">Route</label>
                 <select value={formData.routeId} onChange={handleRouteChange} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
                   <option value="">Select Route</option>
-                  {routes.map(r => <option key={r.id} value={r.id}>{r.origin} → {r.destination}</option>)}
+                  {effectiveRoutes.map((r: any) => <option key={r.id} value={r.id}>{r.origin} → {r.destination}</option>)}
                 </select>
               </div>
               <div>
                 <label className="block text-sm font-bold text-gray-700 mb-1">Bus</label>
                 <select value={formData.busId} onChange={handleBusChange} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
                   <option value="">Select Bus</option>
-                  {buses.map(b => <option key={b.id} value={b.id}>{b.registration || b.licensePlate}</option>)}
+                  {effectiveBuses.map((b: any) => <option key={b.id} value={b.id}>{b.registration || b.licensePlate}</option>)}
                 </select>
               </div>
               <div className="grid grid-cols-2 gap-3">
@@ -313,14 +344,14 @@ export default function SchedulesTab({ companyId, routes = [], buses = [] }: Pro
                 <label className="block text-sm font-bold text-gray-700 mb-1">Route</label>
                 <select value={formData.routeId} onChange={handleRouteChange} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
                   <option value="">Select Route</option>
-                  {routes.map(r => <option key={r.id} value={r.id}>{r.origin} → {r.destination}</option>)}
+                  {effectiveRoutes.map((r: any) => <option key={r.id} value={r.id}>{r.origin} → {r.destination}</option>)}
                 </select>
               </div>
               <div>
                 <label className="block text-sm font-bold text-gray-700 mb-1">Bus</label>
                 <select value={formData.busId} onChange={handleBusChange} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
                   <option value="">Select Bus</option>
-                  {buses.map(b => <option key={b.id} value={b.id}>{b.registration || b.licensePlate}</option>)}
+                  {effectiveBuses.map((b: any) => <option key={b.id} value={b.id}>{b.registration || b.licensePlate}</option>)}
                 </select>
               </div>
               <div className="grid grid-cols-2 gap-3">

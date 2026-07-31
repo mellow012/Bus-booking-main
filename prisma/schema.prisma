@@ -92,6 +92,7 @@ model Company {
   notificationSettings Json?
   operatingHours       Json?
   setupCompleted       Boolean            @default(false)
+  returnTripDiscountPercent Float           @default(0)
   createdAt            DateTime           @default(now())
   updatedAt            DateTime           @updatedAt
   activities           ActivityLog[]
@@ -266,6 +267,8 @@ model Booking {
   originStopId     String?
   destinationStopId String?
   returnDate       DateTime?
+  discountPercent  Float?    @default(0)
+  discountAmount   Int?      @default(0)
   metadata         Json?
   reviewRating     Int?
   reviewText       String?

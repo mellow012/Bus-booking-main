@@ -24,6 +24,7 @@ export interface BookingWithDetails extends Booking {
   bus: Bus;
   route: Route;
   company: Company;
+  operatorPhone?: string;
   paymentProvider?: PaymentProvider;
   originStopId?: string;
   destinationStopId?: string;
@@ -252,6 +253,12 @@ export const useBookingsList = () => {
         // ignore JSON parse errors
       }
       if (!response.ok) {
+        if (response.status === 401) {
+          setBookings([]);
+          setFilteredBookings([]);
+          setLoading(false);
+          return;
+        }
         console.error('fetch /api/bookings failed', response.status, json);
         throw new Error(json?.error || json?.message || `HTTP ${response.status}`);
       }
@@ -345,7 +352,7 @@ export const useBookingsList = () => {
             logo: normalizeText(b.schedule?.company?.logo, ''),
             phone: normalizeText(b.schedule?.company?.phone, ''),
           } as any,
-          operatorPhone: normalizeText(b.schedule?.operatorPhone, ''),
+          operatorPhone: normalizeText(b.schedule?.operatorPhone || b.company?.phone || b.schedule?.company?.phone, ''),
           segments: mappedSegments,
           returnSegment: mappedSegments.length > 1 ? mappedSegments[1] : undefined,
           returnDate: b.returnDate ? new Date(b.returnDate) : (typeof b.metadata?.returnDate === 'string' ? new Date(b.metadata.returnDate) : undefined),
@@ -468,7 +475,13 @@ export const useBookingsList = () => {
         const passengerName = p.name || 'Unknown Passenger';
         const seat = p.seatNumber || 'Unassigned';
         const operator = normalizeText(booking.company.name, 'Unknown Operator');
-        const operatorPhone = normalizeText((booking as any).operatorPhone || (booking.company as any).phone, '');
+        const operatorPhone = normalizeText(
+          booking.operatorPhone ||
+          (booking.schedule as any)?.operatorPhone ||
+          (booking.company as any)?.phone ||
+          (booking as any)?.operatorPhone,
+          ''
+        );
         const busClass = normalizeText(booking.bus?.busType, 'Standard Class');
         
         const routeObj = isReturn && booking.returnSegment ? booking.returnSegment.route : booking.route;
@@ -501,7 +514,16 @@ export const useBookingsList = () => {
         const warningColor = '#D97706'; // amber-600 (Warning/Pending states)
         const paymentColor = isPaid ? successColor : warningColor;
         const paymentTextColor = '#FFFFFF';
-        const paymentMethodName = (booking as any).paymentMethod === 'cash_on_boarding' ? 'Cash on Boarding' : booking.paymentStatus.charAt(0).toUpperCase() + booking.paymentStatus.slice(1);
+        const rawMethod = (booking as any).paymentMethod || (booking as any).paymentProvider;
+        let paymentMethodName = 'PayChangu Mobile Money';
+        if (rawMethod === 'paychangu') paymentMethodName = 'PayChangu (Airtel / TNM / Card)';
+        else if (rawMethod === 'cash' || rawMethod === 'cash_on_boarding') paymentMethodName = 'Cash on Boarding';
+        else if (rawMethod === 'local_bank' || rawMethod === 'bank_transfer') paymentMethodName = 'Bank Transfer';
+        else if (typeof rawMethod === 'string' && rawMethod.trim() && rawMethod !== 'paid' && rawMethod !== 'pending') {
+          paymentMethodName = rawMethod.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        } else if (!isPaid) {
+          paymentMethodName = 'Pending Payment';
+        }
         const ticketTypeLabel = isReturn ? 'RETURN PASS' : 'BOARDING PASS';
 
         // Helper to encode HTML entities for SVG text

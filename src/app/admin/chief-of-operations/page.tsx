@@ -165,17 +165,17 @@ function ChiefOfOperationsPageContent() {
           setSchedules(Array.isArray(data) ? data : data.schedules || []);
         }
       }
-      if (tab === 'routes') {
-        const r = await fetch('/api/admin/coo/routes?limit=500');
-        if (r.ok) {
-          const data = await r.json();
+      if (tab === 'schedules' || tab === 'routes' || tab === 'buses' || tab === 'overview') {
+        const [rRoutes, rBuses] = await Promise.all([
+          fetch('/api/admin/coo/routes?limit=500'),
+          fetch('/api/admin/coo/buses?limit=500'),
+        ]);
+        if (rRoutes.ok) {
+          const data = await rRoutes.json();
           setRoutes(Array.isArray(data) ? data : data.routes || []);
         }
-      }
-      if (tab === 'buses') {
-        const r = await fetch('/api/admin/coo/buses?limit=500');
-        if (r.ok) {
-          const data = await r.json();
+        if (rBuses.ok) {
+          const data = await rBuses.json();
           setBuses(Array.isArray(data) ? data : data.buses || []);
         }
       }
@@ -432,7 +432,7 @@ function ChiefOfOperationsPageContent() {
           {/* Schedules Table */}
           {activeTab === 'schedules' && (
             <div>
-              <SchedulesTab companyId={filterCompany !== 'all' ? filterCompany : undefined} />
+              <SchedulesTab companyId={filterCompany !== 'all' ? filterCompany : undefined} routes={routes} buses={buses} />
             </div>
           )}
 

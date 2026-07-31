@@ -64,6 +64,7 @@ export default function UnifiedScheduleModal({
     returnBusId: '',
     returnDepartureDateTime: fmtDateTimeInput(new Date(Date.now() + 86400000)),
     returnArrivalDateTime: fmtDateTimeInput(new Date(Date.now() + 100800000)),
+    returnPrice: 0,
   };
   const [formData, setFormData] = useState(initialFormState);
 
@@ -79,6 +80,7 @@ export default function UnifiedScheduleModal({
     returnBusId: '',
     returnDepartureTime: '14:00',
     returnArrivalTime: '18:00',
+    returnPrice: 0,
   };
   const [templateFormData, setTemplateFormData] = useState(initialTemplateState);
   const [includeReturnTemplate, setIncludeReturnTemplate] = useState(false);
@@ -97,7 +99,14 @@ export default function UnifiedScheduleModal({
   useEffect(() => {
     if (formData.routeId) {
       const route = routes.find(r => r.id === formData.routeId);
-      if (route) setFormData(prev => ({ ...prev, price: route.baseFare }));
+      const returnRoute = routes.find(r => r.origin === route?.destination && r.destination === route?.origin);
+      if (route) {
+        setFormData(prev => ({ 
+          ...prev, 
+          price: route.baseFare,
+          returnPrice: prev.returnPrice || returnRoute?.baseFare || route.baseFare 
+        }));
+      }
     }
   }, [formData.routeId, routes]);
 
@@ -111,7 +120,14 @@ export default function UnifiedScheduleModal({
   useEffect(() => {
     if (templateFormData.routeId) {
       const route = routes.find(r => r.id === templateFormData.routeId);
-      if (route) setTemplateFormData(prev => ({ ...prev, price: route.baseFare }));
+      const returnRoute = routes.find(r => r.origin === route?.destination && r.destination === route?.origin);
+      if (route) {
+        setTemplateFormData(prev => ({ 
+          ...prev, 
+          price: route.baseFare,
+          returnPrice: prev.returnPrice || returnRoute?.baseFare || route.baseFare 
+        }));
+      }
     }
   }, [templateFormData.routeId, routes]);
 
@@ -138,6 +154,10 @@ export default function UnifiedScheduleModal({
         toast.error('Missing fields', 'Please select a bus for the return trip.');
         return;
       }
+      if (includeReturnTemplate && (!templateFormData.returnPrice || templateFormData.returnPrice <= 0)) {
+        toast.error('Missing fields', 'Please enter a valid price for the return trip.');
+        return;
+      }
       setActionLoading(true);
       try {
         if (includeReturnTemplate) {
@@ -150,6 +170,7 @@ export default function UnifiedScheduleModal({
             busId: templateFormData.returnBusId,
             departureTime: templateFormData.returnDepartureTime,
             arrivalTime: templateFormData.returnArrivalTime,
+            price: templateFormData.returnPrice,
             companyId,
           };
           const result = await createRoundTripScheduleTemplate(outboundData, inboundData);
@@ -180,6 +201,11 @@ export default function UnifiedScheduleModal({
     // Single or Return trip
     if (!formData.routeId || !formData.busId) {
       toast.error('Missing fields', 'Please select both a route and a bus.');
+      return;
+    }
+
+    if (scheduleType === 'return' && (!formData.returnPrice || formData.returnPrice <= 0)) {
+      toast.error('Missing fields', 'Please enter a valid price for the return trip.');
       return;
     }
 
@@ -222,6 +248,7 @@ export default function UnifiedScheduleModal({
           busId: formData.returnBusId,
           departureDateTime: new Date(formData.returnDepartureDateTime),
           arrivalDateTime: new Date(formData.returnArrivalDateTime),
+          price: formData.returnPrice,
           companyId,
           status: 'active' as const,
         };
@@ -550,7 +577,7 @@ export default function UnifiedScheduleModal({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-t border-gray-100 pt-4 mt-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Base Fare (MWK) *
+                  Outbound Fare (MWK) *
                 </label>
                 <input
                   type="number"
@@ -564,6 +591,25 @@ export default function UnifiedScheduleModal({
                   required
                 />
               </div>
+
+              {((scheduleType === 'recurring' && includeReturnTemplate) || (scheduleType === 'return')) && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Return Fare (MWK) *
+                  </label>
+                  <input
+                    type="number"
+                    value={scheduleType === 'recurring' ? templateFormData.returnPrice : formData.returnPrice}
+                    onChange={e => {
+                      const val = parseInt(e.target.value) || 0;
+                      if (scheduleType === 'recurring') setTemplateFormData({ ...templateFormData, returnPrice: val });
+                      else setFormData({ ...formData, returnPrice: val });
+                    }}
+                    className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border"
+                    required
+                  />
+                </div>
+              )}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Available Capacity *

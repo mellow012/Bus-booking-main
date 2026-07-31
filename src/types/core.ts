@@ -90,6 +90,7 @@
     };
 
     planType?: string;
+    returnTripDiscountPercent?: number;
     metadata?: Record<string, unknown>;
   }
 
@@ -459,6 +460,8 @@
     paychanguReference?: string;
     paychanguNetwork?: 'AIRTEL' | 'TNM';
     returnDate?: Date;
+    discountPercent?: number;
+    discountAmount?: number;
 
     createdBy?: string;
     updatedBy?: string;

@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { useQuery, keepPreviousData } from '@tanstack/react-query';
+import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import useFilterStore from '@/lib/stores/filterStore';
 import * as dbActions from '@/lib/actions/db.actions';
 import { Loader2, Plus, Edit3, Trash2 } from 'lucide-react';
@@ -11,6 +11,7 @@ type Props = { companyId?: string };
 const columnHelper = createColumnHelper<any>();
 
 export default function BusesTab({ companyId }: Props) {
+  const queryClient = useQueryClient();
   const { regionId, routeId, dateRange } = useFilterStore();
   const [page, setPage] = useState(1);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -79,6 +80,9 @@ export default function BusesTab({ companyId }: Props) {
       if (result.success) {
         setShowAddModal(false);
         setFormData({ registration: '', licensePlate: '', seatCount: 0 });
+        queryClient.invalidateQueries({ queryKey: ['cooBuses'] });
+        queryClient.invalidateQueries({ queryKey: ['buses'] });
+        queryClient.invalidateQueries({ queryKey: ['cooSchedules'] });
         refetch();
       }
     } catch (err: any) {
@@ -86,7 +90,7 @@ export default function BusesTab({ companyId }: Props) {
     } finally {
       setActionLoading(false);
     }
-  }, [formData, companyId, refetch]);
+  }, [formData, companyId, refetch, queryClient]);
 
   const handleEditSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
@@ -98,6 +102,9 @@ export default function BusesTab({ companyId }: Props) {
         setShowEditModal(false);
         setSelectedBus(null);
         setFormData({ registration: '', licensePlate: '', seatCount: 0 });
+        queryClient.invalidateQueries({ queryKey: ['cooBuses'] });
+        queryClient.invalidateQueries({ queryKey: ['buses'] });
+        queryClient.invalidateQueries({ queryKey: ['cooSchedules'] });
         refetch();
       }
     } catch (err: any) {
@@ -105,7 +112,7 @@ export default function BusesTab({ companyId }: Props) {
     } finally {
       setActionLoading(false);
     }
-  }, [formData, selectedBus, refetch]);
+  }, [formData, selectedBus, refetch, queryClient]);
 
   const handleDelete = useCallback(async (busId: string) => {
     if (!window.confirm('Are you sure you want to delete this bus?')) return;
@@ -113,6 +120,9 @@ export default function BusesTab({ companyId }: Props) {
     try {
       const result = await dbActions.deleteBus(busId);
       if (result.success) {
+        queryClient.invalidateQueries({ queryKey: ['cooBuses'] });
+        queryClient.invalidateQueries({ queryKey: ['buses'] });
+        queryClient.invalidateQueries({ queryKey: ['cooSchedules'] });
         refetch();
       }
     } catch (err: any) {
@@ -120,7 +130,7 @@ export default function BusesTab({ companyId }: Props) {
     } finally {
       setActionLoading(false);
     }
-  }, [refetch]);
+  }, [refetch, queryClient]);
 
   if (isLoading) return <div className="flex items-center justify-center py-12"><Loader2 className="w-10 h-10 text-gray-400 animate-spin" /></div>;
 

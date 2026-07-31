@@ -2,7 +2,8 @@
 
 import React, { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { MapPin, PlusCircle, Users, Pencil, Trash2 } from 'lucide-react';
+import { MapPin, PlusCircle, Users, Pencil, Trash2, Building2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { useAppToast } from '@/contexts/ToastContext';
 import { supabase } from '@/lib/supabase';
 import InviteOperatorModal from './InviteOperatorModal';
@@ -514,28 +515,46 @@ export default function OperatorsAndBranchesTab({ dashboard }: OperatorsAndBranc
       )}
 
       {isBranchModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-900">{editingBranch ? 'Update branch' : 'Add branch'}</h3>
-              <button type="button" onClick={resetBranchModal} className="text-sm text-gray-500 hover:text-gray-700">Close</button>
+        <div className="fixed inset-0 bg-slate-900/40 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden border border-gray-100 animate-in zoom-in-95 duration-200">
+            <div className="px-6 py-4 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
+              <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                <Building2 className="w-5 h-5 text-indigo-600" />
+                {editingBranch ? 'Edit Branch' : 'Add Branch'}
+              </h3>
+              <button type="button" onClick={resetBranchModal} className="text-gray-400 hover:text-gray-600 text-lg font-semibold">×</button>
             </div>
-            <div className="mt-4 space-y-4">
-              <label className="block text-sm font-medium text-gray-700">
-                Branch name
-                <input
-                  value={branchName}
-                  onChange={(event) => setBranchName(event.target.value)}
-                  className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none ring-0 focus:border-indigo-500"
-                  placeholder="e.g. CBD"
-                />
-              </label>
-            </div>
-            <div className="mt-6 flex justify-end gap-2">
-              <button type="button" onClick={resetBranchModal} className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">Cancel</button>
-              <button type="button" onClick={handleSaveBranch} disabled={isSavingBranch || !branchName.trim()} className="rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60">
-                {isSavingBranch ? 'Saving...' : editingBranch ? 'Save changes' : 'Create branch'}
-              </button>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  Branch Name
+                  <input
+                    value={branchName}
+                    onChange={(event) => setBranchName(event.target.value)}
+                    className="h-10 mt-1 w-full border border-gray-200 rounded-xl bg-white px-3 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    placeholder="e.g. CBD"
+                  />
+                </label>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4 border-t border-gray-50 mt-6">
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={resetBranchModal}
+                  className="rounded-xl h-10"
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  type="button" 
+                  onClick={handleSaveBranch} 
+                  disabled={isSavingBranch || !branchName.trim()} 
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl h-10 min-w-[100px]"
+                >
+                  {isSavingBranch ? 'Saving...' : editingBranch ? 'Save Changes' : 'Create Branch'}
+                </Button>
+              </div>
             </div>
           </div>
         </div>

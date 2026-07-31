@@ -85,7 +85,7 @@ export async function createRoundTripSchedule(outboundData: any, inboundData: an
           arrivalDateTime: new Date(inboundData.arrivalDateTime),
           availableSeats: inboundData.availableSeats,
           bookedSeats: [],
-          price: returnRoute.baseFare,
+          price: inboundData.price ?? returnRoute.baseFare,
           status: 'active',
           tripStatus: 'scheduled',
         },
@@ -202,7 +202,7 @@ export async function createRoundTripScheduleTemplate(outboundData: any, inbound
           departureTime: inboundData.departureTime,
           arrivalTime: inboundData.arrivalTime,
           daysOfWeek: inboundData.daysOfWeek || [],
-          price: returnRoute.baseFare,
+          price: inboundData.price ?? returnRoute.baseFare,
           isActive: true,
         },
       })

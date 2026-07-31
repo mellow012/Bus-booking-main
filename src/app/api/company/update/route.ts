@@ -81,9 +81,10 @@ export async function POST(req: NextRequest) {
         paymentSettings:      finalPaymentSettings         ?? undefined,
         notificationSettings: finalNotificationSettings      ?? undefined,
         contactSettings:      finalContactSettings         ?? undefined,
+        returnTripDiscountPercent: updates.returnTripDiscountPercent !== undefined ? parseFloat(String(updates.returnTripDiscountPercent)) : undefined,
         status:               updates.status               ?? undefined,
         updatedAt:            new Date(),
-      },
+      } as any,
     });
 
     if (updates.branches && Array.isArray(updates.branches)) {

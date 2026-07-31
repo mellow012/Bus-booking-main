@@ -1,6 +1,6 @@
 'use client';
 
-import { AlertCircle, Calendar, MapPin, PlusCircle } from 'lucide-react';
+import { AlertCircle, MapPin, PlusCircle } from 'lucide-react';
 import { Booking, Bus, Route, Schedule } from '@/types';
 import { RouteWithScheduleInfo } from '../types';
 import RouteTabStrip from './RouteTabStrip';
@@ -80,13 +80,6 @@ export default function BranchDetailPanel({
         <div className="flex flex-wrap items-center gap-2">
           <button onClick={onAddRoute} className="text-xs font-semibold text-emerald-600 hover:text-emerald-800 bg-emerald-50 px-3 py-1.5 rounded-lg flex items-center gap-1">
             <PlusCircle className="w-3 h-3" /> Add Route
-          </button>
-          <button
-            onClick={onAddSchedule}
-            disabled={!selectedRoute}
-            className="text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed px-3 py-1.5 rounded-lg flex items-center gap-1"
-          >
-            <Calendar className="w-3 h-3" /> Create Schedule
           </button>
         </div>
       </div>

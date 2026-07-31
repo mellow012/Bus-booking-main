@@ -103,8 +103,13 @@ const Header: React.FC = () => {
 
   // Position the user dropdown reliably under the toggle button using fixed positioning
   useEffect(() => {
+    if (!isUserMenuOpen) {
+      setUserMenuStyle(null);
+      return;
+    }
+
     const updatePosition = () => {
-      if (!isUserMenuOpen || !userToggleRef.current) { setUserMenuStyle(null); return; }
+      if (!userToggleRef.current) return;
       const rect = userToggleRef.current.getBoundingClientRect();
       const menuWidth = 256; // w-64
       const margin = 8;
@@ -112,12 +117,19 @@ const Header: React.FC = () => {
       const preferredLeft = Math.round(rect.left + (rect.width / 2) - (menuWidth / 2));
       const clampedLeft = Math.max(margin, Math.min(preferredLeft, window.innerWidth - margin - menuWidth));
       const top = Math.round(rect.bottom + 8);
-      setUserMenuStyle({ top, left: clampedLeft });
+      setUserMenuStyle(prev => {
+        if (prev && prev.top === top && prev.left === clampedLeft) return prev;
+        return { top, left: clampedLeft };
+      });
     };
+
     updatePosition();
     window.addEventListener('resize', updatePosition);
     window.addEventListener('scroll', updatePosition, true);
-    return () => { window.removeEventListener('resize', updatePosition); window.removeEventListener('scroll', updatePosition, true); };
+    return () => {
+      window.removeEventListener('resize', updatePosition);
+      window.removeEventListener('scroll', updatePosition, true);
+    };
   }, [isUserMenuOpen]);
 
   const handleLogout = async () => {
@@ -215,7 +227,9 @@ const Header: React.FC = () => {
             )}
             <LanguageSwitcher />
 
-            {user && (
+            {loading && <UserSkeleton />}
+
+            {!loading && user && (
               <div className="relative hidden md:flex items-center space-x-2" ref={userMenuRef}>
                 <button
                   ref={userToggleRef}

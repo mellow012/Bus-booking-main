@@ -56,6 +56,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Booking total amount is invalid" }, { status: 400 });
     }
 
+    if (amount > 0 && amount <= 50) {
+      return NextResponse.json(
+        { error: "PayChangu requires a minimum payment amount greater than MWK 50." },
+        { status: 400 }
+      );
+    }
+
     if (booking.paymentStatus === "paid") {
       return NextResponse.json({ error: "This booking has already been paid" }, { status: 409 });
     }

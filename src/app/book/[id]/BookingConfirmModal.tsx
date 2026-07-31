@@ -4,14 +4,15 @@ import { Label } from "@/components/ui/Label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { TicketPercent, Loader2, CreditCard, ArrowRight, MapPin, Calendar, Clock } from "lucide-react";
-import type { Schedule, Route } from "@/types";
+import { TicketPercent, Loader2, CreditCard, ArrowRight, MapPin, Calendar, Clock, Tag } from "lucide-react";
+import type { Schedule, Route, Company } from "@/types";
 import type { PassengerFormState } from "./InlinePassengerForm";
 
 export interface BookingConfirmModalProps {
   isOpen: boolean;
   onClose: () => void;
   schedule: Schedule;
+  company?: Company | null;
   originStopId: string;
   destinationStopId: string;
   stopName: (id: string) => string;
@@ -40,16 +41,33 @@ export interface BookingConfirmModalProps {
 }
 
 export default function BookingConfirmModal({
-  isOpen, onClose, schedule, originStopId, destinationStopId, stopName,
+  isOpen, onClose, schedule, company, originStopId, destinationStopId, stopName,
   formatDate, formatTime, selectedSeats, selectedReturnSeats, returnSchedule, returnRoute, displayPrice, passengers,
   appliedPromo, promoCode, setPromoCode, isValidatingPromo, validatePromoCode,
   setAppliedPromo, wantsReturnTrip, setWantsReturnTrip, returnDate, setReturnDate, bookingLoading, passengerForms, goBackToPassengers, confirmBooking,
 }: BookingConfirmModalProps) {
   const outboundAmount = displayPrice * passengers;
   const returnAmount = wantsReturnTrip && returnSchedule ? (returnSchedule.price || 0) * passengers : 0;
-  const finalBaseFare = outboundAmount + returnAmount;
-  const finalTotalAmount = finalBaseFare - (appliedPromo?.discount || 0);
+  const combinedGrossTotal = outboundAmount + returnAmount;
   const hasReturn = wantsReturnTrip && returnSchedule && selectedReturnSeats.length > 0;
+
+  // Extract return leg company discount percentage (aligned with backend calculation)
+  const returnCompanyObj = (returnSchedule as any)?.company || company || (schedule as any)?.company;
+  const returnCompanyDiscountPercent = (() => {
+    if (!hasReturn || !returnCompanyObj) return 0;
+    const directVal = Number(returnCompanyObj.returnTripDiscountPercent);
+    if (!isNaN(directVal) && directVal > 0) return directVal;
+    const settingVal = Number((returnCompanyObj.paymentSettings as any)?.returnDiscount);
+    if (!isNaN(settingVal) && settingVal > 0) return settingVal;
+    return 0;
+  })();
+
+  const returnTripDiscountAmount = (hasReturn && returnCompanyDiscountPercent > 0)
+    ? Math.round(combinedGrossTotal * (returnCompanyDiscountPercent / 100))
+    : 0;
+
+  const grossAfterReturnDiscount = Math.max(0, combinedGrossTotal - returnTripDiscountAmount);
+  const finalTotalAmount = Math.max(0, grossAfterReturnDiscount - (appliedPromo?.discount || 0));
 
   return (
     <Modal
@@ -154,34 +172,80 @@ export default function BookingConfirmModal({
           </div>
         )}
 
-        {/* ── Price Summary ── */}
-        <div className="p-4 bg-brand-50 rounded-xl border border-brand-100">
-          <p className="text-xs font-semibold text-brand-700 uppercase tracking-wide mb-2">Price Summary</p>
-          <div className="space-y-1.5">
-            <div className="flex justify-between items-center text-sm">
-              <span className="text-gray-600">Outbound fare</span>
+        {/* ── Price Summary & Breakdown ── */}
+        <div className="p-4 bg-brand-50/80 rounded-xl border border-brand-100 space-y-2.5">
+          <p className="text-xs font-black text-brand-800 uppercase tracking-wider">Price Breakdown</p>
+          
+          <div className="space-y-1.5 text-sm">
+            <div className="flex justify-between items-center text-gray-700">
+              <span>Outbound fare ({passengers} × MWK {displayPrice.toLocaleString()})</span>
               <span className="font-semibold text-gray-900">MWK {outboundAmount.toLocaleString()}</span>
             </div>
+
             {hasReturn && (
-              <div className="flex justify-between items-center text-sm">
-                <span className="text-gray-600">Return fare</span>
+              <div className="flex justify-between items-center text-gray-700">
+                <span>Return fare ({passengers} × MWK {(returnSchedule!.price || 0).toLocaleString()})</span>
                 <span className="font-semibold text-gray-900">MWK {returnAmount.toLocaleString()}</span>
               </div>
             )}
-            {appliedPromo && (
-              <div className="flex justify-between items-center text-sm">
-                <span className="text-green-600 flex items-center gap-1"><TicketPercent className="w-3 h-3" /> Promo: {appliedPromo.code}</span>
-                <span className="font-semibold text-green-600">- MWK {appliedPromo.discount.toLocaleString()}</span>
+
+            {/* Original Subtotal (before discounts) */}
+            {(returnTripDiscountAmount > 0 || appliedPromo) && (
+              <div className="flex justify-between items-center text-xs text-gray-500 pt-1 border-t border-gray-200/60">
+                <span>Gross Subtotal (Original)</span>
+                <span className="font-medium line-through text-gray-400">MWK {combinedGrossTotal.toLocaleString()}</span>
               </div>
             )}
-            <div className="pt-2 border-t border-brand-200 mt-1 flex justify-between items-center">
-              <span className="font-bold text-gray-900">Total Amount</span>
-              <span className="text-xl font-black text-brand-700">
-                MWK {finalTotalAmount.toLocaleString()}
-              </span>
+
+            {/* Return Trip Discount Breakdown */}
+            {returnTripDiscountAmount > 0 && (
+              <div className="flex justify-between items-center text-sm bg-emerald-100/70 p-2 rounded-lg text-emerald-800 border border-emerald-200/60">
+                <span className="font-medium flex items-center gap-1.5 text-xs sm:text-sm">
+                  <Tag className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>Return Trip Discount ({returnCompanyDiscountPercent}%)</span>
+                </span>
+                <span className="font-bold text-emerald-700 shrink-0">- MWK {returnTripDiscountAmount.toLocaleString()}</span>
+              </div>
+            )}
+
+            {/* Promo Code Discount */}
+            {appliedPromo && (
+              <div className="flex justify-between items-center text-sm bg-green-100/70 p-2 rounded-lg text-green-800 border border-green-200/60">
+                <span className="font-medium flex items-center gap-1.5 text-xs sm:text-sm">
+                  <TicketPercent className="w-4 h-4 text-green-600 shrink-0" />
+                  <span>Promo Code ({appliedPromo.code})</span>
+                </span>
+                <span className="font-bold text-green-700 shrink-0">- MWK {appliedPromo.discount.toLocaleString()}</span>
+              </div>
+            )}
+
+            {/* Total Amount Payable */}
+            <div className="pt-2 border-t border-brand-200 mt-2 flex justify-between items-baseline">
+              <div>
+                <span className="font-bold text-gray-900 block">Total Amount</span>
+                {hasReturn && (
+                  <span className="text-[11px] text-brand-700 block">Round trip — all legs included</span>
+                )}
+              </div>
+              <div className="text-right">
+                {(returnTripDiscountAmount > 0 || appliedPromo) && (
+                  <span className="text-xs text-gray-400 line-through mr-2 font-medium">
+                    MWK {combinedGrossTotal.toLocaleString()}
+                  </span>
+                )}
+                <span className="text-xl font-black text-brand-700">
+                  MWK {finalTotalAmount.toLocaleString()}
+                </span>
+              </div>
             </div>
-            {hasReturn && (
-              <p className="text-[11px] text-brand-700 mt-1">Round trip — both legs included in the total above.</p>
+
+            {/* Savings Badge */}
+            {(returnTripDiscountAmount > 0 || appliedPromo) && (
+              <div className="mt-1.5 p-2 bg-emerald-50 border border-emerald-200 rounded-lg text-center">
+                <p className="text-xs font-bold text-emerald-700">
+                  🎉 Total Savings: MWK {((returnTripDiscountAmount || 0) + (appliedPromo?.discount || 0)).toLocaleString()}
+                </p>
+              </div>
             )}
           </div>
         </div>

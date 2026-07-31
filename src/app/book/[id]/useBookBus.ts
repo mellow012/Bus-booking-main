@@ -73,8 +73,33 @@ export default function useBookBus() {
   const [appliedPromo, setAppliedPromo] = useState<any>(null);
   const [isValidatingPromo, setIsValidatingPromo] = useState(false);
 
-  const [wantsReturnTrip, setWantsReturnTrip] = useState(Boolean(searchParams?.get('returnDate')));
-  const [returnDate, setReturnDate] = useState(searchParams?.get('returnDate') ?? "");
+  const initialFetchCompletedRef = useRef(false);
+
+  const [wantsReturnTrip, setWantsReturnTrip] = useState(() => {
+    if (typeof window !== "undefined" && window.sessionStorage && scheduleId) {
+      try {
+        const raw = sessionStorage.getItem(`booking_draft_${scheduleId}`);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed?.wantsReturnTrip !== undefined) return Boolean(parsed.wantsReturnTrip);
+        }
+      } catch {}
+    }
+    return Boolean(searchParams?.get('returnDate'));
+  });
+
+  const [returnDate, setReturnDate] = useState(() => {
+    if (typeof window !== "undefined" && window.sessionStorage && scheduleId) {
+      try {
+        const raw = sessionStorage.getItem(`booking_draft_${scheduleId}`);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed?.returnDate) return String(parsed.returnDate);
+        }
+      } catch {}
+    }
+    return searchParams?.get('returnDate') ?? "";
+  });
 
   // Scroll anchors: jump back to the outbound seat map on "back to seats",
   // and auto-scroll down to the return trip section once it's toggled on.
@@ -171,12 +196,14 @@ export default function useBookBus() {
     setReturnScheduleError("");
 
     try {
+      const companyIdToUse = schedule.companyId || (route as any).companyId || "";
       const params = new URLSearchParams({
         from: route.destination || "",
         to: route.origin || "",
         date: returnDate,
         passengers: String(passengers),
         tzOffset: String(new Date().getTimezoneOffset()),
+        ...(companyIdToUse ? { companyId: companyIdToUse } : {}),
       });
 
       const response = await fetch(`/api/schedules?${params.toString()}`);
@@ -187,7 +214,7 @@ export default function useBookBus() {
 
       const data = await response.json();
       const rawSchedules = Array.isArray(data?.data) ? data.data : [];
-      const outboundArrivalMs = new Date(schedule.arrivalDateTime).getTime();
+      const outboundArrivalMs = schedule.arrivalDateTime ? new Date(schedule.arrivalDateTime).getTime() : new Date(schedule.departureDateTime).getTime();
       const schedules = rawSchedules.filter((s: any) => new Date(s.departureDateTime).getTime() >= outboundArrivalMs);
       setReturnSchedules(schedules);
       if (!schedules.length) {
@@ -212,6 +239,7 @@ export default function useBookBus() {
 
     setReturnDateOptionsLoading(true);
     try {
+      const companyIdToUse = schedule.companyId || (route as any).companyId || "";
       const startDate = new Date(schedule.departureDateTime);
       const candidateDates: string[] = [];
       for (let i = 0; i < 7; i++) {
@@ -219,6 +247,8 @@ export default function useBookBus() {
         d.setDate(d.getDate() + i);
         candidateDates.push(d.toISOString().split("T")[0]);
       }
+
+      const outboundArrivalMs = schedule.arrivalDateTime ? new Date(schedule.arrivalDateTime).getTime() : new Date(schedule.departureDateTime).getTime();
 
       const results = await Promise.all(
         candidateDates.map(async (date) => {
@@ -229,12 +259,14 @@ export default function useBookBus() {
               date,
               passengers: String(passengers),
               tzOffset: String(new Date().getTimezoneOffset()),
+              ...(companyIdToUse ? { companyId: companyIdToUse } : {}),
             });
             const res = await fetch(`/api/schedules?${params.toString()}`);
             if (!res.ok) return { date, count: 0 };
             const data = await res.json();
-            const list = Array.isArray(data?.data) ? data.data : [];
-            return { date, count: list.length };
+            const rawList = Array.isArray(data?.data) ? data.data : [];
+            const validList = rawList.filter((s: any) => new Date(s.departureDateTime).getTime() >= outboundArrivalMs);
+            return { date, count: validList.length };
           } catch {
             return { date, count: 0 };
           }
@@ -271,7 +303,7 @@ export default function useBookBus() {
         throw new Error(result.error || "Failed to fetch schedule details");
       }
       const result = await response.json();
-      const { schedule: scheduleData, bus: busData, route: routeData } = result;
+      const { schedule: scheduleData, bus: busData, route: routeData, company: companyData } = result;
       if (!scheduleData || !busData || !routeData) {
         throw new Error("Incomplete return schedule details");
       }
@@ -291,6 +323,7 @@ export default function useBookBus() {
         busId: busData.id,
         routeId: routeData.id,
         companyId: scheduleData.companyId,
+        company: companyData,
       } as unknown as Schedule;
 
       setReturnSchedule(hydratedReturnSchedule);
@@ -317,6 +350,8 @@ export default function useBookBus() {
   }, []);
 
   useEffect(() => {
+    if (!initialFetchCompletedRef.current) return;
+
     if (!wantsReturnTrip || !returnDate) {
       if (returnReservationId) {
         releaseReservation(returnReservationId).catch(console.error);
@@ -401,6 +436,17 @@ export default function useBookBus() {
       const newReservationId = await reserveSeats(returnSchedule.id, seats);
       setReturnReservationId(newReservationId);
       setSelectedReturnSeats(seats);
+
+      if (typeof window !== "undefined" && window.sessionStorage && scheduleId) {
+        try {
+          sessionStorage.setItem(`booking_reservation_${scheduleId}_return`, JSON.stringify({
+            reservationId: newReservationId,
+            returnScheduleId: returnSchedule.id,
+            seatNumbers: seats,
+          }));
+        } catch {}
+      }
+
       setSuccess("Return trip seats reserved successfully. Continue to passenger details.");
 
       // If outbound seats are already selected (either committed or still
@@ -458,9 +504,12 @@ export default function useBookBus() {
     return "";
   }, [userProfile, user]);
 
-  const fetchBookingData = useCallback(async () => {
+  const fetchBookingData = useCallback(async (isBackground = false) => {
     if (!scheduleId || typeof scheduleId !== "string") { setError("Invalid schedule ID"); setLoading(false); return; }
-    setLoading(true); setError("");
+    if (!isBackground) {
+      setLoading(true);
+      setError("");
+    }
     try {
       const response = await fetch(`/api/bookings/details/${scheduleId}`);
       if (!response.ok) {
@@ -492,9 +541,17 @@ export default function useBookBus() {
       setRoute(routeData as Route);
       setCompany(companyData as Company);
 
-      // Restore active hold if user already has an active reservation for this schedule
+      // Restore active hold / draft from sessionStorage if available
       let activeReservationId: string | null = null;
       let activeSeats: string[] = [];
+      let savedDraft: any = null;
+
+      if (typeof window !== "undefined" && window.sessionStorage) {
+        try {
+          const draftRaw = sessionStorage.getItem(`booking_draft_${scheduleId}`);
+          if (draftRaw) savedDraft = JSON.parse(draftRaw);
+        } catch {}
+      }
 
       if (myActiveReservation?.id && Array.isArray(myActiveReservation.seatNumbers) && myActiveReservation.seatNumbers.length > 0) {
         activeReservationId = myActiveReservation.id;
@@ -512,23 +569,85 @@ export default function useBookBus() {
         } catch {}
       }
 
-      if (activeReservationId && activeSeats.length > 0) {
-        setReservationId(activeReservationId);
-        setSelectedSeats(activeSeats);
-        setLiveSelectedSeats(activeSeats);
-        const selfName = getProfileFullName();
-        const selfGender = (userProfile?.sex?.toLowerCase() as any) || "male";
-        setPassengerForms(activeSeats.map((seat, index) => ({
-          name: (index === 0 && bookingForSelf) ? selfName : "",
-          ageInput: "18", age: 18,
-          gender: (index === 0 && bookingForSelf) ? selfGender : ("male" as const),
-          seatNumber: seat, ticketType: "adult" as const,
-        })));
-        setCurrentStep("passengers");
+      let activeReturnReservationId: string | null = null;
+      let activeReturnScheduleId: string | null = null;
+      let activeReturnSeats: string[] = [];
+
+      if (typeof window !== "undefined" && window.sessionStorage) {
+        try {
+          const cachedReturn = sessionStorage.getItem(`booking_reservation_${scheduleId}_return`);
+          if (cachedReturn) {
+            const parsed = JSON.parse(cachedReturn);
+            if (parsed?.reservationId && parsed?.returnScheduleId && Array.isArray(parsed?.seatNumbers)) {
+              activeReturnReservationId = parsed.reservationId;
+              activeReturnScheduleId = parsed.returnScheduleId;
+              activeReturnSeats = parsed.seatNumbers;
+            }
+          }
+        } catch {}
+      }
+
+      if (!isBackground) {
+        const returnSchedIdToUse = activeReturnScheduleId || savedDraft?.selectedReturnScheduleId;
+        const returnSeatsToUse = activeReturnSeats.length > 0 ? activeReturnSeats : (savedDraft?.selectedReturnSeats || []);
+        const returnResIdToUse = activeReturnReservationId || savedDraft?.returnReservationId;
+
+        if (returnSchedIdToUse) {
+          setSelectedReturnScheduleId(returnSchedIdToUse);
+          fetchScheduleDetails(returnSchedIdToUse);
+          if (returnSeatsToUse.length > 0) setSelectedReturnSeats(returnSeatsToUse);
+          if (returnResIdToUse) setReturnReservationId(returnResIdToUse);
+        }
+
+        if (activeReservationId && activeSeats.length > 0) {
+          setReservationId(activeReservationId);
+          setSelectedSeats(activeSeats);
+          setLiveSelectedSeats(activeSeats);
+
+          if (savedDraft?.passengerForms && Array.isArray(savedDraft.passengerForms) && savedDraft.passengerForms.length === activeSeats.length) {
+            setPassengerForms(savedDraft.passengerForms);
+          } else {
+            const selfName = getProfileFullName();
+            const selfGender = (userProfile?.sex?.toLowerCase() as any) || "male";
+            setPassengerForms(activeSeats.map((seat, index) => ({
+              name: (index === 0 && bookingForSelf) ? selfName : "",
+              ageInput: "18", age: 18,
+              gender: (index === 0 && bookingForSelf) ? selfGender : ("male" as const),
+              seatNumber: seat, ticketType: "adult" as const,
+            })));
+          }
+
+          if (savedDraft?.wantsReturnTrip !== undefined) setWantsReturnTrip(savedDraft.wantsReturnTrip);
+          if (savedDraft?.returnDate) setReturnDate(savedDraft.returnDate);
+
+          if (savedDraft?.currentStep && ['passengers', 'confirm'].includes(savedDraft.currentStep)) {
+            setCurrentStep(savedDraft.currentStep);
+            if (savedDraft.currentStep === 'confirm') {
+              setConfirmModalOpen(true);
+            }
+          } else {
+            setCurrentStep("passengers");
+          }
+        } else if (savedDraft?.selectedSeats?.length > 0) {
+          setSelectedSeats(savedDraft.selectedSeats);
+          setLiveSelectedSeats(savedDraft.selectedSeats);
+          if (savedDraft.passengerForms) setPassengerForms(savedDraft.passengerForms);
+          if (savedDraft.wantsReturnTrip !== undefined) setWantsReturnTrip(savedDraft.wantsReturnTrip);
+          if (savedDraft.returnDate) setReturnDate(savedDraft.returnDate);
+          if (savedDraft.currentStep) {
+            setCurrentStep(savedDraft.currentStep);
+            if (savedDraft.currentStep === 'confirm') {
+              setConfirmModalOpen(true);
+            }
+          }
+        }
       }
     } catch (e: any) {
-      setError(e.message || "Error loading booking information");
-    } finally { setLoading(false); }
+      if (!isBackground) setError(e.message || "Error loading booking information");
+    } finally {
+      if (!isBackground) setLoading(false);
+      initialFetchCompletedRef.current = true;
+    }
   }, [scheduleId, passengers, bookingForSelf, userProfile, getProfileFullName]);
 
   // Safeguard 1: Ensure passenger forms are populated whenever step is passengers
@@ -795,6 +914,14 @@ export default function useBookBus() {
       setServerTotalAmount(result.totalAmount);
       setServerCurrency(result.currency ?? "MWK");
 
+      if (typeof window !== "undefined" && window.sessionStorage && scheduleId) {
+        try {
+          sessionStorage.removeItem(`booking_draft_${scheduleId}`);
+          sessionStorage.removeItem(`booking_reservation_${scheduleId}`);
+          sessionStorage.removeItem(`booking_reservation_${scheduleId}_return`);
+        } catch {}
+      }
+
       setSuccess("Booking created successfully! Redirecting to payment…");
       setConfirmModalOpen(false);
       setTimeout(() => router.push(`/bookings`), 1500);
@@ -850,7 +977,31 @@ export default function useBookBus() {
     }
   }, [user, passengers, router]);
 
-  useEffect(() => { if (user && scheduleId && passengers >= 1 && passengers <= 10) fetchBookingData(); }, [scheduleId, user, fetchBookingData]);
+  useEffect(() => {
+    if (user && scheduleId && passengers >= 1 && passengers <= 10) {
+      const isBackground = initialFetchCompletedRef.current;
+      fetchBookingData(isBackground);
+    }
+  }, [scheduleId, user?.id, passengers, fetchBookingData]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.sessionStorage && scheduleId && typeof scheduleId === "string") {
+      if (selectedSeats.length > 0 || passengerForms.length > 0 || selectedReturnSeats.length > 0) {
+        try {
+          sessionStorage.setItem(`booking_draft_${scheduleId}`, JSON.stringify({
+            selectedSeats,
+            selectedReturnSeats,
+            selectedReturnScheduleId,
+            returnReservationId,
+            passengerForms,
+            currentStep,
+            wantsReturnTrip,
+            returnDate,
+          }));
+        } catch {}
+      }
+    }
+  }, [scheduleId, selectedSeats, selectedReturnSeats, selectedReturnScheduleId, returnReservationId, passengerForms, currentStep, wantsReturnTrip, returnDate]);
 
   useEffect(() => { if (error) { const t = setTimeout(() => setError(""), 5000); return () => clearTimeout(t); } }, [error]);
   useEffect(() => { if (success) { window.scrollTo({ top: 0, behavior: "smooth" }); const t = setTimeout(() => setSuccess(""), 5000); return () => clearTimeout(t); } }, [success]);

@@ -36,6 +36,8 @@ export default function RevenueTab({ dashboard }: RevenueTabProps) {
   const paidBookings = filteredBookings.filter((b: Booking) => b.paymentStatus === 'paid');
   
   const totalRevenue = paidBookings.reduce((acc: number, b: Booking) => acc + (b.totalAmount || 0), 0);
+  const totalDiscountsGiven = paidBookings.reduce((acc: number, b: any) => acc + (b.discountAmount || b.metadata?.discountAmount || 0), 0);
+  const grossRevenue = totalRevenue + totalDiscountsGiven;
   const totalBookingsCount = filteredBookings.length;
   const paidBookingsCount = paidBookings.length;
 
@@ -155,16 +157,38 @@ export default function RevenueTab({ dashboard }: RevenueTabProps) {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between">
           <div>
-            <p className="text-xs text-gray-400 font-semibold uppercase tracking-wider">Total Revenue</p>
-            <p className="text-2xl font-black text-gray-900 mt-1">MWK {totalRevenue.toLocaleString()}</p>
+            <p className="text-xs text-gray-400 font-semibold uppercase tracking-wider">Net Revenue</p>
+            <p className="text-2xl font-black text-indigo-600 mt-1">MWK {totalRevenue.toLocaleString()}</p>
             <p className="text-xs text-emerald-600 font-semibold mt-1 flex items-center gap-1">
               <TrendingUp className="w-3 h-3" /> Paid bookings: {paidBookingsCount}
             </p>
           </div>
           <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center shrink-0">
+            <DollarSign className="w-6 h-6" />
+          </div>
+        </div>
+
+        <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between">
+          <div>
+            <p className="text-xs text-gray-400 font-semibold uppercase tracking-wider">Gross Revenue</p>
+            <p className="text-2xl font-black text-gray-900 mt-1">MWK {grossRevenue.toLocaleString()}</p>
+            <p className="text-xs text-gray-500 mt-1">Before discounts applied</p>
+          </div>
+          <div className="w-12 h-12 bg-gray-50 text-gray-600 rounded-xl flex items-center justify-center shrink-0">
+            <TrendingUp className="w-6 h-6" />
+          </div>
+        </div>
+
+        <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between">
+          <div>
+            <p className="text-xs text-gray-400 font-semibold uppercase tracking-wider">Discounts Given</p>
+            <p className="text-2xl font-black text-amber-600 mt-1">MWK {totalDiscountsGiven.toLocaleString()}</p>
+            <p className="text-xs text-amber-600 font-semibold mt-1">Return trip discounts</p>
+          </div>
+          <div className="w-12 h-12 bg-amber-50 text-amber-600 rounded-xl flex items-center justify-center shrink-0">
             <DollarSign className="w-6 h-6" />
           </div>
         </div>
@@ -177,17 +201,6 @@ export default function RevenueTab({ dashboard }: RevenueTabProps) {
           </div>
           <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center shrink-0">
             <PieChart className="w-6 h-6" />
-          </div>
-        </div>
-
-        <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between">
-          <div>
-            <p className="text-xs text-gray-400 font-semibold uppercase tracking-wider">Active Routes</p>
-            <p className="text-2xl font-black text-gray-900 mt-1">{routePerformance.length}</p>
-            <p className="text-xs text-gray-500 mt-1">Across {branches.length} branches</p>
-          </div>
-          <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center shrink-0">
-            <FileText className="w-6 h-6" />
           </div>
         </div>
       </div>

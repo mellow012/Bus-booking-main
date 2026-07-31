@@ -54,6 +54,8 @@ export async function GET(
             email: true,
             phone: true,
             status: true,
+            returnTripDiscountPercent: true,
+            paymentSettings: true,
           },
         },
       },

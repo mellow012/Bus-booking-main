@@ -4,7 +4,8 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { Schedule, Booking, Route, Bus } from '@/types';
 import {
   Calendar, Users, Bus as BusIcon, TrendingUp, AlertCircle,
-  ArrowRight, MapPin, Clock, CheckCircle, XCircle, Loader2
+  ArrowRight, MapPin, Clock, CheckCircle, XCircle, Loader2,
+  ChevronLeft, ChevronRight
 } from 'lucide-react';
 import * as dbActions from '@/lib/actions/db.actions';
 import BookingDetailsModal from '@/components/company/BookingDetailsModal';
@@ -12,6 +13,49 @@ import { useAppToast } from '@/contexts/ToastContext';
 
 interface HomeTabProps {
   dashboard: any;
+}
+
+function PaginationControls({
+  currentPage,
+  totalPages,
+  onPageChange,
+  totalItems,
+  itemLabel = 'items',
+}: {
+  currentPage: number;
+  totalPages: number;
+  onPageChange: (page: number) => void;
+  totalItems: number;
+  itemLabel?: string;
+}) {
+  if (totalPages <= 1) return null;
+
+  return (
+    <div className="px-5 py-3 border-t border-gray-50 flex items-center justify-between text-xs text-gray-500 bg-gray-50/30">
+      <span>
+        Page <span className="font-semibold text-gray-700">{currentPage}</span> of{' '}
+        <span className="font-semibold text-gray-700">{totalPages}</span> ({totalItems} {itemLabel})
+      </span>
+      <div className="flex items-center gap-1.5">
+        <button
+          onClick={() => onPageChange(Math.max(1, currentPage - 1))}
+          disabled={currentPage === 1}
+          className="p-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed text-gray-600 transition-colors shadow-sm"
+          title="Previous page"
+        >
+          <ChevronLeft className="w-4 h-4" />
+        </button>
+        <button
+          onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
+          disabled={currentPage === totalPages}
+          className="p-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed text-gray-600 transition-colors shadow-sm"
+          title="Next page"
+        >
+          <ChevronRight className="w-4 h-4" />
+        </button>
+      </div>
+    </div>
+  );
 }
 
 export default function HomeTab({ dashboard }: HomeTabProps) {
@@ -56,23 +100,56 @@ export default function HomeTab({ dashboard }: HomeTabProps) {
   [todaysBookings]);
 
   const pendingBookings = useMemo(() =>
-    bookings.filter((b: Booking) => b.bookingStatus === 'pending').slice(0, 6),
+    bookings.filter((b: Booking) => b.bookingStatus === 'pending'),
   [bookings]);
 
   const LATEST_BOOKINGS_MAX_HOURS = 72;
 
   const latestBookings = useMemo(() => {
     const recentThresholdMs = LATEST_BOOKINGS_MAX_HOURS * 60 * 60 * 1000;
-    return [...bookings]
+    const filtered = [...bookings]
       .filter((b: Booking) => {
         const createdMs = new Date(b.createdAt).getTime();
         return !isNaN(createdMs) && (now.getTime() - createdMs) <= recentThresholdMs;
       })
-      .sort((a: Booking, b: Booking) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-      .slice(0, 8);
+      .sort((a: Booking, b: Booking) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    return filtered.length > 0
+      ? filtered
+      : [...bookings].sort((a: Booking, b: Booking) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }, [bookings]);
 
   const schedulesWithoutBuses = todaysSchedules.filter((s: Schedule) => !s.busId);
+
+  // Pagination states
+  const [recentBookingsPage, setRecentBookingsPage] = useState(1);
+  const [todaysTripsPage, setTodaysTripsPage] = useState(1);
+  const [needsActionPage, setNeedsActionPage] = useState(1);
+
+  const RECENT_BOOKINGS_PER_PAGE = 10;
+  const TODAYS_TRIPS_PER_PAGE = 6;
+  const NEEDS_ACTION_PER_PAGE = 6;
+
+  const recentBookingsTotalPages = Math.ceil(latestBookings.length / RECENT_BOOKINGS_PER_PAGE) || 1;
+  const safeRecentBookingsPage = Math.min(recentBookingsPage, recentBookingsTotalPages);
+  const paginatedLatestBookings = useMemo(() => {
+    const start = (safeRecentBookingsPage - 1) * RECENT_BOOKINGS_PER_PAGE;
+    return latestBookings.slice(start, start + RECENT_BOOKINGS_PER_PAGE);
+  }, [latestBookings, safeRecentBookingsPage]);
+
+  const todaysTripsTotalPages = Math.ceil(todaysSchedules.length / TODAYS_TRIPS_PER_PAGE) || 1;
+  const safeTodaysTripsPage = Math.min(todaysTripsPage, todaysTripsTotalPages);
+  const paginatedTodaysSchedules = useMemo(() => {
+    const start = (safeTodaysTripsPage - 1) * TODAYS_TRIPS_PER_PAGE;
+    return todaysSchedules.slice(start, start + TODAYS_TRIPS_PER_PAGE);
+  }, [todaysSchedules, safeTodaysTripsPage]);
+
+  const needsActionTotalPages = Math.ceil(pendingBookings.length / NEEDS_ACTION_PER_PAGE) || 1;
+  const safeNeedsActionPage = Math.min(needsActionPage, needsActionTotalPages);
+  const paginatedNeedsAction = useMemo(() => {
+    const start = (safeNeedsActionPage - 1) * NEEDS_ACTION_PER_PAGE;
+    return pendingBookings.slice(start, start + NEEDS_ACTION_PER_PAGE);
+  }, [pendingBookings, safeNeedsActionPage]);
 
   // Booking modal state
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
@@ -225,7 +302,7 @@ export default function HomeTab({ dashboard }: HomeTabProps) {
             </div>
           ) : (
             <div className="divide-y divide-gray-50">
-              {latestBookings.map((booking: Booking) => {
+              {paginatedLatestBookings.map((booking: Booking) => {
                 const schedule = schedules.find((s: Schedule) => s.id === booking.scheduleId);
                 const route = schedule ? routes.find((r: Route) => r.id === schedule.routeId) : null;
                 const statusColors: Record<string, string> = {
@@ -279,6 +356,13 @@ export default function HomeTab({ dashboard }: HomeTabProps) {
               })}
             </div>
           )}
+          <PaginationControls
+            currentPage={safeRecentBookingsPage}
+            totalPages={recentBookingsTotalPages}
+            onPageChange={setRecentBookingsPage}
+            totalItems={latestBookings.length}
+            itemLabel="bookings"
+          />
         </div>
 
         {/* Right column */}
@@ -302,7 +386,7 @@ export default function HomeTab({ dashboard }: HomeTabProps) {
               </div>
             ) : (
               <div className="divide-y divide-gray-50">
-                {todaysSchedules.map((schedule: Schedule) => {
+                {paginatedTodaysSchedules.map((schedule: Schedule) => {
                   const route = routes.find((r: Route) => r.id === schedule.routeId);
                   const bus = buses.find((b: Bus) => b.id === schedule.busId);
                   const dep = new Date(schedule.departureDateTime);
@@ -340,6 +424,13 @@ export default function HomeTab({ dashboard }: HomeTabProps) {
                 })}
               </div>
             )}
+            <PaginationControls
+              currentPage={safeTodaysTripsPage}
+              totalPages={todaysTripsTotalPages}
+              onPageChange={setTodaysTripsPage}
+              totalItems={todaysSchedules.length}
+              itemLabel="trips"
+            />
           </div>
           {/* Needs Action */}
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
@@ -359,7 +450,7 @@ export default function HomeTab({ dashboard }: HomeTabProps) {
               </div>
             ) : (
               <div className="divide-y divide-gray-50">
-                {pendingBookings.map((booking: Booking) => {
+                {paginatedNeedsAction.map((booking: Booking) => {
                   const schedule = schedules.find((s: Schedule) => s.id === booking.scheduleId);
                   const route = schedule ? routes.find((r: Route) => r.id === schedule.routeId) : null;
                   return (
@@ -387,16 +478,13 @@ export default function HomeTab({ dashboard }: HomeTabProps) {
                 })}
               </div>
             )}
-            {bookings.filter((b: Booking) => b.bookingStatus === 'pending').length > 6 && (
-              <div className="px-5 py-3 border-t border-gray-50">
-                <button
-                  onClick={() => navigateToBookings?.()}
-                  className="text-xs font-semibold text-indigo-600 hover:text-indigo-500 flex items-center gap-1"
-                >
-                  View all <ArrowRight className="w-3 h-3" />
-                </button>
-              </div>
-            )}
+            <PaginationControls
+              currentPage={safeNeedsActionPage}
+              totalPages={needsActionTotalPages}
+              onPageChange={setNeedsActionPage}
+              totalItems={pendingBookings.length}
+              itemLabel="pending"
+            />
           </div>
 
         </div>

@@ -268,20 +268,27 @@ export async function createBookingFull(body: CreateBookingPayload): Promise<{
     return { ...segment, schedule: cs, fare, fareSource, segmentIndex: idx };
   });
 
-  const isReturnTripBooking = Boolean(returnDate) && finalSegments.length === 1;
-  const paymentSettings = (firstSchedule.company?.paymentSettings as Record<string, any>) || {};
-  const returnDiscount = Number(paymentSettings.returnDiscount) || 0;
+  const isRoundTrip = Boolean(returnDate) || finalSegments.length > 1;
+  const combinedGrossTotal = pricedSegments.reduce((sum, s) => sum + s.fare * passengerCount, 0);
 
-  let totalAmount = pricedSegments.reduce((sum, s) => sum + s.fare * passengerCount, 0);
-  const baseAmount = totalAmount;
+  let returnTripDiscountPercent = 0;
+  let returnTripDiscountAmount = 0;
 
-  if (isReturnTripBooking) {
-    const outboundTotal = baseAmount;
-    const returnTotal = outboundTotal * (1 - returnDiscount / 100);
-    totalAmount = Math.round(outboundTotal + returnTotal);
+  if (isRoundTrip && pricedSegments.length > 0) {
+    const returnSegment = pricedSegments[pricedSegments.length - 1];
+    const returnSchedule = returnSegment.schedule;
+    const returnCompany = returnSchedule.company;
+
+    const rawDiscount = (returnCompany as any)?.returnTripDiscountPercent ?? Number((returnCompany?.paymentSettings as any)?.returnDiscount) ?? 0;
+    if (typeof rawDiscount === 'number' && rawDiscount > 0 && rawDiscount <= 100) {
+      returnTripDiscountPercent = rawDiscount;
+      returnTripDiscountAmount = Math.round(combinedGrossTotal * (returnTripDiscountPercent / 100));
+    }
   }
 
-  let discountAmount = 0;
+  let totalAmount = Math.max(0, combinedGrossTotal - returnTripDiscountAmount);
+
+  let promoDiscountAmount = 0;
   let appliedPromo = null;
   const fareSource = pricedSegments[0]?.fareSource ?? 'full_trip';
   const fullTripFare = (pricedSegments[0]?.schedule as any)?.baseFare ?? (pricedSegments[0]?.schedule as any)?.price ?? 0;
@@ -294,14 +301,14 @@ export async function createBookingFull(body: CreateBookingPayload): Promise<{
       const isValidAmount = !promotion.minPurchase || totalAmount >= promotion.minPurchase;
       if (isValidDate && isValidAmount) {
         if (promotion.discountType === 'percentage') {
-          discountAmount = (totalAmount * promotion.discountValue) / 100;
-          if (promotion.maxDiscount && discountAmount > promotion.maxDiscount) discountAmount = promotion.maxDiscount;
+          promoDiscountAmount = (totalAmount * promotion.discountValue) / 100;
+          if (promotion.maxDiscount && promoDiscountAmount > promotion.maxDiscount) promoDiscountAmount = promotion.maxDiscount;
         } else {
-          discountAmount = promotion.discountValue;
+          promoDiscountAmount = promotion.discountValue;
         }
-        discountAmount = Math.min(discountAmount, totalAmount);
-        totalAmount -= discountAmount;
-        appliedPromo = { code: promotion.code, discount: discountAmount, title: promotion.title };
+        promoDiscountAmount = Math.min(promoDiscountAmount, totalAmount);
+        totalAmount -= promoDiscountAmount;
+        appliedPromo = { code: promotion.code, discount: promoDiscountAmount, title: promotion.title };
       }
     }
   }
@@ -344,6 +351,8 @@ export async function createBookingFull(body: CreateBookingPayload): Promise<{
             scheduleId: finalSegments[0].scheduleId,
             routeId,
             totalAmount,
+            discountPercent: returnTripDiscountPercent,
+            discountAmount: returnTripDiscountAmount,
             currency: 'MWK',
             contactEmail: userData?.email ?? '',
             contactPhone: userData?.phone ?? '',
@@ -356,16 +365,16 @@ export async function createBookingFull(body: CreateBookingPayload): Promise<{
             returnDate: returnDate ? new Date(returnDate) : undefined,
             metadata: {
               ...(returnDate ? { returnDate } : {}),
-              returnDiscount,
-              returnDiscountAmount: isReturnTripBooking ? Math.round(baseAmount * (returnDiscount / 100)) : 0,
-              originalAmount: isReturnTripBooking ? baseAmount * 2 : baseAmount,
+              discountPercent: returnTripDiscountPercent,
+              discountAmount: returnTripDiscountAmount,
+              grossAmount: combinedGrossTotal,
               segments: finalSegments.map((s) => ({
                 scheduleId: s.scheduleId, date: s.date,
                 originStopId: s.originStopId, destinationStopId: s.destinationStopId,
               })),
             },
             bookingDate: new Date(),
-          },
+          } as any,
         });
 
         for (const segment of pricedSegments) {
@@ -458,7 +467,7 @@ export async function createBookingFull(body: CreateBookingPayload): Promise<{
   revalidatePath('/bookings');
 
   return {
-    bookingId: result.id, bookingReference, totalAmount, discountAmount,
+    bookingId: result.id, bookingReference, totalAmount, discountAmount: returnTripDiscountAmount + promoDiscountAmount,
     appliedPromo, baseFare: pricedSegments[0]?.fare ?? 0,
     fullTripFare, fareSource, currency: 'MWK', isSegment: isSegmentRoute,
   };

@@ -615,18 +615,20 @@ const BusesTab: FC<BusesTabProps> = ({
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-bold text-gray-700 mb-1 uppercase tracking-wider">Bus Type</label>
+              <label className="block text-xs font-bold text-gray-700 mb-1 uppercase tracking-wider">Bus Category (Tier)</label>
               <select
                 value={newBus.busType}
                 onChange={(e) => setNewBus({ ...newBus, busType: e.target.value as BusType })}
                 className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-600 outline-none text-sm"
                 required
               >
+                <option value="Standard">Standard</option>
+                <option value="VIP">VIP</option>
+                <option value="Semi-Luxury">Semi-Luxury</option>
+                <option value="Sleeper">Sleeper</option>
                 <option value="AC">AC</option>
                 <option value="Non-AC">Non-AC</option>
-                <option value="Luxury">Luxury</option>
                 <option value="Economy">Economy</option>
-                <option value="Minibus">Minibus</option>
               </select>
             </div>
             <div>
