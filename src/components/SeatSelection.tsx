@@ -202,6 +202,14 @@ const SeatSelection: React.FC<SeatSelectionProps> = ({
     return `Seat ${seat}, ${statusText}`;
   }, []);
 
+  // Helper for extra horizontal spacing between seats within each row side/group
+  const getSeatMarginStyle = (index: number, total: number) => {
+    if (index < total - 1) {
+      return { marginRight: '6px' }; // adjust pixel value as desired for optimal spacing
+    }
+    return {};
+  };
+
   const reservedSeatsCount = reservedSeatsSet.size;
   const selectionProgress = Math.min((internalSelectedSeats.length / passengers) * 100, 100);
   const remaining = passengers - internalSelectedSeats.length;
@@ -354,6 +362,7 @@ const SeatSelection: React.FC<SeatSelectionProps> = ({
                                 <button
                                   key={`${seat}-${colIndex}`}
                                   className={getSeatClassName(status)}
+                                  style={getSeatMarginStyle(colIndex, leftItems.length)}
                                   onClick={() => handleSeatClick(seat)}
                                   onMouseEnter={() => setHoveredSeat(seat)}
                                   onMouseLeave={() => setHoveredSeat(null)}
@@ -395,6 +404,7 @@ const SeatSelection: React.FC<SeatSelectionProps> = ({
                                 <button
                                   key={`${seat}-${colIndex}`}
                                   className={getSeatClassName(status)}
+                                  style={getSeatMarginStyle(colIndex, rightItems.length)}
                                   onClick={() => handleSeatClick(seat)}
                                   onMouseEnter={() => setHoveredSeat(seat)}
                                   onMouseLeave={() => setHoveredSeat(null)}
@@ -442,6 +452,7 @@ const SeatSelection: React.FC<SeatSelectionProps> = ({
                                 <button
                                   key={`${seat}-${colIndex}`}
                                   className={getSeatClassName(status)}
+                                  style={getSeatMarginStyle(colIndex, leftSeats.length)}
                                   onClick={() => handleSeatClick(seat)}
                                   onMouseEnter={() => setHoveredSeat(seat)}
                                   onMouseLeave={() => setHoveredSeat(null)}
@@ -473,6 +484,7 @@ const SeatSelection: React.FC<SeatSelectionProps> = ({
                                 <button
                                   key={`${seat}-${colIndex}`}
                                   className={getSeatClassName(status)}
+                                  style={getSeatMarginStyle(colIndex, rightSeats.length)}
                                   onClick={() => handleSeatClick(seat)}
                                   onMouseEnter={() => setHoveredSeat(seat)}
                                   onMouseLeave={() => setHoveredSeat(null)}
