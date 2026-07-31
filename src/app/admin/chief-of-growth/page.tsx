@@ -5,13 +5,13 @@ import DashboardClient from './DashboardClient';
 import { logAudit } from '@/utils/AuditLogs';
 import { prisma } from '@/lib/prisma';
 
+import { redirect } from 'next/navigation';
+
 export const dynamic = 'force-dynamic';
 
 export default async function Page() {
   const user = await getCurrentUserFromServer();
-  if (!user || !['superadmin', 'company_admin', 'chief_of_growth'].includes(user.role ?? '')) {
-    return <div className="p-8">Access denied</div>;
-  }
+  const isServerAuthorized = Boolean(user && ['superadmin', 'company_admin', 'chief_of_growth'].includes(user.role ?? ''));
 
   const now = new Date();
   const thirtyDaysAgo  = new Date(now); thirtyDaysAgo.setDate(now.getDate() - 30);
@@ -240,20 +240,22 @@ export default async function Page() {
   };
 
   // Audit log
-  try {
-    await logAudit({
-      action: 'access_dashboard', userId: user.id,
-      userName: `${user.firstName || ''} ${user.lastName || ''}`.trim(),
-      userRole: user.role || 'unknown', companyId: user.companyId || '',
-      resourceType: 'dashboard', resourceId: 'chief_of_growth',
-      resourceName: 'Chief of Growth Dashboard',
-      description: 'Accessed Chief of Growth dashboard', status: 'success', metadata: {},
-    });
-  } catch { /* swallow */ }
+  if (user) {
+    try {
+      await logAudit({
+        action: 'access_dashboard', userId: user.id,
+        userName: `${user.firstName || ''} ${user.lastName || ''}`.trim(),
+        userRole: user.role || 'unknown', companyId: user.companyId || '',
+        resourceType: 'dashboard', resourceId: 'chief_of_growth',
+        resourceName: 'Chief of Growth Dashboard',
+        description: 'Accessed Chief of Growth dashboard', status: 'success', metadata: {},
+      });
+    } catch { /* swallow */ }
+  }
 
   return (
     <div className="min-h-screen bg-gray-50/50">
-      <DashboardClient initialData={result.data} initialMeta={result.meta} stats={stats as any} />
+      <DashboardClient initialData={result.data} initialMeta={result.meta} stats={stats as any} isServerAuthorized={isServerAuthorized} />
     </div>
   );
 }

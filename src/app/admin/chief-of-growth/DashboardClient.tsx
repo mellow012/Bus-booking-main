@@ -1,7 +1,10 @@
 "use client";
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { useAuth } from '@/contexts/AuthContext';
+import { useRouter } from 'next/navigation';
+import UnauthorizedPage from '@/app/unauthorized/page';
 import useChiefGrowth from './_hooks/useChiefGrowth';
 import DashboardBottomNav from '@/components/DashboardBottomNav';
 import Fuse from 'fuse.js';
@@ -15,7 +18,7 @@ import {
   Bus, Activity, CheckCircle2, AlertTriangle,
   ArrowUpRight, ArrowDownRight, Minus,
   Zap, BarChart3, Map, ChevronDown, Sparkles,
-  TrendingUp, UserPlus, Clock,
+  TrendingUp, UserPlus, Clock, Plus, X, Loader2,
 } from 'lucide-react';
 
 // ─── TYPES ────────────────────────────────────────────────────────────────────
@@ -45,7 +48,7 @@ interface Stats {
   companies: CompanyRow[];
 }
 
-interface Props { initialData: any[]; initialMeta: any; stats: Stats }
+interface Props { initialData: any[]; initialMeta: any; stats: Stats; isServerAuthorized?: boolean }
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
 
@@ -183,12 +186,261 @@ const COMPANY_FUSE_OPTIONS = {
   includeScore:       true,
 };
 
-function InnerDashboard({ initialData, initialMeta, stats }: Props) {
+// ─── ADD COMPANY MODAL ────────────────────────────────────────────────────────
+function AddCompanyModal({
+  isOpen,
+  onClose,
+  onSuccess,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const [formData, setFormData] = useState({
+    companyName: '',
+    companyEmail: '',
+    adminFirstName: '',
+    adminLastName: '',
+    adminPhone: '',
+  });
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [apiError, setApiError] = useState<string | null>(null);
+
+  if (!isOpen) return null;
+
+  const validate = () => {
+    const errs: Record<string, string> = {};
+    if (!formData.companyName.trim()) errs.companyName = 'Company name is required';
+    if (!formData.companyEmail.trim()) {
+      errs.companyEmail = 'Admin email is required';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.companyEmail.trim())) {
+      errs.companyEmail = 'Invalid email address';
+    }
+    if (!formData.adminFirstName.trim()) errs.adminFirstName = 'Admin first name is required';
+    if (!formData.adminLastName.trim()) errs.adminLastName = 'Admin last name is required';
+    if (!formData.adminPhone.trim()) {
+      errs.adminPhone = 'Admin phone number is required';
+    } else if (formData.adminPhone.trim().length < 7) {
+      errs.adminPhone = 'Enter a valid phone number';
+    }
+
+    setErrors(errs);
+    return Object.keys(errs).length === 0;
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setApiError(null);
+    if (!validate()) return;
+
+    setIsSubmitting(true);
+    try {
+      const res = await fetch('/api/create-company', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || data.message || 'Failed to create company');
+      }
+
+      onSuccess();
+      onClose();
+      setFormData({
+        companyName: '',
+        companyEmail: '',
+        adminFirstName: '',
+        adminLastName: '',
+        adminPhone: '',
+      });
+    } catch (err: any) {
+      setApiError(err.message || 'Something went wrong');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
+      <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200 border border-slate-100">
+        <div className="px-6 py-5 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
+          <div>
+            <h3 className="text-lg font-black text-slate-900 tracking-tight flex items-center gap-2">
+              <Building2 className="w-5 h-5 text-indigo-600" />
+              Add New Company
+            </h3>
+            <p className="text-[11px] font-bold text-slate-400 mt-0.5">Onboard a bus operator & set up admin account</p>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-slate-200/60 rounded-full transition-colors">
+            <X className="w-5 h-5 text-slate-400" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[75vh] overflow-y-auto">
+          {apiError && (
+            <div className="p-3.5 bg-rose-50 border border-rose-100 rounded-2xl flex items-start gap-2.5 text-xs text-rose-700 font-medium">
+              <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
+              <span>{apiError}</span>
+            </div>
+          )}
+
+          <div>
+            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">
+              Company Name <span className="text-rose-500">*</span>
+            </label>
+            <input
+              type="text"
+              value={formData.companyName}
+              onChange={e => {
+                setFormData(p => ({ ...p, companyName: e.target.value }));
+                if (errors.companyName) setErrors(p => ({ ...p, companyName: '' }));
+              }}
+              placeholder="e.g. AXA Coach Services"
+              className={`w-full px-4 py-2.5 bg-slate-50 border rounded-xl text-sm font-bold text-slate-900 focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all ${
+                errors.companyName ? 'border-rose-400 bg-rose-50/20' : 'border-slate-100'
+              }`}
+            />
+            {errors.companyName && <p className="text-rose-500 text-xs mt-1 font-medium">{errors.companyName}</p>}
+          </div>
+
+          <div>
+            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">
+              Admin Email <span className="text-rose-500">*</span>
+            </label>
+            <input
+              type="email"
+              value={formData.companyEmail}
+              onChange={e => {
+                setFormData(p => ({ ...p, companyEmail: e.target.value }));
+                if (errors.companyEmail) setErrors(p => ({ ...p, companyEmail: '' }));
+              }}
+              placeholder="admin@operator.com"
+              className={`w-full px-4 py-2.5 bg-slate-50 border rounded-xl text-sm font-bold text-slate-900 focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all ${
+                errors.companyEmail ? 'border-rose-400 bg-rose-50/20' : 'border-slate-100'
+              }`}
+            />
+            {errors.companyEmail && <p className="text-rose-500 text-xs mt-1 font-medium">{errors.companyEmail}</p>}
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">
+                Admin First Name <span className="text-rose-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={formData.adminFirstName}
+                onChange={e => {
+                  setFormData(p => ({ ...p, adminFirstName: e.target.value }));
+                  if (errors.adminFirstName) setErrors(p => ({ ...p, adminFirstName: '' }));
+                }}
+                placeholder="John"
+                className={`w-full px-4 py-2.5 bg-slate-50 border rounded-xl text-sm font-bold text-slate-900 focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all ${
+                  errors.adminFirstName ? 'border-rose-400 bg-rose-50/20' : 'border-slate-100'
+                }`}
+              />
+              {errors.adminFirstName && <p className="text-rose-500 text-xs mt-1 font-medium">{errors.adminFirstName}</p>}
+            </div>
+
+            <div>
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">
+                Admin Last Name <span className="text-rose-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={formData.adminLastName}
+                onChange={e => {
+                  setFormData(p => ({ ...p, adminLastName: e.target.value }));
+                  if (errors.adminLastName) setErrors(p => ({ ...p, adminLastName: '' }));
+                }}
+                placeholder="Phiri"
+                className={`w-full px-4 py-2.5 bg-slate-50 border rounded-xl text-sm font-bold text-slate-900 focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all ${
+                  errors.adminLastName ? 'border-rose-400 bg-rose-50/20' : 'border-slate-100'
+                }`}
+              />
+              {errors.adminLastName && <p className="text-rose-500 text-xs mt-1 font-medium">{errors.adminLastName}</p>}
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">
+              Admin Phone Number <span className="text-rose-500">*</span>
+            </label>
+            <input
+              type="tel"
+              value={formData.adminPhone}
+              onChange={e => {
+                setFormData(p => ({ ...p, adminPhone: e.target.value }));
+                if (errors.adminPhone) setErrors(p => ({ ...p, adminPhone: '' }));
+              }}
+              placeholder="+265 99X XXX XXX"
+              className={`w-full px-4 py-2.5 bg-slate-50 border rounded-xl text-sm font-bold text-slate-900 focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all ${
+                errors.adminPhone ? 'border-rose-400 bg-rose-50/20' : 'border-slate-100'
+              }`}
+            />
+            {errors.adminPhone && <p className="text-rose-500 text-xs mt-1 font-medium">{errors.adminPhone}</p>}
+          </div>
+
+          <div className="pt-4 border-t border-slate-100 flex gap-3 justify-end items-center">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-5 py-2.5 text-xs font-black uppercase tracking-widest text-slate-500 hover:text-slate-700 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all disabled:opacity-50 flex items-center gap-2"
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Creating...</span>
+                </>
+              ) : (
+                <span>Create Company</span>
+              )}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function InnerDashboard({ initialData, initialMeta, stats, isServerAuthorized }: Props) {
+  const { userProfile, loading: authLoading } = useAuth();
+  const router = useRouter();
   const { users, meta, loading, query, setQuery, refresh, next, prev, isFuzzyActive } = useChiefGrowth(initialData, initialMeta);
   const [activeTab, setActiveTab] = useState<TabId>('users');
   const [roleFilter, setRoleFilter] = useState<string>('all');
   const [companyPage, setCompanyPage] = useState<number>(0);
   const [companySearch, setCompanySearch] = useState<string>('');
+  const [isAddCompanyModalOpen, setIsAddCompanyModalOpen] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+
+  const isAuthorized = useMemo(() => {
+    if (userProfile?.role) {
+      return ['superadmin', 'company_admin', 'chief_of_growth'].includes(userProfile.role);
+    }
+    return isServerAuthorized ?? false;
+  }, [userProfile, isServerAuthorized]);
+
+  useEffect(() => {
+    if (!authLoading && !isAuthorized) {
+      router.replace('/unauthorized');
+    }
+  }, [authLoading, isAuthorized, router]);
+
+  if (!authLoading && !isAuthorized) {
+    return <UnauthorizedPage />;
+  }
 
   // Smart growth alerts
   const alerts = useMemo(() => {
@@ -247,6 +499,23 @@ function InnerDashboard({ initialData, initialMeta, stats }: Props) {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+
+      {/* ══ TOP DASHBOARD HEADER ════════════════════════════════════════════ */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
+        <div>
+          <h1 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+            Growth Command Centre
+          </h1>
+          <p className="text-xs text-slate-400 font-medium mt-0.5">Platform overview & operator onboarding management</p>
+        </div>
+        <button
+          onClick={() => setIsAddCompanyModalOpen(true)}
+          className="flex items-center justify-center gap-2 px-4.5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-extrabold transition-all shadow-md shadow-indigo-200 active:scale-95 shrink-0"
+        >
+          <Plus className="w-4 h-4" />
+          <span>Add New Company</span>
+        </button>
+      </div>
 
       {/* ══ SUMMARY KPIs ════════════════════════════════════════════════════ */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -648,14 +917,23 @@ function InnerDashboard({ initialData, initialMeta, stats }: Props) {
           {/* Header + search */}
           <div className="p-5 border-b border-slate-50 flex flex-col sm:flex-row gap-3 sm:items-center justify-between">
             <SectionHeader title="Partner Companies" sub={`${stats.companyCount} registered bus operators`} icon={Building2} />
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-              <input
-                className="pl-9 pr-4 py-1.5 text-xs bg-slate-50 rounded-xl border border-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-200 placeholder:text-slate-400 w-52"
-                placeholder="Search company name or email…"
-                value={companySearch}
-                onChange={e => { setCompanySearch(e.target.value); setCompanyPage(0); }}
-              />
+            <div className="flex flex-wrap items-center gap-2.5">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                <input
+                  className="pl-9 pr-4 py-1.5 text-xs bg-slate-50 rounded-xl border border-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-200 placeholder:text-slate-400 w-52"
+                  placeholder="Search company name or email…"
+                  value={companySearch}
+                  onChange={e => { setCompanySearch(e.target.value); setCompanyPage(0); }}
+                />
+              </div>
+              <button
+                onClick={() => setIsAddCompanyModalOpen(true)}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm shadow-indigo-200 shrink-0"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Add Company</span>
+              </button>
             </div>
           </div>
 
@@ -814,6 +1092,25 @@ function InnerDashboard({ initialData, initialMeta, stats }: Props) {
         activeTab={activeTab}
         onTabChange={setActiveTab}
       />
+      {/* ══ ADD COMPANY MODAL ════════════════════════════════════════════════ */}
+      <AddCompanyModal
+        isOpen={isAddCompanyModalOpen}
+        onClose={() => setIsAddCompanyModalOpen(false)}
+        onSuccess={() => {
+          setToast('Company created successfully! Setup link sent to admin email.');
+          refresh();
+          setActiveTab('companies');
+          setTimeout(() => setToast(null), 6000);
+        }}
+      />
+
+      {/* ══ SUCCESS TOAST ════════════════════════════════════════════════════ */}
+      {toast && (
+        <div className="fixed bottom-20 right-6 z-[110] bg-slate-900 text-white px-4 py-3 rounded-2xl shadow-2xl border border-slate-800 text-xs font-bold flex items-center gap-2.5 animate-in fade-in slide-in-from-bottom-2">
+          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+          <span>{toast}</span>
+        </div>
+      )}
 
     </div>
   );

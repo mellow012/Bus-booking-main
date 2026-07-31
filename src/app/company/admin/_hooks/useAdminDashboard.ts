@@ -200,7 +200,7 @@ export function useAdminDashboard() {
     if (authLoading) return;
     if (!user) { router.push('/login'); return; }
     if (!userProfile) return;
-    if (!(userProfile.role === 'company_admin' || userProfile.role === 'superadmin')) { showAlert('error', 'Access denied.'); router.push('/'); return; }
+    if (!(userProfile.role === 'company_admin' || userProfile.role === 'superadmin')) { router.push('/unauthorized'); return; }
     if (!userProfile.companyId) { showAlert('info', 'Please finish setting up your company.'); router.push('/company/setup'); return; }
     const urlCompanyId = searchParams?.get('companyId');
     if (urlCompanyId && urlCompanyId !== userProfile.companyId) {
