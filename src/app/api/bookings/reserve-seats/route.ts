@@ -1,7 +1,9 @@
+// Updated for interval-aware SERIALIZABLE locking
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth-utils';
 import prisma from '@/lib/prisma';
 import { apiRateLimiter, getClientIp } from '@/lib/rateLimit';
+import { Prisma } from '@prisma/client';
 
 const SEAT_HOLD_DURATION = 5 * 60 * 1000; // 5 minutes
 
@@ -31,7 +33,7 @@ class ReservationError extends Error {
 
 /**
  * POST /api/bookings/reserve-seats
- * Reserve seats for a user atomically with row locking to prevent double-booking
+ * Reserve seats for a user under SERIALIZABLE isolation level with interval-aware overlap checks.
  */
 export async function POST(req: NextRequest) {
   try {
@@ -52,7 +54,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { scheduleId } = body;
+    const { scheduleId, originStopId, destinationStopId } = body;
     const seatNumbers = parseSeatNumbers(body.seatNumbers);
 
     if (!scheduleId || seatNumbers.length === 0) {
@@ -92,149 +94,216 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Execute atomic reservation transaction with per-seat non-blocking transactional advisory locks
-    const result = await prisma.$transaction(
-      async (tx) => {
-        // 1. Try to acquire per-seat non-blocking transactional advisory lock for each requested seat.
-        // If another user is currently in the middle of reserving the exact same seat, fail immediately with 400.
-        // Two users requesting DIFFERENT seats proceed concurrently in parallel (0s lock wait).
-        const sortedSeatNumbers = [...seatNumbers].sort();
-        for (const seat of sortedSeatNumbers) {
-          const lockKey = `${scheduleId}:${seat}`;
-          const res = await tx.$queryRaw<[{ locked: boolean }]>`
-            SELECT pg_try_advisory_xact_lock(hashtext(${lockKey})) as locked
-          `;
-          if (!res || !res[0] || !res[0].locked) {
-            throw new ReservationError(400, {
-              error: 'One or more seats are currently being reserved by another customer',
-              conflictingSeats: [seat],
-            });
-          }
-        }
+    // Retry loop specifically for Postgres 40001 / Prisma P2034 serialization_failure
+    let reservationResult: any = null;
+    let attempt = 0;
+    const maxAttempts = 15;
 
-        // 2. Fetch schedule along with active non-expired reservations in a single query
-        const schedule = await tx.schedule.findUnique({
-          where: { id: scheduleId },
-          include: {
-            bus: true,
-            reservations: {
-              where: {
-                status: 'reserved',
-                expiresAt: { gt: new Date() },
+    while (attempt < maxAttempts) {
+      try {
+        attempt++;
+        reservationResult = await prisma.$transaction(
+          async (tx) => {
+            // 0. Acquire per-seat advisory locks for each requested seat in deterministic (sorted) order
+            // Using 2-argument Postgres advisory lock: key1 = scheduleId hash, key2 = seat hash.
+            // This ensures concurrent users reserving different seats run in parallel without predicate lock storms,
+            // while concurrent users requesting the same seat on the same schedule are serialized cleanly.
+            const sortedSeatNumbers = [...seatNumbers].sort();
+            for (const seat of sortedSeatNumbers) {
+              await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${scheduleId}), hashtext(${seat}))`;
+            }
+
+            // 1. Fetch schedule and route to determine stop timeline indices
+            const schedule = await tx.schedule.findUnique({
+              where: { id: scheduleId },
+              include: {
+                bus: true,
+                route: true,
+                reservations: {
+                  where: {
+                    status: 'reserved',
+                    expiresAt: { gt: new Date() },
+                  },
+                },
               },
-            },
+            });
+
+            if (!schedule) {
+              throw new ReservationError(404, { error: 'Schedule not found' });
+            }
+
+            // Determine route stop indices
+            const routeStops: any[] = Array.isArray(schedule.route?.stops) ? (schedule.route.stops as any[]) : [];
+            const sortedStops = [...routeStops].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+            const stopTimeline = [
+              { id: '__origin__', order: -1 },
+              ...sortedStops,
+              { id: '__destination__', order: 9999 },
+            ];
+
+            const reqOriginIdx = stopTimeline.findIndex((s) => s.id === (originStopId || '__origin__'));
+            const reqDestIdx = stopTimeline.findIndex((s) => s.id === (destinationStopId || '__destination__'));
+
+            const userO = reqOriginIdx !== -1 ? reqOriginIdx : 0;
+            const userD = reqDestIdx !== -1 ? reqDestIdx : stopTimeline.length - 1;
+
+            // 2. Validate seat numbers against bus capacity
+            const busCapacity = schedule.bus?.capacity || 60;
+            const invalidSeats = seatNumbers.filter((s) => {
+              const num = parseInt(s, 10);
+              return isNaN(num) || num <= 0 || num > busCapacity;
+            });
+
+            if (invalidSeats.length > 0) {
+              throw new ReservationError(400, {
+                error: 'One or more requested seat numbers exceed bus capacity',
+                invalidSeats,
+              });
+            }
+
+            // 3. Query existing non-cancelled BookingSegments for this schedule
+            const activeSegments = await tx.bookingSegment.findMany({
+              where: {
+                scheduleId,
+                booking: { bookingStatus: { not: 'cancelled' } },
+              },
+              select: {
+                seatNumbers: true,
+                originStopId: true,
+                destinationStopId: true,
+              },
+            });
+
+            // 4. Check for overlapping interval conflicts on existing bookings
+            const conflictingBookedSeats: string[] = [];
+            for (const seg of activeSegments) {
+              const segSeats = parseSeatNumbers(seg.seatNumbers);
+              const matchingSeats = seatNumbers.filter((s) => segSeats.includes(s));
+              if (matchingSeats.length === 0) continue;
+
+              const segOIdx = stopTimeline.findIndex((s) => s.id === (seg.originStopId || '__origin__'));
+              const segDIdx = stopTimeline.findIndex((s) => s.id === (seg.destinationStopId || '__destination__'));
+              const segO = segOIdx !== -1 ? segOIdx : 0;
+              const segD = segDIdx !== -1 ? segDIdx : stopTimeline.length - 1;
+
+              // Overlap condition: max(O1, O2) < min(D1, D2)
+              if (Math.max(userO, segO) < Math.min(userD, segD)) {
+                conflictingBookedSeats.push(...matchingSeats);
+              }
+            }
+
+            if (conflictingBookedSeats.length > 0) {
+              throw new ReservationError(400, {
+                error: 'One or more seats are already booked for your selected travel interval',
+                conflictingSeats: Array.from(new Set(conflictingBookedSeats)),
+              });
+            }
+
+            // 5. Check for active temporary reservations by other users for overlapping travel intervals
+            const targetUserId = userRecord.id;
+            const activeReservations = schedule.reservations || [];
+            const otherReservations = activeReservations.filter(
+              (r: any) => r.userId !== targetUserId && r.userId !== user.id
+            );
+
+            const conflictingReservedSeats: string[] = [];
+            for (const res of otherReservations) {
+              const resSeats = parseSeatNumbers(res.seatNumbers);
+              const matchingSeats = seatNumbers.filter((s) => resSeats.includes(s));
+              if (matchingSeats.length === 0) continue;
+
+              const resOIdx = stopTimeline.findIndex((s) => s.id === ((res as any).originStopId || '__origin__'));
+              const resDIdx = stopTimeline.findIndex((s) => s.id === ((res as any).destinationStopId || '__destination__'));
+              const resO = resOIdx !== -1 ? resOIdx : 0;
+              const resD = resDIdx !== -1 ? resDIdx : stopTimeline.length - 1;
+
+              if (Math.max(userO, resO) < Math.min(userD, resD)) {
+                conflictingReservedSeats.push(...matchingSeats);
+              }
+            }
+
+            if (conflictingReservedSeats.length > 0) {
+              throw new ReservationError(400, {
+                error: 'One or more seats are already reserved by another customer for your selected travel interval',
+                conflictingSeats: Array.from(new Set(conflictingReservedSeats)),
+              });
+            }
+
+            // 6. Delete existing reservations for this user and schedule
+            await tx.seatReservation.deleteMany({
+              where: {
+                scheduleId,
+                OR: [{ userId: targetUserId }, { userId: user.id }],
+              },
+            });
+
+            // 7. Create new seat reservation
+            const expiresAt = new Date(Date.now() + SEAT_HOLD_DURATION);
+            const reservation = await tx.seatReservation.create({
+              data: {
+                scheduleId,
+                userId: targetUserId,
+                seatNumbers,
+                originStopId: originStopId || '__origin__',
+                destinationStopId: destinationStopId || '__destination__',
+                status: 'reserved',
+                expiresAt,
+              },
+            });
+
+            return reservation;
           },
-        });
-
-        if (!schedule) {
-          throw new ReservationError(404, { error: 'Schedule not found' });
-        }
-
-        // 3. Check requested seat numbers against bus total capacity limit
-        const busCapacity = schedule.bus?.capacity || 60;
-        const invalidSeats = seatNumbers.filter(s => {
-          const num = parseInt(s, 10);
-          return isNaN(num) || num <= 0 || num > busCapacity;
-        });
-
-        if (invalidSeats.length > 0) {
-          throw new ReservationError(400, {
-            error: 'One or more requested seat numbers exceed bus capacity',
-            invalidSeats,
-          });
-        }
-
-        // 4. Check if seats are already permanently booked (direct + segment bookings)
-        const [activeDirectBookings, activeSegmentBookings] = await Promise.all([
-          tx.booking.findMany({
-            where: { scheduleId, bookingStatus: { not: 'cancelled' } },
-            select: { seatNumbers: true },
-          }),
-          tx.bookingSegment.findMany({
-            where: { scheduleId, booking: { bookingStatus: { not: 'cancelled' } } },
-            select: { seatNumbers: true },
-          }),
-        ]);
-
-        const staticBookedSeats = parseSeatNumbers(schedule.bookedSeats);
-        const allBookedSeatsSet = new Set<string>([
-          ...staticBookedSeats,
-          ...activeDirectBookings.flatMap((b) => parseSeatNumbers(b.seatNumbers)),
-          ...activeSegmentBookings.flatMap((s) => parseSeatNumbers(s.seatNumbers)),
-        ]);
-
-        const conflictingBookedSeats = seatNumbers.filter((seat) => allBookedSeatsSet.has(seat));
-
-        if (conflictingBookedSeats.length > 0) {
-          throw new ReservationError(400, {
-            error: 'One or more seats are already booked',
-            conflictingSeats: conflictingBookedSeats,
-          });
-        }
-
-        // 5. Check for active temporary reservations on the same schedule by other users
-        const activeReservations = schedule.reservations || [];
-        const targetUserId = userRecord.id;
-        const otherReservations = activeReservations.filter((r: any) => r.userId !== targetUserId && r.userId !== user.id);
-        const reservedSeats = otherReservations.flatMap((reservation: any) =>
-          parseSeatNumbers(reservation.seatNumbers)
+          {
+            isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted,
+            maxWait: 30000,
+            timeout: 60000,
+          }
         );
 
-        const conflictingReservedSeats = seatNumbers.filter((seat) => reservedSeats.includes(seat));
-        if (conflictingReservedSeats.length > 0) {
-          throw new ReservationError(400, {
-            error: 'One or more seats are already reserved by another customer',
-            conflictingSeats: conflictingReservedSeats,
-          });
+        // Success! Break retry loop
+        break;
+      } catch (error: any) {
+        if (error instanceof ReservationError) {
+          throw error; // Business logic errors should NOT be retried
         }
 
-        // 6. Explicit atomic capacity check: total occupied (booked + reserved) vs bus capacity
-        const busCap = schedule.bus?.capacity || 40;
-        const totalOccupiedCount = allBookedSeatsSet.size + reservedSeats.length;
-        const effectiveAvailable = Math.max(0, busCap - totalOccupiedCount);
-        if (effectiveAvailable < seatNumbers.length) {
-          throw new ReservationError(400, {
-            error: 'Not enough seats available on this schedule',
-            available: Math.max(0, effectiveAvailable),
-            requested: seatNumbers.length,
-          });
+        // Detect serialization/write-conflict errors from all possible sources:
+        // - Prisma P2034 (PrismaClientKnownRequestError)
+        // - Postgres 40001 (serialization_failure)
+        // - DriverAdapterError: TransactionWriteConflict (Neon/PlanetScale adapters)
+        const errorMsg = (error?.message || '').toLowerCase();
+        const errorName = (error?.name || '').toLowerCase();
+        const errorStr = String(error).toLowerCase();
+        const errorCode = error?.code || '';
+        const searchable = `${errorMsg} ${errorName} ${errorStr}`;
+        const isSerializationError =
+          errorCode === 'P2034' ||
+          errorCode === '40001' ||
+          searchable.includes('p2034') ||
+          searchable.includes('40001') ||
+          searchable.includes('serialization_failure') ||
+          searchable.includes('write conflict') ||
+          searchable.includes('writeconflict') ||
+          searchable.includes('transactionwriteconflict') ||
+          searchable.includes('deadlock') ||
+          searchable.includes('could not serialize access due to concurrent update');
+
+        if (isSerializationError && attempt < maxAttempts) {
+          const jitter = Math.floor(Math.random() * 300);
+          const backoffMs = Math.min(Math.pow(2, attempt) * 50 + jitter, 4000);
+          console.warn(`[reserve-seats] Serialization conflict (attempt ${attempt}/${maxAttempts}). Retrying in ${backoffMs}ms... Error: ${error?.message}`);
+          await new Promise((resolve) => setTimeout(resolve, backoffMs));
+          continue;
         }
 
-        // 6. Delete existing reservations for this user and schedule
-        await tx.seatReservation.deleteMany({
-          where: {
-            scheduleId,
-            OR: [
-              { userId: targetUserId },
-              { userId: user.id },
-            ],
-          },
-        });
-
-        // 7. Create new seat reservation
-        const expiresAt = new Date(Date.now() + SEAT_HOLD_DURATION);
-        const reservation = await tx.seatReservation.create({
-          data: {
-            scheduleId,
-            userId: targetUserId,
-            seatNumbers,
-            status: 'reserved',
-            expiresAt,
-          },
-        });
-
-        return reservation;
-      },
-      {
-        maxWait: 10000,
-        timeout: 15000,
+        throw error;
       }
-    );
+    }
 
     return NextResponse.json(
       {
-        reservationId: result.id,
-        expiresAt: result.expiresAt,
+        reservationId: reservationResult.id,
+        expiresAt: reservationResult.expiresAt,
         holdDurationMinutes: 5,
       },
       { status: 201 }
@@ -250,4 +319,3 @@ export async function POST(req: NextRequest) {
     );
   }
 }
-

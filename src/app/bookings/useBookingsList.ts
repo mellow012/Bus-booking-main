@@ -331,6 +331,9 @@ export const useBookingsList = () => {
             price: b.totalAmount && Array.isArray(b.passengerDetails) && b.passengerDetails.length > 0 ? Math.floor(b.totalAmount / b.passengerDetails.length) : 0,
             availableSeats: b.schedule?.availableSeats || 0,
             date: b.schedule?.departureDateTime,
+            tripStatus: b.schedule?.tripStatus || 'scheduled',
+            operatorPhone: b.schedule?.operatorPhone || '',
+            operatorName: b.schedule?.operatorName || '',
           } as any,
           route: {
             id: b.schedule?.route?.id || '',
@@ -475,15 +478,23 @@ export const useBookingsList = () => {
         const passengerName = p.name || 'Unknown Passenger';
         const seat = p.seatNumber || 'Unassigned';
         const operator = normalizeText(booking.company.name, 'Unknown Operator');
+
+        // Person responsible for the schedule (assigned operator), then company phone
+        const scheduleOperatorName = normalizeText(
+          (booking as any).scheduleOperatorName ||
+          (booking.schedule as any)?.operatorName ||
+          '',
+          ''
+        );
         const operatorPhone = normalizeText(
           booking.operatorPhone ||
           (booking.schedule as any)?.operatorPhone ||
           (booking.company as any)?.phone ||
-          (booking as any)?.operatorPhone,
+          '',
           ''
         );
         const busClass = normalizeText(booking.bus?.busType, 'Standard Class');
-        
+
         const routeObj = isReturn && booking.returnSegment ? booking.returnSegment.route : booking.route;
         const schedObj = isReturn && booking.returnSegment ? booking.returnSegment.schedule : booking.schedule;
         const originId = isReturn && booking.returnSegment ? booking.returnSegment.originStopId : booking.originStopId;
@@ -634,9 +645,10 @@ export const useBookingsList = () => {
       </g>
 
       <text x="100" y="196" font-family="system-ui, -apple-system, sans-serif" font-weight="800" font-size="13" fill="${ticketAccentColor}" text-anchor="middle">${escapeXml(operator)}</text>
-      ${operatorPhone ? `<text x="100" y="212" font-family="system-ui, -apple-system, sans-serif" font-weight="500" font-size="10" fill="${ticketSubtleTextColor}" text-anchor="middle">${escapeXml(operatorPhone)}</text>` : ''}
-      <text x="100" y="${operatorPhone ? '230' : '214'}" font-family="system-ui, -apple-system, sans-serif" font-weight="600" font-size="9" fill="${ticketSubtleTextColor}" text-anchor="middle">Digital Manifest Token</text>
-      <text x="100" y="${operatorPhone ? '242' : '226'}" font-family="system-ui, -apple-system, sans-serif" font-weight="400" font-size="9" fill="${ticketSubtleTextColor}" text-anchor="middle">Present PNR at gate boarding</text>
+      ${scheduleOperatorName ? `<text x="100" y="211" font-family="system-ui, -apple-system, sans-serif" font-weight="500" font-size="9" fill="${ticketSubtleTextColor}" text-anchor="middle">Operator: ${escapeXml(scheduleOperatorName)}</text>` : ''}
+      ${operatorPhone ? `<text x="100" y="${scheduleOperatorName ? '224' : '212'}" font-family="system-ui, -apple-system, sans-serif" font-weight="600" font-size="10" fill="${ticketSubtleTextColor}" text-anchor="middle">${escapeXml(operatorPhone)}</text>` : ''}
+      <text x="100" y="${(scheduleOperatorName && operatorPhone) ? '238' : (scheduleOperatorName || operatorPhone) ? '228' : '214'}" font-family="system-ui, -apple-system, sans-serif" font-weight="600" font-size="9" fill="${ticketSubtleTextColor}" text-anchor="middle">Digital Manifest Token</text>
+      <text x="100" y="${(scheduleOperatorName && operatorPhone) ? '250' : (scheduleOperatorName || operatorPhone) ? '240' : '226'}" font-family="system-ui, -apple-system, sans-serif" font-weight="400" font-size="9" fill="${ticketSubtleTextColor}" text-anchor="middle">Present PNR at gate boarding</text>
     </g>
 
 
@@ -644,9 +656,7 @@ export const useBookingsList = () => {
     <line x1="0" y1="348" x2="720" y2="348" stroke="${ticketBorderColor}" stroke-width="1" />
 
     <g transform="translate(24, 378)">
-      <text x="0" y="0" font-family="system-ui, -apple-system, sans-serif" font-size="11" font-weight="500" fill="${ticketSubtleTextColor}">Paid via: <tspan fill="${ticketContentTextColor}" font-weight="700">${escapeXml(paymentMethodName)}</tspan></text>
-      <circle cx="120" cy="-4" r="2" fill="${ticketBorderColor}" />
-      <text x="135" y="0" font-family="system-ui, -apple-system, sans-serif" font-size="11" font-weight="500" fill="${ticketSubtleTextColor}">Total Ticket Fare: <tspan fill="${ticketAccentColor}" font-weight="800" font-size="13">MWK ${escapeXml(totalFare)}</tspan></text>
+      <text x="0" y="0" font-family="system-ui, -apple-system, sans-serif" font-size="11" font-weight="500" fill="${ticketSubtleTextColor}">Paid via: <tspan fill="${ticketContentTextColor}" font-weight="700">${escapeXml(paymentMethodName)}</tspan>   <tspan fill="${ticketSubtleTextColor}" font-weight="500">  •  Total Ticket Fare: </tspan><tspan fill="${ticketAccentColor}" font-weight="800" font-size="13">MWK ${escapeXml(totalFare)}</tspan></text>
     </g>
 
     <g transform="translate(696, 378)">

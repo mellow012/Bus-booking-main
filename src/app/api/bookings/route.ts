@@ -181,26 +181,29 @@ export async function GET(req: NextRequest) {
 
     const now = Date.now();
 
-    // Attach operatorPhone to each booking and dynamically resolve auto-completed delayed schedules
+    // Attach operatorPhone to each booking
     const enrichedBookings = bookings.map((b: any) => {
-      // 1. Try direct schedule operator phone
+      // Priority 1: direct schedule operator's phone (person assigned to run the schedule)
       const opUid = b.schedule?.operator?.uid;
-      const opId = b.schedule?.operator?.id;
-      let phone = (opUid ? operatorPhoneMap[opUid] : '') || (opId ? operatorPhoneMap[opId] : '') || '';
+      const opId  = b.schedule?.operator?.id;
+      let phone =
+        (opUid ? operatorPhoneMap[opUid] : '') ||
+        (opId  ? operatorPhoneMap[opId]  : '') ||
+        '';
 
-      // 2. Fallback to first route operator phone
+      // Priority 2: any route-assigned operator's phone
       if (!phone) {
         const routeOps = b.schedule?.route?.operators || [];
         for (const ro of routeOps) {
-          const rPhone = (ro.uid ? operatorPhoneMap[ro.uid] : '') || (ro.id ? operatorPhoneMap[ro.id] : '') || '';
-          if (rPhone) {
-            phone = rPhone;
-            break;
-          }
+          const rPhone =
+            (ro.uid ? operatorPhoneMap[ro.uid] : '') ||
+            (ro.id  ? operatorPhoneMap[ro.id]  : '') ||
+            '';
+          if (rPhone) { phone = rPhone; break; }
         }
       }
 
-      // 3. Fallback to company phone if no direct operator user phone found
+      // Priority 3: company phone (the registered contact number for the company)
       if (!phone) {
         phone = b.schedule?.company?.phone || b.company?.phone || '';
       }
@@ -220,6 +223,8 @@ export async function GET(req: NextRequest) {
           ...b.schedule,
           tripStatus: effectiveStatus,
           operatorPhone: phone,
+          // Name of the person assigned to run this schedule (for ticket display)
+          operatorName: b.schedule?.operator?.name || '',
         },
       };
     });

@@ -25,10 +25,7 @@ export const SEAT_LAYOUT_PRESETS: Record<SeatLayoutKey, SeatLayoutPreset> = {
     name: 'Minibus',
     seatsPerRow: 4,
     aislePosition: 1, // 1+3 layout: 1 seat left of aisle, 3 seats right (A | B C D)
-    seatLabels: ['A', 'B', 'C', 'D'],
-    // Front row seat count genuinely varies per real minibus (commonly 2 or 3) —
-    // 3 is used as a reasonable default, but this should be adjustable per bus
-    // in Fleet Manager rather than treated as fixed.
+    seatLabels: ['A', 'B', 'C', 'D', 'E'],
     defaultFirstRowSeats: 3,
     defaultRowOverrides: [{ position: 'last', type: 'bench', benchSeats: 4 }],
   },
@@ -36,8 +33,7 @@ export const SEAT_LAYOUT_PRESETS: Record<SeatLayoutKey, SeatLayoutPreset> = {
     name: 'Coaster',
     seatsPerRow: 4,
     aislePosition: 2, // 2+2 layout: centered aisle (A B | C D)
-    seatLabels: ['A', 'B', 'C', 'D'],
-    // Narrower front row (driver cabin/entrance space) — 2 seats by default.
+    seatLabels: ['A', 'B', 'C', 'D', 'E'],
     defaultFirstRowSeats: 2,
     defaultRowOverrides: [{ position: 'last', type: 'bench', benchSeats: 4 }],
   },
@@ -53,7 +49,7 @@ export const SEAT_LAYOUT_PRESETS: Record<SeatLayoutKey, SeatLayoutPreset> = {
     name: 'Luxury',
     seatsPerRow: 3,
     aislePosition: 2, // 2+1 layout: wider individual seats (A B | C)
-    seatLabels: ['A', 'B', 'C'],
+    seatLabels: ['A', 'B', 'C', 'D', 'E'],
     defaultFirstRowSeats: 2,
     defaultRowOverrides: [{ position: 'last', type: 'bench', benchSeats: 4 }],
   },

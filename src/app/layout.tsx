@@ -71,7 +71,7 @@ export const metadata: Metadata = {
 };
 
 import { MobileBottomNav } from "@/components/MobileBottomNav";
-import { NavigationProgressBar } from "@/components/NavigationProgressBar";
+// import { NavigationProgressBar } from "@/components/NavigationProgressBar";
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const locale   = await getLocale();
@@ -84,7 +84,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <AuthProvider>
             <NotificationProviderWrapper>
               <ToastProvider>
-                <NavigationProgressBar />
+                {/* <NavigationProgressBar /> */}
                 <div className="min-h-screen flex flex-col">
                   <Header />
                   <main className="flex-grow pb-12 page-content">

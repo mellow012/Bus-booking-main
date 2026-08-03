@@ -1,81 +1,123 @@
 'use client';
 
+import React from 'react';
 import { RouteFormState } from '../../types';
+import { RouteStop } from '@/types';
+import StopsEditor from '@/components/common/StopsEditor';
 
 interface AddRouteFormProps {
   form: RouteFormState;
   onChange: (form: RouteFormState) => void;
 }
 
+/** Shared label + input block to enforce uniform styling across all fields */
+function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
+  return (
+    <div>
+      <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+        {label}{required && <span className="text-rose-500 ml-0.5">*</span>}
+      </label>
+      {children}
+    </div>
+  );
+}
+
+const inputCls =
+  'block w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-900 ' +
+  'placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm';
+
 export default function AddRouteForm({ form, onChange }: AddRouteFormProps) {
   const set = (patch: Partial<RouteFormState>) => onChange({ ...form, ...patch });
 
   return (
-    <>
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Route Name *</label>
+    <div className="space-y-4">
+      {/* Route Name */}
+      <Field label="Route Name" required>
         <input
           type="text"
           value={form.name}
           onChange={(e) => set({ name: e.target.value })}
-          placeholder="e.g., Lilongwe - Blantyre Express"
-          className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border"
+          placeholder="e.g., Lilongwe – Blantyre Express"
+          className={inputCls}
         />
-      </div>
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Origin *</label>
+      </Field>
+
+      {/* Origin / Destination */}
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Origin" required>
           <input
             type="text"
             value={form.origin}
             onChange={(e) => set({ origin: e.target.value })}
             placeholder="Lilongwe"
-            className="block w-full rounded-lg border-gray-300 shadow-sm sm:text-sm px-3 py-2 border"
+            className={inputCls}
           />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Destination *</label>
+        </Field>
+        <Field label="Destination" required>
           <input
             type="text"
             value={form.destination}
             onChange={(e) => set({ destination: e.target.value })}
             placeholder="Blantyre"
-            className="block w-full rounded-lg border-gray-300 shadow-sm sm:text-sm px-3 py-2 border"
+            className={inputCls}
           />
-        </div>
+        </Field>
       </div>
-      <div className="grid grid-cols-3 gap-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Distance (km)</label>
+
+      {/* Numeric fields — use inputMode="decimal" so users can clear and retype freely */}
+      <div className="grid grid-cols-3 gap-3">
+        <Field label="Distance (km)">
           <input
-            type="number"
+            type="text"
+            inputMode="decimal"
             value={form.distance}
-            onChange={(e) => set({ distance: e.target.value })}
+            onChange={(e) => {
+              // Allow: digits, one decimal point, empty string
+              const v = e.target.value;
+              if (v === '' || /^\d*\.?\d*$/.test(v)) set({ distance: v });
+            }}
             placeholder="310"
-            className="block w-full rounded-lg border-gray-300 shadow-sm sm:text-sm px-3 py-2 border"
+            className={inputCls}
           />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Duration (min)</label>
+        </Field>
+        <Field label="Duration (min)">
           <input
-            type="number"
+            type="text"
+            inputMode="decimal"
             value={form.duration}
-            onChange={(e) => set({ duration: e.target.value })}
+            onChange={(e) => {
+              const v = e.target.value;
+              if (v === '' || /^\d*\.?\d*$/.test(v)) set({ duration: v });
+            }}
             placeholder="240"
-            className="block w-full rounded-lg border-gray-300 shadow-sm sm:text-sm px-3 py-2 border"
+            className={inputCls}
           />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Base Fare (MWK)</label>
+        </Field>
+        <Field label="Base Fare (MWK)">
           <input
-            type="number"
+            type="text"
+            inputMode="decimal"
             value={form.baseFare}
-            onChange={(e) => set({ baseFare: e.target.value })}
+            onChange={(e) => {
+              const v = e.target.value;
+              if (v === '' || /^\d*\.?\d*$/.test(v)) set({ baseFare: v });
+            }}
             placeholder="5000"
-            className="block w-full rounded-lg border-gray-300 shadow-sm sm:text-sm px-3 py-2 border"
+            className={inputCls}
           />
-        </div>
+        </Field>
       </div>
-    </>
+
+      {/* Stops Editor */}
+      <div className="pt-2 border-t border-gray-100">
+        <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">
+          Intermediate Pick-up Stops <span className="text-gray-400 normal-case font-normal">(optional)</span>
+        </p>
+        <StopsEditor
+          stops={form.stops || []}
+          onChange={(newStops: RouteStop[]) => set({ stops: newStops })}
+        />
+      </div>
+    </div>
   );
 }

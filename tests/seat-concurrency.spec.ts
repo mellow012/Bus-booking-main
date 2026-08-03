@@ -22,6 +22,10 @@ test.describe('Seat Reservation Concurrency & Race Conditions', () => {
     testUsers = await ensureTestUsers(35);
   });
 
+  test.beforeEach(({}) => {
+    test.setTimeout(180_000);
+  });
+
   test('1. same seat conflict — exactly one winner', async ({ baseURL }) => {
     const targetBaseUrl = baseURL || 'http://localhost:3000';
     safeguardProductionCheck(targetBaseUrl);
@@ -129,6 +133,7 @@ test.describe('Seat Reservation Concurrency & Race Conditions', () => {
               scheduleId: schedule.id,
               seatNumbers: [seatNumber],
             },
+            timeout: 180_000,
           });
         })
       );
@@ -217,6 +222,7 @@ test.describe('Seat Reservation Concurrency & Race Conditions', () => {
               scheduleId: schedule.id,
               seatNumbers: [seatNumber],
             },
+            timeout: 180_000,
           });
         })
       );

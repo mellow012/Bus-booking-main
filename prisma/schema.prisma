@@ -380,6 +380,8 @@ model SeatReservation {
   expiresAt       DateTime
   createdAt       DateTime @default(now())
   bookingSegmentId String?
+  originStopId    String?
+  destinationStopId String?
   schedule        Schedule @relation(fields: [scheduleId], references: [id])
   user            User     @relation(fields: [userId], references: [id])
   bookingSegment  BookingSegment? @relation("SeatReservationBookingSegment", fields: [bookingSegmentId], references: [id])

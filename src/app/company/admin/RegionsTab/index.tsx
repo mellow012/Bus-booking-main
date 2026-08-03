@@ -27,7 +27,7 @@ interface RegionsTabProps {
   dashboard: any;
 }
 
-const EMPTY_ROUTE_FORM: RouteFormState = { name: '', origin: '', destination: '', distance: '', duration: '', baseFare: '' };
+const EMPTY_ROUTE_FORM: RouteFormState = { name: '', origin: '', destination: '', distance: '', duration: '', baseFare: '', stops: [] };
 const EMPTY_BUS_FORM: BusFormState = { licensePlate: '', busType: 'Economy', capacity: '45', status: 'active' };
 
 export default function RegionsTab({ dashboard }: RegionsTabProps) {
@@ -234,15 +234,32 @@ export default function RegionsTab({ dashboard }: RegionsTabProps) {
       showAlert('error', 'Please fill in route name, origin and destination.');
       return;
     }
+    // Validate numeric fields
+    const dist = parseFloat(routeForm.distance);
+    const dur = parseFloat(routeForm.duration);
+    const fare = parseFloat(routeForm.baseFare);
+    if (routeForm.distance && (isNaN(dist) || dist < 0)) {
+      showAlert('error', 'Distance must be a positive number.');
+      return;
+    }
+    if (routeForm.duration && (isNaN(dur) || dur < 0)) {
+      showAlert('error', 'Duration must be a positive number.');
+      return;
+    }
+    if (routeForm.baseFare && (isNaN(fare) || fare < 0)) {
+      showAlert('error', 'Base fare must be a positive number.');
+      return;
+    }
     setSaving(true);
     try {
       await addItem('Route', {
         name: routeForm.name,
         origin: routeForm.origin,
         destination: routeForm.destination,
-        distance: parseInt(routeForm.distance) || 0,
-        duration: parseInt(routeForm.duration) || 0,
-        baseFare: parseInt(routeForm.baseFare) || 0,
+        distance: isNaN(dist) ? 0 : dist,
+        duration: isNaN(dur) ? 0 : dur,
+        baseFare: isNaN(fare) ? 0 : fare,
+        stops: routeForm.stops || [],
         regionId: modalContext.branchId || null,
         isActive: true,
         status: 'active',

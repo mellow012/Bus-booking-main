@@ -42,11 +42,25 @@ export async function POST(
       );
     }
 
-    // Check if departure time has passed (cannot cancel)
+    // Check refund/cancellation 2-hour pre-departure cutoff policy
     const departureTime = new Date(booking.schedule.departureDateTime);
-    if (departureTime < new Date()) {
+    const twoHoursMs = 2 * 60 * 60 * 1000;
+    const timeUntilDeparture = departureTime.getTime() - Date.now();
+
+    if (timeUntilDeparture <= 0) {
       return NextResponse.json(
-        { error: 'Cannot cancel booking after departure time' },
+        { error: 'Cannot cancel booking after departure time.' },
+        { status: 400 }
+      );
+    }
+
+    if (timeUntilDeparture < twoHoursMs) {
+      return NextResponse.json(
+        {
+          error: 'Refund Cutoff Exceeded',
+          message: 'Bookings cannot be cancelled or refunded within 2 hours of scheduled departure time as per TibhukeBus policy.',
+          policyCutoffHours: 2,
+        },
         { status: 400 }
       );
     }

@@ -1,4 +1,4 @@
-import { Route, Schedule } from '@/types';
+import { Route, RouteStop, Schedule } from '@/types';
 
 export type ModalType = 'addRoute' | 'addBus' | null;
 
@@ -28,6 +28,7 @@ export interface RouteFormState {
   distance: string;
   duration: string;
   baseFare: string;
+  stops: RouteStop[];
 }
 
 export interface BusFormState {

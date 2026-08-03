@@ -11,7 +11,7 @@ interface ModalShellProps {
 export default function ModalShell({ title, saving, onClose, onSave, children }: ModalShellProps) {
   return (
     <div className="fixed inset-0 bg-slate-900/40 z-50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={onClose}>
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden border border-gray-100 animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden border border-gray-100 animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
         <div className="px-6 py-4 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
           <h2 className="text-lg font-bold text-gray-900">{title}</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-lg font-semibold">
@@ -19,7 +19,7 @@ export default function ModalShell({ title, saving, onClose, onSave, children }:
           </button>
         </div>
 
-        <div className="p-6 space-y-4">{children}</div>
+        <div className="p-6 space-y-4 overflow-y-auto flex-1">{children}</div>
 
         <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-50 bg-white">
           <Button type="button" variant="outline" onClick={onClose} className="rounded-xl h-10">

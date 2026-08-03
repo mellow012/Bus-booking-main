@@ -554,9 +554,9 @@ export async function createBooking(data: Partial<Booking> & {
       },
       include: { payments: true }
     });
-    revalidatePath('/bookings');
-    revalidatePath('/company/conductor/dashboard');
-    revalidatePath('/company/admin');
+    try { revalidatePath('/bookings'); } catch (_) {}
+    try { revalidatePath('/company/conductor/dashboard'); } catch (_) {}
+    try { revalidatePath('/company/admin'); } catch (_) {}
     return { success: true, data: (booking as any) as Booking };
   } catch (error: unknown) {
     console.error('Error creating booking:', error);
@@ -625,14 +625,22 @@ export async function updateBooking(id: string, data: Partial<Booking>) {
 export async function cancelBooking(bookingId: string, scheduleId?: string, seatNumbers?: string[]) {
   try {
     const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      // 1. Fetch booking with segments to release all associated schedule seats
+      // 1. Fetch booking with segments and schedule to release seats and enforce 2-hour refund policy
       const existingBooking = await tx.booking.findUnique({
         where: { id: bookingId },
-        include: { segments: true },
+        include: { segments: true, schedule: true },
       });
 
       if (!existingBooking) {
         throw new Error('Booking not found');
+      }
+
+      if (existingBooking.schedule) {
+        const depTime = new Date(existingBooking.schedule.departureDateTime).getTime();
+        const timeUntilDep = depTime - Date.now();
+        if (timeUntilDep < 2 * 60 * 60 * 1000) {
+          throw new Error('Bookings cannot be cancelled or refunded within 2 hours of scheduled departure time as per TibhukeBus policy.');
+        }
       }
 
       // 2. Update booking status

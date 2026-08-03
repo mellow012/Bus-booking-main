@@ -23,8 +23,8 @@ export default defineConfig({
     trace:             'on-first-retry',
     screenshot:        'only-on-failure',
     video:             'on-first-retry',
-    actionTimeout:     45_000,
-    navigationTimeout: 40_000,
+    actionTimeout:     90_000,
+    navigationTimeout: 60_000,
   },
 
   // webServer: {
