@@ -3,6 +3,8 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
+import { format } from 'date-fns';
+import { parseUtcDate } from '@/lib/timezone';
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/Label";
 import {
@@ -221,7 +223,7 @@ const PaymentsTab: React.FC<PaymentsTabProps> = ({
                   busId: d.busId || "",
                   origin: (d as any).Route?.origin || d.departureLocation || "",
                   destination: (d as any).Route?.destination || d.arrivalLocation || "",
-                  departureTime: d.departureDateTime ? new Date(d.departureDateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "",
+                  departureTime: d.departureDateTime ? parseUtcDate(d.departureDateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "",
                 });
               });
             }

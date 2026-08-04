@@ -4,14 +4,17 @@ import { Calendar, Route as RouteIcon } from 'lucide-react';
 import { Bus, Route, Schedule } from '@/types';
 import { formatDateTime } from '../utils/schedule';
 
+import { parseUtcDate } from '@/lib/timezone';
+
 interface BranchUpcomingTripsProps {
   branchName: string;
   schedules: Schedule[];
   routes: Route[];
   buses: Bus[];
+  onScheduleClick?: (scheduleId: string) => void;
 }
 
-export default function BranchUpcomingTrips({ branchName, schedules, routes, buses }: BranchUpcomingTripsProps) {
+export default function BranchUpcomingTrips({ branchName, schedules, routes, buses, onScheduleClick }: BranchUpcomingTripsProps) {
   return (
     <div className="p-5 border-t border-gray-100 bg-gray-50/30">
       <h4 className="text-sm font-bold text-gray-900 mb-3 flex items-center gap-2">
@@ -25,13 +28,17 @@ export default function BranchUpcomingTrips({ branchName, schedules, routes, bus
             const route = routes.find((r: Route) => r.id === schedule.routeId);
             const bus = buses.find((b: Bus) => b.id === schedule.busId);
             return (
-              <div key={schedule.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-white px-4 py-2.5 rounded-lg border border-gray-100">
+              <div 
+                key={schedule.id} 
+                onClick={() => onScheduleClick && onScheduleClick(schedule.id)}
+                className={`flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-white px-4 py-2.5 rounded-lg border border-gray-100 ${onScheduleClick ? 'cursor-pointer hover:border-indigo-300 hover:shadow-sm transition-all' : ''}`}
+              >
                 <div className="flex items-center gap-3">
                   <RouteIcon className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
                   <span className="text-sm font-semibold text-gray-900">{route ? `${route.origin} → ${route.destination}` : 'Unknown route'}</span>
                   <span className="text-xs text-gray-400">{bus?.licensePlate || 'No bus'}</span>
                 </div>
-                <span className="text-xs font-medium text-gray-500">{formatDateTime(schedule.departureDateTime.toISOString())}</span>
+                <span className="text-xs font-medium text-gray-500">{formatDateTime(parseUtcDate(schedule.departureDateTime as unknown as string).toISOString())}</span>
               </div>
             );
           })}

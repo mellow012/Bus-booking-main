@@ -1,6 +1,7 @@
 'use client';
 
 import { Calendar, Bus as BusIcon } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { Bus, Schedule } from '@/types';
 import { SCHEDULE_STATUS_LABELS, SCHEDULE_STATUS_STYLES, formatDateTime, getScheduleStatus } from '../utils/schedule';
 
@@ -12,10 +13,14 @@ interface ScheduleCardProps {
 }
 
 export default function ScheduleCard({ schedule, bus, bookingsCount, revenue }: ScheduleCardProps) {
+  const router = useRouter();
   const status = getScheduleStatus(schedule);
 
   return (
-    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white px-4 py-3 rounded-xl border border-gray-200 hover:border-gray-300 transition-colors shadow-sm">
+    <div 
+      onClick={() => router.push(`/company/admin?tab=bookings&scheduleId=${encodeURIComponent(schedule.id)}`)}
+      className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white px-4 py-3 rounded-xl border border-gray-200 hover:border-indigo-300 hover:shadow-md cursor-pointer transition-all shadow-sm"
+    >
       <div className="flex flex-wrap items-center gap-3 sm:gap-4">
         <div className="flex items-center gap-2 text-xs font-semibold text-gray-900 shrink-0">
           <Calendar className="w-4 h-4 text-indigo-500 shrink-0" />

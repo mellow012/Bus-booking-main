@@ -27,6 +27,20 @@ const fmtDateTimeInput = (d: Date) => {
   return `${base}T${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 };
 
+/**
+ * Convert a local HH:MM time string to its UTC equivalent.
+ * Template departure/arrival times are entered by the admin in their local
+ * timezone. We store and materialize them in UTC so setUTCHours() produces
+ * the correct UTC instant regardless of the server's TZ setting.
+ */
+const localTimeToUtc = (localTimeStr: string): string => {
+  const [h, m] = localTimeStr.split(':').map(Number);
+  const d = new Date();
+  d.setHours(h, m, 0, 0); // interpret as local time
+  return `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;
+};
+
+
 interface UnifiedScheduleModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -163,17 +177,21 @@ export default function UnifiedScheduleModal({
         if (includeReturnTemplate) {
           const outboundData = {
             ...templateFormData,
+            // Convert local times to UTC (see localTimeToUtc comment above)
+            departureTime: localTimeToUtc(templateFormData.departureTime),
+            arrivalTime: localTimeToUtc(templateFormData.arrivalTime),
             companyId,
           };
           const inboundData = {
             ...templateFormData,
             busId: templateFormData.returnBusId,
-            departureTime: templateFormData.returnDepartureTime,
-            arrivalTime: templateFormData.returnArrivalTime,
+            departureTime: localTimeToUtc(templateFormData.returnDepartureTime),
+            arrivalTime: localTimeToUtc(templateFormData.returnArrivalTime),
             price: templateFormData.returnPrice,
             companyId,
           };
           const result = await createRoundTripScheduleTemplate(outboundData, inboundData);
+
           if (result.success) {
             toast.success('Templates created', 'Both recurring schedules registered successfully!');
             onSuccess();
@@ -182,8 +200,13 @@ export default function UnifiedScheduleModal({
         } else {
           const result = await createScheduleTemplate({
             ...templateFormData,
+            // Convert local times to UTC so materializeSchedules stores the
+            // correct UTC instant (matched by setUTCHours in the server action)
+            departureTime: localTimeToUtc(templateFormData.departureTime),
+            arrivalTime: localTimeToUtc(templateFormData.arrivalTime),
             companyId,
           });
+
           if (result.success) {
             toast.success('Template created', 'Recurring schedule registered successfully!');
             onSuccess();
@@ -204,10 +227,32 @@ export default function UnifiedScheduleModal({
       return;
     }
 
+    // ── Client-side validation (matches server-side checks in createSchedule) ──
+    if (!formData.price || formData.price <= 0) {
+      toast.error('Invalid price', 'Price per seat must be greater than 0.');
+      return;
+    }
+    if (!formData.availableSeats || formData.availableSeats <= 0) {
+      toast.error('No seats available', 'Select a bus first, or enter available seats (must be > 0).');
+      return;
+    }
+    const depDate = new Date(formData.departureDateTime);
+    const arrDate = new Date(formData.arrivalDateTime);
+    if (isNaN(depDate.getTime()) || isNaN(arrDate.getTime())) {
+      toast.error('Invalid times', 'Please enter valid departure and arrival date/times.');
+      return;
+    }
+    if (arrDate <= depDate) {
+      toast.error('Invalid times', 'Arrival time must be after departure time.');
+      return;
+    }
+    // ──────────────────────────────────────────────────────────────────────────
+
     if (scheduleType === 'return' && (!formData.returnPrice || formData.returnPrice <= 0)) {
       toast.error('Missing fields', 'Please enter a valid price for the return trip.');
       return;
     }
+
 
     setActionLoading(true);
     try {

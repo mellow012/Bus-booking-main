@@ -24,18 +24,19 @@ import {
   PieChart,
   BusIcon
 } from "lucide-react";
+
+import { parseUtcDate } from '@/lib/timezone';
 import { Input } from "@/components/ui/input";
 import { toast } from "react-hot-toast";
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
 const toDate = (v: unknown): Date => {
-  if (v == null) return new Date();
+  if (!v) return new Date(NaN);
   if (v instanceof Date) return v;
   const a = v as any;
   if (typeof a.toDate === "function") return a.toDate() as Date;
-  if (typeof a === "string" || typeof a === "number") return new Date(a);
-  return new Date();
+  return parseUtcDate(a as string);
 };
 
 const fmt = (n: number) => n.toLocaleString("en-MW");

@@ -2,6 +2,8 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { Schedule, Route, Bus } from '@/types';
 
+import { parseUtcDate } from '@/lib/timezone';
+
 const fetchCollectionData = async (table: string, companyId: string) => {
   if (!companyId) return [];
   const { data, error } = await supabase.from(table).select('*').eq('companyId', companyId);
@@ -9,10 +11,10 @@ const fetchCollectionData = async (table: string, companyId: string) => {
   
   return (data || []).map(d => ({
     ...d,
-    departureDateTime: d.departureDateTime ? new Date(d.departureDateTime) : undefined,
-    arrivalDateTime:   d.arrivalDateTime   ? new Date(d.arrivalDateTime)   : undefined,
-    createdAt: new Date(d.createdAt),
-    updatedAt: new Date(d.updatedAt),
+    departureDateTime: d.departureDateTime ? parseUtcDate(d.departureDateTime) : undefined,
+    arrivalDateTime:   d.arrivalDateTime   ? parseUtcDate(d.arrivalDateTime)   : undefined,
+    createdAt: parseUtcDate(d.createdAt),
+    updatedAt: parseUtcDate(d.updatedAt),
   }));
 };
 

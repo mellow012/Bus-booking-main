@@ -4,6 +4,13 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 
 export type JourneyState = 'upcoming' | 'in_transit' | 'delayed' | 'arrived' | 'completed' | 'past';
 
+export interface StopWithStage {
+  id: string;
+  name: string;
+  coords: [number, number] | null;
+  stage: 'passed' | 'current' | 'upcoming';
+}
+
 export interface JourneyInfo {
   state: JourneyState;
   /** 0-1 progress between departure and arrival */
@@ -12,6 +19,10 @@ export interface JourneyInfo {
   minutesRemaining: number;
   /** Formatted countdown string like "2h 15m" or "Delayed • Running Late" */
   countdownText: string;
+  /** Completed at timestamp */
+  completedAt: Date | null;
+  /** Stop stages (passed, current, upcoming) */
+  stopStages: StopWithStage[];
   /** Whether the user has opted in to share location */
   locationConsent: boolean;
   /** Live position from API (if available) */
@@ -37,6 +48,8 @@ interface UseJourneyTrackerArgs {
   reviewRating?: number | null;
   destinationCity?: string;
   destinationCoords?: [number, number];
+  stops?: Array<{ id: string; name: string; coords?: [number, number] }>;
+  currentStopIndex?: number;
 }
 
 const CITY_COORDS: Record<string, [number, number]> = {
@@ -126,6 +139,8 @@ export function useJourneyTracker({
   reviewRating,
   destinationCity,
   destinationCoords,
+  stops = [],
+  currentStopIndex,
 }: UseJourneyTrackerArgs): JourneyInfo {
   const [locationConsent, setLocationConsent] = useState(false);
   const [livePosition, setLivePosition] = useState<{ latitude: number; longitude: number } | null>(null);
@@ -215,7 +230,7 @@ export function useJourneyTracker({
   }, [now, departureDateTime, arrivalDateTime, tripStatus, bookingStatus, paymentStatus, reviewRating, livePosition, destinationCity, destinationCoords]);
 
   // Calculate progress and countdown
-  const { progress, minutesRemaining, countdownText } = useMemo(() => {
+  const { progress, minutesRemaining, countdownText, completedAt } = useMemo(() => {
     const dep = departureDateTime instanceof Date ? departureDateTime : new Date(departureDateTime);
     const arr = arrivalDateTime instanceof Date ? arrivalDateTime : new Date(arrivalDateTime);
     const totalMs = arr.getTime() - dep.getTime();
@@ -241,14 +256,73 @@ export function useJourneyTracker({
       countdown = hours > 0 ? `${hours}h ${mins}m to arrival` : `${mins}m to arrival`;
     } else if (state === 'delayed') {
       countdown = 'Delayed • Running Late';
-    } else if (state === 'arrived') {
-      countdown = 'Arrived';
+    } else if (state === 'arrived' || state === 'completed') {
+      // Return arrival time formatted as HH:mm
+      const hh = arr.getHours().toString().padStart(2, '0');
+      const mm = arr.getMinutes().toString().padStart(2, '0');
+      countdown = `Arrived at ${hh}:${mm}`;
     } else {
       countdown = '';
     }
 
-    return { progress: prog, minutesRemaining: remainMin, countdownText: countdown };
+    let completedAt: Date | null = null;
+    if (state === 'completed' || state === 'arrived') {
+      completedAt = arr; 
+    }
+
+    return { progress: prog, minutesRemaining: remainMin, countdownText: countdown, completedAt };
   }, [now, departureDateTime, arrivalDateTime, state]);
+
+  // Derive stop stages
+  const stopStages = useMemo((): StopWithStage[] => {
+    if (!stops || stops.length === 0) return [];
+
+    let currentIndex = 0;
+    
+    // If DB provides explicit stop index, use it
+    if (typeof currentStopIndex === 'number' && currentStopIndex >= 0) {
+      currentIndex = currentStopIndex;
+    } else if (livePosition) {
+      // Fallback: estimate from live GPS via proximity
+      let nearestDist = Infinity;
+      let nearestIdx = 0;
+      
+      stops.forEach((stop, idx) => {
+        const c = stop.coords || resolveCoords(stop.name);
+        if (c) {
+          const dist = haversineM([livePosition.latitude, livePosition.longitude], c);
+          if (dist < nearestDist) {
+            nearestDist = dist;
+            nearestIdx = idx;
+          }
+        }
+      });
+      
+      // If we are somewhat close to a stop, consider it current, else whatever the nearest was.
+      currentIndex = nearestIdx;
+    }
+
+    if (state === 'upcoming') {
+      currentIndex = -1; // All upcoming
+    } else if (state === 'completed' || state === 'past') {
+      currentIndex = stops.length; // All passed
+    } else if (state === 'arrived') {
+      currentIndex = stops.length - 1; // Destination is current
+    }
+
+    return stops.map((stop, i) => {
+      let stage: 'passed' | 'current' | 'upcoming' = 'upcoming';
+      if (i < currentIndex) stage = 'passed';
+      else if (i === currentIndex) stage = 'current';
+      
+      return {
+        id: stop.id,
+        name: stop.name,
+        coords: stop.coords || resolveCoords(stop.name),
+        stage
+      };
+    });
+  }, [stops, currentStopIndex, livePosition, state]);
 
   // Location reporting when in transit or delayed and consent is given
   useEffect(() => {
@@ -376,6 +450,8 @@ export function useJourneyTracker({
     progress,
     minutesRemaining,
     countdownText,
+    completedAt,
+    stopStages,
     locationConsent,
     livePosition,
     hasReview,

@@ -267,20 +267,29 @@ export default function BookingsTab({ dashboard }: BookingsTabProps) {
     );
   });
 
-  const [selectedScheduleId, setSelectedScheduleId] = useState<string | null>(
-    allActiveSchedules.length > 0 ? allActiveSchedules[0].id : null
-  );
+  const [selectedScheduleId, setSelectedScheduleId] = useState<string | null>(null);
 
+  // 1. Initial selection or when URL param changes
   useEffect(() => {
-    if (preferredSchedule?.id && allActiveSchedules.some((s: Schedule) => s.id === preferredSchedule.id)) {
-      setSelectedScheduleId(preferredSchedule.id);
-      return;
+    if (requestedScheduleId && allActiveSchedules.some(s => s.id === requestedScheduleId)) {
+      setSelectedScheduleId(requestedScheduleId);
     }
+  }, [requestedScheduleId, allActiveSchedules]);
 
-    if (!allActiveSchedules.some((s: Schedule) => s.id === selectedScheduleId)) {
-      setSelectedScheduleId(allActiveSchedules.length > 0 ? allActiveSchedules[0].id : null);
+  // 2. Fallback to first available schedule if the current one is invalid or null
+  useEffect(() => {
+    if (allActiveSchedules.length > 0) {
+      // If we don't have a selection, or our selection is no longer in the active list (e.g. date changed)
+      if (!selectedScheduleId || !allActiveSchedules.some((s: Schedule) => s.id === selectedScheduleId)) {
+        // Only set default if we aren't being forced to requestedScheduleId right now
+        if (!requestedScheduleId || !allActiveSchedules.some(s => s.id === requestedScheduleId)) {
+          setSelectedScheduleId(allActiveSchedules[0].id);
+        }
+      }
+    } else {
+      setSelectedScheduleId(null);
     }
-  }, [allActiveSchedules, preferredSchedule, selectedScheduleId]);
+  }, [allActiveSchedules, selectedScheduleId, requestedScheduleId]);
 
   const selectedBookingSchedule = selectedBooking
     ? schedules.find((schedule: Schedule) => schedule.id === selectedBooking.scheduleId)

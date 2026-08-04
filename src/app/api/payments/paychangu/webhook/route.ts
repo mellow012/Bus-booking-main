@@ -147,12 +147,34 @@ export async function POST(req: NextRequest) {
 
     // ── Atomic transaction ──────────────────────────────────────────────────────
     await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      
+      const currentMetadata = (booking.metadata as Record<string, any>) || {};
+      let finalBookingStatus = bookingStatus;
+      let finalMetadata = currentMetadata;
+
+      // Late webhook guard: do not silently un-cancel an expired/cancelled booking.
+      // If they paid late, we flag it for human review.
+      if (
+        paymentStatus === 'paid' && 
+        (booking.bookingStatus === 'expired' || booking.bookingStatus === 'cancelled')
+      ) {
+        finalBookingStatus = booking.bookingStatus;
+        finalMetadata = {
+          ...currentMetadata,
+          flaggedForReview: true,
+          lateWebhookAt: new Date().toISOString(),
+          lateWebhookStatus: normalised,
+        };
+        console.warn(`[LATE_WEBHOOK] Payment successful but booking ${booking.id} is already ${booking.bookingStatus}. Flagging for review.`);
+      }
+
       // Update booking
       await tx.booking.update({
         where: { id: booking.id },
         data: {
           paymentStatus,
-          bookingStatus,
+          bookingStatus: finalBookingStatus,
+          metadata: finalMetadata,
           paidAt: paymentStatus === 'paid' ? new Date() : booking.paidAt,
           updatedAt: new Date(),
         },

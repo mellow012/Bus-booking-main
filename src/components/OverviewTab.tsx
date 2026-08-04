@@ -4,6 +4,7 @@ import {
   DollarSign, Bus as BusIcon, TrendingUp, AlertTriangle, CheckCircle, MapPin, Ticket, RefreshCcw, Bell, Wallet, CreditCard, Navigation, Globe, UserCog, ChevronDown, ChevronRight
 } from "lucide-react";
 import { Company, Schedule, Route, Bus, Booking } from "@/types";
+import { parseUtcDate } from '@/lib/timezone';
 
 type TabType = "overview" | "schedules" | "routes" | "buses" | "bookings" | "operators" | "profile" | "settings" | "payments";
 
@@ -23,9 +24,9 @@ interface OverviewTabProps {
 }
 
 const toDate = (date: any): Date => {
-  if (!date) return new Date();
+  if (!date) return new Date(NaN);
   if (date instanceof Date) return date;
-  return new Date(date);
+  return parseUtcDate(date as string);
 };
 
 const fmt = (n: number) => n.toLocaleString("en-MW");
@@ -173,7 +174,7 @@ export default function OverviewTab({ dashboardData, realtimeStatus, setActiveTa
                 </h2>
                 <div className="flex flex-wrap items-center justify-center sm:justify-start gap-3">
                   <span className="text-[10px] font-black text-white uppercase tracking-widest bg-indigo-800/50 border border-indigo-700/50 px-4 py-2 rounded-xl">
-                    {new Date(liveTrip.departureDateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} Departure
+                    {parseUtcDate(liveTrip.departureDateTime as unknown as string).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} Departure
                   </span>
                   <span className="text-[10px] font-black text-white uppercase tracking-widest bg-indigo-800/50 border border-indigo-700/50 px-4 py-2 rounded-xl">
                     Bus {buses.find(b => b.id === liveTrip.busId)?.licensePlate || 'N/A'}
@@ -325,7 +326,7 @@ export default function OverviewTab({ dashboardData, realtimeStatus, setActiveTa
                                     </div>
                                     <p className="text-xs text-gray-500 font-medium flex items-center gap-1.5">
                                       <Bell className="w-3 h-3" />
-                                      {new Date(sch.departureDateTime).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
+                                      {parseUtcDate(sch.departureDateTime as unknown as string).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
                                     </p>
                                   </div>
                                   

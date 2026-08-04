@@ -61,7 +61,7 @@ export async function checkAndRollSchedules(force = false) {
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) || 1;
 
     // Update in parallel transaction chunks to be extremely fast and efficient
-    const chunkSize = 10; // Reduced chunk size to prevent driver timeouts
+    const chunkSize = 5; // Reduced chunk size to prevent driver timeouts
     let updatedCount = 0;
 
     console.log(`[schedule-generator] Spreading ${schedules.length} schedules over ${diffDays} days until end of June.`);
@@ -114,7 +114,7 @@ export async function checkAndRollSchedules(force = false) {
           await Promise.all(promises);
         },
         {
-          timeout: 15000 // Reduced timeout to fail faster and allow retries
+          timeout: 30000 // Increased timeout to prevent slow network transaction expiration
         }
       );
 

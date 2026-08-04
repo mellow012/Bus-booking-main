@@ -3,6 +3,7 @@ import { sendNotification, useNotifications } from '@/contexts/NotificationConte
 import { useAuth } from '@/contexts/AuthContext';
 import { useAppToast } from '@/contexts/ToastContext';
 import { Booking, Schedule, Bus, Route, Company, UserProfile } from '@/types';
+import { parseUtcDate } from '@/lib/timezone';
 
 // PaymentProvider type
 export type PaymentProvider = 'paychangu' | 'cash' | 'local_bank';
@@ -118,8 +119,8 @@ export function checkIsArchived(b: BookingWithDetails): boolean {
   // Auto-archive any trip whose scheduled arrival (or departure) time passed > 5 hours ago
   const arrRaw = b.schedule?.arrivalDateTime || (b as any).arrivalDateTime;
   const depRaw = b.schedule?.departureDateTime || (b as any).departureDateTime;
-  const arr = arrRaw ? (arrRaw instanceof Date ? arrRaw : new Date(arrRaw as unknown as string)) : null;
-  const dep = depRaw ? (depRaw instanceof Date ? depRaw : new Date(depRaw as unknown as string)) : null;
+  const arr = arrRaw ? (arrRaw instanceof Date ? arrRaw : parseUtcDate(arrRaw as unknown as string)) : null;
+  const dep = depRaw ? (depRaw instanceof Date ? depRaw : parseUtcDate(depRaw as unknown as string)) : null;
 
   const tripTime = (arr && !isNaN(arr.getTime())) ? arr.getTime() : (dep && !isNaN(dep.getTime())) ? dep.getTime() : null;
 
@@ -170,7 +171,7 @@ export const useBookingsList = () => {
   const formatTime = useCallback((dateTime: unknown): string => {
     let d: Date;
     if (dateTime instanceof Date) d = dateTime;
-    else if (typeof dateTime === 'string') d = new Date(dateTime);
+    else if (typeof dateTime === 'string') d = parseUtcDate(dateTime);
     else if ((dateTime as any)?.seconds) d = new Date((dateTime as any).seconds * 1000);
     else return 'N/A';
     return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
@@ -179,7 +180,7 @@ export const useBookingsList = () => {
   const formatDate = useCallback((dateTime: unknown): string => {
     let d: Date;
     if (dateTime instanceof Date) d = dateTime;
-    else if (typeof dateTime === 'string') d = new Date(dateTime);
+    else if (typeof dateTime === 'string') d = parseUtcDate(dateTime);
     else if ((dateTime as any)?.seconds) d = new Date((dateTime as any).seconds * 1000);
     else return 'N/A';
     return d.toLocaleDateString('en-GB', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
@@ -196,9 +197,9 @@ export const useBookingsList = () => {
   ), []);
 
   const isBookingExpired = useCallback((b: BookingWithDetails) => {
-    const arr = b.schedule?.arrivalDateTime instanceof Date
-      ? b.schedule.arrivalDateTime
-      : new Date(b.schedule?.arrivalDateTime as unknown as string);
+    const arr = b.schedule?.arrivalDateTime instanceof Date 
+      ? b.schedule.arrivalDateTime 
+      : parseUtcDate(b.schedule?.arrivalDateTime as unknown as string);
     return arr < new Date()
       && b.bookingStatus !== 'completed'
       && b.bookingStatus !== 'cancelled'
@@ -220,13 +221,13 @@ export const useBookingsList = () => {
       f = f.filter((b) => !checkIsArchived(b) && ((b.bookingStatus as string) === 'cancelled' || (b.bookingStatus as string) === 'payment_failed'));
     } else if (af === 'upcoming') {
       f = f.filter((b) => {
-        const d = b.schedule?.departureDateTime instanceof Date ? b.schedule.departureDateTime : new Date(b.schedule?.departureDateTime as unknown as string);
+        const d = b.schedule?.departureDateTime instanceof Date ? b.schedule.departureDateTime : parseUtcDate(b.schedule?.departureDateTime as unknown as string);
         return !checkIsArchived(b) && d > now && b.bookingStatus === 'confirmed' && (b.paymentStatus === 'paid' || (b as any).paymentMethod === 'cash_on_boarding');
       });
     } else if (af === 'in_transit') {
       f = f.filter((b) => {
-        const dep = b.schedule?.departureDateTime instanceof Date ? b.schedule.departureDateTime : new Date(b.schedule?.departureDateTime as unknown as string);
-        const arr = b.schedule?.arrivalDateTime instanceof Date ? b.schedule.arrivalDateTime : new Date(b.schedule?.arrivalDateTime as unknown as string);
+        const dep = b.schedule?.departureDateTime instanceof Date ? b.schedule.departureDateTime : parseUtcDate(b.schedule?.departureDateTime as unknown as string);
+        const arr = b.schedule?.arrivalDateTime instanceof Date ? b.schedule.arrivalDateTime : parseUtcDate(b.schedule?.arrivalDateTime as unknown as string);
         return !checkIsArchived(b) && (b.schedule?.tripStatus === 'in_transit' || (dep <= now && now < arr && b.bookingStatus === 'confirmed'));
       });
     } else {
@@ -266,17 +267,18 @@ export const useBookingsList = () => {
 
       const details: BookingWithDetails[] = apiBookings.map((b: any) => {
         const mappedSegments: BookingSegmentWithDetails[] = Array.isArray(b.segments)
-          ? b.segments.map((segment: any) => ({
+          ? b.segments.map((segment: any) => {
+            const processedSegment: BookingSegmentWithDetails = {
               id: segment.id,
-              scheduleId: segment.scheduleId,
-              originStopId: segment.originStopId,
-              destinationStopId: segment.destinationStopId,
-              seatNumbers: Array.isArray(segment.seatNumbers) ? segment.seatNumbers : [],
-              date: segment.date ? new Date(segment.date) : undefined,
+              scheduleId: segment.scheduleId || segment.schedule?.id,
+              originStopId: segment.originStopId || b.originStopId,
+              destinationStopId: segment.destinationStopId || b.destinationStopId,
+              seatNumbers: Array.isArray(segment.seatNumbers) ? segment.seatNumbers : typeof segment.seatNumbers === 'string' ? JSON.parse(segment.seatNumbers) : [],
+              date: segment.date ? parseUtcDate(segment.date) : undefined,
               schedule: {
                 id: segment.schedule?.id || '',
-                departureDateTime: new Date(segment.schedule?.departureDateTime),
-                arrivalDateTime: new Date(segment.schedule?.arrivalDateTime),
+                departureDateTime: parseUtcDate(segment.schedule?.departureDateTime),
+                arrivalDateTime: parseUtcDate(segment.schedule?.arrivalDateTime),
                 price: segment.schedule?.price || 0,
                 availableSeats: segment.schedule?.availableSeats || 0,
                 date: segment.schedule?.departureDateTime,
@@ -294,28 +296,18 @@ export const useBookingsList = () => {
                 ),
                 stops: segment.schedule?.route?.stops || [],
               } as any,
-            }))
+            };
+            return processedSegment;
+          })
           : [];
-
-        const mainOrigin = normalizeText(b.schedule?.route?.origin, 'Unknown');
-        const mainDestination = normalizeText(b.schedule?.route?.destination, 'Unknown');
-        const mainDbDistance = b.schedule?.route?.distance || 0;
-        const mainDbDuration = b.schedule?.route?.duration || 0;
-        const resolvedDistance = mainDbDistance || estimateDistance(mainOrigin, mainDestination);
-        const resolvedDuration = getEstimatedDuration(mainOrigin, mainDestination, mainDbDuration, mainDbDistance);
+        
+        const returnSegment = mappedSegments.length > 1 ? mappedSegments[1] : undefined;
 
         return {
-          id: b.id,
-          bookingReference: b.bookingReference,
-          userId: b.userId,
-          scheduleId: b.scheduleId,
-          companyId: b.schedule?.company?.id || b.companyId,
-          numberOfSeats: Array.isArray(b.passengerDetails) ? b.passengerDetails.length : 0,
-          totalAmount: b.totalAmount,
-          bookingStatus: b.bookingStatus,
-          paymentStatus: b.paymentStatus,
-          createdAt: new Date(b.createdAt),
-          updatedAt: new Date(b.updatedAt),
+          ...b,
+          route: b.schedule?.route || b.route || {},
+          createdAt: parseUtcDate(b.createdAt),
+          updatedAt: parseUtcDate(b.updatedAt),
           seatNumbers: b.seatNumbers || [],
           passengerDetails: b.passengerDetails || [],
           originStopId: b.originStopId,
@@ -325,23 +317,16 @@ export const useBookingsList = () => {
           reviewRating: b.reviewRating ?? null,
           reviewText: b.reviewText ?? null,
           schedule: {
+            ...b.schedule,
             id: b.scheduleId,
-            departureDateTime: new Date(b.schedule?.departureDateTime),
-            arrivalDateTime: new Date(b.schedule?.arrivalDateTime),
+            departureDateTime: parseUtcDate(b.schedule?.departureDateTime),
+            arrivalDateTime: parseUtcDate(b.schedule?.arrivalDateTime),
             price: b.totalAmount && Array.isArray(b.passengerDetails) && b.passengerDetails.length > 0 ? Math.floor(b.totalAmount / b.passengerDetails.length) : 0,
             availableSeats: b.schedule?.availableSeats || 0,
             date: b.schedule?.departureDateTime,
             tripStatus: b.schedule?.tripStatus || 'scheduled',
             operatorPhone: b.schedule?.operatorPhone || '',
             operatorName: b.schedule?.operatorName || '',
-          } as any,
-          route: {
-            id: b.schedule?.route?.id || '',
-            origin: mainOrigin,
-            destination: mainDestination,
-            distance: resolvedDistance,
-            duration: resolvedDuration,
-            stops: b.schedule?.route?.stops || [],
           } as any,
           bus: {
             id: b.schedule?.bus?.id || '',
@@ -357,8 +342,8 @@ export const useBookingsList = () => {
           } as any,
           operatorPhone: normalizeText(b.schedule?.operatorPhone || b.company?.phone || b.schedule?.company?.phone, ''),
           segments: mappedSegments,
-          returnSegment: mappedSegments.length > 1 ? mappedSegments[1] : undefined,
-          returnDate: b.returnDate ? new Date(b.returnDate) : (typeof b.metadata?.returnDate === 'string' ? new Date(b.metadata.returnDate) : undefined),
+          returnSegment,
+          returnDate: b.returnDate ? parseUtcDate(b.returnDate) : (typeof b.metadata?.returnDate === 'string' ? parseUtcDate(b.metadata.returnDate) : undefined),
         };
       });
 
@@ -379,7 +364,7 @@ export const useBookingsList = () => {
     if (!b) { setError('Booking not found'); return; }
     const dep = b.schedule.departureDateTime instanceof Date
       ? b.schedule.departureDateTime
-      : new Date(b.schedule?.departureDateTime as unknown as string);
+      : parseUtcDate(b.schedule?.departureDateTime as unknown as string);
     if (dep < new Date()) { setError('Cannot cancel a past departure.'); return; }
     const isPaid = b.paymentStatus === 'paid';
     const twoHoursInMs = 2 * 60 * 60 * 1000;
@@ -760,7 +745,7 @@ export const useBookingsList = () => {
 
       const res = await fetch('/api/payments/paychangu/charge', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bookingId: selectedBooking.id, paymentProvider: selectedProvider, customerDetails: { email: userDetails.email.toLowerCase().trim(), name: userDetails.name.trim(), phone: userDetails.phone.trim() }, metadata: { route: `${selectedBooking.route.origin}-${selectedBooking.route.destination}`, departure: selectedBooking.schedule.departureDateTime instanceof Date ? selectedBooking.schedule.departureDateTime.toISOString() : new Date(selectedBooking.schedule.departureDateTime as unknown as string).toISOString(), passengerCount: String(selectedBooking.passengerDetails.length), seatNumbers: selectedBooking.seatNumbers.join(','), subMethod: selectedSubId } }),
+        body: JSON.stringify({ bookingId: selectedBooking.id, paymentProvider: selectedProvider, customerDetails: { email: userDetails.email.toLowerCase().trim(), name: userDetails.name.trim(), phone: userDetails.phone.trim() }, metadata: { route: `${selectedBooking.route.origin}-${selectedBooking.route.destination}`, departure: selectedBooking.schedule.departureDateTime instanceof Date ? selectedBooking.schedule.departureDateTime.toISOString() : parseUtcDate(selectedBooking.schedule.departureDateTime as unknown as string).toISOString(), passengerCount: String(selectedBooking.passengerDetails.length), seatNumbers: selectedBooking.seatNumbers.join(','), subMethod: selectedSubId } }),
       });
       const result = await res.json(); if (!res.ok) throw new Error(result.error || result.message || 'Payment session failed');
       if (result.success && result.isFree) {
@@ -818,12 +803,12 @@ export const useBookingsList = () => {
       pending: bookings.filter((b) => !checkIsArchived(b) && (b.bookingStatus === 'pending' || (b.bookingStatus === 'confirmed' && b.paymentStatus === 'pending' && (b as any).paymentMethod !== 'cash_on_boarding'))).length,
       cancelled: bookings.filter((b) => !checkIsArchived(b) && ((b.bookingStatus as string) === 'cancelled' || (b.bookingStatus as string) === 'payment_failed')).length,
       upcoming: bookings.filter((b) => {
-        const d = b.schedule?.departureDateTime instanceof Date ? b.schedule.departureDateTime : new Date(b.schedule?.departureDateTime as unknown as string);
+        const d = b.schedule?.departureDateTime instanceof Date ? b.schedule.departureDateTime : parseUtcDate(b.schedule?.departureDateTime as unknown as string);
         return !checkIsArchived(b) && d > now && b.bookingStatus === 'confirmed' && (b.paymentStatus === 'paid' || (b as any).paymentMethod === 'cash_on_boarding');
       }).length,
       in_transit: bookings.filter((b) => {
-        const dep = b.schedule?.departureDateTime instanceof Date ? b.schedule.departureDateTime : new Date(b.schedule?.departureDateTime as unknown as string);
-        const arr = b.schedule?.arrivalDateTime instanceof Date ? b.schedule.arrivalDateTime : new Date(b.schedule?.arrivalDateTime as unknown as string);
+        const dep = b.schedule?.departureDateTime instanceof Date ? b.schedule.departureDateTime : parseUtcDate(b.schedule?.departureDateTime as unknown as string);
+        const arr = b.schedule?.arrivalDateTime instanceof Date ? b.schedule.arrivalDateTime : parseUtcDate(b.schedule?.arrivalDateTime as unknown as string);
         return !checkIsArchived(b) && (b.schedule?.tripStatus === 'in_transit' || (dep <= now && now < arr && b.bookingStatus === 'confirmed'));
       }).length,
       archived: bookings.filter((b) => checkIsArchived(b)).length,

@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { GroupBookingFormData, Schedule } from '@/types';
+import { parseUtcDate } from '@/lib/timezone';
 import { 
   Users, 
   MessageCircle, 
@@ -64,8 +65,8 @@ const GroupBookingForm: React.FC<GroupBookingFormProps> = ({
         if (!fetchError && scheduleData) {
           setSchedule({
             ...scheduleData,
-            departureDateTime: new Date(scheduleData.departureDateTime),
-            arrivalDateTime: new Date(scheduleData.arrivalDateTime),
+            departureDateTime: parseUtcDate(scheduleData.departureDateTime),
+            arrivalDateTime: parseUtcDate(scheduleData.arrivalDateTime),
           } as Schedule);
           setError('');
         } else {

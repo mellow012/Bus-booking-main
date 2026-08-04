@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { Booking, Bus, Schedule } from '@/types';
 import { bookingMatchesSchedule } from '@/lib/booking-utils';
@@ -13,6 +14,7 @@ interface CompletedSchedulesArchiveProps {
 }
 
 export default function CompletedSchedulesArchive({ schedules, buses, bookings }: CompletedSchedulesArchiveProps) {
+  const router = useRouter();
   const [expanded, setExpanded] = useState(false);
 
   if (schedules.length === 0) return null;
@@ -41,10 +43,14 @@ export default function CompletedSchedulesArchive({ schedules, buses, bookings }
               .reduce((acc: number, b: Booking) => acc + (b.totalAmount || 0), 0);
 
             return (
-              <div key={schedule.id} className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
+              <div 
+                key={schedule.id} 
+                onClick={() => router.push(`/company/admin?tab=bookings&scheduleId=${encodeURIComponent(schedule.id)}`)}
+                className="rounded-2xl border border-gray-100 bg-gray-50 p-4 cursor-pointer hover:border-indigo-300 hover:shadow-sm transition-all"
+              >
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <div className="text-sm text-gray-900">
-                    <div className="font-semibold">{formatDateTime(schedule.departureDateTime.toISOString())}</div>
+                    <div className="font-semibold">{formatDateTime(new Date(schedule.departureDateTime).toISOString())}</div>
                     <div className="text-xs text-gray-500">{bus ? `${bus.licensePlate} (${bus.capacity} seats)` : 'Unassigned bus'}</div>
                   </div>
                   <div className="flex flex-wrap gap-3 text-xs text-gray-500">

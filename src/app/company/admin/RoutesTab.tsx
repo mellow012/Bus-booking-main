@@ -68,6 +68,19 @@ export default function RoutesTab({ dashboard }: RoutesTabProps) {
       return;
     }
 
+    const originStr = editingRoute.origin.trim().toLowerCase();
+    const destStr = editingRoute.destination.trim().toLowerCase();
+    const isDuplicate = routes.some(r => 
+      r.id !== editingRoute.id &&
+      r.origin?.trim().toLowerCase() === originStr &&
+      r.destination?.trim().toLowerCase() === destStr
+    );
+
+    if (isDuplicate) {
+      setErrorMsg(`A route from ${editingRoute.origin.trim()} to ${editingRoute.destination.trim()} already exists.`);
+      return;
+    }
+
     setIsSubmitting(true);
     setErrorMsg(null);
 

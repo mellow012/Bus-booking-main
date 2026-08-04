@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { MapPin, Calendar } from 'lucide-react';
 import { Route, Bus, Schedule, Booking } from '@/types';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { supabase } from '@/lib/supabase';
 
 import BranchesGrid from './components/BranchesGrid';
 import AllBranchesOverview from './components/BranchesOverview';
@@ -43,6 +44,7 @@ export default function RegionsTab({ dashboard }: RegionsTabProps) {
 
   const searchQuery = dashboard.searchQuery?.toLowerCase() || '';
   const searchParams = useSearchParams();
+  const router = useRouter();
 
   const branches = allBranches.filter((branch: any) => {
     if (!searchQuery) return true;
@@ -123,7 +125,12 @@ export default function RegionsTab({ dashboard }: RegionsTabProps) {
   const filteredSelectedRouteSchedules = useMemo(() => {
     return selectedRouteSchedules.filter((schedule: Schedule) => {
       if (!scheduleFilterDate) return true;
-      return new Date(schedule.departureDateTime).toISOString().split('T')[0] === scheduleFilterDate;
+      // Compare using LOCAL date parts — not .toISOString() which gives UTC date
+      // and would misfile schedules departing after 22:00 local (next UTC day).
+      const d = new Date(schedule.departureDateTime);
+      const localDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      return localDate === scheduleFilterDate;
+
     });
   }, [selectedRouteSchedules, scheduleFilterDate]);
 
@@ -234,6 +241,19 @@ export default function RegionsTab({ dashboard }: RegionsTabProps) {
       showAlert('error', 'Please fill in route name, origin and destination.');
       return;
     }
+
+    const originStr = routeForm.origin.trim().toLowerCase();
+    const destStr = routeForm.destination.trim().toLowerCase();
+    const isDuplicate = routes.some(r => 
+      r.origin?.trim().toLowerCase() === originStr &&
+      r.destination?.trim().toLowerCase() === destStr
+    );
+
+    if (isDuplicate) {
+      showAlert('error', `A route from ${routeForm.origin.trim()} to ${routeForm.destination.trim()} already exists.`);
+      return;
+    }
+
     // Validate numeric fields
     const dist = parseFloat(routeForm.distance);
     const dur = parseFloat(routeForm.duration);
@@ -371,6 +391,7 @@ export default function RegionsTab({ dashboard }: RegionsTabProps) {
           }
           onNextPage={() => selectedRoute && setSchedulePageByRoute((current) => ({ ...current, [selectedRoute.id]: (current[selectedRoute.id] || 1) + 1 }))}
           branchUpcomingTrips={branchUpcomingTrips}
+          onScheduleClick={(scheduleId) => router.push(`/company/admin?tab=bookings&scheduleId=${encodeURIComponent(scheduleId)}`)}
           routes={routes}
           buses={buses}
           bookings={bookings}
@@ -380,7 +401,23 @@ export default function RegionsTab({ dashboard }: RegionsTabProps) {
         />
       )}
 
-      <UnassignedRoutesPanel routes={unassignedRoutes} />
+      <UnassignedRoutesPanel 
+        routes={unassignedRoutes} 
+        branches={branches}
+        onAssignRoute={async (routeId, branchId) => {
+          try {
+            const { error } = await supabase.from('Route').update({ regionId: branchId }).eq('id', routeId);
+            if (error) throw error;
+            dashboard.showAlert('success', 'Route assigned successfully');
+            dashboard.fetchInitialData?.();
+          } catch (err: any) {
+            dashboard.showAlert('error', err.message || 'Failed to assign route');
+          }
+        }}
+        onCreateBranch={() => {
+          dashboard.setActiveTab?.('operators');
+        }}
+      />
 
       <RegionsModals
         activeModal={activeModal}

@@ -35,6 +35,7 @@ interface BranchDetailPanelProps {
   templates: any[];
   companyId: string;
   onTripsGenerated?: () => void;
+  onScheduleClick?: (scheduleId: string) => void;
 }
 
 export default function BranchDetailPanel({
@@ -64,6 +65,7 @@ export default function BranchDetailPanel({
   templates,
   companyId,
   onTripsGenerated,
+  onScheduleClick,
 }: BranchDetailPanelProps) {
   return (
     <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden animate-in fade-in slide-in-from-top-2 duration-300">

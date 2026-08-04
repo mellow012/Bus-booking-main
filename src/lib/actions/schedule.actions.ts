@@ -4,6 +4,40 @@ import prisma from '../prisma';
 import { revalidatePath } from 'next/cache';
 import { Schedule, ScheduleStatus, TripStatus } from '@/types';
 import { serverCache } from '../cache';
+import { Prisma } from '@prisma/client';
+
+async function assertBusNotOverlapping(
+  tx: Prisma.TransactionClient | any,
+  busId: string,
+  departureDateTime: Date,
+  arrivalDateTime: Date,
+  excludeScheduleId?: string
+): Promise<void> {
+  const conflictingSchedule = await tx.schedule.findFirst({
+    where: {
+      busId,
+      status: { notIn: ['cancelled', 'archived'] },
+      id: excludeScheduleId ? { not: excludeScheduleId } : undefined,
+      AND: [
+        { departureDateTime: { lt: arrivalDateTime } },
+        { arrivalDateTime: { gt: departureDateTime } },
+      ],
+    },
+    select: {
+      id: true,
+      departureDateTime: true,
+      arrivalDateTime: true,
+    },
+  });
+
+  if (conflictingSchedule) {
+    throw new Error(
+      `Bus is already assigned to another schedule (${conflictingSchedule.id}) which runs from ` +
+      `${new Date(conflictingSchedule.departureDateTime).toLocaleString()} to ` +
+      `${new Date(conflictingSchedule.arrivalDateTime).toLocaleString()}.`
+    );
+  }
+}
 
 /**
  * --- Schedules ---
@@ -17,15 +51,33 @@ export async function createSchedule(data: Partial<Schedule> & {
   availableSeats: number;
   price: number;
 }) {
+  // ── Server-side validation (never trust client alone) ──────────────────────
+  const dep = new Date(data.departureDateTime);
+  const arr = new Date(data.arrivalDateTime);
+  if (isNaN(dep.getTime()) || isNaN(arr.getTime())) {
+    return { success: false, error: 'Invalid departure or arrival date/time.' };
+  }
+  if (arr <= dep) {
+    return { success: false, error: 'Arrival time must be after departure time.' };
+  }
+  if (!data.price || data.price <= 0) {
+    return { success: false, error: 'Price per seat must be greater than 0.' };
+  }
+  if (!data.availableSeats || data.availableSeats <= 0) {
+    return { success: false, error: 'Available seats must be greater than 0.' };
+  }
+  // ──────────────────────────────────────────────────────────────────────────
   try {
+    await assertBusNotOverlapping(prisma, data.busId, dep, arr);
+
     const schedule = await prisma.schedule.create({
       data: {
         id: data.id,
         companyId: data.companyId,
         busId: data.busId,
         routeId: data.routeId,
-        departureDateTime: new Date(data.departureDateTime),
-        arrivalDateTime: new Date(data.arrivalDateTime),
+        departureDateTime: dep,
+        arrivalDateTime: arr,
         availableSeats: data.availableSeats,
         bookedSeats: data.bookedSeats || [],
         price: data.price,
@@ -59,6 +111,21 @@ export async function createRoundTripSchedule(outboundData: any, inboundData: an
 
     if (!returnRoute) {
       throw new Error(`Return route (${outboundRoute.destination} to ${outboundRoute.origin}) not found. Please create this route first.`);
+    }
+
+    const outDep = new Date(outboundData.departureDateTime);
+    const outArr = new Date(outboundData.arrivalDateTime);
+    const inDep = new Date(inboundData.departureDateTime);
+    const inArr = new Date(inboundData.arrivalDateTime);
+
+    await assertBusNotOverlapping(prisma, outboundData.busId, outDep, outArr);
+    await assertBusNotOverlapping(prisma, inboundData.busId, inDep, inArr);
+    
+    // Check if the two legs overlap with each other if using same bus
+    if (outboundData.busId === inboundData.busId) {
+      if (outDep < inArr && outArr > inDep) {
+        throw new Error("Outbound and return trips overlap with each other for the same bus.");
+      }
     }
 
     const transactionResult = await prisma.$transaction([
@@ -103,6 +170,22 @@ export async function createRoundTripSchedule(outboundData: any, inboundData: an
 
 export async function updateSchedule(id: string, data: Partial<Schedule>) {
   try {
+    const currentSchedule = await prisma.schedule.findUnique({ where: { id } });
+    if (!currentSchedule) {
+      return { success: false, error: 'Schedule not found' };
+    }
+
+    const newBusId = data.busId || currentSchedule.busId;
+    const newDep = data.departureDateTime ? new Date(data.departureDateTime) : currentSchedule.departureDateTime;
+    const newArr = data.arrivalDateTime ? new Date(data.arrivalDateTime) : currentSchedule.arrivalDateTime;
+
+    if (data.busId || data.departureDateTime || data.arrivalDateTime || data.status) {
+      // If any time/bus/status changed, and the schedule isn't being cancelled
+      if (data.status !== 'cancelled' && data.status !== 'archived') {
+        await assertBusNotOverlapping(prisma, newBusId, newDep, newArr, id);
+      }
+    }
+
     const { id: _, createdAt, updatedAt, ...updatableData } = data;
     const schedule = await prisma.schedule.update({
       where: { id },
@@ -279,10 +362,13 @@ export async function materializeSchedules(companyId: string, routeId: string, d
       return { success: true, createdCount: 0, message: "No active blueprints found." };
     }
 
+    // All date arithmetic uses UTC throughout to avoid server-timezone shifts.
+    // Template times are stored as UTC strings (converted from local at save time
+    // in UnifiedScheduleModal), so setUTCHours produces the correct UTC instant.
     const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    today.setUTCHours(0, 0, 0, 0);
     const endDate = new Date(today);
-    endDate.setDate(endDate.getDate() + daysAhead);
+    endDate.setUTCDate(endDate.getUTCDate() + daysAhead);
 
     const existingSchedules = await prisma.schedule.findMany({
       where: {
@@ -293,16 +379,14 @@ export async function materializeSchedules(companyId: string, routeId: string, d
       select: { routeId: true, busId: true, departureDateTime: true }
     });
 
-    // Use a timezone-safe key: YYYY-MM-DD + HH:MM + routeId + busId
-    // This avoids UTC vs local time mismatch issues
-    const toDateStr = (d: Date) =>
+    // Idempotency key: UTC date + UTC HH:MM + routeId + busId
+    const toUTCDateStr = (d: Date) =>
       `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`;
-    
+
     const existingSet = new Set(
       existingSchedules.map(s => {
         const dep = new Date(s.departureDateTime);
-        // Build key from UTC date + UTC hours+minutes to match how we store them
-        const dateStr = toDateStr(dep);
+        const dateStr = toUTCDateStr(dep);
         const timeStr = `${String(dep.getUTCHours()).padStart(2,'0')}:${String(dep.getUTCMinutes()).padStart(2,'0')}`;
         return `${s.routeId}_${s.busId}_${dateStr}_${timeStr}`;
       })
@@ -312,26 +396,27 @@ export async function materializeSchedules(companyId: string, routeId: string, d
 
     for (let dayOffset = 0; dayOffset <= daysAhead; dayOffset++) {
       const targetDate = new Date(today);
-      targetDate.setDate(targetDate.getDate() + dayOffset);
-      const dayOfWeek = targetDate.getDay(); // local day
+      targetDate.setUTCDate(targetDate.getUTCDate() + dayOffset);
+      const dayOfWeek = targetDate.getUTCDay(); // UTC day — consistent with UTC midnight base
 
       for (const template of templates) {
         const activeDays = (template.daysOfWeek as number[]) || [];
         if (!activeDays.includes(dayOfWeek)) continue;
 
+        // Template times are stored as UTC strings — use setUTCHours for exact match
         const [depHours, depMinutes] = template.departureTime.split(':').map(Number);
         const departureDateTime = new Date(targetDate);
-        departureDateTime.setHours(depHours, depMinutes, 0, 0);
+        departureDateTime.setUTCHours(depHours, depMinutes, 0, 0);
 
         const [arrHours, arrMinutes] = template.arrivalTime.split(':').map(Number);
         const arrivalDateTime = new Date(targetDate);
-        arrivalDateTime.setHours(arrHours, arrMinutes, 0, 0);
+        arrivalDateTime.setUTCHours(arrHours, arrMinutes, 0, 0);
         if (arrivalDateTime < departureDateTime) {
-          arrivalDateTime.setDate(arrivalDateTime.getDate() + 1);
+          arrivalDateTime.setUTCDate(arrivalDateTime.getUTCDate() + 1);
         }
 
-        // Idempotency key using the departure time string (matches how it's stored)
-        const dateStr = `${targetDate.getFullYear()}-${String(targetDate.getMonth()+1).padStart(2,'0')}-${String(targetDate.getDate()).padStart(2,'0')}`;
+        // Idempotency key — UTC date + UTC time string matches existingSet format
+        const dateStr = toUTCDateStr(targetDate);
         const uniqueKey = `${template.routeId}_${template.busId}_${dateStr}_${template.departureTime}`;
 
         if (!existingSet.has(uniqueKey)) {

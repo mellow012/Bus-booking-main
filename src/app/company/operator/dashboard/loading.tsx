@@ -2,7 +2,7 @@ import React from 'react';
 
 export default function OperatorDashboardLoading() {
   return (
-    <div className="min-h-screen bg-slate-50 pt-24 sm:pt-28 pb-16 px-4 sm:px-6 lg:px-8 animate-pulse">
+    <div className="min-h-screen bg-slate-50 p-4 sm:p-6 lg:p-8 animate-pulse flex-1">
       <div className="max-w-7xl mx-auto space-y-6">
         <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm flex justify-between items-center">
           <div className="space-y-2">

@@ -46,6 +46,11 @@ async function closeModal(page: Page) {
   await modal.waitFor({ state: 'hidden', timeout: 6_000 }).catch(() => {});
 }
 
+/**
+ * Broad form — matches any success-like toast. Use only where no specific
+ * message is guaranteed (e.g. delete confirmations that vary by impl).
+ * For creates/edits, prefer expectSpecificToast() with the exact message.
+ */
 async function expectToast(page: Page) {
   await expect(
     page.locator(
@@ -56,6 +61,20 @@ async function expectToast(page: Page) {
     ).first()
   ).toBeVisible({ timeout: 12_000 });
 }
+
+/**
+ * Strict form — asserts the toast contains a SPECIFIC substring.
+ * Prefer this over expectToast() whenever you know what the UI should say.
+ */
+async function expectSpecificToast(page: Page, text: string) {
+  await expect(
+    page.locator(`text=${text}`)
+      .or(page.locator(`[role="status"]:has-text("${text}")`)
+      .or(page.locator(`[role="alert"]:has-text("${text}")`)))
+      .first()
+  ).toBeVisible({ timeout: 12_000 });
+}
+
 
 const uid = () => Date.now().toString().slice(-6);
 
@@ -103,8 +122,10 @@ test.describe('Company Admin — Schedules', () => {
     const card = page.locator('article').first();
     if (!await card.isVisible({ timeout: 15_000 }).catch(() => false)) return;
     const text = (await card.textContent()) ?? '';
-    expect(text).toMatch(/\d{1,2}:\d{2}/);
-    expect(text).toMatch(/MWK/);
+    // Assert a real HH:MM time format (not just any digit pair)
+    expect(text).toMatch(/\d{2}:\d{2}/);
+    // Assert price label is present and is a real number, not just "MWK"
+    expect(text).toMatch(/MWK\s+[\d,]+/);
   });
 
   test('Add Schedule modal has all required fields', async ({ page }) => {
@@ -152,8 +173,11 @@ test.describe('Company Admin — Schedules', () => {
       const busOpts = await busSelect.locator('option:not([value=""]):not([disabled])').all();
       if (busOpts.length) await busSelect.selectOption(await busOpts[0].getAttribute('value') ?? '');
     }
+    await page.waitForTimeout(400); // wait for auto-fill of seats from bus selection
 
-    await modal.locator('input[name="price"]').first().fill('5500');
+    // Unique price so we can identify the card we just created
+    const uniquePrice = 8808 + Math.floor(Math.random() * 100);
+    await modal.locator('input[name="price"]').first().fill(String(uniquePrice));
 
     const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
     const base = tomorrow.toISOString().slice(0, 10);
@@ -161,9 +185,24 @@ test.describe('Company Admin — Schedules', () => {
     await fillIfVisible(page, 'input[name*="arrival" i]', `${base}T11:30`);
 
     await modal.locator('button[type="submit"], button:has-text("Save"), button:has-text("Create")').first().click();
-    await Promise.race([expectToast(page), modal.waitFor({ state: 'hidden', timeout: 12_000 })]);
+
+    // Specific toast assertion — not a broad shape match
+    await expectSpecificToast(page, 'Schedule created');
+
+    // Modal must close
+    await expect(modal).not.toBeVisible({ timeout: 10_000 });
+
+    // Find the card with the unique price and verify the departure time
+    // This is the assertion that was missing before — it catches Bug 1 (timezone shift)
+    await page.waitForTimeout(1_000);
+    const card = page.locator('article').filter({ hasText: uniquePrice.toLocaleString() }).first();
+    if (await card.isVisible({ timeout: 8_000 }).catch(() => false)) {
+      const cardText = (await card.textContent()) ?? '';
+      expect(cardText).toContain('07:00');
+    }
     console.log('[create-schedule] ✓');
   });
+
 
   test('edit schedule — change price', async ({ page }) => {
     await goToAdmin(page);

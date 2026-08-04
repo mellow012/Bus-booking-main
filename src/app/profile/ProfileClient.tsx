@@ -688,7 +688,7 @@ export default function ProfileClient() {
           <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-brand-50/40 blur-[120px] rounded-full" />
         </div>
 
-        <div className="relative z-10 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 pb-12">
+        <div className="relative z-10 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pt-28 sm:pt-32 pb-12">
           {error && (
             <div className="mb-6">
               <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-2xl text-sm flex items-center gap-2">
@@ -756,7 +756,7 @@ export default function ProfileClient() {
           </div>
         )}
 
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-28 sm:pt-32 pb-8 md:pb-12">
           <div className="mb-6 hidden md:block">
             <BackButton className="text-gray-600 hover:text-gray-900" />
           </div>

@@ -3,7 +3,8 @@
 import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { Maximize2, Minimize2 } from 'lucide-react';
+import { Maximize2, Minimize2, Crosshair } from 'lucide-react';
+import type { StopWithStage } from './useJourneyTracker';
 
 // Fix Leaflet's default icon path issue in Next.js/webpack bundling
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -28,6 +29,32 @@ const busIcon = L.divIcon({
   iconSize: [32, 32],
   iconAnchor: [16, 16],
 });
+
+// Create stop icons
+const getStopIcon = (type: 'origin' | 'destination' | 'passed' | 'current' | 'upcoming') => {
+  let html = '';
+  switch (type) {
+    case 'origin':
+      html = `<div style="width: 16px; height: 16px; background-color: #22c55e; border-radius: 50%; border: 3px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.3);"></div>`;
+      break;
+    case 'destination':
+      html = `<div style="width: 16px; height: 16px; background-color: #ef4444; border-radius: 50%; border: 3px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.3);"></div>`;
+      break;
+    case 'passed':
+      html = `<div style="width: 12px; height: 12px; background-color: #9ca3af; opacity: 0.5; border-radius: 50%; border: 2px solid #fff;"></div>`;
+      break;
+    case 'upcoming':
+      html = `<div style="width: 12px; height: 12px; border: 2px solid #d1d5db; background-color: #fff; border-radius: 50%;"></div>`;
+      break;
+    case 'current':
+      html = `<div style="position: relative; width: 16px; height: 16px;">
+                <div style="position: absolute; inset: 0; background-color: #005A5B; border-radius: 50%; animation: ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite; opacity: 0.5;"></div>
+                <div style="position: absolute; inset: 0; background-color: #005A5B; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.3);"></div>
+              </div>`;
+      break;
+  }
+  return L.divIcon({ html, className: '', iconSize: [16, 16], iconAnchor: [8, 8] });
+};
 
 // Malawian city coordinate database
 const CITY_COORDS: Record<string, [number, number]> = {
@@ -136,6 +163,51 @@ function haversineM(a: [number, number], b: [number, number]): number {
 }
 
 /**
+ * Given a route polyline and a fractional progress (0–1), return the sub-array
+ * of points from the start up to (and including) the interpolated split point.
+ */
+function splitRouteAtProgress(
+  routePoints: [number, number][],
+  progress: number
+): [number, number][] {
+  if (!routePoints || routePoints.length < 2) return [];
+  const t = Math.min(Math.max(progress, 0), 1);
+  if (t === 0) return [routePoints[0]];
+  if (t === 1) return [...routePoints];
+
+  let totalLen = 0;
+  const cumulative: number[] = [0];
+  for (let i = 1; i < routePoints.length; i++) {
+    totalLen += haversineM(routePoints[i - 1], routePoints[i]);
+    cumulative.push(totalLen);
+  }
+  if (totalLen === 0) return [routePoints[0]];
+
+  const target = t * totalLen;
+  const traveled: [number, number][] = [routePoints[0]];
+
+  for (let i = 1; i < routePoints.length; i++) {
+    if (cumulative[i] >= target) {
+      const segLen = cumulative[i] - cumulative[i - 1];
+      if (segLen === 0) {
+        traveled.push(routePoints[i]);
+      } else {
+        const segT = (target - cumulative[i - 1]) / segLen;
+        const a = routePoints[i - 1];
+        const b = routePoints[i];
+        traveled.push([
+          a[0] + (b[0] - a[0]) * segT,
+          a[1] + (b[1] - a[1]) * segT,
+        ]);
+      }
+      break;
+    }
+    traveled.push(routePoints[i]);
+  }
+  return traveled;
+}
+
+/**
  * Interpolate a position along a polyline at a given fractional progress (0–1).
  * Walks the polyline by cumulative Haversine distance so the result sits exactly
  * on the road geometry rather than cutting across it.
@@ -191,6 +263,67 @@ function interpolateAlongPolyline(
   return isValidLatLng(lat, lng) ? [lat, lng] : null;
 }
 
+// ─── Snap a GPS position onto the nearest point along a polyline ───
+// Returns { snapped: [lat, lng], progress: 0..1 } so the bus icon always sits on the road.
+function snapToPolyline(
+  routePoints: [number, number][],
+  position: [number, number]
+): { snapped: [number, number]; progress: number } {
+  if (!routePoints || routePoints.length < 2) {
+    return { snapped: position, progress: 0 };
+  }
+
+  // Build cumulative distance array
+  let totalLen = 0;
+  const cumulative: number[] = [0];
+  for (let i = 1; i < routePoints.length; i++) {
+    totalLen += haversineM(routePoints[i - 1], routePoints[i]);
+    cumulative.push(totalLen);
+  }
+  if (totalLen === 0) return { snapped: routePoints[0], progress: 0 };
+
+  let bestDist = Infinity;
+  let bestPoint: [number, number] = routePoints[0];
+  let bestDistAlong = 0;
+
+  for (let i = 1; i < routePoints.length; i++) {
+    const a = routePoints[i - 1];
+    const b = routePoints[i];
+    const p = position;
+
+    // Project p onto segment a→b using simple lat/lng arithmetic (accurate enough at this scale)
+    const ax = a[1], ay = a[0];
+    const bx = b[1], by = b[0];
+    const px = p[1], py = p[0];
+
+    const dx = bx - ax, dy = by - ay;
+    const segLenSq = dx * dx + dy * dy;
+    let t = 0;
+    if (segLenSq > 0) {
+      t = ((px - ax) * dx + (py - ay) * dy) / segLenSq;
+      t = Math.min(Math.max(t, 0), 1);
+    }
+    const closestX = ax + t * dx;
+    const closestY = ay + t * dy;
+    const closest: [number, number] = [closestY, closestX];
+    const dist = haversineM(p, closest);
+
+    if (dist < bestDist) {
+      bestDist = dist;
+      bestPoint = closest;
+      const segDistAlong = haversineM(a, closest);
+      bestDistAlong = cumulative[i - 1] + segDistAlong;
+    }
+  }
+
+  return { snapped: bestPoint, progress: bestDistAlong / totalLen };
+}
+
+// ─── Project position onto polyline to get progress (0-1) (kept for fallback) ───
+function getProgressFromPosition(routePoints: [number, number][], position: [number, number]): number {
+  return snapToPolyline(routePoints, position).progress;
+}
+
 export interface JourneyMapProps {
   origin: string;
   destination: string;
@@ -200,6 +333,10 @@ export interface JourneyMapProps {
   isActive?: boolean;
   className?: string;
   onClick?: () => void;
+  followBus?: boolean;
+  onFollowChange?: (follow: boolean) => void;
+  stopStages?: StopWithStage[];
+  onMapReady?: (map: L.Map) => void;
 }
 
 const STALE_THRESHOLD_MS = 3 * 60 * 1000; // 3 minutes
@@ -218,6 +355,10 @@ const JourneyMap: React.FC<JourneyMapProps> = ({
   isActive = true,
   className = "w-full h-48 rounded-xl overflow-hidden border border-gray-200 shadow-inner relative",
   onClick,
+  followBus,
+  onFollowChange,
+  stopStages = [],
+  onMapReady,
 }) => {
   const [mounted, setMounted] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -298,12 +439,30 @@ const JourneyMap: React.FC<JourneyMapProps> = ({
   }, [livePosition, livePositionAgeMs]);
 
   let busPosition: [number, number] | null = null;
+  let displayProgress = safeProgress;
+
   if (isLivePositionUsable && livePosition) {
-    busPosition = [livePosition.latitude, livePosition.longitude];
-  } else if (safeProgress !== null && safeProgress > 0 && safeProgress < 1 && originCoords && destCoords) {
-    // Use road-following interpolation when routePoints are available,
-    // straight-line interpolation when routePoints is null (fallback).
-    // Don't interpolate while routePoints is still undefined (loading).
+    const rawPos: [number, number] = [livePosition.latitude, livePosition.longitude];
+
+    if (routePoints && routePoints.length >= 2) {
+      // Snap live GPS onto the road polyline so the icon always sits on the road
+      const { snapped, progress } = snapToPolyline(routePoints, rawPos);
+      busPosition = snapped;
+      displayProgress = progress;
+    } else if (originCoords && destCoords) {
+      // No road polyline yet — place bus on the straight-line segment nearest to GPS
+      busPosition = interpolateAlongPolyline(null, originCoords, destCoords, safeProgress ?? 0);
+      const total = haversineM(originCoords, destCoords);
+      if (total > 0) {
+        const fromOrigin = haversineM(originCoords, rawPos);
+        displayProgress = Math.min(Math.max(fromOrigin / total, 0), 1);
+      }
+    } else {
+      // Last resort: use raw GPS
+      busPosition = rawPos;
+    }
+  } else if (safeProgress !== null && originCoords && destCoords) {
+    // No live GPS — place bus based on time-based progress along the road
     if (routePoints !== undefined) {
       busPosition = interpolateAlongPolyline(routePoints, originCoords, destCoords, safeProgress);
     }
@@ -314,6 +473,8 @@ const JourneyMap: React.FC<JourneyMapProps> = ({
   const mapRef = useRef<L.Map | null>(null);
   const busMarkerRef = useRef<L.Marker | null>(null);
   const routeLayerRef = useRef<L.Polyline | null>(null);
+  const traveledLayerRef = useRef<L.Polyline | null>(null);
+  const stopMarkersRef = useRef<L.Marker[]>([]);
 
   // Stable callback to update/replace route polyline without destroying the map
   const updateRouteLayer = useCallback(
@@ -323,23 +484,27 @@ const JourneyMap: React.FC<JourneyMapProps> = ({
         routeLayerRef.current.remove();
         routeLayerRef.current = null;
       }
+      // Remove old traveled overlay
+      if (traveledLayerRef.current) {
+        traveledLayerRef.current.remove();
+        traveledLayerRef.current = null;
+      }
 
       if (!originCoords || !destCoords) return;
 
       if (pts && pts.length >= 2) {
-        // Road-following polyline — solid line
+        // Base route — dark teal for "remaining" road
         routeLayerRef.current = L.polyline(pts, {
           color: '#005A5B',
           weight: 4,
-          opacity: 0.85,
+          opacity: 0.6,
         }).addTo(map);
       } else if (pts === null) {
         // Fallback: dashed straight line between origin and destination
         routeLayerRef.current = L.polyline([originCoords, destCoords], {
           color: '#005A5B',
           weight: 3,
-          opacity: 0.7,
-          dashArray: '8, 6',
+          opacity: 0.6,
         }).addTo(map);
       }
       // If pts === undefined (loading), draw nothing — keeps the map clean during fetch
@@ -368,7 +533,6 @@ const JourneyMap: React.FC<JourneyMapProps> = ({
     });
     mapRef.current = map;
 
-    // Attribution control: OpenStreetMap tiles + GraphHopper routing credit
     map.attributionControl.setPrefix(
       '<a href="https://www.graphhopper.com" target="_blank" rel="noopener">Routing © GraphHopper</a>'
     );
@@ -377,14 +541,20 @@ const JourneyMap: React.FC<JourneyMapProps> = ({
       attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
     }).addTo(map);
 
-    L.marker(originCoords).addTo(map);
-    L.marker(destCoords).addTo(map);
-
     try {
       const bounds = L.latLngBounds(originCoords, destCoords);
-      map.fitBounds(bounds, { padding: [40, 40], maxZoom: 13 });
+      map.fitBounds(bounds, { padding: [40, 40], maxZoom: 12 });
     } catch {
       // Ignore fitBounds errors on degenerate coordinates
+    }
+
+    // Handle manual pan to turn off follow mode
+    map.on('dragstart', () => {
+      if (onFollowChange) onFollowChange(false);
+    });
+
+    if (onMapReady) {
+      onMapReady(map);
     }
 
     // Draw initial route state (may be loading/fallback/road)
@@ -399,6 +569,12 @@ const JourneyMap: React.FC<JourneyMapProps> = ({
         routeLayerRef.current.remove();
         routeLayerRef.current = null;
       }
+      if (traveledLayerRef.current) {
+        traveledLayerRef.current.remove();
+        traveledLayerRef.current = null;
+      }
+      stopMarkersRef.current.forEach(m => m.remove());
+      stopMarkersRef.current = [];
       map.remove();
       mapRef.current = null;
       if ((el as any)._leaflet_id) {
@@ -415,7 +591,34 @@ const JourneyMap: React.FC<JourneyMapProps> = ({
     updateRouteLayer(map, routePoints);
   }, [routePoints, updateRouteLayer]);
 
-  // Effect 3: Dynamically update or add/remove ONLY the bus marker when position changes
+  // Effect 3: Render stops based on stopStages
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !originCoords || !destCoords) return;
+
+    // Clear old stops
+    stopMarkersRef.current.forEach(m => m.remove());
+    stopMarkersRef.current = [];
+
+    if (stopStages && stopStages.length > 0) {
+      // Draw all stops from stopStages
+      stopStages.forEach((stop, i) => {
+        if (!stop.coords) return;
+        let type: 'origin' | 'destination' | 'passed' | 'current' | 'upcoming' = stop.stage;
+        if (i === 0) type = 'origin';
+        if (i === stopStages.length - 1) type = 'destination';
+        
+        const marker = L.marker(stop.coords, { icon: getStopIcon(type) }).addTo(map);
+        stopMarkersRef.current.push(marker);
+      });
+    } else {
+      // Fallback if no stopStages provided
+      stopMarkersRef.current.push(L.marker(originCoords, { icon: getStopIcon('origin') }).addTo(map));
+      stopMarkersRef.current.push(L.marker(destCoords, { icon: getStopIcon('destination') }).addTo(map));
+    }
+  }, [stopStages, originCoords, destCoords]);
+
+  // Effect 4: Dynamically update or add/remove ONLY the bus marker when position changes
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -424,13 +627,53 @@ const JourneyMap: React.FC<JourneyMapProps> = ({
       if (busMarkerRef.current) {
         busMarkerRef.current.setLatLng(busPosition);
       } else {
-        busMarkerRef.current = L.marker(busPosition, { icon: busIcon }).addTo(map);
+        busMarkerRef.current = L.marker(busPosition, { icon: busIcon, zIndexOffset: 1000 }).addTo(map);
+      }
+      
+      // Handle following
+      if (followBus) {
+        map.panTo(busPosition, { animate: true });
       }
     } else if (busMarkerRef.current) {
       busMarkerRef.current.remove();
       busMarkerRef.current = null;
     }
-  }, [showBusMarker, busPosition?.[0], busPosition?.[1]]);
+  }, [showBusMarker, busPosition?.[0], busPosition?.[1], followBus]);
+
+  // Effect 5: Update traveled-road overlay when progress changes
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    // Remove old traveled overlay
+    if (traveledLayerRef.current) {
+      traveledLayerRef.current.remove();
+      traveledLayerRef.current = null;
+    }
+
+    if (displayProgress === null || displayProgress <= 0) return;
+    if (!originCoords || !destCoords) return;
+
+    if (routePoints && routePoints.length >= 2) {
+      const traveledPts = splitRouteAtProgress(routePoints, displayProgress);
+      if (traveledPts.length >= 2) {
+        traveledLayerRef.current = L.polyline(traveledPts, {
+          color: '#FF6B6B',
+          weight: 5,
+          opacity: 0.9,
+        }).addTo(map);
+      }
+    } else if (routePoints === null) {
+      // Fallback straight line — show traveled portion
+      const lat = originCoords[0] + (destCoords[0] - originCoords[0]) * displayProgress;
+      const lng = originCoords[1] + (destCoords[1] - originCoords[1]) * displayProgress;
+      traveledLayerRef.current = L.polyline([originCoords, [lat, lng]], {
+        color: '#FF6B6B',
+        weight: 4,
+        opacity: 0.9,
+      }).addTo(map);
+    }
+  }, [displayProgress, routePoints, originCoords, destCoords]);
 
   if (!mounted) {
     return (
@@ -475,6 +718,22 @@ const JourneyMap: React.FC<JourneyMapProps> = ({
     <div className={`${className} ${onClick ? 'cursor-pointer' : ''}`} onClick={onClick}>
       <div ref={containerRef} className="w-full h-full" />
       <div className="absolute top-2 right-2 flex items-center gap-1.5 z-[1000]">
+        {onFollowChange && showBusMarker && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onFollowChange(true);
+              if (busPosition && mapRef.current) {
+                mapRef.current.panTo(busPosition, { animate: true });
+              }
+            }}
+            title={followBus ? 'Following Bus' : 'Find Bus'}
+            className={`bg-white/90 hover:bg-white p-1.5 rounded-lg shadow border transition-colors flex items-center justify-center ${followBus ? 'text-brand-700 border-brand-200' : 'text-gray-500 border-gray-200/80 hover:text-brand-700'}`}
+          >
+            <Crosshair className={`w-3.5 h-3.5 ${followBus ? 'fill-current' : ''}`} />
+          </button>
+        )}
         {isLivePositionUsable && (
           <div className="bg-white/90 rounded-full px-2 py-0.5 text-[10px] font-medium text-teal-700 shadow">
             Live
