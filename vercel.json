@@ -6,7 +6,7 @@
     },
     {
       "path": "/api/cron/expire-bookings",
-      "schedule": "*/15 * * * *"
+      "schedule": "0 1 * * *"
     },
     {
       "path": "/api/cron/generate-trips",
