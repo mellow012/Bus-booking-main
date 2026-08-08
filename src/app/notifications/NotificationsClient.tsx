@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Bell, Trash2, Check, CheckCheck, Loader2, AlertCircle } from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
 import { useRouter } from 'next/navigation';
+import NotificationsLoading from './loading';
 
 interface NotificationResponse {
   id: string;
@@ -165,6 +166,10 @@ export default function NotificationsClient() {
 
   const unreadCount = notifications.filter(n => !n.isRead).length;
 
+  if (loading && notifications.length === 0) {
+    return <NotificationsLoading />;
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-brand-50 to-gray-50 py-8 px-4 sm:px-6 lg:px-8">
       <div className="max-w-4xl mx-auto">
@@ -222,12 +227,7 @@ export default function NotificationsClient() {
           </div>
         )}
 
-        {loading && notifications.length === 0 && (
-          <div className="text-center py-12">
-            <Loader2 className="w-8 h-8 text-brand-700 animate-spin mx-auto mb-4" />
-            <p className="text-gray-600">Loading notifications...</p>
-          </div>
-        )}
+
 
         {!loading && notifications.length === 0 && (
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center">

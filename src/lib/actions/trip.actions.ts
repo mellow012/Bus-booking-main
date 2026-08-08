@@ -194,23 +194,20 @@ export async function syncBusLocation(params: {
   const { busId, scheduleId, userId, latitude, longitude, speed, heading } = params;
 
   try {
-    // We store location in ActivityLog since Bus model lacks a dedicated metadata/location field in schema
-    const log = await createActivityLog({
-      userId,
-      action: 'LOCATION_SYNC',
-      description: `Location update`,
-      scheduleId,
-      metadata: { 
-        busId,
-        latitude, 
-        longitude, 
-        speed, 
-        heading,
-        syncedAt: new Date().toISOString()
-      }
+    // Write location to TripPositionSample for real-time tracking map (Supabase Realtime)
+    const sample = await prisma.tripPositionSample.create({
+      data: {
+        scheduleId,
+        latitude,
+        longitude,
+        speed: speed ?? null,
+        heading: heading ?? null,
+        accuracy: null,
+        source: 'conductor',
+      },
     });
 
-    return { success: true, data: log.data };
+    return { success: true, data: sample };
   } catch (error: any) {
     console.error('Error syncing bus location:', error);
     return { success: false, error: error.message };

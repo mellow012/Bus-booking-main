@@ -45,6 +45,7 @@ interface UseJourneyTrackerArgs {
   tripStatus?: string;
   bookingStatus: string;
   paymentStatus: string;
+  paymentMethod?: string;
   reviewRating?: number | null;
   destinationCity?: string;
   destinationCoords?: [number, number];
@@ -136,6 +137,7 @@ export function useJourneyTracker({
   tripStatus,
   bookingStatus,
   paymentStatus,
+  paymentMethod,
   reviewRating,
   destinationCity,
   destinationCoords,
@@ -169,7 +171,7 @@ export function useJourneyTracker({
     if (bookingStatus !== 'confirmed') return 'upcoming';
 
     const isPaid = paymentStatus === 'paid';
-    const isCash = (paymentStatus as string) === 'pending'; // cash_on_boarding
+    const isCash = paymentMethod === 'cash' || paymentMethod === 'cash_on_boarding';
 
     if (!isPaid && !isCash) return 'upcoming';
 
@@ -217,17 +219,20 @@ export function useJourneyTracker({
     }
 
     // 3. No live GPS position available
-    if (now < arr) {
-      return 'in_transit';
-    } else {
-      // If 5 hours have passed since arrival time, trip is completed
-      if (now.getTime() > arr.getTime() + 5 * 60 * 60 * 1000) {
-        return 'completed';
-      }
-      // Clock passed arrival time (within 5h window) -> DELAYED
-      return 'delayed';
+    // Has 5 hours passed since arrival?
+    if (now.getTime() > arr.getTime() + 5 * 60 * 60 * 1000) {
+      return 'completed';
     }
-  }, [now, departureDateTime, arrivalDateTime, tripStatus, bookingStatus, paymentStatus, reviewRating, livePosition, destinationCity, destinationCoords]);
+    
+    // Are we in the arrival window? (arr - 15m up to arr + 5h)
+    if (now.getTime() >= arr.getTime() - 15 * 60 * 1000) {
+      if (reviewRating) return 'completed';
+      return 'arrived';
+    }
+
+    // (now < dep is already handled above)
+    return 'in_transit';
+  }, [now, departureDateTime, arrivalDateTime, tripStatus, bookingStatus, paymentStatus, paymentMethod, reviewRating, livePosition, destinationCity, destinationCoords]);
 
   // Calculate progress and countdown
   const { progress, minutesRemaining, countdownText, completedAt } = useMemo(() => {
@@ -304,10 +309,8 @@ export function useJourneyTracker({
 
     if (state === 'upcoming') {
       currentIndex = -1; // All upcoming
-    } else if (state === 'completed' || state === 'past') {
+    } else if (state === 'completed' || state === 'past' || state === 'arrived') {
       currentIndex = stops.length; // All passed
-    } else if (state === 'arrived') {
-      currentIndex = stops.length - 1; // Destination is current
     }
 
     return stops.map((stop, i) => {

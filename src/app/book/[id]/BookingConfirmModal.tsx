@@ -7,6 +7,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { TicketPercent, Loader2, CreditCard, ArrowRight, MapPin, Calendar, Clock, Tag } from "lucide-react";
 import type { Schedule, Route, Company } from "@/types";
 import type { PassengerFormState } from "./InlinePassengerForm";
+import { RouteStopsDisplay } from "@/components/RouteStopsDisplay";
+import type { RouteStopDisplayItem } from "@/components/RouteStopsDisplay";
 
 export interface BookingConfirmModalProps {
   isOpen: boolean;
@@ -38,13 +40,14 @@ export interface BookingConfirmModalProps {
   returnRoute: Route | null;
   goBackToPassengers: () => void;
   confirmBooking: () => Promise<void> | void;
+  selectedPathStops: RouteStopDisplayItem[];
 }
 
 export default function BookingConfirmModal({
   isOpen, onClose, schedule, company, originStopId, destinationStopId, stopName,
   formatDate, formatTime, selectedSeats, selectedReturnSeats, returnSchedule, returnRoute, displayPrice, passengers,
   appliedPromo, promoCode, setPromoCode, isValidatingPromo, validatePromoCode,
-  setAppliedPromo, wantsReturnTrip, setWantsReturnTrip, returnDate, setReturnDate, bookingLoading, passengerForms, goBackToPassengers, confirmBooking,
+  setAppliedPromo, wantsReturnTrip, setWantsReturnTrip, returnDate, setReturnDate, bookingLoading, passengerForms, goBackToPassengers, confirmBooking, selectedPathStops
 }: BookingConfirmModalProps) {
   const outboundAmount = displayPrice * passengers;
   const returnAmount = wantsReturnTrip && returnSchedule ? (returnSchedule.price || 0) * passengers : 0;
@@ -111,13 +114,16 @@ export default function BookingConfirmModal({
                   <p className="text-xs text-brand-700 font-medium">{formatTime(schedule.departureDateTime)}</p>
                 </div>
               </div>
-              <div className="flex items-start gap-2">
-                <span className="text-base mt-0.5 shrink-0">💺</span>
-                <div>
-                  <p className="text-xs text-gray-500">Seats</p>
-                  <p className="font-semibold text-sm">{selectedSeats.join(", ")}</p>
-                </div>
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-1 sm:gap-4 mt-2 pt-2 border-t border-gray-100">
+                <span className="text-gray-500 font-medium whitespace-nowrap">Seats:</span>
+                <span className="text-gray-900 font-bold break-words">{selectedSeats.join(", ")}</span>
               </div>
+              {selectedPathStops && selectedPathStops.length > 0 && (
+                <div className="mt-4 pt-4 border-t border-gray-100">
+                  <span className="text-gray-500 font-medium block mb-3">Itinerary Route:</span>
+                  <RouteStopsDisplay stops={selectedPathStops} />
+                </div>
+              )}
             </div>
             <div className="flex justify-between items-center text-sm pt-2 border-t border-gray-100">
               <span className="text-gray-600">Outbound fare ({passengers} × MWK {displayPrice.toLocaleString()})</span>

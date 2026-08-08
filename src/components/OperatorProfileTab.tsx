@@ -201,8 +201,14 @@ const OperatorProfileTab: React.FC<OperatorProfileTabProps> = ({
 
           {/* Avatar row — pulls up to overlap the banner */}
           <div className="flex flex-col sm:flex-row sm:items-end gap-4 -mt-10 mb-6">
-            <div className={`w-20 h-20 rounded-2xl bg-gradient-to-br ${meta.gradient} flex items-center justify-center text-white font-bold text-3xl shadow-lg ring-4 ring-white flex-shrink-0`}>
-              {initial}
+            <div className={`w-20 h-20 rounded-2xl bg-gradient-to-br ${meta.gradient} flex items-center justify-center text-white font-bold text-3xl shadow-lg ring-4 ring-white flex-shrink-0 overflow-hidden`}>
+              {(() => {
+                const avatarUrl = userProfile?.profilePicture || (userProfile as any)?.avatar;
+                if (avatarUrl) {
+                  return <img src={avatarUrl} alt="Profile" className="w-full h-full object-cover" />;
+                }
+                return initial;
+              })()}
             </div>
             <div className="sm:pb-2">
               <h2 className="text-2xl font-bold text-white leading-tight drop-shadow-sm">{operatorName}</h2>

@@ -3,14 +3,19 @@
 import React, { useState, useMemo } from 'react';
 import { 
   Bus as BusIcon, Plus, Search, Edit2, Trash2, 
-  Settings, CheckCircle, AlertTriangle, AlertCircle, Wrench, Shield, Fuel, Star 
+  Settings, CheckCircle, AlertTriangle, AlertCircle, Wrench, Shield, Fuel, Star, Loader2
 } from 'lucide-react';
 import { Bus } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/Label';
 import { createBus, updateBus, deleteBus } from '@/lib/actions/fleet.actions';
+import { uploadBusImage } from '@/utils/supabase/storage-utils';
 import { BUS_TYPES, BUS_STATUSES } from './_lib/constants';
+import TabButton from '@/components/tabButton';
+import ToggleChip from '@/components/ToggleChip';
+
+const AVAILABLE_AMENITIES = ['AC', 'WiFi', 'USB Charging', 'Reclining Seats', 'TV', 'Restroom'];
 
 interface BusesTabProps {
   dashboard: any;
@@ -29,9 +34,20 @@ export default function BusesTab({ dashboard }: BusesTabProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingBus, setEditingBus] = useState<Bus | null>(null);
   const [isDeletingId, setIsDeletingId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'details' | 'amenities'>('details');
   
   // Form State
-  const [formValues, setFormValues] = useState({
+  const [formValues, setFormValues] = useState<{
+    licensePlate: string;
+    busType: string;
+    capacity: number;
+    status: string;
+    fuelType: string;
+    lastMaintenanceDate: string;
+    nextMaintenanceDate: string;
+    images: string[];
+    amenities: string[];
+  }>({
     licensePlate: '',
     busType: 'Luxury',
     capacity: 40,
@@ -39,7 +55,12 @@ export default function BusesTab({ dashboard }: BusesTabProps) {
     fuelType: 'Diesel',
     lastMaintenanceDate: '',
     nextMaintenanceDate: '',
+    images: [],
+    amenities: [],
   });
+  
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
 
   const [formError, setFormError] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -73,8 +94,13 @@ export default function BusesTab({ dashboard }: BusesTabProps) {
       fuelType: 'Diesel',
       lastMaintenanceDate: '',
       nextMaintenanceDate: '',
+      images: [],
+      amenities: [],
     });
+    setSelectedFiles([]);
+    setImagePreviews([]);
     setFormError('');
+    setActiveTab('details');
     setIsModalOpen(true);
   };
 
@@ -88,8 +114,13 @@ export default function BusesTab({ dashboard }: BusesTabProps) {
       fuelType: bus.fuelType || 'Diesel',
       lastMaintenanceDate: bus.lastMaintenanceDate ? new Date(bus.lastMaintenanceDate).toISOString().split('T')[0] : '',
       nextMaintenanceDate: bus.nextMaintenanceDate ? new Date(bus.nextMaintenanceDate).toISOString().split('T')[0] : '',
+      images: bus.images || [],
+      amenities: Array.isArray(bus.amenities) ? (bus.amenities as string[]) : [],
     });
+    setSelectedFiles([]);
+    setImagePreviews(bus.images || []);
     setFormError('');
+    setActiveTab('details');
     setIsModalOpen(true);
   };
 
@@ -108,10 +139,20 @@ export default function BusesTab({ dashboard }: BusesTabProps) {
     setFormError('');
     
     try {
+      let uploadedUrls: string[] = [...(formValues.images || [])];
+      
+      if (selectedFiles.length > 0) {
+        for (const file of selectedFiles) {
+          const url = await uploadBusImage(file, companyId);
+          uploadedUrls.push(url);
+        }
+      }
+
       if (editingBus) {
         // Update Bus
         const res = await updateBus(editingBus.id, {
           ...formValues,
+          images: uploadedUrls,
           companyId,
         } as any);
         if (res.success) {
@@ -125,6 +166,7 @@ export default function BusesTab({ dashboard }: BusesTabProps) {
         // Create Bus
         const res = await createBus({
           ...formValues,
+          images: uploadedUrls,
           companyId,
         } as any);
         if (res.success) {
@@ -140,6 +182,35 @@ export default function BusesTab({ dashboard }: BusesTabProps) {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const filesArray = Array.from(e.target.files);
+      setSelectedFiles(prev => [...prev, ...filesArray]);
+      
+      const newPreviews = filesArray.map(file => URL.createObjectURL(file));
+      setImagePreviews(prev => [...prev, ...newPreviews]);
+    }
+  };
+
+  const removeImage = (index: number) => {
+    // If it's an existing image (URL string)
+    if (index < formValues.images.length) {
+      const updatedImages = [...formValues.images];
+      updatedImages.splice(index, 1);
+      setFormValues({ ...formValues, images: updatedImages });
+    } else {
+      // It's a newly added file
+      const fileIndex = index - formValues.images.length;
+      const updatedFiles = [...selectedFiles];
+      updatedFiles.splice(fileIndex, 1);
+      setSelectedFiles(updatedFiles);
+    }
+    
+    const updatedPreviews = [...imagePreviews];
+    updatedPreviews.splice(index, 1);
+    setImagePreviews(updatedPreviews);
   };
 
   const handleDelete = async (id: string) => {
@@ -365,12 +436,16 @@ export default function BusesTab({ dashboard }: BusesTabProps) {
       {isModalOpen && (
         <div className="fixed inset-0 bg-slate-900/40 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden border border-gray-100 animate-in zoom-in-95 duration-200">
-            <div className="px-6 py-4 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
+            <div className="px-6 py-4 bg-gray-50 border-b border-gray-100">
               <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
                 <BusIcon className="w-5 h-5 text-indigo-600" />
                 {editingBus ? 'Edit Vehicle Info' : 'Add Vehicle to Fleet'}
               </h3>
-              <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600 text-lg">×</button>
+              <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600 text-lg absolute right-4 top-4">×</button>
+              <div className="mt-4 flex gap-2">
+                <TabButton isActive={activeTab === 'details'} onClick={() => setActiveTab('details')}>Details</TabButton>
+                <TabButton isActive={activeTab === 'amenities'} onClick={() => setActiveTab('amenities')}>Amenities & Photos</TabButton>
+              </div>
             </div>
             
             <form onSubmit={handleFormSubmit} className="p-6 space-y-4">
@@ -381,94 +456,158 @@ export default function BusesTab({ dashboard }: BusesTabProps) {
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="col-span-2">
-                  <Label htmlFor="licensePlate">License Plate *</Label>
-                  <Input 
-                    id="licensePlate"
-                    value={formValues.licensePlate}
-                    onChange={(e) => setFormValues({ ...formValues, licensePlate: e.target.value })}
-                    placeholder="e.g. MN 1234, TO 8901"
-                    className="h-10 mt-1 uppercase"
-                  />
-                </div>
+              {activeTab === 'details' && (
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="col-span-2">
+                    <Label htmlFor="licensePlate">License Plate *</Label>
+                    <Input 
+                      id="licensePlate"
+                      value={formValues.licensePlate}
+                      onChange={(e) => setFormValues({ ...formValues, licensePlate: e.target.value })}
+                      placeholder="e.g. MN 1234, TO 8901"
+                      className="h-10 mt-1 uppercase"
+                    />
+                  </div>
 
-                <div>
-                  <Label htmlFor="busType">Bus Category</Label>
-                  <select
-                    id="busType"
-                    value={formValues.busType}
-                    onChange={(e) => setFormValues({ ...formValues, busType: e.target.value })}
-                    className="w-full h-10 mt-1 px-3 border border-gray-200 rounded-xl bg-white text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                  >
-                    {BUS_TYPES.map(type => <option key={type} value={type}>{type}</option>)}
-                  </select>
-                </div>
+                  <div>
+                    <Label htmlFor="busType">Bus Category</Label>
+                    <select
+                      id="busType"
+                      value={formValues.busType}
+                      onChange={(e) => setFormValues({ ...formValues, busType: e.target.value })}
+                      className="w-full h-10 mt-1 px-3 border border-gray-200 rounded-xl bg-white text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    >
+                      {BUS_TYPES.map(type => <option key={type} value={type}>{type}</option>)}
+                    </select>
+                  </div>
 
-                <div>
-                  <Label htmlFor="capacity">Capacity (Seats) *</Label>
-                  <Input 
-                    id="capacity"
-                    type="number"
-                    value={formValues.capacity}
-                    onChange={(e) => setFormValues({ ...formValues, capacity: parseInt(e.target.value) || 0 })}
-                    min="10"
-                    max="100"
-                    className="h-10 mt-1"
-                  />
-                </div>
+                  <div>
+                    <Label htmlFor="capacity">Capacity *</Label>
+                    <div className="relative rounded-xl border border-gray-200 bg-white shadow-sm focus-within:ring-2 focus-within:ring-indigo-500 focus-within:border-transparent transition-all mt-1">
+                      <input
+                        id="capacity"
+                        type="number"
+                        value={formValues.capacity}
+                        onChange={(e) => setFormValues({ ...formValues, capacity: parseInt(e.target.value) || 0 })}
+                        min="10"
+                        max="100"
+                        className="block w-full bg-transparent px-3 py-2 pr-16 text-sm text-gray-900 focus:outline-none h-10 rounded-xl"
+                        required
+                      />
+                      <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">seats</span>
+                      </div>
+                    </div>
+                  </div>
 
-                <div>
-                  <Label htmlFor="status">Fleet Status</Label>
-                  <select
-                    id="status"
-                    value={formValues.status}
-                    onChange={(e) => setFormValues({ ...formValues, status: e.target.value })}
-                    className="w-full h-10 mt-1 px-3 border border-gray-200 rounded-xl bg-white text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                  >
-                    <option value="active">Active (On road)</option>
-                    <option value="inactive">Inactive (Stored)</option>
-                    <option value="maintenance">Maintenance (Garage)</option>
-                  </select>
-                </div>
+                  <div>
+                    <Label htmlFor="status">Fleet Status</Label>
+                    <select
+                      id="status"
+                      value={formValues.status}
+                      onChange={(e) => setFormValues({ ...formValues, status: e.target.value })}
+                      className="w-full h-10 mt-1 px-3 border border-gray-200 rounded-xl bg-white text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    >
+                      <option value="active">Active (On road)</option>
+                      <option value="inactive">Inactive (Stored)</option>
+                      <option value="maintenance">Maintenance (Garage)</option>
+                    </select>
+                  </div>
 
-                <div>
-                  <Label htmlFor="fuelType">Fuel Type</Label>
-                  <select
-                    id="fuelType"
-                    value={formValues.fuelType}
-                    onChange={(e) => setFormValues({ ...formValues, fuelType: e.target.value })}
-                    className="w-full h-10 mt-1 px-3 border border-gray-200 rounded-xl bg-white text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                  >
-                    <option value="Diesel">Diesel</option>
-                    <option value="Petrol">Petrol</option>
-                    <option value="Electric">Electric</option>
-                    <option value="Hybrid">Hybrid</option>
-                  </select>
-                </div>
+                  <div>
+                    <Label htmlFor="fuelType">Fuel Type</Label>
+                    <select
+                      id="fuelType"
+                      value={formValues.fuelType}
+                      onChange={(e) => setFormValues({ ...formValues, fuelType: e.target.value })}
+                      className="w-full h-10 mt-1 px-3 border border-gray-200 rounded-xl bg-white text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    >
+                      <option value="Diesel">Diesel</option>
+                      <option value="Petrol">Petrol</option>
+                      <option value="Electric">Electric</option>
+                      <option value="Hybrid">Hybrid</option>
+                    </select>
+                  </div>
 
-                <div>
-                  <Label htmlFor="lastMaintenanceDate">Last Maintenance</Label>
-                  <Input 
-                    id="lastMaintenanceDate"
-                    type="date"
-                    value={formValues.lastMaintenanceDate}
-                    onChange={(e) => setFormValues({ ...formValues, lastMaintenanceDate: e.target.value })}
-                    className="h-10 mt-1"
-                  />
-                </div>
+                  <div>
+                    <Label htmlFor="lastMaintenanceDate">Last Maintenance</Label>
+                    <Input 
+                      id="lastMaintenanceDate"
+                      type="date"
+                      value={formValues.lastMaintenanceDate}
+                      onChange={(e) => setFormValues({ ...formValues, lastMaintenanceDate: e.target.value })}
+                      className="h-10 mt-1"
+                    />
+                  </div>
 
-                <div>
-                  <Label htmlFor="nextMaintenanceDate">Next Maintenance</Label>
-                  <Input 
-                    id="nextMaintenanceDate"
-                    type="date"
-                    value={formValues.nextMaintenanceDate}
-                    onChange={(e) => setFormValues({ ...formValues, nextMaintenanceDate: e.target.value })}
-                    className="h-10 mt-1"
-                  />
+                  <div>
+                    <Label htmlFor="nextMaintenanceDate">Next Maintenance</Label>
+                    <Input 
+                      id="nextMaintenanceDate"
+                      type="date"
+                      value={formValues.nextMaintenanceDate}
+                      onChange={(e) => setFormValues({ ...formValues, nextMaintenanceDate: e.target.value })}
+                      className="h-10 mt-1"
+                    />
+                  </div>
                 </div>
-              </div>
+              )}
+
+              {activeTab === 'amenities' && (
+                <div className="space-y-4">
+                  <div>
+                    <Label>Amenities</Label>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {AVAILABLE_AMENITIES.map((amenity) => {
+                        const isSelected = formValues.amenities.includes(amenity);
+                        return (
+                          <ToggleChip
+                            key={amenity}
+                            label={amenity}
+                            isActive={isSelected}
+                            onClick={() => {
+                              const next = isSelected
+                                ? formValues.amenities.filter(a => a !== amenity)
+                                : [...formValues.amenities, amenity];
+                              setFormValues({ ...formValues, amenities: next });
+                            }}
+                          />
+                        );
+                      })}
+                    </div>
+                  </div>
+                  <div>
+                    <Label>Bus Images</Label>
+                    <div className="mt-1 flex items-center gap-4 flex-wrap p-3 bg-gray-50 border border-gray-100 rounded-xl">
+                      {imagePreviews.map((preview, i) => (
+                        <div key={i} className="relative w-24 h-24 rounded-lg border border-gray-200 bg-white overflow-hidden shrink-0 group shadow-sm">
+                          <img src={preview} alt="Bus" className="w-full h-full object-cover" />
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                            <button 
+                              type="button" 
+                              onClick={() => removeImage(i)} 
+                              className="bg-white text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-full p-1.5 shadow"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                      <label className="w-24 h-24 rounded-lg border-2 border-dashed border-gray-300 bg-white flex flex-col items-center justify-center text-gray-500 hover:bg-indigo-50 hover:border-indigo-300 hover:text-indigo-600 cursor-pointer transition-colors shrink-0 shadow-sm">
+                        <Plus className="w-5 h-5 mb-1" />
+                        <span className="text-[10px] font-semibold tracking-wide uppercase">Add Photo</span>
+                        <input 
+                          type="file" 
+                          accept="image/*" 
+                          multiple 
+                          className="sr-only" 
+                          onChange={handleImageChange} 
+                        />
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <div className="flex justify-end gap-3 pt-4 border-t border-gray-50 mt-6">
                 <Button 
@@ -485,7 +624,14 @@ export default function BusesTab({ dashboard }: BusesTabProps) {
                   disabled={submitting}
                   className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl h-10 min-w-[100px]"
                 >
-                  {submitting ? 'Saving...' : 'Save Vehicle'}
+                  {submitting ? (
+                     <>
+                       <Loader2 className="h-4 w-4 animate-spin" />
+                       Saving...
+                     </>
+                  ) : (
+                    'Save Vehicle'
+                  )}
                 </Button>
               </div>
             </form>
@@ -518,7 +664,14 @@ export default function BusesTab({ dashboard }: BusesTabProps) {
                 disabled={submitting}
                 className="bg-rose-600 hover:bg-rose-700 text-white rounded-xl h-10 px-5"
               >
-                {submitting ? 'Deleting...' : 'Delete Vehicle'}
+                {submitting ? (
+                   <>
+                     <Loader2 className="h-4 w-4 animate-spin" />
+                     Deleting...
+                   </>
+                 ) : (
+                   'Delete Vehicle'
+                 )}
               </Button>
             </div>
           </div>

@@ -2,6 +2,7 @@
  * Centralized Timezone Utilities for Malawi (CAT / Africa/Blantyre / UTC+2)
  */
 
+// Let the host system (browser/server) define the timezone automatically
 export const MALAWI_TIMEZONE = 'Africa/Blantyre';
 
 /**
@@ -25,7 +26,7 @@ export function getTomorrowDateString(): string {
  * Formats a Date object or ISO string into 24-hour time "HH:MM" in Malawi time (UTC+2)
  */
 export function formatTime24(date: Date | string | number): string {
-  const d = new Date(date);
+  const d = parseUtcDate(date);
   if (isNaN(d.getTime())) return '00:00';
   return d.toLocaleTimeString('en-GB', {
     timeZone: MALAWI_TIMEZONE,
@@ -39,7 +40,7 @@ export function formatTime24(date: Date | string | number): string {
  * Formats a Date object or ISO string into 12-hour time "hh:mm AM/PM" in Malawi time (UTC+2)
  */
 export function formatTime12(date: Date | string | number): string {
-  const d = new Date(date);
+  const d = parseUtcDate(date);
   if (isNaN(d.getTime())) return '12:00 AM';
   return d.toLocaleTimeString('en-US', {
     timeZone: MALAWI_TIMEZONE,
@@ -53,7 +54,7 @@ export function formatTime12(date: Date | string | number): string {
  * Formats a Date object or ISO string into YYYY-MM-DD in Malawi time (UTC+2)
  */
 export function formatDateISO(date: Date | string | number): string {
-  const d = new Date(date);
+  const d = parseUtcDate(date);
   if (isNaN(d.getTime())) return '';
   return d.toLocaleDateString('en-CA', { timeZone: MALAWI_TIMEZONE });
 }

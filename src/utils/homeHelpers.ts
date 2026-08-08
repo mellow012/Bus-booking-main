@@ -8,6 +8,7 @@ export interface EnhancedSchedule {
   duration: number; distance: number; busNumber: string; busType: string; amenities: string[];
   departureLocation?: string;
   arrivalLocation?: string;
+  stopsCount?: number;
 }
 
 export type GeoStatus = "idle" | "detecting" | "granted" | "denied" | "unavailable";

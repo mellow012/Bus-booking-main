@@ -7,6 +7,8 @@ import BackButton from '@/components/BackButton';
 import JourneyMap from '@/app/bookings/JourneyMap';
 import { useJourneyTracker } from '@/app/bookings/useJourneyTracker';
 import { BookingWithDetails, resolveStopName } from '@/app/bookings/useBookingsList';
+import { deriveBookingStatus, getDisplayStatusUI } from '@/lib/booking-utils';
+import { RouteStopsDisplay } from '@/components/RouteStopsDisplay';
 import {
   Navigation, MapPin, Clock, Bus as BusIcon, Shield,
   AlertCircle, Loader2, ArrowLeft, RefreshCw, Armchair, Zap, User, Calendar, CheckCircle2, Circle
@@ -122,7 +124,10 @@ export default function DedicatedJourneyPage() {
     tripStatus: activeSegment ? activeSegment.schedule.tripStatus : booking?.schedule.tripStatus,
     bookingStatus: booking?.bookingStatus || 'pending',
     paymentStatus: booking?.paymentStatus || 'pending',
-    reviewRating: (booking as any)?.reviewRating,
+    paymentMethod: (booking as any)?.paymentMethod || booking?.paymentProvider,
+    reviewRating: activeSegment
+      ? ((booking as any)?.metadata?.returnReview?.rating ?? null)
+      : ((booking as any)?.metadata?.outboundReview?.rating ?? (booking as any)?.reviewRating ?? null),
     destinationCity: activeSegment ? (activeSegment.route?.destination || '') : (booking?.route?.destination || ''),
     stops: allStops,
     currentStopIndex: activeSegment ? activeSegment.schedule.currentStopIndex : booking?.schedule.currentStopIndex,
@@ -202,6 +207,16 @@ export default function DedicatedJourneyPage() {
   let nextStopName = upcomingStops.length > 0 ? upcomingStops[0].name : destinationName;
   if (journey.state === 'completed') nextStopName = destinationName;
 
+  const derivedStatus = deriveBookingStatus({
+    bookingStatus: booking.bookingStatus,
+    paymentStatus: booking.paymentStatus,
+    paymentMethod: (booking as any).paymentMethod || booking.paymentProvider,
+    tripStatus: activeSegment ? activeSegment.schedule.tripStatus : booking.schedule.tripStatus,
+    departureTime: activeSegment ? activeSegment.schedule.departureDateTime : booking.schedule.departureDateTime,
+    arrivalTime: activeSegment ? activeSegment.schedule.arrivalDateTime : booking.schedule.arrivalDateTime
+  });
+  const statusUI = getDisplayStatusUI(derivedStatus);
+
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col">
       {/* Navigation Header */}
@@ -262,52 +277,15 @@ export default function DedicatedJourneyPage() {
           {/* Stops Horizontal List */}
           {journey.stopStages.length > 0 && (
             <div className="bg-white rounded-2xl p-4 border border-gray-200 shadow-sm overflow-x-auto hide-scrollbar shrink-0">
-              <div className="flex items-center justify-center min-w-max px-2 py-1 mx-auto gap-0">
-
-                {/* "Current" pill — first item in the row, before the origin stop */}
-                {currentStop && (
-                  <>
-                    <div className="flex flex-col items-center mr-1">
-                      <span className="px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-brand-600 text-white leading-none whitespace-nowrap">
-                        Current
-                      </span>
-                    </div>
-                    {/* Connector from tag to first stop */}
-                    <div className="w-4 h-[2px] bg-brand-200 shrink-0" />
-                  </>
-                )}
-
-                {journey.stopStages.map((stop, i) => (
-                  <div key={stop.id || stop.name || i} className="flex items-center group cursor-pointer"
-                       onClick={() => {
-                         if (stop.coords && mapRef.current) {
-                           mapRef.current.panTo(stop.coords, { animate: true });
-                           setFollowBus(false);
-                         }
-                       }}>
-                    <div className="flex flex-col items-center relative">
-                      <div className="relative z-10 bg-white">
-                        {stop.stage === 'passed' ? (
-                          <CheckCircle2 className="w-5 h-5 text-gray-400" />
-                        ) : stop.stage === 'current' ? (
-                          <div className="relative">
-                            <Circle className="w-5 h-5 text-brand-600 fill-brand-600 relative z-10" />
-                            <div className="absolute inset-0 bg-brand-600 rounded-full animate-ping opacity-30"></div>
-                          </div>
-                        ) : (
-                          <Circle className="w-5 h-5 text-gray-300" />
-                        )}
-                      </div>
-                      <p className={`mt-1 text-xs text-center w-20 break-words ${stop.stage === 'current' ? 'font-bold text-brand-700' : stop.stage === 'passed' ? 'text-gray-500 font-medium' : 'text-gray-700 font-medium'}`}>
-                        {stop.name}
-                      </p>
-                    </div>
-                    {i !== journey.stopStages.length - 1 && (
-                      <div className={`w-12 sm:w-16 h-[2px] mx-1 -translate-y-[10px] ${stop.stage === 'passed' ? 'bg-gray-300' : 'bg-gray-100'}`} />
-                    )}
-                  </div>
-                ))}
-              </div>
+              <RouteStopsDisplay 
+                stops={journey.stopStages} 
+                onStopClick={(stop) => {
+                  if (stop.coords && mapRef.current) {
+                    mapRef.current.panTo(stop.coords, { animate: true });
+                    setFollowBus(false);
+                  }
+                }}
+              />
             </div>
           )}
         </div>
@@ -318,22 +296,8 @@ export default function DedicatedJourneyPage() {
           <div className="bg-white rounded-2xl p-5 border border-gray-200 shadow-sm space-y-4">
             <div className="flex items-center justify-between border-b border-gray-100 pb-3">
               <span className="text-xs font-bold uppercase tracking-wider text-gray-400">Live Journey Status</span>
-              <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${
-                journey.state === 'in_transit'
-                  ? 'bg-brand-50 text-brand-700 border-brand-200 animate-pulse'
-                  : journey.state === 'delayed'
-                  ? 'bg-amber-50 text-amber-700 border-amber-200 animate-pulse'
-                  : journey.state === 'arrived'
-                  ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
-                  : 'bg-emerald-50 text-emerald-700 border-emerald-200'
-              }`}>
-                {journey.state === 'in_transit'
-                  ? 'In Transit'
-                  : journey.state === 'delayed'
-                  ? 'Running Late'
-                  : journey.state === 'arrived'
-                  ? 'Arrived'
-                  : 'Completed'}
+              <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${statusUI.colorClass} ${statusUI.isPulsing ? 'animate-pulse' : ''}`}>
+                {statusUI.label}
               </span>
             </div>
 
@@ -348,10 +312,10 @@ export default function DedicatedJourneyPage() {
               <div className="grid grid-cols-2 gap-3 pt-2">
                 <div className="bg-gray-50 p-3 rounded-xl">
                   <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-                    {journey.state === 'completed' ? 'Destination' : 'Currently At'}
+                    {journey.state === 'completed' || journey.state === 'arrived' ? 'Destination' : 'Currently At'}
                   </p>
                   <p className="text-sm font-semibold text-gray-900 truncate mt-0.5">
-                    {journey.state === 'completed'
+                    {journey.state === 'completed' || journey.state === 'arrived'
                       ? destinationName
                       : (currentStop?.name ?? originName)}
                   </p>
@@ -362,10 +326,10 @@ export default function DedicatedJourneyPage() {
                 </div>
                 <div className="bg-gray-50 p-3 rounded-xl">
                   <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-                    {journey.state === 'completed' ? 'Trip Finished' : 'Next Stop'}
+                    {journey.state === 'completed' || journey.state === 'arrived' ? 'Trip Finished' : 'Next Stop'}
                   </p>
                   <p className="text-sm font-semibold text-gray-900 truncate mt-0.5">
-                    {journey.state === 'completed' ? destinationName : nextStopName}
+                    {journey.state === 'completed' || journey.state === 'arrived' ? destinationName : nextStopName}
                   </p>
                 </div>
               </div>

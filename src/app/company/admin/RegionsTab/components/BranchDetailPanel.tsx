@@ -5,6 +5,11 @@ import { Booking, Bus, Route, Schedule } from '@/types';
 import { RouteWithScheduleInfo } from '../types';
 import RouteTabStrip from './RouteTabStrip';
 import RouteScheduleSection from './RouteScheduleSection';
+import { Trash2 } from 'lucide-react';
+import { useState } from 'react';
+import ConfirmDeleteModal from '../../ConfirmDeleteModal';
+import { useAppToast } from '@/contexts/ToastContext';
+import { deleteBranch } from '@/lib/actions/fleet.actions';
 
 interface BranchDetailPanelProps {
   branch: any;
@@ -67,6 +72,37 @@ export default function BranchDetailPanel({
   onTripsGenerated,
   onScheduleClick,
 }: BranchDetailPanelProps) {
+  const toast = useAppToast();
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const handleDeleteBranch = async () => {
+    // Dependency check
+    if (branchRoutes.length > 0) {
+      toast.error('Cannot delete branch', `This branch has ${branchRoutes.length} active route(s). Reassign or delete them first.`);
+      setIsDeleteModalOpen(false);
+      return;
+    }
+    // Also check for operators? It's hard to check operators here unless passed in.
+    // For now, checking routes is the main dependency.
+
+    setIsDeleting(true);
+    try {
+      const res = await deleteBranch(branch.id);
+      if (res.success) {
+        toast.success('Branch deleted', `${branch.name} has been removed.`);
+        // Note: the parent will need to handle re-fetching or state update. The server action revalidates.
+      } else {
+        toast.error('Failed to delete', res.error || 'Unknown error');
+      }
+    } catch (err: any) {
+      toast.error('Error', err.message);
+    } finally {
+      setIsDeleting(false);
+      setIsDeleteModalOpen(false);
+    }
+  };
+
   return (
     <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden animate-in fade-in slide-in-from-top-2 duration-300">
       <div className="p-5 border-b border-gray-100 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between bg-gray-50/50">
@@ -80,6 +116,12 @@ export default function BranchDetailPanel({
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <button 
+            onClick={() => setIsDeleteModalOpen(true)}
+            className="text-xs font-semibold text-red-600 hover:text-red-800 bg-red-50 px-3 py-1.5 rounded-lg flex items-center gap-1"
+          >
+            <Trash2 className="w-3 h-3" /> Delete Branch
+          </button>
           <button onClick={onAddRoute} className="text-xs font-semibold text-emerald-600 hover:text-emerald-800 bg-emerald-50 px-3 py-1.5 rounded-lg flex items-center gap-1">
             <PlusCircle className="w-3 h-3" /> Add Route
           </button>
@@ -126,6 +168,15 @@ export default function BranchDetailPanel({
           </div>
         )}
       </div>
+
+      <ConfirmDeleteModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        onConfirm={handleDeleteBranch}
+        isDeleting={isDeleting}
+        title="Delete Branch"
+        message={`Are you sure you want to delete ${branch.name}? This action cannot be undone.`}
+      />
     </div>
   );
 }

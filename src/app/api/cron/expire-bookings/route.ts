@@ -39,6 +39,8 @@ export async function POST(request: NextRequest) {
       select: {
         id: true,
         scheduleId: true,
+        userId: true,
+        seatNumbers: true,
         passengerDetails: true,
       },
     });
@@ -73,15 +75,39 @@ export async function POST(request: NextRequest) {
           });
 
           // Release the held seats back to the schedule
-          const passengerCount = Array.isArray(currentBooking.passengerDetails) ? currentBooking.passengerDetails.length : 0;
-          if (passengerCount > 0 && booking.scheduleId) {
-            await tx.schedule.update({
+          if (booking.scheduleId) {
+            const passengerCount = Array.isArray(currentBooking.passengerDetails) ? currentBooking.passengerDetails.length : 0;
+            
+            const schedule = await tx.schedule.findUnique({
               where: { id: booking.scheduleId },
-              data: {
-                availableSeats: {
-                  increment: passengerCount,
+              select: { bookedSeats: true, availableSeats: true }
+            });
+
+            if (schedule) {
+              const currentBookedSeats = Array.isArray(schedule.bookedSeats) ? schedule.bookedSeats as string[] : [];
+              const bookingSeats = Array.isArray(booking.seatNumbers) ? booking.seatNumbers as string[] : [];
+              
+              const newBookedSeats = currentBookedSeats.filter(seat => !bookingSeats.includes(seat));
+              
+              await tx.schedule.update({
+                where: { id: booking.scheduleId },
+                data: {
+                  availableSeats: schedule.availableSeats + passengerCount,
+                  bookedSeats: newBookedSeats,
                 },
+              });
+            }
+
+            // Expire lingering SeatReservation rows scoped to this user and schedule
+            await tx.seatReservation.updateMany({
+              where: {
+                userId: booking.userId,
+                scheduleId: booking.scheduleId,
+                status: 'reserved'
               },
+              data: {
+                status: 'expired'
+              }
             });
           }
           expiredCount++;

@@ -43,6 +43,8 @@ export default function OperatorsAndBranchesTab({ dashboard }: OperatorsAndBranc
   const [routeAssignmentOperator, setRouteAssignmentOperator] = useState<OperatorRow | null>(null);
   const [selectedRouteIds, setSelectedRouteIds] = useState<string[]>([]);
   const [isSavingRouteAssignment, setIsSavingRouteAssignment] = useState(false);
+  const [loadingRoutesId, setLoadingRoutesId] = useState<string | null>(null);
+  const [loadingViewId, setLoadingViewId] = useState<string | null>(null);
 
   const companyId = dashboard?.dashboardData?.company?.id || '';
   const companyName = dashboard?.dashboardData?.company?.name || '';
@@ -103,6 +105,7 @@ export default function OperatorsAndBranchesTab({ dashboard }: OperatorsAndBranc
   }, [operators, selectedBranchId]);
 
   const handleViewOperatorDashboard = (operatorId: string) => {
+    setLoadingViewId(operatorId);
     router.push(`/company/operator/dashboard?operatorId=${encodeURIComponent(operatorId)}`);
   };
 
@@ -180,6 +183,7 @@ export default function OperatorsAndBranchesTab({ dashboard }: OperatorsAndBranc
   };
 
   const openAssignRoutesModal = async (operator: OperatorRow) => {
+    setLoadingRoutesId(operator.id);
     setRouteAssignmentOperator(operator);
     setSelectedRouteIds([]);
     setRouteAssignmentModalOpen(true);
@@ -197,6 +201,8 @@ export default function OperatorsAndBranchesTab({ dashboard }: OperatorsAndBranc
     } catch (err) {
       console.error('Error loading assigned routes:', err);
       setSelectedRouteIds(operator.routeIds || []);
+    } finally {
+      setLoadingRoutesId(null);
     }
   };
 
@@ -426,40 +432,50 @@ export default function OperatorsAndBranchesTab({ dashboard }: OperatorsAndBranc
                     </td>
                     <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-600 sm:px-6">{operator.region}</td>
                     <td className="whitespace-nowrap px-4 py-3 text-right sm:px-6 space-x-2">
-                      <button
+                      <Button
                         type="button"
                         onClick={() => handleViewOperatorDashboard(operator.id)}
+                        isLoading={loadingViewId === operator.id}
                         disabled={isActionLoading}
-                        className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition disabled:opacity-50"
+                        variant="outline"
+                        size="sm"
+                        className="h-8 rounded-lg text-xs"
                       >
                         View
-                      </button>
-                      <button
+                      </Button>
+                      <Button
                         type="button"
                         onClick={() => openAssignRoutesModal(operator)}
+                        isLoading={loadingRoutesId === operator.id}
                         disabled={isActionLoading}
-                        className="inline-flex items-center gap-1 rounded-md border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 transition disabled:opacity-50"
+                        variant="secondary"
+                        size="sm"
+                        className="h-8 rounded-lg bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100 text-xs"
                       >
                         Routes
-                      </button>
-                      <button
+                      </Button>
+                      <Button
                         type="button"
                         onClick={() => openEditOperatorModal(operator)}
                         disabled={isActionLoading}
-                        className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition disabled:opacity-50"
+                        variant="outline"
+                        size="sm"
+                        className="h-8 rounded-lg text-xs"
                       >
                         <Pencil className="h-3.5 w-3.5" />
                         Edit
-                      </button>
-                      <button
+                      </Button>
+                      <Button
                         type="button"
                         onClick={() => handleDeleteOperator(operator)}
                         disabled={isActionLoading}
-                        className="inline-flex items-center gap-1 rounded-md bg-red-600 px-3 py-2 text-xs font-semibold text-white hover:bg-red-500 transition disabled:opacity-50"
+                        variant="destructive"
+                        size="sm"
+                        className="h-8 rounded-lg text-white text-xs"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                         Delete
-                      </button>
+                      </Button>
                     </td>
                   </tr>
                 ))}

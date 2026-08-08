@@ -177,6 +177,7 @@ export async function GET(req: NextRequest) {
         companyName: (userProfile as any).company?.name || null,
         preferences: userProfile.preferences,
         passwordSet: userProfile.passwordSet,
+        profilePicture: userProfile.profilePicture,
         payments: paymentsList,
         bookings: userProfile.bookings,
       },
@@ -206,7 +207,7 @@ export async function PUT(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { firstName, lastName, phone, nationalId, sex, currentAddress, preferences } = body;
+    const { firstName, lastName, phone, nationalId, sex, currentAddress, preferences, profilePicture } = body;
 
     const existing = await prisma.user.findFirst({
       where: {
@@ -233,6 +234,7 @@ export async function PUT(req: NextRequest) {
         ...(sex !== undefined && { sex }),
         ...(currentAddress !== undefined && { currentAddress }),
         ...(preferences !== undefined && { preferences }),
+        ...(profilePicture !== undefined && { profilePicture }),
         // When a user updates their profile via this endpoint we consider
         // the setup flow complete and persist that server-side so subsequent
         // visits reflect view-only mode.
@@ -264,6 +266,7 @@ export async function PUT(req: NextRequest) {
         sex: updated.sex,
         currentAddress: updated.currentAddress,
         preferences: updated.preferences,
+        profilePicture: updated.profilePicture,
       },
     });
   } catch (error: any) {

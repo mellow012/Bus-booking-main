@@ -14,8 +14,9 @@ import Image from 'next/image';
 import LanguageSwitcher from './LanguageSwitcher';
 
 const UserAvatar = ({ user, userProfile }: { user: any; userProfile: any }) => {
-  if (userProfile?.avatar) {
-    return <Image src={userProfile.avatar} alt="Profile" width={32} height={32} className="w-8 h-8 rounded-full object-cover border-2 border-brand-100" />;
+  const avatarUrl = userProfile?.avatar || userProfile?.profilePicture || user?.user_metadata?.avatar_url;
+  if (avatarUrl) {
+    return <Image src={avatarUrl} alt="Profile" width={32} height={32} className="w-8 h-8 rounded-full object-cover border-2 border-brand-100" />;
   }
   const initial = userProfile?.firstName?.[0] || user?.email?.[0] || 'U';
   return (
@@ -190,7 +191,7 @@ const Header: React.FC = () => {
 
           {/* Logo */}
           <Link href="/" className="flex items-center space-x-2.5 group">
-            <div className="relative shrink-0">
+            <div className="relative shrink-0 z-50">
               <div className={`${
                 isAuthPage 
                   ? 'h-12 sm:h-14 md:h-16 lg:h-20' 
@@ -246,6 +247,12 @@ const Header: React.FC = () => {
                   }}
                   className="flex items-center space-x-3 p-2 rounded-xl hover:bg-gray-100 transition-all duration-200 group"
                 >
+                  <div className="relative">
+                    <UserAvatar user={user} userProfile={userProfile} />
+                    {needsProfileAttention && (
+                      <span className="absolute top-0 right-0 w-2.5 h-2.5 bg-emerald-500 rounded-full border border-white" />
+                    )}
+                  </div>
                   <div className="hidden md:block text-left">
                     <div className="text-sm font-semibold text-gray-900 group-hover:text-brand-700">{displayName}</div>
                     <div className="text-xs text-gray-500 capitalize">
@@ -253,18 +260,6 @@ const Header: React.FC = () => {
                     </div>
                   </div>
                   <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform duration-200 ${isUserMenuOpen ? 'rotate-180' : ''}`} />
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleProfileNavigate}
-                  className="relative rounded-full p-1 hover:bg-gray-100 transition-all duration-200"
-                  aria-label="View profile"
-                >
-                  <UserAvatar user={user} userProfile={userProfile} />
-                  {needsProfileAttention && (
-                    <span className="absolute top-0 right-0 w-2.5 h-2.5 bg-emerald-500 rounded-full border border-white" />
-                  )}
                 </button>
 
                 {isUserMenuOpen && (
@@ -329,7 +324,7 @@ const Header: React.FC = () => {
             )}
 
             <button 
-              className="lg:hidden p-2 text-gray-600 hover:text-brand-700 hover:bg-brand-50 rounded-xl transition-all duration-300 active:scale-90" 
+              className="lg:hidden p-2 text-gray-600 hover:text-brand-700 hover:bg-brand-50 rounded-xl transition-all duration-300 active:scale-90 relative z-50" 
               onClick={() => setIsMenuOpen(!isMenuOpen)}
               aria-label={isMenuOpen ? "Close menu" : "Open menu"}
             >

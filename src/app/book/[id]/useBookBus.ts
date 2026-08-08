@@ -58,6 +58,7 @@ export default function useBookBus() {
   const [originStopId, setOriginStopId] = useState<string>("");
   const [destinationStopId, setDestinationStopId] = useState<string>("");
   const [displayPrice, setDisplayPrice] = useState<number>(0);
+  const [reviewsData, setReviewsData] = useState<{ averageRating: number; count: number; ratingBreakdown?: Record<number, number>; reviews: any[] } | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [bookingLoading, setBookingLoading] = useState(false);
@@ -541,6 +542,18 @@ export default function useBookBus() {
       setRoute(routeData as Route);
       setCompany(companyData as Company);
 
+      if (busData?.id) {
+        try {
+          const reviewRes = await fetch(`/api/buses/${busData.id}/reviews`);
+          if (reviewRes.ok) {
+            const { data: revData } = await reviewRes.json();
+            setReviewsData(revData);
+          }
+        } catch (reviewErr) {
+          console.error('Failed to fetch bus reviews', reviewErr);
+        }
+      }
+
       // Restore active hold / draft from sessionStorage if available
       let activeReservationId: string | null = null;
       let activeSeats: string[] = [];
@@ -1008,7 +1021,7 @@ export default function useBookBus() {
 
   return {
     // data
-    schedule, bus, route, company,
+    schedule, bus, route, company, reviewsData,
     passengers,
     // selection
     selectedSeats, setSelectedSeats,

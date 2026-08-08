@@ -6,6 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Company, Schedule, Route, Bus, Booking, TripStatus } from '@/types';
 import * as dbActions from '@/lib/actions/db.actions';
 import { WalkOnFormData } from '../_components/WalkOnBookingModal';
+import { parseUtcDate } from '@/lib/timezone';
 
 export function useConductorDashboard() {
   const { user, userProfile, loading: authLoading, signOut } = useAuth();
@@ -56,7 +57,7 @@ export function useConductorDashboard() {
         ]);
         
         const activeTrips = (sData as any[] || []).filter(t => t.status === 'active' && !t.isArchived)
-          .map(t => ({...t, departureDateTime: new Date(t.departureDateTime), arrivalDateTime: new Date(t.arrivalDateTime)}));
+          .map(t => ({...t, departureDateTime: parseUtcDate(t.departureDateTime), arrivalDateTime: parseUtcDate(t.arrivalDateTime)}));
         
         setTrips(activeTrips as Schedule[]);
         setRoutes(rData as Route[]);

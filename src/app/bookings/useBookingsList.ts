@@ -4,6 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useAppToast } from '@/contexts/ToastContext';
 import { Booking, Schedule, Bus, Route, Company, UserProfile } from '@/types';
 import { parseUtcDate } from '@/lib/timezone';
+import { deriveBookingStatus } from '@/lib/booking-utils';
 
 // PaymentProvider type
 export type PaymentProvider = 'paychangu' | 'cash' | 'local_bank';
@@ -186,15 +187,7 @@ export const useBookingsList = () => {
     return d.toLocaleDateString('en-GB', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
   }, []);
 
-  const getStatusColor = useCallback((s: string): string => (
-    ({ confirmed: 'bg-emerald-100 text-emerald-800 border-emerald-200', cancelled: 'bg-red-100 text-red-800 border-red-200', pending: 'bg-amber-100 text-amber-800 border-amber-200', payment_failed: 'bg-red-100 text-red-800 border-red-200' } as Record<string, string>)[s]
-    ?? 'bg-gray-100 text-gray-800 border-gray-200'
-  ), []);
 
-  const getPaymentStatusColor = useCallback((s: string): string => (
-    ({ paid: 'bg-emerald-100 text-emerald-800 border-emerald-200', failed: 'bg-red-100 text-red-800 border-red-200', pending: 'bg-amber-100 text-amber-800 border-amber-200' } as Record<string, string>)[s]
-    ?? 'bg-gray-100 text-gray-800 border-gray-200'
-  ), []);
 
   const isBookingExpired = useCallback((b: BookingWithDetails) => {
     const arr = b.schedule?.arrivalDateTime instanceof Date 
@@ -209,30 +202,30 @@ export const useBookingsList = () => {
 
   const applyFiltersLogic = useCallback((src: BookingWithDetails[], af: string, cf: SearchFilters) => {
     let f = [...src];
-    const now = new Date();
 
     if (af === 'archived') {
       f = f.filter((b) => checkIsArchived(b));
-    } else if (af === 'confirmed') {
-      f = f.filter((b) => !checkIsArchived(b) && b.bookingStatus === 'confirmed' && (b.paymentStatus === 'paid' || (b as any).paymentMethod === 'cash_on_boarding'));
-    } else if (af === 'pending') {
-      f = f.filter((b) => !checkIsArchived(b) && (b.bookingStatus === 'pending' || (b.bookingStatus === 'confirmed' && b.paymentStatus === 'pending' && (b as any).paymentMethod !== 'cash_on_boarding')));
-    } else if (af === 'cancelled') {
-      f = f.filter((b) => !checkIsArchived(b) && ((b.bookingStatus as string) === 'cancelled' || (b.bookingStatus as string) === 'payment_failed'));
-    } else if (af === 'upcoming') {
-      f = f.filter((b) => {
-        const d = b.schedule?.departureDateTime instanceof Date ? b.schedule.departureDateTime : parseUtcDate(b.schedule?.departureDateTime as unknown as string);
-        return !checkIsArchived(b) && d > now && b.bookingStatus === 'confirmed' && (b.paymentStatus === 'paid' || (b as any).paymentMethod === 'cash_on_boarding');
-      });
-    } else if (af === 'in_transit') {
-      f = f.filter((b) => {
-        const dep = b.schedule?.departureDateTime instanceof Date ? b.schedule.departureDateTime : parseUtcDate(b.schedule?.departureDateTime as unknown as string);
-        const arr = b.schedule?.arrivalDateTime instanceof Date ? b.schedule.arrivalDateTime : parseUtcDate(b.schedule?.arrivalDateTime as unknown as string);
-        return !checkIsArchived(b) && (b.schedule?.tripStatus === 'in_transit' || (dep <= now && now < arr && b.bookingStatus === 'confirmed'));
-      });
     } else {
-      // Default: 'all' -> Show active non-archived bookings
-      f = f.filter((b) => !checkIsArchived(b));
+      f = f.filter((b) => {
+        if (checkIsArchived(b)) return false;
+        if (af === 'all') return true;
+        
+        const derived = deriveBookingStatus({
+          bookingStatus: b.bookingStatus,
+          paymentStatus: b.paymentStatus,
+          paymentMethod: (b as any).paymentMethod || b.paymentProvider,
+          tripStatus: b.schedule?.tripStatus,
+          departureTime: b.schedule?.departureDateTime,
+          arrivalTime: b.schedule?.arrivalDateTime,
+        });
+
+        if (af === 'confirmed') return derived === 'confirmed' || derived === 'reserved_cash';
+        if (af === 'pending') return derived === 'awaiting_payment';
+        if (af === 'cancelled') return derived === 'cancelled' || derived === 'payment_failed';
+        if (af === 'in_transit') return derived === 'in_transit';
+        if (af === 'upcoming') return (derived === 'confirmed' || derived === 'reserved_cash') && new Date() < new Date(b.schedule?.departureDateTime as any);
+        return true;
+      });
     }
 
     if (cf.busType) { const t = Array.isArray(cf.busType) ? cf.busType : [cf.busType]; f = f.filter((b) => b.bus?.busType && t.includes(b.bus.busType)); }
@@ -795,24 +788,28 @@ export const useBookingsList = () => {
   }, [ctxNotifications, fetchBookings]);
 
   const bookingStats = useMemo(() => {
-    const now = new Date();
-
-    return {
-      all: bookings.filter((b) => !checkIsArchived(b)).length,
-      confirmed: bookings.filter((b) => !checkIsArchived(b) && b.bookingStatus === 'confirmed' && (b.paymentStatus === 'paid' || (b as any).paymentMethod === 'cash_on_boarding')).length,
-      pending: bookings.filter((b) => !checkIsArchived(b) && (b.bookingStatus === 'pending' || (b.bookingStatus === 'confirmed' && b.paymentStatus === 'pending' && (b as any).paymentMethod !== 'cash_on_boarding'))).length,
-      cancelled: bookings.filter((b) => !checkIsArchived(b) && ((b.bookingStatus as string) === 'cancelled' || (b.bookingStatus as string) === 'payment_failed')).length,
-      upcoming: bookings.filter((b) => {
-        const d = b.schedule?.departureDateTime instanceof Date ? b.schedule.departureDateTime : parseUtcDate(b.schedule?.departureDateTime as unknown as string);
-        return !checkIsArchived(b) && d > now && b.bookingStatus === 'confirmed' && (b.paymentStatus === 'paid' || (b as any).paymentMethod === 'cash_on_boarding');
-      }).length,
-      in_transit: bookings.filter((b) => {
-        const dep = b.schedule?.departureDateTime instanceof Date ? b.schedule.departureDateTime : parseUtcDate(b.schedule?.departureDateTime as unknown as string);
-        const arr = b.schedule?.arrivalDateTime instanceof Date ? b.schedule.arrivalDateTime : parseUtcDate(b.schedule?.arrivalDateTime as unknown as string);
-        return !checkIsArchived(b) && (b.schedule?.tripStatus === 'in_transit' || (dep <= now && now < arr && b.bookingStatus === 'confirmed'));
-      }).length,
-      archived: bookings.filter((b) => checkIsArchived(b)).length,
-    };
+    const stats = { all: 0, confirmed: 0, pending: 0, cancelled: 0, upcoming: 0, in_transit: 0, archived: 0 };
+    bookings.forEach(b => {
+      if (checkIsArchived(b)) {
+        stats.archived++;
+        return;
+      }
+      stats.all++;
+      const derived = deriveBookingStatus({
+        bookingStatus: b.bookingStatus,
+        paymentStatus: b.paymentStatus,
+        paymentMethod: (b as any).paymentMethod || b.paymentProvider,
+        tripStatus: b.schedule?.tripStatus,
+        departureTime: b.schedule?.departureDateTime,
+        arrivalTime: b.schedule?.arrivalDateTime,
+      });
+      if (derived === 'confirmed' || derived === 'reserved_cash') stats.confirmed++;
+      if (derived === 'awaiting_payment') stats.pending++;
+      if (derived === 'cancelled' || derived === 'payment_failed') stats.cancelled++;
+      if (derived === 'in_transit') stats.in_transit++;
+      if ((derived === 'confirmed' || derived === 'reserved_cash') && new Date() < new Date(b.schedule?.departureDateTime as any)) stats.upcoming++;
+    });
+    return stats;
   }, [bookings]);
 
   const paginatedBookings = useMemo(() => filteredBookings.slice((currentPage - 1) * bookingsPerPage, currentPage * bookingsPerPage), [filteredBookings, currentPage]);
@@ -856,8 +853,6 @@ export const useBookingsList = () => {
     userDetails,
     formatTime,
     formatDate,
-    getStatusColor,
-    getPaymentStatusColor,
     fetchBookings,
     handleCancelBooking,
     handleDeleteBooking,

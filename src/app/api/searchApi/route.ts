@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { Route, Schedule, Bus, Company } from "@prisma/client";
-import { checkAndRollSchedules } from "@/lib/schedule-generator";
 import { logger } from "@/lib/logger";
 
 interface SearchResultPayload {
@@ -13,15 +12,15 @@ interface SearchResultPayload {
 
 export async function POST(request: Request) {
   try {
-    // Ensure future schedules are active and running all the time (asynchronously)
-    checkAndRollSchedules().catch((err: any) => {
-      logger.logError('api', '[schedule-generator] Async roll error', err);
-    });
-
     const { origin, destination, date, passengers = 1 } = await request.json();
 
     if (!origin || !destination) {
       return NextResponse.json({ error: "Missing origin or destination" }, { status: 400 });
+    }
+
+    const parsedDate = date ? new Date(date) : new Date();
+    if (isNaN(parsedDate.getTime())) {
+      return NextResponse.json({ error: 'Invalid travel date' }, { status: 400 });
     }
 
     // 1. Fuzzy search for routes matching origin/destination using similarity

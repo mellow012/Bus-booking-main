@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { Company, Schedule, Route, Bus, Booking, Operator } from '@/types';
+import { parseUtcDate } from '@/lib/timezone';
 import { bookingMatchesSchedule } from '@/lib/booking-utils';
 
 export function useOperatorDashboard() {
@@ -137,8 +138,8 @@ export function useOperatorDashboard() {
         if (schedulesError) throw schedulesError;
         schedulesList = (schedulesData || []).map(s => ({
           ...s,
-          departureDateTime: new Date(s.departureDateTime),
-          arrivalDateTime: new Date(s.arrivalDateTime)
+          departureDateTime: parseUtcDate(s.departureDateTime as unknown as string),
+          arrivalDateTime: parseUtcDate(s.arrivalDateTime as unknown as string)
         })) as Schedule[];
       }
       setSchedules(schedulesList);
@@ -165,7 +166,7 @@ export function useOperatorDashboard() {
         bookingsList = (bookingsData || []).map(b => ({
           ...b,
           paymentMethod: (b as any).Payment?.[0]?.paymentType || (b.paymentStatus === 'paid' ? 'cash' : 'Not specified'),
-          createdAt: new Date(b.createdAt)
+          createdAt: parseUtcDate(b.createdAt as unknown as string)
         })) as Booking[];
       }
       setBookings(bookingsList);
@@ -244,6 +245,9 @@ export function useOperatorDashboard() {
     const channels = [
       supabase.channel('ops-schedules-sub').on('postgres_changes', { event: '*', schema: 'public', table: 'Schedule', filter: `companyId=eq.${companyId}` }, scheduleRefresh).subscribe(),
       supabase.channel('ops-bookings-sub').on('postgres_changes', { event: '*', schema: 'public', table: 'Booking', filter: `companyId=eq.${companyId}` }, scheduleRefresh).subscribe(),
+      supabase.channel('ops-routes-sub').on('postgres_changes', { event: '*', schema: 'public', table: 'Route', filter: `companyId=eq.${companyId}` }, scheduleRefresh).subscribe(),
+      supabase.channel('ops-templates-sub').on('postgres_changes', { event: '*', schema: 'public', table: 'ScheduleTemplate', filter: `companyId=eq.${companyId}` }, scheduleRefresh).subscribe(),
+      supabase.channel('ops-buses-sub').on('postgres_changes', { event: '*', schema: 'public', table: 'Bus', filter: `companyId=eq.${companyId}` }, scheduleRefresh).subscribe(),
       supabase.channel('ops-location-sub').on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'ActivityLog', filter: `companyId=eq.${companyId}` }, (payload) => {
         if ((payload.new as any).action === 'LOCATION_SYNC') scheduleRefresh();
       }).subscribe(),

@@ -41,6 +41,8 @@ export default function useBusDetails() {
   const [modalOpen, setModalOpen] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
 
+  const [reviewsData, setReviewsData] = useState<{ averageRating: number; count: number; reviews: any[] } | null>(null);
+
   useEffect(() => {
     const fetchSchedule = async () => {
       if (!scheduleId) return;
@@ -51,6 +53,19 @@ export default function useBusDetails() {
         if (!response.ok) { setError('Schedule not found'); setLoading(false); return; }
         const { data: scheduleData } = await response.json();
         setSchedule(scheduleData as BusScheduleWithDetails);
+        
+        // Fetch reviews for the bus
+        if (scheduleData && scheduleData.bus?.id) {
+          try {
+            const reviewRes = await fetch(`/api/buses/${scheduleData.bus.id}/reviews`);
+            if (reviewRes.ok) {
+              const { data } = await reviewRes.json();
+              setReviewsData(data);
+            }
+          } catch (reviewErr) {
+            console.error('Failed to fetch bus reviews', reviewErr);
+          }
+        }
       } catch (err: any) {
         setError('Failed to load bus details. Please try again.');
       } finally {
@@ -159,5 +174,6 @@ export default function useBusDetails() {
     handleBookNow,
     handleBookingSubmit,
     setError,
+    reviewsData,
   } as const;
 }

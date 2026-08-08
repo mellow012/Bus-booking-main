@@ -21,7 +21,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { isSegmentBookable } from '@/lib/schedule-utils';
-import { checkAndRollSchedules } from '@/lib/schedule-generator';
 import { serverCache, createScheduleCacheKey } from '@/lib/cache';
 import { getRouteDistanceAndDuration } from '@/lib/route-utils';
 import { formatTime24, formatDateISO } from '@/lib/timezone';
@@ -58,6 +57,7 @@ interface EnhancedSchedule {
   busType: string;
   amenities: string[];
   totalSeats: number;
+  stopsCount?: number;
   departureLocation?: string;
 }
 
@@ -296,6 +296,7 @@ async function querySchedules(params: {
         totalSeats,
         departureLocation: sch.departureLocation || company.address || `${route.origin} Main Terminal`,
         arrivalLocation: sch.arrivalLocation || `${route.destination} Main Terminal`,
+        stopsCount: Array.isArray(route.stops) ? route.stops.length : 0,
       };
     })
     .filter((item: any) => item !== null) as EnhancedSchedule[];
@@ -323,11 +324,6 @@ async function querySchedules(params: {
 
 export async function GET(request: NextRequest) {
   try {
-    // Fire-and-forget: ensure future schedules exist (runs at most once per 5 min)
-    checkAndRollSchedules().catch((err: any) => {
-      logger.logError('api', '[schedule-generator] Async roll error', err);
-    });
-
     const searchParams = request.nextUrl.searchParams;
 
     const tzOffsetRaw = searchParams.get('tzOffset');

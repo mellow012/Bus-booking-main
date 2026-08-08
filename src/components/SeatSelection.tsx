@@ -7,7 +7,7 @@ interface SeatSelectionProps {
   bus: Bus;
   schedule: Schedule;
   passengers: number;
-  onSeatSelection: (seats: string[]) => void;
+  onSeatSelection: (seats: string[]) => void | Promise<void>;
   onSelectionChange?: (seats: string[]) => void;
   selectedSeats?: string[];
   reservedSeats?: string[];
@@ -37,6 +37,7 @@ const SeatSelection: React.FC<SeatSelectionProps> = ({
   const [internalSelectedSeats, setInternalSelectedSeats] = useState<string[]>(selectedSeats);
   const [error, setError] = useState('');
   const [hoveredSeat, setHoveredSeat] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
 
   // ── Layout & grid resolution ─────────────────────────────────────────────
   const { grid: seatLayout, rowMeta, preset: layoutConfig } = useMemo(() => {
@@ -154,8 +155,13 @@ const SeatSelection: React.FC<SeatSelectionProps> = ({
     [disabled, isSeatUnavailable, passengers]
   );
 
-  const handleContinue = () => {
-    onSeatSelection(internalSelectedSeats);
+  const handleContinue = async () => {
+    setIsLoading(true);
+    try {
+      await onSeatSelection(internalSelectedSeats);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   // ── Seat styling ───────────────────────────────────────────────────────────
@@ -327,84 +333,24 @@ const SeatSelection: React.FC<SeatSelectionProps> = ({
                         <span>{meta.label || 'W/C'}</span>
                       </div>
                     ) : isBenchRow ? (
-                      /* Rear Bench Layout — aligned with standard row grid columns */
+                      /* Rear Bench Layout — dynamically column-sized based on actual seat count to prevent wrapping */
                       (() => {
                         const benchSeats = row.filter(
                           (seat): seat is string => Boolean(seat)
                         );
-                        const hasMiddleAisleSeat = benchSeats.length > seatsPerRow;
-                        const leftSeats = benchSeats.slice(0, aislePosition);
-                        const middleSeat = hasMiddleAisleSeat ? benchSeats[aislePosition] : null;
-                        const rightSeats = hasMiddleAisleSeat
-                          ? benchSeats.slice(aislePosition + 1)
-                          : benchSeats.slice(aislePosition);
-
-                        // Fill arrays to match exact column count
-                        const leftItems: (string | null)[] = [...leftSeats];
-                        while (leftItems.length < aislePosition) leftItems.push(null);
-
-                        const rightCount = seatsPerRow - aislePosition;
-                        const rightItems: (string | null)[] = [...rightSeats];
-                        while (rightItems.length < rightCount) rightItems.push(null);
-
                         return (
                           <div
-                            className="grid gap-1 justify-center items-center justify-items-center w-[18rem] sm:w-[22rem]"
+                            className="grid gap-1 justify-center items-center justify-items-center w-full"
                             style={{
-                              gridTemplateColumns: `repeat(${aislePosition}, minmax(2rem, 3rem)) minmax(1.5rem, 2rem) repeat(${seatsPerRow - aislePosition}, minmax(2rem, 3rem))`,
+                              gridTemplateColumns: `repeat(${benchSeats.length}, minmax(2rem, 3.5rem))`,
                             }}
                           >
-                            {/* Left bench seats */}
-                            {leftItems.map((seat: string | null, colIndex: number) => {
-                              if (!seat) return <div key={`bench-left-space-${colIndex}`} className="w-8 h-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12 pointer-events-none" />;
+                            {benchSeats.map((seat: string, colIndex: number) => {
                               const status = getSeatStatus(seat);
                               return (
                                 <button
                                   key={`${seat}-${colIndex}`}
                                   className={getSeatClassName(status)}
-                                  style={getSeatMarginStyle(colIndex, leftItems.length)}
-                                  onClick={() => handleSeatClick(seat)}
-                                  onMouseEnter={() => setHoveredSeat(seat)}
-                                  onMouseLeave={() => setHoveredSeat(null)}
-                                  disabled={status === 'booked' || status === 'reserved' || disabled}
-                                  aria-label={getSeatAriaLabel(seat, status)}
-                                  aria-pressed={status === 'selected'}
-                                >
-                                  {seat}
-                                </button>
-                              );
-                            })}
-
-                            {/* Middle Aisle seat or spacer */}
-                            {middleSeat ? (() => {
-                              const status = getSeatStatus(middleSeat);
-                              return (
-                                <button
-                                  key={`${middleSeat}-mid`}
-                                  className={getSeatClassName(status)}
-                                  onClick={() => handleSeatClick(middleSeat)}
-                                  onMouseEnter={() => setHoveredSeat(middleSeat)}
-                                  onMouseLeave={() => setHoveredSeat(null)}
-                                  disabled={status === 'booked' || status === 'reserved' || disabled}
-                                  aria-label={getSeatAriaLabel(middleSeat, status)}
-                                  aria-pressed={status === 'selected'}
-                                >
-                                  {middleSeat}
-                                </button>
-                              );
-                            })() : (
-                              <div className="w-4 sm:w-6 h-8 sm:h-10 lg:h-12 pointer-events-none" />
-                            )}
-
-                            {/* Right bench seats */}
-                            {rightItems.map((seat: string | null, colIndex: number) => {
-                              if (!seat) return <div key={`bench-right-space-${colIndex}`} className="w-8 h-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12 pointer-events-none" />;
-                              const status = getSeatStatus(seat);
-                              return (
-                                <button
-                                  key={`${seat}-${colIndex}`}
-                                  className={getSeatClassName(status)}
-                                  style={getSeatMarginStyle(colIndex, rightItems.length)}
                                   onClick={() => handleSeatClick(seat)}
                                   onMouseEnter={() => setHoveredSeat(seat)}
                                   onMouseLeave={() => setHoveredSeat(null)}
@@ -542,14 +488,20 @@ const SeatSelection: React.FC<SeatSelectionProps> = ({
       {!hideContinue && (
         <button
           onClick={handleContinue}
-          disabled={internalSelectedSeats.length !== passengers || disabled}
+          disabled={internalSelectedSeats.length !== passengers || disabled || isLoading}
           className="w-full py-3 px-6 bg-coral-500 text-white font-semibold rounded-xl
                      disabled:opacity-50 disabled:cursor-not-allowed
                      hover:bg-coral-600 active:bg-coral-700
-                     transition-colors duration-200 text-sm"
+                     transition-colors duration-200 text-sm flex items-center justify-center gap-2"
         >
+          {isLoading && (
+            <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+          )}
           {internalSelectedSeats.length === passengers
-            ? `Continue with seat${passengers > 1 ? 's' : ''} ${[...internalSelectedSeats].sort().join(', ')}`
+            ? (isLoading ? 'Reserving...' : `Continue with seat${passengers > 1 ? 's' : ''} ${[...internalSelectedSeats].sort().join(', ')}`)
             : `Select ${remaining} more seat${remaining !== 1 ? 's' : ''} to continue`}
         </button>
       )}

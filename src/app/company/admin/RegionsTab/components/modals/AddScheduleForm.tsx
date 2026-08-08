@@ -96,24 +96,34 @@ export default function AddScheduleForm({ form, onChange, modalContext, routes, 
 
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Price per Seat (MWK) *</label>
-          <input
-            type="number"
-            value={form.price}
-            onChange={(e) => set({ price: e.target.value })}
-            placeholder="5000"
-            className="block w-full rounded-lg border-gray-300 shadow-sm sm:text-sm px-3 py-2 border"
-          />
+          <label className="block text-sm font-medium text-gray-700 mb-1">Price per Seat *</label>
+          <div className="relative rounded-lg border border-gray-300 bg-white shadow-sm focus-within:ring-2 focus-within:ring-indigo-500 focus-within:border-transparent transition-all">
+            <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+              <span className="text-[10px] font-bold text-gray-400">MWK</span>
+            </div>
+            <input
+              type="number"
+              value={form.price}
+              onChange={(e) => set({ price: e.target.value })}
+              placeholder="5000"
+              className="block w-full bg-transparent pl-11 pr-3 py-2 text-sm text-gray-900 focus:outline-none border-none"
+            />
+          </div>
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Available Seats</label>
-          <input
-            type="number"
-            value={form.availableSeats}
-            onChange={(e) => set({ availableSeats: e.target.value })}
-            placeholder="Auto from bus"
-            className="block w-full rounded-lg border-gray-300 shadow-sm sm:text-sm px-3 py-2 border"
-          />
+          <div className="relative rounded-lg border border-gray-300 bg-white shadow-sm focus-within:ring-2 focus-within:ring-indigo-500 focus-within:border-transparent transition-all">
+            <input
+              type="number"
+              value={form.availableSeats}
+              onChange={(e) => set({ availableSeats: e.target.value })}
+              placeholder="Auto from bus"
+              className="block w-full bg-transparent px-3 py-2 pr-16 text-sm text-gray-900 focus:outline-none border-none"
+            />
+            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">seats</span>
+            </div>
+          </div>
         </div>
       </div>
     </>

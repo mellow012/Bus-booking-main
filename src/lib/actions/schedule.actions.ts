@@ -19,8 +19,8 @@ async function assertBusNotOverlapping(
       status: { notIn: ['cancelled', 'archived'] },
       id: excludeScheduleId ? { not: excludeScheduleId } : undefined,
       AND: [
-        { departureDateTime: { lt: arrivalDateTime } },
-        { arrivalDateTime: { gt: departureDateTime } },
+        { departureDateTime: { lt: new Date(arrivalDateTime.getTime() + 30 * 60000) } },
+        { arrivalDateTime: { gt: new Date(departureDateTime.getTime() - 30 * 60000) } },
       ],
     },
     select: {
@@ -42,7 +42,7 @@ async function assertBusNotOverlapping(
 /**
  * --- Schedules ---
  */
-export async function createSchedule(data: Partial<Schedule> & {
+export async function createSchedule(data: Omit<Partial<Schedule>, 'departureDateTime' | 'arrivalDateTime'> & {
   companyId: string;
   busId: string;
   routeId: string;
@@ -208,10 +208,15 @@ export async function updateSchedule(id: string, data: Partial<Schedule>) {
 
 export async function deleteSchedule(id: string) {
   try {
+    const bookingCount = await prisma.booking.count({ where: { scheduleId: id } });
+    if (bookingCount > 0) {
+      return { success: false, error: 'Cannot delete schedule because it has associated bookings. Please mark the schedule as cancelled or archived instead.' };
+    }
     await prisma.schedule.delete({ where: { id } });
     serverCache.invalidate('schedules');
     revalidatePath('/company/conductor/dashboard');
     revalidatePath('/company/operator/dashboard');
+    revalidatePath('/company/admin');
     return { success: true };
   } catch (error: unknown) {
     console.error('Error deleting schedule:', error);
@@ -379,6 +384,18 @@ export async function materializeSchedules(companyId: string, routeId: string, d
       select: { routeId: true, busId: true, departureDateTime: true }
     });
 
+    const existingSchedulesForOverlap = await prisma.schedule.findMany({
+      where: {
+        companyId,
+        status: { notIn: ['cancelled', 'archived'] },
+        departureDateTime: { 
+          gte: new Date(today.getTime() - 24 * 60 * 60 * 1000),
+          lte: new Date(endDate.getTime() + 24 * 60 * 60 * 1000)
+        }
+      },
+      select: { id: true, busId: true, departureDateTime: true, arrivalDateTime: true }
+    });
+
     // Idempotency key: UTC date + UTC HH:MM + routeId + busId
     const toUTCDateStr = (d: Date) =>
       `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`;
@@ -393,6 +410,7 @@ export async function materializeSchedules(companyId: string, routeId: string, d
     );
 
     const newSchedules: any[] = [];
+    const allSchedulesToCheck = [...existingSchedulesForOverlap];
 
     for (let dayOffset = 0; dayOffset <= daysAhead; dayOffset++) {
       const targetDate = new Date(today);
@@ -420,7 +438,7 @@ export async function materializeSchedules(companyId: string, routeId: string, d
         const uniqueKey = `${template.routeId}_${template.busId}_${dateStr}_${template.departureTime}`;
 
         if (!existingSet.has(uniqueKey)) {
-          newSchedules.push({
+          const newSched = {
             companyId: template.companyId,
             busId: template.busId,
             routeId: template.routeId,
@@ -435,7 +453,36 @@ export async function materializeSchedules(companyId: string, routeId: string, d
             isActive: true,
             isArchived: false,
             isCompleted: false,
+          };
+          
+          // Overlap validation
+          const newDep = newSched.departureDateTime.getTime();
+          const newArr = newSched.arrivalDateTime.getTime();
+          
+          const conflicting = allSchedulesToCheck.find(s => {
+            if (s.busId !== newSched.busId) return false;
+            const sDep = s.departureDateTime.getTime();
+            const sArr = s.arrivalDateTime.getTime();
+            
+            return sDep < (newArr + 30 * 60000) && sArr > (newDep - 30 * 60000);
           });
+          
+          if (conflicting) {
+            throw new Error(
+              `Conflict detected for bus ${template.bus.licensePlate || newSched.busId} on ${new Date(newDep).toLocaleString()}. ` +
+              `It overlaps with another schedule from ${new Date(conflicting.departureDateTime).toLocaleString()} ` +
+              `to ${new Date(conflicting.arrivalDateTime).toLocaleString()} (including 30m turnaround).`
+            );
+          }
+          
+          allSchedulesToCheck.push({
+            id: 'new', // placeholder
+            busId: newSched.busId,
+            departureDateTime: newSched.departureDateTime,
+            arrivalDateTime: newSched.arrivalDateTime,
+          });
+
+          newSchedules.push(newSched);
           existingSet.add(uniqueKey);
         }
       }

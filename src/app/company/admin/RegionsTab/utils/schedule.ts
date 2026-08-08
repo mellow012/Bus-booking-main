@@ -1,11 +1,12 @@
 import { Route, Schedule } from '@/types';
+import { parseUtcDate } from '@/lib/timezone';
 
 export const DEFAULT_TRIP_DURATION_MS = 3 * 60 * 60 * 1000;
 
 export function getTripWindow(schedule: Schedule) {
-  const departure = new Date(schedule.departureDateTime).getTime();
+  const departure = parseUtcDate(schedule.departureDateTime as unknown as string).getTime();
   const arrival = schedule.arrivalDateTime
-    ? new Date(schedule.arrivalDateTime).getTime()
+    ? parseUtcDate(schedule.arrivalDateTime as unknown as string).getTime()
     : departure + DEFAULT_TRIP_DURATION_MS;
   return { departure, arrival };
 }
@@ -59,5 +60,5 @@ export function getBranchTripSummary(
 }
 
 export function formatDateTime(iso: string) {
-  return new Date(iso).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
+  return parseUtcDate(iso).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
 }

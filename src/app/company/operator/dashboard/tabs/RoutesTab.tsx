@@ -1,21 +1,31 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Route, Schedule, Bus } from '@/types';
 import {
   Map, MapPin, Calendar, Bus as BusIcon, Plus, LayoutTemplate,
-  Clock, Sparkles, ChevronLeft, ChevronRight, Search,
+  Clock, Sparkles, ChevronLeft, ChevronRight, Search, BadgeCheck, ChevronDown
 } from 'lucide-react';
+import { parseUtcDate } from '@/lib/timezone';
+
+const isRelevantSchedule = (s: Schedule) => {
+  if (s.status === 'archived' || !!s.isArchived) return false;
+  const now = new Date();
+  return parseUtcDate(s.departureDateTime as unknown as string) >= now || ['boarding', 'in_transit', 'arrived'].includes(s.tripStatus || '');
+};
 
 import UnifiedScheduleModal from '@/components/company/UnifiedScheduleModal';
 import GenerateTripsModal from '@/components/company/GenerateTripsModal';
 import StopsEditor from '@/components/common/StopsEditor';
+import RouteScheduleSection from '@/app/company/admin/RegionsTab/components/RouteScheduleSection';
 
 interface RoutesTabProps {
   dashboard: any;
 }
 
 export default function RoutesTab({ dashboard }: RoutesTabProps) {
+  const router = useRouter();
   const { assignedRoutes, schedules, templates, buses, userProfile: profile } = dashboard;
   const companyId = profile?.companyId?.trim() || '';
 
@@ -36,6 +46,7 @@ export default function RoutesTab({ dashboard }: RoutesTabProps) {
   const [showGenerateModal, setShowGenerateModal] = useState(false);
   const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
   const [scheduleFilterDate, setScheduleFilterDate] = useState<string>('');
+  const [archiveExpanded, setArchiveExpanded] = useState(false);
 
   const ROUTES_PER_PAGE = 6;
   const SCHEDULES_PER_PAGE = 6;
@@ -46,7 +57,10 @@ export default function RoutesTab({ dashboard }: RoutesTabProps) {
   const pagedRoutes = filteredRoutes.slice((routesPage - 1) * ROUTES_PER_PAGE, routesPage * ROUTES_PER_PAGE);
 
   useEffect(() => { setRoutesPage(1); }, [searchQuery]);
-  useEffect(() => { setSchedulesPage(1); }, [selectedRouteId, scheduleFilterDate]);
+  useEffect(() => { 
+    setSchedulesPage(1); 
+    setArchiveExpanded(false);
+  }, [selectedRouteId, scheduleFilterDate]);
 
   useEffect(() => {
     if (filteredRoutes.length > 0 && (!selectedRouteId || !filteredRoutes.find((r: Route) => r.id === selectedRouteId))) {
@@ -110,63 +124,58 @@ export default function RoutesTab({ dashboard }: RoutesTabProps) {
 
           {/* ── Route Cards Grid ────────────────────────────────────── */}
           <div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {pagedRoutes.map((route: Route) => {
                 const isSelected = selectedRouteId === route.id;
-                const routeScheduleCount = schedules.filter((s: Schedule) => s.routeId === route.id).length;
+                const routeScheduleCount = schedules.filter((s: Schedule) => s.routeId === route.id && isRelevantSchedule(s)).length;
+                const routeTemplates = templates?.filter((t: any) => t.routeId === route.id) || [];
                 return (
-                  <div
+                  <button
                     key={route.id}
+                    type="button"
                     onClick={() => setSelectedRouteId(route.id)}
-                    className={`bg-white rounded-2xl border p-5 shadow-sm cursor-pointer transition-all space-y-4 ${
+                    className={`text-left bg-white rounded-xl border p-4 transition-all shadow-sm active:scale-[0.98] ${
                       isSelected
-                        ? 'border-indigo-500 ring-1 ring-indigo-500 shadow-indigo-100/60'
-                        : 'border-gray-200 hover:border-indigo-300 hover:shadow-md'
+                        ? 'border-indigo-600 ring-2 ring-indigo-600 ring-opacity-20'
+                        : 'border-gray-200 hover:border-indigo-200 hover:shadow-md'
                     }`}
                   >
-                    {/* Card Header */}
-                    <div className="flex justify-between items-start">
-                      <div className="min-w-0 flex-1">
-                        <h3 className="font-bold text-gray-900 text-base truncate">{route.name}</h3>
-                        <p className="text-xs text-gray-500 font-medium mt-0.5 flex items-center gap-1">
-                          <MapPin className="w-3 h-3 shrink-0 text-gray-400" />
-                          <span className="truncate">{route.origin} → {route.destination}</span>
-                        </p>
+                    {/* Top Row Icon and Badge */}
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="w-10 h-10 bg-indigo-50 rounded-lg flex items-center justify-center text-indigo-600">
+                        <Map className="w-5 h-5" />
                       </div>
-                      <span className={`ml-2 shrink-0 px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase border ${
-                        route.isActive
-                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                          : 'bg-gray-100 text-gray-500 border-gray-200'
-                      }`}>
-                        {route.isActive ? 'Active' : 'Inactive'}
-                      </span>
+                      {route.isActive ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide bg-emerald-50 text-emerald-700">
+                          <BadgeCheck className="w-3 h-3" />
+                          Active
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide bg-gray-100 text-gray-400">
+                          Inactive
+                        </span>
+                      )}
                     </div>
 
-                    {/* Stats Strip */}
-                    <div className="grid grid-cols-2 gap-2 bg-gray-50 p-3 rounded-xl text-center text-xs border border-gray-100">
-                      <div>
-                        <p className="text-[10px] text-gray-400 font-bold uppercase">Schedules</p>
-                        <p className="font-bold text-indigo-600">{routeScheduleCount}</p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] text-gray-400 font-bold uppercase">Base Fare</p>
-                        <p className="font-bold text-gray-800">MWK {route.baseFare?.toLocaleString() ?? '—'}</p>
-                      </div>
-                    </div>
+                    {/* Middle Section Title and Caption */}
+                    <h3 className="font-bold text-gray-900 text-lg truncate">{route.name}</h3>
+                    <p className="text-xs text-gray-500 mt-1 truncate">
+                      {route.origin} → {route.destination}
+                    </p>
+                    <p className="text-xs text-indigo-600 font-semibold mt-1">
+                      MWK {route.baseFare?.toLocaleString() ?? '—'} • {routeTemplates.length} blueprint{routeTemplates.length === 1 ? '' : 's'}
+                    </p>
 
-                    {/* View indicator */}
-                    <div className="pt-2 border-t border-gray-100 flex items-center justify-between">
-                      <span className="text-xs font-semibold text-indigo-600">
-                        {isSelected ? '● Viewing details' : 'Click to view details'}
+                    {/* Bottom Status Panel */}
+                    <div className="mt-4 rounded-2xl bg-slate-50 p-3 text-sm text-slate-600 border border-slate-100 flex items-center justify-between gap-2">
+                      <span className="font-semibold text-slate-900 capitalize">
+                        {routeScheduleCount} upcoming trip{routeScheduleCount === 1 ? '' : 's'}
                       </span>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); openCreateSchedule(route.id); }}
-                        className="inline-flex items-center gap-1 text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-2 py-1 rounded-lg transition-colors"
-                      >
-                        <Plus className="w-3 h-3" /> Schedule
-                      </button>
+                      <span className="text-[10px] font-bold uppercase tracking-widest rounded-full px-2.5 py-1 bg-indigo-100 text-indigo-700">
+                        Schedules
+                      </span>
                     </div>
-                  </div>
+                  </button>
                 );
               })}
             </div>
@@ -205,205 +214,60 @@ export default function RoutesTab({ dashboard }: RoutesTabProps) {
             const selectedRoute = filteredRoutes.find((r: Route) => r.id === selectedRouteId);
             if (!selectedRoute) return null;
 
-            const routeSchedules = schedules.filter((s: Schedule) => {
-              if (s.routeId !== selectedRouteId) return false;
-              if (scheduleFilterDate) {
-                const sDate = new Date(s.departureDateTime).toISOString().split('T')[0];
-                return sDate === scheduleFilterDate;
-              }
-              const now = new Date();
-              return s.departureDateTime >= now || ['boarding', 'in_transit', 'arrived'].includes(s.tripStatus || '');
+            const filteredSelectedRouteSchedules = schedules.filter((schedule: Schedule) => {
+              if (schedule.routeId !== selectedRouteId) return false;
+              if (schedule.status === 'archived' || !!schedule.isArchived) return false;
+              if (!scheduleFilterDate) return true;
+              const d = parseUtcDate(schedule.departureDateTime as unknown as string);
+              const localDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+              return localDate === scheduleFilterDate;
             });
-            const routeTemplates = templates?.filter((t: any) => t.routeId === selectedRouteId) || [];
 
-            const totalSchedulesPages = Math.ceil(routeSchedules.length / SCHEDULES_PER_PAGE) || 1;
-            const pagedSchedules = routeSchedules.slice(
+            const upcomingSchedules = filteredSelectedRouteSchedules.filter(isRelevantSchedule)
+              .sort((a: Schedule, b: Schedule) => {
+                const activeStatuses = ['boarding', 'in_transit'];
+                const aActive = activeStatuses.includes(a.tripStatus || '');
+                const bActive = activeStatuses.includes(b.tripStatus || '');
+                if (aActive !== bActive) return aActive ? -1 : 1;
+                return parseUtcDate(a.departureDateTime as unknown as string).getTime() - parseUtcDate(b.departureDateTime as unknown as string).getTime();
+              });
+
+            const completedSchedules = filteredSelectedRouteSchedules.filter((s: Schedule) => !isRelevantSchedule(s))
+              .sort((a: Schedule, b: Schedule) => parseUtcDate(b.departureDateTime as unknown as string).getTime() - parseUtcDate(a.departureDateTime as unknown as string).getTime());
+
+            const pagedSchedules = upcomingSchedules.slice(
               (schedulesPage - 1) * SCHEDULES_PER_PAGE,
               schedulesPage * SCHEDULES_PER_PAGE
             );
+            
+            const routeBookings = dashboard.bookings?.filter((b: any) => b.routeId === selectedRouteId) || [];
+            const revenue = routeBookings
+              .filter((b: any) => b.paymentStatus === 'paid')
+              .reduce((sum: number, b: any) => sum + (b.totalAmount || 0), 0);
 
             return (
-              <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden animate-in fade-in duration-300">
-
-                {/* Panel Header */}
-                <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/70 flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-sm font-semibold text-gray-900">
-                    <Map className="h-4 w-4 text-indigo-600" />
-                    {selectedRoute.name} — Details
-                  </div>
-                  {routeTemplates.length > 0 && (
-                    <button
-                      onClick={() => openGenerateTrips(selectedRoute.id)}
-                      className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded-xl transition-colors border border-emerald-200"
-                    >
-                      <Sparkles className="w-3.5 h-3.5" /> Generate Trips
-                    </button>
-                  )}
-                </div>
-
-                {/* Stops Overview */}
-                <div className="p-6 border-b border-gray-100 bg-gray-50/50">
-                  <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Pick-up Stops</p>
-                  <StopsEditor
-                    stops={selectedRoute.stops || []}
-                    onChange={() => {}}
-                    readOnly={true}
-                  />
-                </div>
-
-                {/* Schedules + Templates Grid */}
-                <div className="p-6 grid grid-cols-1 lg:grid-cols-2 gap-8">
-
-                  {/* Schedules Column */}
-                  <div>
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center gap-3">
-                        <h4 className="text-xs font-bold uppercase tracking-wider text-gray-400 whitespace-nowrap">
-                          {scheduleFilterDate ? 'Archived Schedules' : 'Active / Upcoming'}
-                        </h4>
-                        <input
-                          type="date"
-                          value={scheduleFilterDate}
-                          onChange={(e) => setScheduleFilterDate(e.target.value)}
-                          className="text-xs px-2 py-1 border border-gray-200 rounded-lg text-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white shadow-sm"
-                          title="Filter by date to see past schedules"
-                        />
-                        {scheduleFilterDate && (
-                          <button
-                            onClick={() => setScheduleFilterDate('')}
-                            className="text-[10px] uppercase font-bold text-gray-400 hover:text-gray-700 transition-colors"
-                          >
-                            Clear
-                          </button>
-                        )}
-                      </div>
-                      <button
-                        onClick={() => openCreateSchedule(selectedRoute.id)}
-                        className="inline-flex items-center gap-1 text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-2.5 py-1.5 rounded-lg transition-colors"
-                      >
-                        <Plus className="w-3 h-3" /> Add
-                      </button>
-                    </div>
-
-                    {routeSchedules.length === 0 ? (
-                      <div className="text-center py-8 text-gray-500 bg-gray-50 rounded-xl border border-dashed border-gray-200 text-xs font-medium">
-                        {scheduleFilterDate ? 'No schedules found for this date.' : 'No active or upcoming schedules.'}
-                      </div>
-                    ) : (
-                      <div>
-                        <div className="space-y-2.5">
-                          {pagedSchedules.map((schedule: Schedule) => {
-                            const bus = buses.find((b: Bus) => b.id === schedule.busId);
-                            const statusKey = schedule.tripStatus || schedule.status || 'scheduled';
-                            const statusCfg = tripStatusConfig[statusKey] || { label: statusKey, color: 'bg-gray-100 text-gray-600 border-gray-200' };
-                            return (
-                              <div
-                                key={schedule.id}
-                                className="p-3.5 bg-white rounded-xl border border-gray-200 flex justify-between items-center hover:border-indigo-200 transition-colors shadow-sm"
-                              >
-                                <div className="flex items-center gap-3">
-                                  <div className="w-9 h-9 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600 shrink-0">
-                                    <Calendar className="w-4 h-4" />
-                                  </div>
-                                  <div>
-                                    <div className="text-sm font-bold text-gray-900">
-                                      {new Date(schedule.departureDateTime).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
-                                    </div>
-                                    <span className={`inline-block mt-0.5 text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full border ${statusCfg.color}`}>
-                                      {statusCfg.label}
-                                    </span>
-                                  </div>
-                                </div>
-                                <div className="flex items-center gap-1.5 text-xs font-semibold text-gray-600 bg-gray-50 px-2.5 py-1.5 rounded-lg border border-gray-100">
-                                  <BusIcon className="w-3 h-3 text-gray-400" />
-                                  {bus?.licensePlate || 'Unassigned'}
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-
-                        {/* Schedules Pagination */}
-                        {totalSchedulesPages > 1 && (
-                          <div className="mt-3 px-4 py-2.5 border border-gray-100 rounded-xl flex items-center justify-between text-xs text-gray-500 bg-gray-50/30">
-                            <span>
-                              Page <span className="font-semibold text-gray-700">{schedulesPage}</span> of{' '}
-                              <span className="font-semibold text-gray-700">{totalSchedulesPages}</span>
-                            </span>
-                            <div className="flex items-center gap-1.5">
-                              <button
-                                onClick={() => setSchedulesPage((p) => Math.max(p - 1, 1))}
-                                disabled={schedulesPage === 1}
-                                className="p-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed text-gray-600 transition-colors shadow-sm"
-                                title="Previous page"
-                              >
-                                <ChevronLeft className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                onClick={() => setSchedulesPage((p) => Math.min(p + 1, totalSchedulesPages))}
-                                disabled={schedulesPage >= totalSchedulesPages}
-                                className="p-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed text-gray-600 transition-colors shadow-sm"
-                                title="Next page"
-                              >
-                                <ChevronRight className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Templates Column */}
-                  <div>
-                    <div className="flex items-center justify-between mb-4">
-                      <h4 className="text-xs font-bold uppercase tracking-wider text-gray-400">Recurring Blueprints</h4>
-                    </div>
-
-                    {routeTemplates.length === 0 ? (
-                      <div className="text-center py-8 text-gray-500 bg-gray-50 rounded-xl border border-dashed border-gray-200 text-xs font-medium">
-                        No active blueprints for this route.
-                      </div>
-                    ) : (
-                      <div className="space-y-2.5">
-                        {routeTemplates.map((template: any) => {
-                          const bus = buses.find((b: Bus) => b.id === template.busId);
-                          const shortDays = template.daysOfWeek
-                            ?.map((d: number) => ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d])
-                            .join(', ');
-                          return (
-                            <div
-                              key={template.id}
-                              className="p-3.5 bg-white rounded-xl border border-gray-200 shadow-sm hover:border-indigo-200 transition-colors"
-                            >
-                              <div className="flex justify-between items-start mb-3">
-                                <div className="flex items-center gap-2">
-                                  <div className="w-9 h-9 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600 shrink-0">
-                                    <LayoutTemplate className="w-4 h-4" />
-                                  </div>
-                                  <span className="text-sm font-bold text-gray-900">{shortDays || 'No days set'}</span>
-                                </div>
-                                <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase border bg-emerald-50 text-emerald-700 border-emerald-200">
-                                  Active
-                                </span>
-                              </div>
-                              <div className="flex justify-between items-center text-xs text-gray-500 bg-gray-50 p-2.5 rounded-lg border border-gray-100">
-                                <div className="flex items-center gap-1.5 font-semibold text-gray-700">
-                                  <Clock className="w-3 h-3 text-gray-400" />
-                                  {template.departureTime} – {template.arrivalTime}
-                                </div>
-                                <div className="flex items-center gap-1.5 font-semibold text-gray-700">
-                                  <BusIcon className="w-3 h-3 text-gray-400" />
-                                  {bus?.licensePlate || 'TBA'}
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                </div>
+              <div className="mt-8">
+                <RouteScheduleSection
+                  route={selectedRoute}
+                  scheduleCount={filteredSelectedRouteSchedules.length}
+                  revenue={revenue}
+                  filterDate={scheduleFilterDate}
+                  onFilterDateChange={setScheduleFilterDate}
+                  onAddSchedule={() => openCreateSchedule(selectedRoute.id)}
+                  pagedSchedules={pagedSchedules}
+                  currentAndUpcomingCount={upcomingSchedules.length}
+                  completedSchedules={completedSchedules}
+                  page={schedulesPage}
+                  onPreviousPage={() => setSchedulesPage((p) => Math.max(p - 1, 1))}
+                  onNextPage={() => setSchedulesPage((p) => Math.min(p + 1, Math.ceil(upcomingSchedules.length / SCHEDULES_PER_PAGE) || 1))}
+                  buses={buses}
+                  bookings={dashboard.bookings || []}
+                  templates={templates}
+                  companyId={companyId}
+                  onTripsGenerated={() => openGenerateTrips(selectedRoute.id)}
+                  onScheduleDeleted={() => dashboard.fetchInitialData?.(true)}
+                  baseUrl="/company/operator/dashboard"
+                />
               </div>
             );
           })()}

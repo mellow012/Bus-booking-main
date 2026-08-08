@@ -6,22 +6,45 @@ import { Booking, Bus } from '@/types';
 import { bookingMatchesSchedule } from '@/lib/booking-utils';
 import { BranchUpcomingTrip } from '../types';
 import { formatDateTime } from '../utils/schedule';
-import { Calendar, Bus as BusIcon, Route as RouteIcon } from 'lucide-react';
+import { deleteSchedule } from '@/lib/actions/schedule.actions';
+import { Calendar, Bus as BusIcon, Route as RouteIcon, Trash2, Loader2 } from 'lucide-react';
 import Pagination from './Pagination';
 
 interface AllBranchesOverviewProps {
   trips: BranchUpcomingTrip[];
   buses: Bus[];
   bookings: Booking[];
+  onDeleteSuccess?: () => void;
 }
 
-export default function AllBranchesOverview({ trips, buses, bookings }: AllBranchesOverviewProps) {
+export default function AllBranchesOverview({ trips, buses, bookings, onDeleteSuccess }: AllBranchesOverviewProps) {
   const router = useRouter();
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 6;
 
   const handleOpenSchedule = (scheduleId: string) => {
     router.push(`/company/admin?tab=bookings&scheduleId=${encodeURIComponent(scheduleId)}`);
+  };
+
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const handleDelete = async (e: React.MouseEvent, scheduleId: string) => {
+    e.stopPropagation();
+    if (!window.confirm('Are you sure you want to delete this schedule?')) return;
+    
+    setDeletingId(scheduleId);
+    try {
+      const result = await deleteSchedule(scheduleId);
+      if (result.success) {
+        if (onDeleteSuccess) onDeleteSuccess();
+      } else {
+        alert(result.error || 'Failed to delete schedule');
+      }
+    } catch (err: any) {
+      alert(err.message || 'An unexpected error occurred');
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   const startIndex = (currentPage - 1) * pageSize;
@@ -51,11 +74,10 @@ export default function AllBranchesOverview({ trips, buses, bookings }: AllBranc
             const seatsLeft = capacity !== null ? Math.max(capacity - bookedSeats, 0) : null;
 
             return (
-              <button
+              <div
                 key={schedule.id}
-                type="button"
                 onClick={() => handleOpenSchedule(schedule.id)}
-                className="w-full text-left rounded-xl border border-gray-200 bg-white p-3 hover:border-indigo-300 hover:bg-indigo-50/20 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm active:scale-[0.99]"
+                className="w-full text-left rounded-xl border border-gray-200 bg-white p-3 hover:border-indigo-300 hover:bg-indigo-50/20 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm active:scale-[0.99] cursor-pointer"
               >
                 <div className="flex flex-wrap items-center gap-3 sm:gap-4">
                   <div className="flex items-center gap-2 text-xs font-semibold text-gray-900 shrink-0">
@@ -104,8 +126,16 @@ export default function AllBranchesOverview({ trips, buses, bookings }: AllBranc
                   >
                     {isCurrent ? 'Current' : 'Upcoming'}
                   </span>
+                  <button
+                    onClick={(e) => handleDelete(e, schedule.id)}
+                    disabled={deletingId === schedule.id}
+                    title="Delete Schedule"
+                    className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50 ml-1"
+                  >
+                    {deletingId === schedule.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                  </button>
                 </div>
-              </button>
+              </div>
             );
           })}
 

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -105,7 +105,7 @@ const useFormValidation = (formData: FormData, t: (key: string, opts?: any) => s
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function Register() {
+export function RegisterContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const dest = searchParams?.get('redirect') || searchParams?.get('redirectTo') || searchParams?.get('from');
@@ -530,5 +530,13 @@ export default function Register() {
         </div>
       </div>
     </>
+  );
+}
+
+export default function Register() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-gray-50" />}>
+      <RegisterContent />
+    </Suspense>
   );
 }

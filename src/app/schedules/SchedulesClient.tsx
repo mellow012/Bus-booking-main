@@ -17,6 +17,7 @@ import Pagination from './_components/Pagination';
 import Image from "next/image";
 import { ScheduleCard } from "@/components/ScheduleCard";
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import SchedulesLoading from './loading';
 
 interface EnhancedSchedule {
   id: string;
@@ -59,7 +60,7 @@ export default function SchedulesClient({ initialSchedules, initialCompanies }: 
   } = useSchedules(initialSchedules, initialCompanies as any);
 
   if (loading) {
-    return <LoadingSpinner className="text-brand-700" label="Loading schedules..." fullScreen />;
+    return <SchedulesLoading />;
   }
 
   return (

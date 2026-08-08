@@ -257,16 +257,21 @@ export default function UnifiedScheduleModal({
     setActionLoading(true);
     try {
       const route = routes.find(r => r.id === formData.routeId);
+      
+      // Append Malawi timezone offset (+02:00) so the server creates the exact correct UTC instant
+      const depTz = `${formData.departureDateTime}+02:00`;
+      const arrTz = `${formData.arrivalDateTime}+02:00`;
 
       if (scheduleType === 'single') {
         const scheduleData = {
           ...formData,
-          departureDateTime: new Date(formData.departureDateTime),
-          arrivalDateTime: new Date(formData.arrivalDateTime),
+          departureDateTime: depTz,
+          arrivalDateTime: arrTz,
           departureLocation: route?.origin,
           arrivalLocation: route?.destination,
           companyId,
           status: 'active' as const,
+          tripStatus: 'scheduled' as const
         };
         const result = await createSchedule(scheduleData);
         if (result.success) {
@@ -281,21 +286,26 @@ export default function UnifiedScheduleModal({
           throw new Error('Please select a bus for the return trip.');
         }
 
+        const returnDepTz = `${formData.returnDepartureDateTime}+02:00`;
+        const returnArrTz = `${formData.returnArrivalDateTime}+02:00`;
+
         const outboundData = {
           ...formData,
-          departureDateTime: new Date(formData.departureDateTime),
-          arrivalDateTime: new Date(formData.arrivalDateTime),
+          departureDateTime: depTz,
+          arrivalDateTime: arrTz,
           companyId,
           status: 'active' as const,
+          tripStatus: 'scheduled' as const
         };
         const inboundData = {
           ...formData,
           busId: formData.returnBusId,
-          departureDateTime: new Date(formData.returnDepartureDateTime),
-          arrivalDateTime: new Date(formData.returnArrivalDateTime),
+          departureDateTime: returnDepTz,
+          arrivalDateTime: returnArrTz,
           price: formData.returnPrice,
           companyId,
           status: 'active' as const,
+          tripStatus: 'scheduled' as const
         };
 
         const result = await createRoundTripSchedule(outboundData, inboundData);
@@ -622,54 +632,69 @@ export default function UnifiedScheduleModal({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-t border-gray-100 pt-4 mt-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Outbound Fare (MWK) *
+                  Outbound Fare *
                 </label>
-                <input
-                  type="number"
-                  value={scheduleType === 'recurring' ? templateFormData.price : formData.price}
-                  onChange={e => {
-                    const val = parseInt(e.target.value) || 0;
-                    if (scheduleType === 'recurring') setTemplateFormData({ ...templateFormData, price: val });
-                    else setFormData({ ...formData, price: val });
-                  }}
-                  className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border"
-                  required
-                />
+                <div className="relative rounded-lg border border-gray-300 bg-white shadow-sm focus-within:ring-2 focus-within:ring-indigo-500 focus-within:border-transparent transition-all">
+                  <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                    <span className="text-[10px] font-bold text-gray-400">MWK</span>
+                  </div>
+                  <input
+                    type="number"
+                    value={scheduleType === 'recurring' ? templateFormData.price : formData.price}
+                    onChange={e => {
+                      const val = parseInt(e.target.value) || 0;
+                      if (scheduleType === 'recurring') setTemplateFormData({ ...templateFormData, price: val });
+                      else setFormData({ ...formData, price: val });
+                    }}
+                    className="block w-full bg-transparent pl-11 pr-3 py-2 text-sm text-gray-900 focus:outline-none border-none rounded-lg"
+                    required
+                  />
+                </div>
               </div>
 
               {((scheduleType === 'recurring' && includeReturnTemplate) || (scheduleType === 'return')) && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Return Fare (MWK) *
+                    Return Fare *
                   </label>
-                  <input
-                    type="number"
-                    value={scheduleType === 'recurring' ? templateFormData.returnPrice : formData.returnPrice}
-                    onChange={e => {
-                      const val = parseInt(e.target.value) || 0;
-                      if (scheduleType === 'recurring') setTemplateFormData({ ...templateFormData, returnPrice: val });
-                      else setFormData({ ...formData, returnPrice: val });
-                    }}
-                    className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border"
-                    required
-                  />
+                  <div className="relative rounded-lg border border-gray-300 bg-white shadow-sm focus-within:ring-2 focus-within:ring-indigo-500 focus-within:border-transparent transition-all">
+                    <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                      <span className="text-[10px] font-bold text-gray-400">MWK</span>
+                    </div>
+                    <input
+                      type="number"
+                      value={scheduleType === 'recurring' ? templateFormData.returnPrice : formData.returnPrice}
+                      onChange={e => {
+                        const val = parseInt(e.target.value) || 0;
+                        if (scheduleType === 'recurring') setTemplateFormData({ ...templateFormData, returnPrice: val });
+                        else setFormData({ ...formData, returnPrice: val });
+                      }}
+                      className="block w-full bg-transparent pl-11 pr-3 py-2 text-sm text-gray-900 focus:outline-none border-none rounded-lg"
+                      required
+                    />
+                  </div>
                 </div>
               )}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Available Capacity *
                 </label>
-                <input
-                  type="number"
-                  value={scheduleType === 'recurring' ? templateFormData.availableSeats : formData.availableSeats}
-                  onChange={e => {
-                    const val = parseInt(e.target.value) || 0;
-                    if (scheduleType === 'recurring') setTemplateFormData({ ...templateFormData, availableSeats: val });
-                    else setFormData({ ...formData, availableSeats: val });
-                  }}
-                  className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border"
-                  required
-                />
+                <div className="relative rounded-lg border border-gray-300 bg-white shadow-sm focus-within:ring-2 focus-within:ring-indigo-500 focus-within:border-transparent transition-all">
+                  <input
+                    type="number"
+                    value={scheduleType === 'recurring' ? templateFormData.availableSeats : formData.availableSeats}
+                    onChange={e => {
+                      const val = parseInt(e.target.value) || 0;
+                      if (scheduleType === 'recurring') setTemplateFormData({ ...templateFormData, availableSeats: val });
+                      else setFormData({ ...formData, availableSeats: val });
+                    }}
+                    className="block w-full bg-transparent px-3 py-2 pr-16 text-sm text-gray-900 focus:outline-none border-none rounded-lg"
+                    required
+                  />
+                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">seats</span>
+                  </div>
+                </div>
               </div>
             </div>
           </form>

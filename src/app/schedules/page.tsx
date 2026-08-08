@@ -52,6 +52,8 @@ export default async function SchedulesPage({
 
   if (from) where.route.origin = { contains: from, mode: 'insensitive' };
   if (to) where.route.destination = { contains: to, mode: 'insensitive' };
+  const busId = (params.busId as string)?.trim();
+  if (busId) where.busId = busId;
 
   if (searchDate) {
     const todayStr = hasValidTzOffset ? getLocalTodayString(tzOffset) : new Date().toISOString().split('T')[0];

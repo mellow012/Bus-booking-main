@@ -167,7 +167,7 @@ export default function ActiveJourneyCard() {
       >
 
         {/* Left: Status Badge & Origin */}
-        <div className="flex items-center gap-3 shrink-0 w-full sm:w-auto justify-between sm:justify-start">
+        <div className="flex flex-row-reverse sm:flex-row items-center gap-3 shrink-0 w-full sm:w-auto justify-between sm:justify-start">
           {displayState === 'upcoming' && (
             <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200/60 text-[11px] font-bold uppercase tracking-wider">
               <span className="relative flex h-2 w-2">

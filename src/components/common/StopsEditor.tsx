@@ -81,26 +81,51 @@ export const StopsEditor: FC<StopsEditorProps> = ({ stops = [], onChange, readOn
             <div key={stop.id} className="bg-gray-50 border border-gray-200 rounded-xl p-3 space-y-2">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-xs font-bold text-gray-400 w-5">#{idx + 1}</span>
-                <input
-                  type="text"
-                  value={stop.name}
-                  onChange={(e) => handleUpdateStop(stop.id, { name: e.target.value })}
-                  disabled={readOnly}
-                  placeholder="Stop name (e.g. Dedza)"
-                  className="flex-1 min-w-[120px] px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-xs font-bold focus:ring-2 focus:ring-indigo-600 outline-none disabled:bg-gray-100 disabled:text-gray-500"
-                  required
-                />
-                <input
-                  type="number"
-                  min="0"
-                  step="0.1"
-                  value={stop.distanceFromOrigin}
-                  onChange={(e) => handleUpdateStop(stop.id, { distanceFromOrigin: parseFloat(e.target.value) || 0 })}
-                  disabled={readOnly}
-                  placeholder="km from start"
-                  className="w-24 px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-xs font-bold focus:ring-2 focus:ring-indigo-600 outline-none disabled:bg-gray-100 disabled:text-gray-500"
-                  required
-                />
+                <div className="relative flex-1 min-w-[120px] rounded-lg border border-gray-300 bg-white shadow-sm focus-within:ring-2 focus-within:ring-indigo-600 transition-all">
+                  <input
+                    type="text"
+                    value={stop.name}
+                    onChange={(e) => handleUpdateStop(stop.id, { name: e.target.value })}
+                    disabled={readOnly}
+                    placeholder="Stop name (e.g. Dedza)"
+                    className="block w-full bg-transparent px-3 py-1.5 text-xs font-bold text-gray-900 placeholder:text-gray-400 focus:outline-none disabled:bg-gray-100 disabled:text-gray-500 rounded-lg"
+                    required
+                  />
+                </div>
+                <div className="relative w-28 rounded-lg border border-gray-300 bg-white shadow-sm focus-within:ring-2 focus-within:ring-indigo-600 transition-all">
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    value={stop.distanceFromOrigin}
+                    onChange={(e) => handleUpdateStop(stop.id, { distanceFromOrigin: parseFloat(e.target.value) || 0 })}
+                    disabled={readOnly}
+                    placeholder="Distance"
+                    className="block w-full bg-transparent px-3 py-1.5 pr-8 text-xs font-bold text-gray-900 placeholder:text-gray-400 focus:outline-none disabled:bg-gray-100 disabled:text-gray-500 rounded-lg"
+                    required
+                  />
+                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2">
+                    <span className="text-[9px] font-bold text-gray-400">km</span>
+                  </div>
+                </div>
+                <div className="relative w-32 rounded-lg border border-gray-300 bg-white shadow-sm focus-within:ring-2 focus-within:ring-indigo-600 transition-all">
+                  <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-2">
+                    <span className="text-[9px] font-bold text-gray-400">MWK</span>
+                  </div>
+                  <input
+                    type="number"
+                    min="0"
+                    step="50"
+                    value={typeof stop.price === 'number' ? stop.price : ''}
+                    onChange={(e) => {
+                      const val = e.target.value === '' ? undefined : (parseInt(e.target.value, 10) || 0);
+                      handleUpdateStop(stop.id, { price: val });
+                    }}
+                    disabled={readOnly}
+                    placeholder="Fare from start"
+                    className="block w-full bg-transparent pl-10 pr-3 py-1.5 text-xs font-bold text-gray-900 placeholder:text-gray-400 focus:outline-none disabled:bg-gray-100 disabled:text-gray-500 rounded-lg"
+                  />
+                </div>
                 <div className="flex items-center gap-1 shrink-0">
                   {!readOnly && (
                     <>

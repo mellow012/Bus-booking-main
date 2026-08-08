@@ -13,6 +13,7 @@ import {
   CheckCircleIcon,
   InformationCircleIcon
 } from '@heroicons/react/24/outline';
+import { checkEmailExists } from '@/lib/actions/user.actions';
 
 // Types
 interface FormErrors {
@@ -76,9 +77,19 @@ export default function ForgotPassword() {
     setError({});
 
     try {
+      const emailLower = email.trim().toLowerCase();
+      
+      // Check if email exists in DB
+      const exists = await checkEmailExists(emailLower);
+      if (!exists) {
+        setError({ general: 'We could not find an account with that email address. Please register for a new account.' });
+        setIsSubmitting(false);
+        return;
+      }
+
       // 💡 FIXED: Directly invoke Supabase client SDK on the client side.
       // This automatically triggers the "Send Email Hook" configured in your Supabase dashboard.
-      const { error: apiError } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
+      const { error: apiError } = await supabase.auth.resetPasswordForEmail(emailLower, {
         // 💡 FIXED: Direct the verification link to pass through your auth/callback route.
         // This exchanges the recovery code for valid session cookies before mounting the reset-password page.
         redirectTo: `${window.location.origin}/auth/callback?next=/reset-password`,

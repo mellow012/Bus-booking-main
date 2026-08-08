@@ -13,7 +13,7 @@ export async function createBus(data: Partial<Bus>) {
       id, companyId, licensePlate, busType, capacity, amenities,
       status, yearOfManufacture, registrationDetails, isActive,
       fuelType, insuranceDetails, lastMaintenanceDate, nextMaintenanceDate,
-      conductorIds
+      conductorIds, images
     } = data;
 
     const bus = await prisma.bus.create({
@@ -33,6 +33,7 @@ export async function createBus(data: Partial<Bus>) {
         lastMaintenanceDate: lastMaintenanceDate ? new Date(lastMaintenanceDate) : null,
         nextMaintenanceDate: nextMaintenanceDate ? new Date(nextMaintenanceDate) : null,
         conductorIds: conductorIds || [],
+        images: images || [],
       } as any
     });
     revalidatePath('/company/operator/dashboard');
@@ -46,7 +47,7 @@ export async function createBus(data: Partial<Bus>) {
 export async function updateBus(id: string, data: Partial<Bus>) {
   try {
     const {
-      id: _, createdAt, updatedAt, companyId, images, metadata, ...updatableData
+      id: _, createdAt, updatedAt, companyId, metadata, ...updatableData
     } = data as any;
 
     const bus = await prisma.bus.update({
@@ -143,6 +144,17 @@ export async function deleteRoute(id: string) {
     return { success: true };
   } catch (error: unknown) {
     console.error('Error deleting route:', error);
+    return { success: false, error: (error as Error).message };
+  }
+}
+
+export async function deleteBranch(id: string) {
+  try {
+    await prisma.region.delete({ where: { id } });
+    revalidatePath('/company/operator/dashboard');
+    return { success: true };
+  } catch (error: unknown) {
+    console.error('Error deleting branch:', error);
     return { success: false, error: (error as Error).message };
   }
 }

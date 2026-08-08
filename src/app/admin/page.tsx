@@ -1279,6 +1279,8 @@ export default function SuperAdminDashboard() {
   // Platform fee is auto-calculated: 100 - paychanguFee - companyFee
 
   // Transactions & Reports
+  const [transactions, setTransactions] = useState<any[]>([]);
+  const [transactionsLoading, setTransactionsLoading] = useState(false);
   const [transactionFilter, setTransactionFilter] = useState<'all' | 'successful' | 'failed' | 'pending'>('all');
   const [transactionCompanyFilter, setTransactionCompanyFilter] = useState<string>('');
   const [transactionPage, setTransactionPage] = useState(1);
@@ -1343,6 +1345,21 @@ export default function SuperAdminDashboard() {
   useEffect(() => { fetchUsers(); }, []);
 
   const refreshUsers = () => fetchUsers();
+
+  const fetchTransactions = async () => {
+    setTransactionsLoading(true);
+    try {
+      const res = await fetch('/api/admin/payments?limit=200', { credentials: 'same-origin' });
+      if (!res.ok) throw new Error('Failed to fetch transactions');
+      const json = await res.json();
+      setTransactions(json?.data || []);
+    } catch (e) {
+      console.error('Failed to load transactions', e);
+      showAlert('error', 'Failed to load transactions');
+    } finally { setTransactionsLoading(false); }
+  };
+
+  useEffect(() => { fetchTransactions(); }, []);
 
   const updateCompanySettings = useCallback((company: Company) => {
     setCompanies(prev => prev.map(c => c.id === company.id ? company : c));
@@ -1642,31 +1659,32 @@ export default function SuperAdminDashboard() {
     };
   };
 
-  // ── Mock Transaction Data ─────────────────────────────────────────────────
-  const mockTransactions = useMemo(() => {
-    return bookings.slice(0, 20).map((booking, idx) => {
-      const company = companies.find(c => c.id === booking.companyId);
-      const split = calculateCommissionSplit(booking.totalAmount || 0);
+  // ── Real Transaction Data ─────────────────────────────────────────────────
+  const realTransactions = useMemo(() => {
+    return transactions.map((payment) => {
+      const booking = payment.booking;
+      const amount = payment.amount || 0;
+      const split = calculateCommissionSplit(amount);
       return {
-        id: `TXN-${idx + 1001}`,
-        bookingId: booking.id,
-        companyId: booking.companyId,
-        companyName: company?.name || 'Unknown',
-        amount: booking.totalAmount || 0,
-        status: (booking.paymentStatus || 'pending').toLowerCase() as 'successful' | 'failed' | 'pending',
-        date: booking.createdAt,
+        id: payment.paychanguRef || payment.id,
+        bookingId: booking?.id || 'Unknown',
+        companyId: booking?.companyId || 'Unknown',
+        companyName: booking?.company?.name || 'Unknown',
+        amount: amount,
+        status: (payment.status || 'pending').toLowerCase() as 'successful' | 'failed' | 'pending',
+        date: payment.createdAt,
         split,
       };
     });
-  }, [bookings, companies, calculateCommissionSplit]);
+  }, [transactions, calculateCommissionSplit]);
 
   const filteredTransactions = useMemo(() => {
-    return mockTransactions.filter(t => {
+    return realTransactions.filter(t => {
       const statusMatch = transactionFilter === 'all' || t.status === transactionFilter;
       const companyMatch = !transactionCompanyFilter || t.companyId === transactionCompanyFilter;
       return statusMatch && companyMatch;
     });
-  }, [mockTransactions, transactionFilter, transactionCompanyFilter]);
+  }, [realTransactions, transactionFilter, transactionCompanyFilter]);
 
   const transactionPagination = useMemo(() => {
     const totalItems = filteredTransactions.length;
@@ -1686,13 +1704,13 @@ export default function SuperAdminDashboard() {
 
   // ── Transaction Summary Stats ─────────────────────────────────────────────
   const transactionStats = useMemo(() => {
-    const successful = mockTransactions.filter(t => t.status === 'successful').length;
-    const failed = mockTransactions.filter(t => t.status === 'failed').length;
-    const pending = mockTransactions.filter(t => t.status === 'pending').length;
-    const totalProcessed = mockTransactions.reduce((sum, t) => sum + t.amount, 0);
-    const totalPaychanguFees = mockTransactions.reduce((sum, t) => sum + t.split.paychanguFee, 0);
-    const totalCompanyEarnings = mockTransactions.reduce((sum, t) => sum + t.split.companyEarnings, 0);
-    const totalPlatformEarnings = mockTransactions.reduce((sum, t) => sum + t.split.platformEarnings, 0);
+    const successful = realTransactions.filter(t => t.status === 'successful').length;
+    const failed = realTransactions.filter(t => t.status === 'failed').length;
+    const pending = realTransactions.filter(t => t.status === 'pending').length;
+    const totalProcessed = realTransactions.reduce((sum, t) => sum + t.amount, 0);
+    const totalPaychanguFees = realTransactions.reduce((sum, t) => sum + t.split.paychanguFee, 0);
+    const totalCompanyEarnings = realTransactions.reduce((sum, t) => sum + t.split.companyEarnings, 0);
+    const totalPlatformEarnings = realTransactions.reduce((sum, t) => sum + t.split.platformEarnings, 0);
 
     return {
       successful,
@@ -1703,7 +1721,7 @@ export default function SuperAdminDashboard() {
       totalCompanyEarnings,
       totalPlatformEarnings,
     };
-  }, [mockTransactions]);
+  }, [realTransactions]);
 
   const handleRoleChange = async (id: string, newRole: string) => {
     const previous = usersList;

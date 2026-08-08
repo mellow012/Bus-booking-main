@@ -2,6 +2,7 @@
 
 import React, { useMemo, useState, useEffect } from 'react';
 import { Schedule, Booking, Route, Bus } from '@/types';
+import { parseUtcDate } from '@/lib/timezone';
 import {
   Calendar, Users, Bus as BusIcon, TrendingUp, AlertCircle,
   ArrowRight, MapPin, Clock, CheckCircle, XCircle, Loader2,
@@ -69,19 +70,19 @@ export default function HomeTab({ dashboard }: HomeTabProps) {
   const todaysSchedules = useMemo(() =>
     schedules
       .filter((s: Schedule) => {
-        const d = new Date(s.departureDateTime);
+        const d = parseUtcDate(s.departureDateTime as unknown as string);
         return d >= todayStart && d <= todayEnd;
       })
       .sort((a: Schedule, b: Schedule) =>
-        new Date(a.departureDateTime).getTime() - new Date(b.departureDateTime).getTime()
+        parseUtcDate(a.departureDateTime as unknown as string).getTime() - parseUtcDate(b.departureDateTime as unknown as string).getTime()
       ),
   [schedules]);
 
   const upcomingSchedules = useMemo(() =>
     schedules
-      .filter((s: Schedule) => new Date(s.departureDateTime) > now)
+      .filter((s: Schedule) => parseUtcDate(s.departureDateTime as unknown as string) > now)
       .sort((a: Schedule, b: Schedule) =>
-        new Date(a.departureDateTime).getTime() - new Date(b.departureDateTime).getTime()
+        parseUtcDate(a.departureDateTime as unknown as string).getTime() - parseUtcDate(b.departureDateTime as unknown as string).getTime()
       )
       .slice(0, 3),
   [schedules]);

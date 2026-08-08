@@ -4,7 +4,8 @@ import React, { useState, useMemo } from 'react';
 import { 
   MapPin, Calendar, Users, DollarSign, Bus as BusIcon, Route as RouteIcon, FileText, Share2, Clipboard, ArrowRight 
 } from 'lucide-react';
-import { Route, Schedule, Bus, Booking } from '@/types';
+import { Schedule, Route, Bus, Booking } from '@/types';
+import { parseUtcDate } from '@/lib/timezone';
 
 interface MyRoutesTabProps {
   assignedRoutes: Route[];
@@ -47,8 +48,8 @@ export default function MyRoutesTab({
 
     // Get the next schedule for this route
     const nextSchedule = routeSchedules
-      .filter(s => new Date(s.departureDateTime) > new Date() && s.status === 'active')
-      .sort((a, b) => new Date(a.departureDateTime).getTime() - new Date(b.departureDateTime).getTime())[0];
+      .filter(s => parseUtcDate(s.departureDateTime as unknown as string) > new Date() && s.status === 'active')
+      .sort((a, b) => parseUtcDate(a.departureDateTime as unknown as string).getTime() - parseUtcDate(b.departureDateTime as unknown as string).getTime())[0];
 
     return {
       activeRunsCount: activeRuns.length,

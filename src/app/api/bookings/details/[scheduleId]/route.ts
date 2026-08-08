@@ -32,6 +32,7 @@ export async function GET(
             busType: true,
             capacity: true,
             amenities: true,
+            images: true,
           },
         },
         route: {

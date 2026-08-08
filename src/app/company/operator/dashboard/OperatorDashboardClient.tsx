@@ -9,12 +9,12 @@ import { OPERATOR_CATEGORIES } from './_lib/constants';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { NotificationBell } from '@/contexts/NotificationContext';
 import { useAppToast } from '@/contexts/ToastContext';
-// Tabs
 import HomeTab from './tabs/HomeTab';
 import RoutesTab from './tabs/RoutesTab';
 import BookingsTab from './tabs/BookingsTab';
 import RevenueTab from './tabs/RevenueTab';
 import ProfileTab from './tabs/ProfileTab';
+import OperatorDashboardLoading from './loading';
 
 export default function OperatorDashboardClient() {
   const router = useRouter();
@@ -67,20 +67,7 @@ export default function OperatorDashboardClient() {
   const dashboardWithSearch = { ...dashboard, searchQuery, navigateTo: updateTab, navigateToBookings };
 
   if (dashboard.isLoading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex">
-        <Skeleton className="w-64 h-screen rounded-none hidden lg:block" />
-        <div className="flex-1 flex flex-col p-6 sm:p-8 gap-8">
-          <Skeleton className="w-full h-16 rounded-xl" />
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <Skeleton className="h-32 w-full rounded-2xl" />
-            <Skeleton className="h-32 w-full rounded-2xl" />
-            <Skeleton className="h-32 w-full rounded-2xl" />
-          </div>
-          <Skeleton className="h-[400px] w-full rounded-2xl mt-4" />
-        </div>
-      </div>
-    );
+    return <OperatorDashboardLoading />;
   }
 
   const renderActiveTab = () => {

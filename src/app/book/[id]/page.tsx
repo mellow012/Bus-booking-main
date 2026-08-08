@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useState } from "react";
 import SeatSelection from "@/components/SeatSelection";
 import AlertMessage from '@/components/AlertMessage';
 import BackButton from '@/components/BackButton';
@@ -13,7 +13,8 @@ import { Badge } from "@/components/ui/badge";
 import {
   CreditCard, CheckCircle, AlertCircle, MapPin,
   Users, Calendar, ArrowRight, Star, ArrowLeft,
-  TicketPercent, Loader2, Lock, ArrowDown,
+  TicketPercent, Loader2, Lock, ArrowDown, Armchair, Bus as BusIcon, MessageSquare,
+  Camera, Share2,
 } from "lucide-react";
 
 import InlinePassengerForm, { PassengerFormState } from "./InlinePassengerForm";
@@ -21,6 +22,8 @@ import useBookBus from "./useBookBus";
 import BookingConfirmModal from "./BookingConfirmModal";
 import BookBusLoading from "./loading";
 import { formatTime, formatDate, formatDuration } from "./utils";
+import { formatDateISO } from "@/lib/timezone";
+import { RouteStopsDisplay } from "@/components/RouteStopsDisplay";
 
 // ================================
 // CONSTANTS
@@ -68,9 +71,11 @@ export default function BookBus() {
     confirmBooking, goBackToSeats, goBackToPassengers, skipReturnAndProceed, validatePromoCode, stopName,
     outboundSectionRef, returnSectionScrollRef,
     liveSelectedSeats, setLiveSelectedSeats,
+    reviewsData,
   } = useBookBus();
 
-
+  const [activeTab, setActiveTab] = useState<'seatSelection' | 'aboutBus'>('seatSelection');
+  const [aboutBusSubTab, setAboutBusSubTab] = useState<'reviews' | 'ratings'>('reviews');
 
   // ── Render: loading ────────────────────────────────────────────────────────
 
@@ -100,13 +105,46 @@ export default function BookBus() {
   const alightingStopName = destinationStopId ? stopName(destinationStopId) : route.destination;
   const isPartialSegment = originStopId !== "__origin__" || destinationStopId !== "__destination__";
 
-  const formattedReturnDate = returnDate ? new Date(returnDate).toLocaleDateString() : '';
+  const formattedReturnDate = returnDate ? formatDateISO(returnDate) : '';
+  const originIdx = normalisedStops.findIndex(s => s.id === originStopId);
+  const destIdx = normalisedStops.findIndex(s => s.id === destinationStopId);
+  const selectedPathStops = originIdx !== -1 && destIdx !== -1 && destIdx >= originIdx 
+    ? normalisedStops.slice(originIdx, destIdx + 1).map(s => ({ id: s.id, name: s.name, stage: 'default' as const }))
+    : [];
+
+  const handleShare = async () => {
+    const url = window.location.href;
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: `${route.origin} to ${route.destination} on TibhukeBus`,
+          text: `Check out this trip from ${route.origin} to ${route.destination} with ${company.name}!`,
+          url,
+        });
+      } catch (err) {
+        console.error('Share failed', err);
+      }
+    } else {
+      await navigator.clipboard.writeText(url);
+      alert('Link copied to clipboard!');
+    }
+  };
 
   // ── Main render ────────────────────────────────────────────────────────────
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-brand-50 to-gray-50 pt-28 sm:pt-32 lg:pt-36">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+
+        {/* ── Header with Share ── */}
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl sm:text-2xl font-bold text-gray-900">
+            {route.origin} → {route.destination}
+          </h2>
+          <Button variant="outline" size="sm" onClick={handleShare} className="flex items-center gap-2 bg-white">
+            <Share2 className="w-4 h-4" /> <span className="hidden sm:inline">Share</span>
+          </Button>
+        </div>
 
         {/* ── Boarding & Alighting Stop Selector ── */}
         {currentStep === "seats" && normalisedStops.length > 1 && (
@@ -159,18 +197,14 @@ export default function BookBus() {
                   </select>
                 </div>
               </div>
-              {originStopId && destinationStopId && displayPrice > 0 && (
-                <div className="mt-4 p-3 bg-brand-50 border border-brand-100 rounded-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-sm text-brand-800">
-                  <div className="flex items-center gap-2 flex-wrap min-w-0">
-                    <span className="w-2 h-2 rounded-full bg-green-500 flex-shrink-0" />
-                    <span className="font-medium min-w-0 break-words">{stopName(originStopId)}</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
-                    <span className="w-2 h-2 rounded-full bg-red-500 flex-shrink-0" />
-                    <span className="font-medium min-w-0 break-words">{stopName(destinationStopId)}</span>
+              {originStopId && destinationStopId && displayPrice > 0 && selectedPathStops.length > 0 && (
+                <div className="mt-4 p-4 bg-brand-50 border border-brand-100 rounded-xl flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 text-sm text-brand-800 shadow-sm overflow-hidden">
+                  <div className="flex-1 w-full min-w-0 overflow-x-auto hide-scrollbar">
+                    <RouteStopsDisplay stops={selectedPathStops} />
                   </div>
-                  <span className="font-bold text-brand-700 shrink-0 mt-2 sm:mt-0">
-                    ~MWK {displayPrice.toLocaleString()} / person
-                  </span>
+                  <div className="font-bold text-brand-700 shrink-0 whitespace-nowrap bg-white px-4 py-2 rounded-lg shadow-sm border border-brand-100 text-base">
+                    ~MWK {displayPrice.toLocaleString()} <span className="text-sm font-semibold text-brand-600">/ person</span>
+                  </div>
                 </div>
               )}
             </CardContent>
@@ -231,7 +265,27 @@ export default function BookBus() {
           {/* Step 1 — Seat selection */}
           {currentStep === "seats" && (
             <>
-              {/* Outbound Seat Map — attached to outboundSectionRef for scroll-back-to-top */}
+              {/* Tabs */}
+              <div className="flex justify-center border-b border-gray-200 mb-6 gap-2">
+                <button
+                  className={`flex items-center gap-2 px-6 py-3 font-medium text-sm transition-colors ${activeTab === 'seatSelection' ? 'border-b-2 border-brand-700 text-brand-700' : 'text-gray-500 hover:text-gray-700'}`}
+                  onClick={() => setActiveTab('seatSelection')}
+                >
+                  <Armchair className="w-4 h-4" />
+                  Seat Selection
+                </button>
+                <button
+                  className={`flex items-center gap-2 px-6 py-3 font-medium text-sm transition-colors ${activeTab === 'aboutBus' ? 'border-b-2 border-brand-700 text-brand-700' : 'text-gray-500 hover:text-gray-700'}`}
+                  onClick={() => setActiveTab('aboutBus')}
+                >
+                  <BusIcon className="w-4 h-4" />
+                  About Bus
+                </button>
+              </div>
+
+              {activeTab === 'seatSelection' ? (
+                <>
+                  {/* Outbound Seat Map — attached to outboundSectionRef for scroll-back-to-top */}
               <div ref={outboundSectionRef}>
                 <SeatSelection
                   bus={bus} schedule={schedule} passengers={passengers}
@@ -413,6 +467,152 @@ export default function BookBus() {
                   className="mt-4"
                 />
               )}
+                </>
+              ) : (
+                <div className="space-y-8 animate-in fade-in duration-300">
+                  <div>
+                    <h2 className="text-xl font-semibold text-gray-800 mb-4">Bus Details</h2>
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                       <div className="p-4 bg-gray-50 rounded-xl border border-gray-100">
+                          <p className="text-sm text-gray-500">Company</p>
+                          <p className="font-medium text-gray-900 mt-1">{company.name}</p>
+                       </div>
+                       <div className="p-4 bg-gray-50 rounded-xl border border-gray-100">
+                          <p className="text-sm text-gray-500">Category</p>
+                          <p className="font-medium text-gray-900 mt-1">{bus.busType}</p>
+                       </div>
+                       <div className="p-4 bg-gray-50 rounded-xl border border-gray-100">
+                          <p className="text-sm text-gray-500">Capacity</p>
+                          <p className="font-medium text-gray-900 mt-1">{bus.capacity} Seats</p>
+                       </div>
+                       <div className="p-4 bg-gray-50 rounded-xl border border-gray-100">
+                          <p className="text-sm text-gray-500">Amenities</p>
+                          <p className="font-medium text-gray-900 mt-1">{(bus.amenities || []).join(', ') || 'None'}</p>
+                       </div>
+                       <div className="p-4 bg-gray-50 rounded-xl border border-gray-100">
+                          <p className="text-sm text-gray-500">Vehicle Rating</p>
+                          <div className="font-medium text-gray-900 mt-1 flex items-center gap-1.5">
+                            {reviewsData ? (
+                              <>
+                                 <Star className="w-4 h-4 text-amber-500 fill-amber-400" /> 
+                                 {reviewsData.averageRating} <span className="text-gray-500 text-xs ml-1">({reviewsData.count} reviews)</span>
+                              </>
+                            ) : (
+                              <span className="text-gray-400 text-sm">Loading...</span>
+                            )}
+                          </div>
+                       </div>
+                    </div>
+                  </div>
+
+                   <div>
+                     <h3 className="text-lg font-semibold text-gray-800 mb-3">Photos</h3>
+                     {bus.images && bus.images.length > 0 ? (
+                       <div className="flex gap-4 overflow-x-auto pb-4 snap-x">
+                         {bus.images.map((img: string, i: number) => (
+                           <img key={i} src={img} alt={`Bus ${i+1}`} className="w-64 h-40 object-cover rounded-xl shadow-sm shrink-0 snap-center border border-gray-100" />
+                         ))}
+                       </div>
+                     ) : (
+                       <div className="flex flex-col items-center justify-center py-8 px-4 bg-gray-50 rounded-2xl border border-dashed border-gray-200 text-center">
+                         <Camera className="w-8 h-8 text-gray-300 mb-2 animate-pulse" />
+                         <p className="text-xs text-gray-500 font-semibold">No vehicle photos uploaded yet</p>
+                         <p className="text-[10px] text-gray-400 mt-0.5">Images showing the exterior and interior amenities will appear here once added by the operator.</p>
+                       </div>
+                     )}
+                   </div>
+
+                  {reviewsData && (
+                    <div>
+                      <div className="flex border-b border-gray-200 mb-6 gap-2">
+                        <button
+                          className={`flex items-center gap-2 px-4 py-2 font-medium text-sm transition-colors ${aboutBusSubTab === 'reviews' ? 'border-b-2 border-brand-700 text-brand-700' : 'text-gray-500 hover:text-gray-700'}`}
+                          onClick={() => setAboutBusSubTab('reviews')}
+                        >
+                          <MessageSquare className="w-4 h-4" />
+                          Recent Reviews
+                        </button>
+                        <button
+                          className={`flex items-center gap-2 px-4 py-2 font-medium text-sm transition-colors ${aboutBusSubTab === 'ratings' ? 'border-b-2 border-brand-700 text-brand-700' : 'text-gray-500 hover:text-gray-700'}`}
+                          onClick={() => setAboutBusSubTab('ratings')}
+                        >
+                          <Star className="w-4 h-4" />
+                          Rating Breakdown
+                        </button>
+                      </div>
+
+                      {aboutBusSubTab === 'reviews' ? (
+                        <div className="space-y-4 max-w-3xl">
+                          {reviewsData.reviews.length > 0 ? reviewsData.reviews.map((r: any, i: number) => (
+                            <div key={i} className="p-4 bg-white rounded-xl border border-gray-200 shadow-sm">
+                              <div className="flex items-center justify-between mb-3">
+                                <div className="flex items-center gap-3">
+                                  {r.authorAvatar ? (
+                                     <img src={r.authorAvatar} alt="Avatar" className="w-8 h-8 rounded-full object-cover" />
+                                  ) : (
+                                     <div className="w-8 h-8 bg-brand-100 text-brand-700 rounded-full flex items-center justify-center text-xs font-bold uppercase">
+                                       {r.authorName.charAt(0)}
+                                     </div>
+                                  )}
+                                  <div>
+                                    <span className="font-medium text-sm text-gray-900 block">{r.authorName}</span>
+                                    <span className="text-xs text-gray-500">{new Date(r.date || r.createdAt || Date.now()).toLocaleDateString()}</span>
+                                  </div>
+                                </div>
+                                <div className="flex text-amber-400 text-sm">
+                                  {'★'.repeat(r.rating)}{'☆'.repeat(5-r.rating)}
+                                </div>
+                              </div>
+                              {r.text && <p className="text-gray-600 text-sm leading-relaxed">{r.text}</p>}
+                            </div>
+                          )) : (
+                            <p className="text-gray-500 text-sm italic">No reviews yet for this bus.</p>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="max-w-md p-6 bg-white rounded-xl border border-gray-200 shadow-sm">
+                           <div className="flex items-center gap-4 mb-6">
+                             <div className="text-4xl font-bold text-gray-900">{reviewsData.averageRating}</div>
+                             <div>
+                               <div className="flex text-amber-400 mb-1">
+                                 {'★'.repeat(Math.round(reviewsData.averageRating))}{'☆'.repeat(5-Math.round(reviewsData.averageRating))}
+                               </div>
+                               <div className="text-sm text-gray-500">Based on {reviewsData.count} reviews</div>
+                             </div>
+                           </div>
+                           
+                           <div className="space-y-3">
+                             {[5, 4, 3, 2, 1].map(stars => {
+                               const count = reviewsData.ratingBreakdown?.[stars] || 0;
+                               const percentage = reviewsData.count > 0 ? (count / reviewsData.count) * 100 : 0;
+                               return (
+                                 <div key={stars} className="flex items-center gap-3 text-sm">
+                                   <div className="w-12 text-gray-600 font-medium flex items-center gap-1">
+                                     {stars} <Star className="w-3 h-3 text-gray-400 fill-current" />
+                                   </div>
+                                   <div className="flex-1 h-2.5 bg-gray-100 rounded-full overflow-hidden">
+                                     <div className="h-full bg-amber-400 rounded-full" style={{ width: `${percentage}%` }}></div>
+                                   </div>
+                                   <div className="w-8 text-right text-gray-500">{count}</div>
+                                 </div>
+                               );
+                             })}
+                           </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="pt-6 mt-4 border-t border-gray-100 flex justify-center">
+                    <Button variant="outline" className="w-full sm:w-auto" asChild>
+                      <a href={`/schedules?busId=${bus.id}`} className="flex items-center gap-2 text-brand-700">
+                        <Calendar className="w-4 h-4" /> 
+                        View All Upcoming Schedules For This Bus
+                      </a>
+                    </Button>
+                  </div>
+                </div>
+              )}
             </>
           )}
 
@@ -437,28 +637,23 @@ export default function BookBus() {
                   <div className="p-3 bg-brand-50 rounded-lg border border-brand-100 text-sm text-gray-700">
                     <p className="text-xs font-semibold text-brand-700 uppercase tracking-wide mb-1.5">🚌 Outbound Trip</p>
                     <p>Seats: <span className="font-semibold text-gray-900">{selectedSeats.join(", ")}</span></p>
-                    <p className="flex items-center gap-1.5 flex-wrap mt-1">
-                      <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
-                      <span>Pick-up: <span className="font-semibold text-green-700">{boardingStopName}</span></span>
-                      <ArrowRight className="w-3.5 h-3.5 text-gray-400" />
-                      <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" />
-                      <span>Drop-off: <span className="font-semibold text-red-600">{alightingStopName}</span></span>
-                    </p>
+                    <div className="mt-3 flex justify-center overflow-x-auto hide-scrollbar w-full">
+                      <RouteStopsDisplay stops={selectedPathStops} />
+                    </div>
                   </div>
                   {/* Return leg summary (only when return trip is selected) */}
                   {wantsReturnTrip && returnSchedule && selectedReturnSeats.length > 0 && (
                     <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 text-sm text-gray-700">
                       <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1.5">🔁 Return Trip</p>
                       <p>Seats: <span className="font-semibold text-gray-900">{selectedReturnSeats.join(", ")}</span></p>
-                      <p className="flex items-center gap-1.5 flex-wrap mt-1">
-                        <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
-                        <span>From: <span className="font-semibold text-green-700">{returnSchedule.departureLocation || returnRoute?.origin || route.destination}</span></span>
-                        <ArrowRight className="w-3.5 h-3.5 text-gray-400" />
-                        <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" />
-                        <span>To: <span className="font-semibold text-red-600">{returnSchedule.arrivalLocation || returnRoute?.destination || route.origin}</span></span>
-                      </p>
+                      <div className="mt-3 flex justify-center overflow-x-auto hide-scrollbar w-full">
+                        <RouteStopsDisplay stops={[
+                          { id: 'ret_origin', name: returnSchedule.departureLocation || returnRoute?.origin || route.destination, stage: 'default' as const },
+                          { id: 'ret_dest', name: returnSchedule.arrivalLocation || returnRoute?.destination || route.origin, stage: 'default' as const }
+                        ]} />
+                      </div>
                       <p className="text-xs text-slate-500 mt-1">
-                        Departure: {new Date(returnSchedule.departureDateTime).toLocaleDateString()} · {new Date(returnSchedule.departureDateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        Departure: {formatDateISO(returnSchedule.departureDateTime)} · {formatTime(returnSchedule.departureDateTime)}
                       </p>
                     </div>
                   )}
@@ -538,6 +733,7 @@ export default function BookBus() {
           passengerForms={passengerForms}
           goBackToPassengers={goBackToPassengers}
           confirmBooking={confirmBooking}
+          selectedPathStops={selectedPathStops}
         />
       </div>
     </div>

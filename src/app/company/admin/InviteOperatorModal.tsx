@@ -114,8 +114,8 @@ export default function InviteOperatorModal({ isOpen, onClose, branches = [], co
                     <Button type="button" variant="outline" onClick={onClose} className="rounded-xl h-10">
                       Cancel
                     </Button>
-                    <Button type="submit" disabled={isSubmitting} className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl h-10 min-w-[100px]">
-                      {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Send Invitation'}
+                    <Button type="submit" disabled={mutation.isPending} className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl h-10 min-w-[100px]">
+                      {mutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Send Invitation'}
                     </Button>
                   </div>
                 </form>

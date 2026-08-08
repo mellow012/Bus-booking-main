@@ -98,8 +98,8 @@ function SearchPreview() {
 
 function SchedulePreview() {
   const options = [
-    { time: "07:00", company: "AXA Coach", seats: 12, price: "MWK 5,500", hot: true },
-    { time: "10:30", company: "Shire Bus",  seats: 28, price: "MWK 4,800" },
+    { time: "07:00", company: "Bus A", seats: 12, price: "MWK 5,500", hot: true },
+    { time: "10:30", company: "Bus B",  seats: 28, price: "MWK 4,800" },
   ];
   return (
     <div className="space-y-2 w-full">

@@ -1,4 +1,5 @@
 import { Schedule, Route } from "@prisma/client";
+import { parseUtcDate } from './timezone';
 
 export type TripStatus = 
   | 'scheduled' 
@@ -16,7 +17,7 @@ export function calculateTripStatus(schedule: any): TripStatus {
   if (schedule.status === 'cancelled') return 'cancelled';
   if (schedule.isCompleted) return 'completed';
   if (schedule.tripStatus === 'delayed') {
-    const arrival = new Date(schedule.arrivalDateTime);
+    const arrival = parseUtcDate(schedule.arrivalDateTime);
     const fiveHoursMs = 5 * 60 * 60 * 1000;
     if (new Date().getTime() > arrival.getTime() + fiveHoursMs) {
       return 'completed';
@@ -25,8 +26,8 @@ export function calculateTripStatus(schedule: any): TripStatus {
   }
 
   const now = new Date();
-  const departure = new Date(schedule.departureDateTime);
-  const arrival = new Date(schedule.arrivalDateTime);
+  const departure = parseUtcDate(schedule.departureDateTime);
+  const arrival = parseUtcDate(schedule.arrivalDateTime);
 
   // Manual tripStatus from database takes precedence
   const manualStatus = schedule.tripStatus as string;

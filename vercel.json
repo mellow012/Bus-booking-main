@@ -3,6 +3,14 @@
     {
       "path": "/api/cron/reminders",
       "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/cron/expire-bookings",
+      "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/cron/generate-trips",
+      "schedule": "0 2 * * *"
     }
   ]
 }

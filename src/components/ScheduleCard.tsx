@@ -1,11 +1,12 @@
 import React from "react";
 import Image from "next/image";
-import { Star, ArrowRight, Calendar, Users, Clock, MapPin, Bus as BusIcon, Flame, CheckCircle, Shield, Navigation } from "lucide-react";
+import { Star, ArrowRight, Calendar, Users, Clock, MapPin, Bus as BusIcon, Flame, CheckCircle, Shield, Navigation, Loader2 } from "lucide-react";
 import { EnhancedSchedule, fillingFast, seatColor, cityMatch, formatDuration, isToday, AMENITY_ICONS, getScheduleCategory } from "@/utils/homeHelpers";
 
 export const ScheduleCard = React.memo(({ s, onBook, userCity }: {
   s: EnhancedSchedule; onBook: () => void; userCity: string | null;
 }) => {
+  const [isLoading, setIsLoading] = React.useState(false);
   const filling = fillingFast(s.availableSeats, s.totalSeats);
   const seatCls = seatColor(s.availableSeats, s.totalSeats);
   const isLocal = userCity ? cityMatch(s, userCity) : false;
@@ -69,6 +70,9 @@ export const ScheduleCard = React.memo(({ s, onBook, userCity }: {
                 <div className="w-1.5 h-1.5 rounded-full bg-brand-400" />
               </div>
               <span className="text-[9px] sm:text-[10px] text-gray-400">{formatDuration(s.duration)}</span>
+              {s.stopsCount !== undefined && s.stopsCount > 0 && (
+                <span className="text-[9px] sm:text-[10px] text-brand-600 font-medium mt-0.5">{s.stopsCount} stops</span>
+              )}
             </div>
             <div className="text-center min-w-0 flex-1">
               <p className="text-xs sm:text-sm font-bold text-gray-900 truncate">{s.destination}</p>
@@ -128,10 +132,25 @@ export const ScheduleCard = React.memo(({ s, onBook, userCity }: {
           {s.status === 'completed' && <span className="flex items-center gap-0.5 sm:gap-1 text-[10px] sm:text-[11px] px-1.5 sm:px-2 py-0.5 sm:py-1 bg-gray-50 text-gray-600 rounded-full border border-gray-200 font-semibold"><CheckCircle className="w-2.5 h-2.5 sm:w-3 sm:h-3" />Completed</span>}
         </div>
 
-        <button onClick={onBook} disabled={s.availableSeats <= 0}
-          className="mt-auto w-full h-10 rounded-xl bg-coral-500 hover:bg-coral-600 disabled:bg-gray-100 disabled:text-gray-400 text-white text-xs sm:text-sm font-semibold transition-colors flex items-center justify-center gap-2 group/btn active:scale-[.98]">
-          {s.availableSeats <= 0 ? "Fully Booked" : <>Book Journey <ArrowRight className="w-3.5 h-3.5 group-hover/btn:translate-x-0.5 transition-transform" /></>}
-        </button>
+        <div className="flex gap-2 mt-auto">
+          <button 
+            onClick={() => {
+              setIsLoading(true);
+              onBook();
+              // Reset after a delay in case navigation fails or takes too long, or it redirects to login and they press back
+              setTimeout(() => setIsLoading(false), 3000);
+            }} 
+            disabled={s.availableSeats <= 0 || isLoading}
+            className="flex-1 h-10 rounded-xl bg-coral-500 hover:bg-coral-600 disabled:bg-gray-100 disabled:text-gray-400 text-white text-xs sm:text-sm font-semibold transition-colors flex items-center justify-center gap-2 group/btn active:scale-[.98]">
+            {s.availableSeats <= 0 ? "Fully Booked" : (
+              isLoading ? (
+                <>Loading... <Loader2 className="w-4 h-4 animate-spin" /></>
+              ) : (
+                <>Book Journey <ArrowRight className="w-3.5 h-3.5 group-hover/btn:translate-x-0.5 transition-transform" /></>
+              )
+            )}
+          </button>
+        </div>
       </div>
     </article>
   );

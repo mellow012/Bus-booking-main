@@ -11,9 +11,10 @@ interface CompletedSchedulesArchiveProps {
   schedules: Schedule[];
   buses: Bus[];
   bookings: Booking[];
+  baseUrl?: string;
 }
 
-export default function CompletedSchedulesArchive({ schedules, buses, bookings }: CompletedSchedulesArchiveProps) {
+export default function CompletedSchedulesArchive({ schedules, buses, bookings, baseUrl = '/company/admin' }: CompletedSchedulesArchiveProps) {
   const router = useRouter();
   const [expanded, setExpanded] = useState(false);
 
@@ -45,7 +46,7 @@ export default function CompletedSchedulesArchive({ schedules, buses, bookings }
             return (
               <div 
                 key={schedule.id} 
-                onClick={() => router.push(`/company/admin?tab=bookings&scheduleId=${encodeURIComponent(schedule.id)}`)}
+                onClick={() => router.push(`${baseUrl}?tab=bookings&scheduleId=${encodeURIComponent(schedule.id)}`)}
                 className="rounded-2xl border border-gray-100 bg-gray-50 p-4 cursor-pointer hover:border-indigo-300 hover:shadow-sm transition-all"
               >
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">

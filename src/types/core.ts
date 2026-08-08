@@ -249,6 +249,7 @@
     name: string;
     distanceFromOrigin: number;
     order: number;
+    price?: number;
     address?: string;
     pickupPoint?: string;
     estimatedArrival?: number;

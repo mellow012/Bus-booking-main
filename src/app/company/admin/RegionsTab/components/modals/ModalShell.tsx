@@ -28,10 +28,11 @@ export default function ModalShell({ title, saving, onClose, onSave, children }:
           <Button
             type="button"
             onClick={onSave}
-            disabled={saving}
+            isLoading={saving}
+            loadingText="Saving..."
             className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl h-10 min-w-[100px]"
           >
-            {saving ? 'Saving...' : 'Save'}
+            Save
           </Button>
         </div>
       </div>

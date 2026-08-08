@@ -60,17 +60,24 @@ function generateBookingReference(): string {
   return ref;
 }
 
-interface RouteStop { id: string; name: string; }
+interface RouteStop { id: string; name: string; price?: number; }
 
 function buildStopList(routeData: any): RouteStop[] {
   const stops: RouteStop[] = [];
-  if (routeData?.origin) stops.push({ id: '__origin__', name: routeData.origin });
+  const baseFare = routeData?.baseFare ?? routeData?.price ?? routeData?.fare ?? 0;
+  if (routeData?.origin) stops.push({ id: '__origin__', name: routeData.origin, price: 0 });
   if (Array.isArray(routeData?.stops)) {
     for (const s of routeData.stops) {
-      if (s?.id && s?.name) stops.push({ id: s.id, name: s.name });
+      if (s?.id && s?.name) {
+        stops.push({
+          id: s.id,
+          name: s.name,
+          price: typeof s.price === 'number' ? s.price : undefined
+        });
+      }
     }
   }
-  if (routeData?.destination) stops.push({ id: '__destination__', name: routeData.destination });
+  if (routeData?.destination) stops.push({ id: '__destination__', name: routeData.destination, price: baseFare });
   return stops;
 }
 
@@ -99,10 +106,10 @@ function parseSeatArray(value: unknown): string[] {
 function calculateSegmentFare(
   scheduleData: any, routeData: any,
   originStopId?: string, destinationStopId?: string,
-): { fare: number; fareSource: 'full_trip' | 'operator_set' | 'proportional_fallback' } {
+): { fare: number; fareSource: 'full_trip' | 'operator_set' | 'route_stop_pricing' | 'proportional_fallback' } {
   const fullFare = scheduleData.baseFare ?? scheduleData.price ?? scheduleData.fare;
   let baseFare = fullFare;
-  let fareSource: 'full_trip' | 'operator_set' | 'proportional_fallback' = 'full_trip';
+  let fareSource: 'full_trip' | 'operator_set' | 'route_stop_pricing' | 'proportional_fallback' = 'full_trip';
 
   const isSegment = !!(originStopId && destinationStopId &&
     (originStopId !== '__origin__' || destinationStopId !== '__destination__'));
@@ -117,8 +124,21 @@ function calculateSegmentFare(
       fareSource = 'operator_set';
     } else {
       const stopList = buildStopList(routeData ?? scheduleData);
-      const calculated = proportionalFare(fullFare, stopList, originStopId, destinationStopId);
-      if (calculated !== null) { baseFare = calculated; fareSource = 'proportional_fallback'; }
+      const originStop = stopList.find(s => s.id === originStopId);
+      const destStop = stopList.find(s => s.id === destinationStopId);
+
+      if (
+        originStop && destStop &&
+        typeof originStop.price === 'number' &&
+        typeof destStop.price === 'number' &&
+        destStop.price > originStop.price
+      ) {
+        baseFare = destStop.price - originStop.price;
+        fareSource = 'route_stop_pricing';
+      } else {
+        const calculated = proportionalFare(fullFare, stopList, originStopId, destinationStopId);
+        if (calculated !== null) { baseFare = calculated; fareSource = 'proportional_fallback'; }
+      }
     }
   }
   return { fare: baseFare, fareSource };

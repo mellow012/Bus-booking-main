@@ -9,9 +9,10 @@ import {
   Loader2, AlertCircle, User, Mail, Phone, Shield,
   Calendar, CreditCard, Activity, Settings, ChevronRight, Award, Trash2,
   Key, TrendingUp, MapPin, Bus as BusIcon, DollarSign, CheckCircle, Clock, XCircle, AlertTriangle,
-  Edit, Eye, EyeOff, Users, ExternalLink, Search, Copy, Download, BarChart3, Smartphone, Bell, Zap, FileText, Share2, History as HistoryIcon
+  Edit, Eye, EyeOff, Users, ExternalLink, Search, Copy, Download, BarChart3, Smartphone, Bell, Zap, FileText, Share2, History as HistoryIcon, Camera
 } from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
+import { uploadProfilePicture } from '@/utils/supabase/storage-utils';
 import AlertMessage from '../../components/AlertMessage';
 import BackButton from '@/components/BackButton';
 import { useAppToast } from '@/contexts/ToastContext';
@@ -31,6 +32,7 @@ interface UserProfile {
   currentAddress?: string;
   role: UserRole;
   setupCompleted: boolean;
+  profilePicture?: string;
   createdAt: Date;
   updatedAt?: Date;
   [key: string]: unknown;
@@ -185,7 +187,43 @@ export default function ProfileClient() {
     sex: '',
     currentAddress: '',
     email: user?.email || '',
+    profilePicture: userProfile?.profilePicture || '',
   });
+
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+    
+    setUploadingImage(true);
+    setError('');
+    
+    try {
+      const url = await uploadProfilePicture(file, user.id);
+      
+      setFormData(prev => ({ ...prev, profilePicture: url }));
+      setProfile(prev => prev ? { ...prev, profilePicture: url } : null);
+      
+      await updateUserProfile({ 
+        firstName: formData.fullName.split(' ')[0] || '',
+        lastName: formData.fullName.split(' ').slice(1).join(' ') || '',
+        phone: formData.phone,
+        profilePicture: url 
+      });
+      
+      toast.success('Profile Picture Updated', 'Your new profile picture has been saved.');
+    } catch (err: any) {
+      console.error('Image upload failed', err);
+      setError('Failed to upload image. Please try again.');
+    } finally {
+      setUploadingImage(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
 
   const fetchBookingData = useCallback(async (preFetchedData?: any) => {
     if (!user) return;
@@ -344,6 +382,7 @@ export default function ProfileClient() {
                   sex: retryData.sex || '',
                   currentAddress: retryData.currentAddress || '',
                   email: retryData.email || user.email || '',
+                  profilePicture: retryData.profilePicture || '',
                 });
                 await Promise.all([fetchBookingData(retryData), loadUserPreferences()]);
                 setLoading(false);
@@ -370,6 +409,7 @@ export default function ProfileClient() {
               sex: '',
               currentAddress: '',
               email: user.email || '',
+              profilePicture: '',
             });
             setEditProfile(true);
             setLoading(false);
@@ -393,6 +433,7 @@ export default function ProfileClient() {
           sex: userData.sex || '',
           currentAddress: userData.currentAddress || '',
           email: userData.email || user.email || '',
+          profilePicture: userData.profilePicture || '',
         });
         await Promise.all([fetchBookingData(userData), loadUserPreferences()]);
       } catch (err: unknown) {
@@ -789,15 +830,36 @@ export default function ProfileClient() {
           <div className="bg-white/80 backdrop-blur-md rounded-[32px] shadow-sm border border-white p-6 sm:p-8 mb-8">
             <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
               <div className="flex flex-col sm:flex-row items-center sm:items-start lg:items-center gap-4 sm:gap-6 w-full lg:w-auto">
-                <div className="relative flex-shrink-0">
-                  <div className="w-20 h-20 sm:w-24 sm:h-24 bg-gradient-to-tr from-brand-700 to-brand-600 rounded-3xl flex items-center justify-center text-white font-bold text-3xl sm:text-4xl shadow-xl shadow-brand-200/50 rotate-3">
-                    <span className="-rotate-3">{displayedFirstName?.charAt(0) || 'U'}</span>
+                <div className="relative flex-shrink-0 group">
+                  <div className="w-20 h-20 sm:w-24 sm:h-24 bg-gradient-to-tr from-brand-700 to-brand-600 rounded-3xl flex items-center justify-center text-white font-bold text-3xl sm:text-4xl shadow-xl shadow-brand-200/50 rotate-3 overflow-hidden">
+                    {(() => {
+                      const avatarUrl = profile.profilePicture || (userProfile as any)?.avatar || userProfile?.profilePicture || user?.user_metadata?.avatar_url;
+                      if (avatarUrl) {
+                        return <img src={avatarUrl} alt="Profile" className="w-full h-full object-cover -rotate-3" />;
+                      }
+                      return <span className="-rotate-3">{displayedFirstName?.charAt(0) || 'U'}</span>;
+                    })()}
                   </div>
-                  <div className="absolute -bottom-1 -right-1 w-8 h-8 bg-green-500 rounded-2xl border-4 border-white flex items-center justify-center shadow-lg">
+                  
+                  {editProfile && (
+                    <label className="absolute inset-0 flex items-center justify-center bg-black/40 text-white opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer rounded-3xl rotate-3">
+                      {uploadingImage ? <Loader2 className="w-6 h-6 animate-spin -rotate-3" /> : <Camera className="w-6 h-6 -rotate-3" />}
+                      <input 
+                        type="file" 
+                        accept="image/*" 
+                        className="hidden" 
+                        ref={fileInputRef}
+                        onChange={handleImageUpload}
+                        disabled={uploadingImage}
+                      />
+                    </label>
+                  )}
+                  
+                  <div className="absolute -bottom-1 -right-1 w-8 h-8 bg-green-500 rounded-2xl border-4 border-white flex items-center justify-center shadow-lg z-10">
                     <CheckCircle className="w-4 h-4 text-white" />
                   </div>
                 </div>
-                <div className="min-w-0">
+                <div className="min-w-0 text-center sm:text-left">
                   <div className="flex flex-col sm:flex-row sm:items-center gap-2 mb-1">
                     <h1 className="text-lg sm:text-xl lg:text-2xl font-bold text-gray-900 truncate">
                       {displayedFirstName} {displayedLastName}

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Settings, Save, MapPin, Building, Globe, Phone, Clock, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Settings, Save, MapPin, Building, Globe, Phone, Clock, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
 import { uploadLogo } from '@/utils/supabase/storage-utils';
 import { useCompanyRegions } from './_hooks/useDashboardQueries';
 
@@ -383,7 +383,17 @@ export default function ProfileTab({ dashboard }: ProfileTabProps) {
               disabled={isSaving}
               className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 transition-all disabled:opacity-50"
             >
-              {isSaving ? 'Saving...' : <><Save className="w-4 h-4" /> Save Changes</>}
+              {isSaving ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Save className="w-4 h-4" />
+                  Save Changes
+                </>
+              )}
             </button>
           </div>
         </form>

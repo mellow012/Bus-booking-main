@@ -358,7 +358,7 @@ export default function RegionsTab({ dashboard }: RegionsTabProps) {
         <>
           <BranchesGrid branches={branches} routes={routes} operators={operators} schedules={schedules} selectedBranchId={selectedBranchId} onSelectBranch={selectBranch} />
 
-          {!selectedBranch && <AllBranchesOverview trips={allBranchUpcomingTrips} buses={buses} bookings={bookings} />}
+          {!selectedBranch && <AllBranchesOverview trips={allBranchUpcomingTrips} buses={buses} bookings={bookings} onDeleteSuccess={() => dashboard.fetchInitialData?.()} />}
         </>
       )}
 

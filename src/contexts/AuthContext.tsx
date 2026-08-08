@@ -57,6 +57,7 @@ interface UpdateProfilePayload {
   nationalId?: string;
   sex?: string;
   currentAddress?: string;
+  profilePicture?: string;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -346,6 +347,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         nationalId: profile.nationalId,
         sex: profile.sex,
         currentAddress: profile.currentAddress,
+        profilePicture: profile.profilePicture,
       }),
     });
     if (!response.ok) throw new Error('Failed to update profile');

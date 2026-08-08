@@ -12,6 +12,8 @@ import { logger } from '@/lib/logger';
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 200;
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   try {
     // ── Auth & Security ──────────────────────────────────────────────────────

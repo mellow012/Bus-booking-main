@@ -2,16 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth-utils';
 import prisma from '@/lib/prisma';
 import { logger } from '@/lib/logger';
-
-function formatTimeString(dateTime: Date | string): string {
-  const d = new Date(dateTime);
-  if (isNaN(d.getTime())) return '';
-  return d.toLocaleTimeString('en-US', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: true,
-  });
-}
+import { formatTime12, parseUtcDate } from '@/lib/timezone';
 
 export async function GET(req: NextRequest) {
   try {
@@ -127,8 +118,8 @@ export async function GET(req: NextRequest) {
           scheduleId: currentSchedule.id,
           origin: currentRoute.origin || 'Departure',
           destination: currentRoute.destination || 'Arrival',
-          departureTime: formatTimeString(currentSchedule.departureDateTime),
-          arrivalTime: formatTimeString(currentSchedule.arrivalDateTime),
+          departureTime: formatTime12(parseUtcDate(currentSchedule.departureDateTime)),
+          arrivalTime: formatTime12(parseUtcDate(currentSchedule.arrivalDateTime)),
           departureDateTime: currentSchedule.departureDateTime,
           arrivalDateTime: currentSchedule.arrivalDateTime,
           companyName: currentCompany?.name || 'Bus Operator',

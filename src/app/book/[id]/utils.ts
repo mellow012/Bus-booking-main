@@ -5,11 +5,12 @@ export interface NormalisedStop {
   name: string;
   distanceFromOrigin: number;
   order: number;
+  price?: number;
 }
 
 export function buildNormalisedStops(route: Route): NormalisedStop[] {
   const stops: NormalisedStop[] = [];
-  stops.push({ id: "__origin__", name: route.origin, distanceFromOrigin: 0, order: -1 });
+  stops.push({ id: "__origin__", name: route.origin, distanceFromOrigin: 0, order: -1, price: 0 });
 
   const intermediate = (route.stops ?? [])
     .slice()
@@ -23,12 +24,14 @@ export function buildNormalisedStops(route: Route): NormalisedStop[] {
         ? s.distanceFromOrigin
         : Math.round(((i + 1) / (intermediate.length + 1)) * (route.distance || 100)),
       order: i,
+      price: typeof s.price === 'number' ? s.price : undefined,
     });
   });
 
   stops.push({
     id: "__destination__", name: route.destination,
     distanceFromOrigin: route.distance || 100, order: intermediate.length,
+    price: route.baseFare || 0,
   });
   return stops;
 }
@@ -45,6 +48,19 @@ export function calcSegmentPrice(
   const key = `${originId}:${destId}`;
   const price = segmentPrices?.[key];
   if (typeof price === 'number' && price > 0) return price;
+
+  const originStop = stops.find(s => s.id === originId);
+  const destStop = stops.find(s => s.id === destId);
+
+  // Try Route-level stop pricing difference first
+  if (
+    originStop && destStop &&
+    typeof originStop.price === 'number' &&
+    typeof destStop.price === 'number' &&
+    destStop.price > originStop.price
+  ) {
+    return destStop.price - originStop.price;
+  }
 
   const oi = stops.findIndex(s => s.id === originId);
   const di = stops.findIndex(s => s.id === destId);

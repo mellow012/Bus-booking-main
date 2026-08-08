@@ -17,6 +17,7 @@ import BusesTab from './BusesTab';
 import AlertMessage from '@/components/AlertMessage';
 import { NotificationBell } from '@/contexts/NotificationContext';
 import { CATEGORIES } from './_lib/constants';
+import CompanyAdminLoading from './loading';
 
 const queryClient = new QueryClient();
 
@@ -33,11 +34,7 @@ function AdminDashboardInner() {
   // Only show the full-screen spinner during the very first auth/data load
   // (when we have no data yet). After that, isBusy can show a lighter indicator.
   if (dashboard.authLoading || (dashboard.loading && !dashboard.dashboardData.company)) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-50">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
-      </div>
-    );
+    return <CompanyAdminLoading />;
   }
 
   if (!dashboard.user) {

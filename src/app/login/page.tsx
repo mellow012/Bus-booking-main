@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import StorysetCredit from '@/components/ui/StorysetCredit';
@@ -98,7 +98,7 @@ const useLoginAttempts = () => {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function Login() {
+function LoginContent() {
   const router       = useRouter();
   const searchParams = useSearchParams();
   const isVerified   = searchParams?.get('verified') === 'true';
@@ -493,4 +493,12 @@ export default function Login() {
       </div>
     </div>
   );
-}   
+}
+
+export default function Login() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-gray-50" />}>
+      <LoginContent />
+    </Suspense>
+  );
+}

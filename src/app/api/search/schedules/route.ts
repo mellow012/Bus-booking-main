@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { isSegmentBookable } from '@/lib/schedule-utils';
-import { checkAndRollSchedules } from '@/lib/schedule-generator';
 import { getRouteDistanceAndDuration } from '@/lib/route-utils';
 
 const DEFAULT_LIMIT = 20;
@@ -25,11 +24,6 @@ function getEstimatedDuration(origin: string, destination: string, dbDuration?: 
 
 export async function GET(request: NextRequest) {
   try {
-    // Ensure future schedules are active and running all the time (asynchronously)
-    checkAndRollSchedules().catch((err: any) => {
-      logger.logError('api', '[schedule-generator] Async roll error', err);
-    });
-
     const searchParams = request.nextUrl.searchParams;
 
     // Required parameters

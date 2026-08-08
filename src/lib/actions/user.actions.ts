@@ -6,7 +6,12 @@ import { UserProfile as User } from '@/types';
 import { createClient } from '@/utils/supabase/server';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Session-aware actions (replace /api/auth/profile + /api/auth/reset-password)
+
+export async function checkEmailExists(email: string) {
+  const existing = await prisma.user.findUnique({ where: { email } });
+  return !!existing;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** GET /api/auth/profile equivalent — reads session server-side */

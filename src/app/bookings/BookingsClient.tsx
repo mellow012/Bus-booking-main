@@ -18,9 +18,12 @@ import Modal from '../../components/Modals';
 import AlertMessage from '../../components/AlertMessage';
 import { useAppToast } from '@/contexts/ToastContext';
 import useBookingsList, { BookingWithDetails, SearchFilters, resolveStopName, getEstimatedDuration } from './useBookingsList';
+import { deriveBookingStatus, getDisplayStatusUI } from '@/lib/booking-utils';
 import BookingCheckoutDrawer from './BookingCheckoutFlow';
 import BookingStatsGrid from './BookingStatsGrid';
 import { useJourneyTracker } from './useJourneyTracker';
+import { RouteStopsDisplay } from '@/components/RouteStopsDisplay';
+import BookingsLoading from './loading';
 
 const JourneyMap = nextDynamic(() => import('./JourneyMap'), { ssr: false, loading: () => <div className="w-full h-48 bg-gray-100 rounded-xl animate-pulse flex items-center justify-center"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div> });
 
@@ -35,11 +38,9 @@ const BookingCard = memo<{
   actionLoading: string | null;
   formatTime: (dateTime: unknown) => string;
   formatDate: (dateTime: unknown) => string;
-  getStatusColor: (status: string) => string;
-  getPaymentStatusColor: (status: string) => string;
   router: ReturnType<typeof useRouter>;
 }>(({ booking, onCancel, onDelete, onDownload, onPayment, onReviewSubmitted, actionLoading,
-  formatTime, formatDate, getStatusColor, getPaymentStatusColor, router }) => {
+  formatTime, formatDate, router }) => {
 
   const handleCancel = useCallback(() => onCancel(booking.id, booking.scheduleId, booking.seatNumbers), [booking.id, booking.scheduleId, booking.seatNumbers, onCancel]);
   const handleDelete = useCallback(() => onDelete(booking.id), [booking.id, onDelete]);
@@ -80,11 +81,22 @@ const BookingCard = memo<{
     tripStatus: activeSegment ? activeSegment.schedule.tripStatus : booking.schedule.tripStatus,
     bookingStatus: booking.bookingStatus,
     paymentStatus: booking.paymentStatus,
+    paymentMethod: (booking as any).paymentMethod || booking.paymentProvider,
     reviewRating: activeLegReviewRating,
     destinationCity: activeSegment ? (activeSegment.route?.destination || '') : (booking.route?.destination || ''),
   });
 
   const [reviewForm, setReviewForm] = useState({ rating: 0, hover: 0, text: '' });
+
+  const derivedStatus = deriveBookingStatus({
+    bookingStatus: booking.bookingStatus,
+    paymentStatus: booking.paymentStatus,
+    paymentMethod: (booking as any).paymentMethod || booking.paymentProvider,
+    tripStatus: activeSegment ? activeSegment.schedule.tripStatus : booking.schedule.tripStatus,
+    departureTime: activeSegment ? activeSegment.schedule.departureDateTime : booking.schedule.departureDateTime,
+    arrivalTime: activeSegment ? activeSegment.schedule.arrivalDateTime : booking.schedule.arrivalDateTime
+  });
+  const statusUI = getDisplayStatusUI(derivedStatus);
 
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-all duration-300">
@@ -107,32 +119,12 @@ const BookingCard = memo<{
             </div>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            {journey.state === 'in_transit' ? (
-              <span className="px-3 py-1 rounded-full text-xs font-medium border bg-brand-50 text-brand-700 border-brand-200 flex items-center gap-1 animate-pulse">
-                <Navigation className="w-3 h-3" /> In Transit
-              </span>
-            ) : journey.state === 'delayed' ? (
-              <span className="px-3 py-1 rounded-full text-xs font-medium border bg-amber-50 text-amber-700 border-amber-200 flex items-center gap-1 animate-pulse">
-                <Clock className="w-3 h-3 text-amber-600" /> Delayed
-              </span>
-            ) : journey.state === 'arrived' || journey.state === 'completed' ? (
-              <span className="px-3 py-1 rounded-full text-xs font-medium border bg-emerald-50 text-emerald-700 border-emerald-200">
-                Completed
-              </span>
-            ) : (
-              <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getStatusColor(booking.bookingStatus)}`}>
-                {booking.bookingStatus.charAt(0).toUpperCase() + booking.bookingStatus.slice(1)}
-              </span>
-            )}
-            
-            <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getPaymentStatusColor(booking.paymentStatus)}`}>
-              {booking.paymentStatus.charAt(0).toUpperCase() + booking.paymentStatus.slice(1)}
+            <span className={`px-3 py-1 rounded-full text-xs font-medium border ${statusUI.colorClass} flex items-center gap-1 ${statusUI.isPulsing ? 'animate-pulse' : ''}`}>
+              {derivedStatus === 'in_transit' && <Navigation className="w-3 h-3" />}
+              {derivedStatus === 'delayed' && <Clock className="w-3 h-3" />}
+              {(derivedStatus === 'reserved_cash' || isCash) && <Wallet className="w-3 h-3" />}
+              {statusUI.label}
             </span>
-            {isCash && (
-              <span className="px-3 py-1 rounded-full text-xs font-medium border bg-gray-100 text-gray-700 border-gray-300 flex items-center gap-1">
-                <Wallet className="w-3 h-3" />Cash
-              </span>
-            )}
             {isSegment && (
               <span className="px-3 py-1 rounded-full text-xs font-medium border bg-orange-50 text-orange-700 border-orange-200">Segment</span>
             )}
@@ -193,6 +185,23 @@ const BookingCard = memo<{
         {isSegment && (
           <div className="mb-4 px-3 py-2 bg-orange-50 border border-orange-100 rounded-lg text-xs text-orange-700">
             Full route: {booking.route?.origin} → {booking.route?.destination}
+          </div>
+        )}
+
+        {journey.stopStages && journey.stopStages.length > 2 && (
+          <div className="mb-4">
+            <details className="group [&_summary::-webkit-details-marker]:hidden">
+              <summary className="flex cursor-pointer items-center justify-between gap-1.5 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors p-3 text-gray-900 border border-gray-100">
+                <h2 className="font-medium text-xs text-gray-600 flex items-center gap-2">
+                  <MapPin className="w-3.5 h-3.5" />
+                  View full itinerary ({journey.stopStages.length} stops)
+                </h2>
+                <ChevronRight className="w-4 h-4 text-gray-500 transition duration-300 group-open:rotate-90" />
+              </summary>
+              <div className="mt-2 bg-white border border-gray-100 rounded-lg p-4 shadow-inner max-h-60 overflow-y-auto">
+                <RouteStopsDisplay stops={journey.stopStages} />
+              </div>
+            </details>
           </div>
         )}
 
@@ -362,44 +371,43 @@ const BookingCard = memo<{
               )}
             </div>
             <div className="space-y-2">
-              {booking.bookingStatus === 'confirmed' && booking.paymentStatus === 'pending' && !isCash && (
+              {derivedStatus === 'awaiting_payment' && (
                 <button onClick={handlePayment} disabled={actionLoading === booking.id}
                   className="w-full px-3 py-2 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-lg hover:from-emerald-600 hover:to-emerald-700 transition-all shadow-md flex items-center justify-center gap-2">
                   {actionLoading === booking.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Zap className="w-4 h-4" /><span className="font-medium">Pay Now</span></>}
                 </button>
               )}
-              {booking.bookingStatus === 'confirmed' && booking.paymentStatus === 'paid' && (
+              {booking.paymentStatus === 'paid' && (
                 <button onClick={handleDLOnly} disabled={actionLoading === `download_${booking.id}`}
                   className="w-full px-3 py-2 bg-gray-50 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors border border-gray-200 flex items-center justify-center gap-2">
                   <Download className="w-4 h-4" /><span>Ticket Only</span>
                 </button>
               )}
-              {booking.bookingStatus === 'confirmed' && isCash && (
+              {isCash && derivedStatus !== 'awaiting_payment' && derivedStatus !== 'cancelled' && (
                 <button onClick={handleDLWithQR} disabled={actionLoading === `download_${booking.id}`}
                   className="w-full px-3 py-2 bg-brand-50 text-brand-700 rounded-lg hover:bg-brand-100 transition-colors border border-brand-100 flex items-center justify-center gap-2">
                   {actionLoading === `download_${booking.id}` ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Download className="w-4 h-4" /><span>Boarding Pass</span></>}
                 </button>
               )}
-              {(booking.bookingStatus === 'pending' || (booking.bookingStatus === 'confirmed' && booking.paymentStatus === 'pending' && !isCash)) && (
-                <button onClick={handleCancel} disabled={actionLoading === booking.id}
-                  className="w-full px-3 py-2 bg-red-50 text-red-700 rounded-lg hover:bg-red-100 transition-colors border border-red-200 flex items-center justify-center gap-2">
-                  {actionLoading === booking.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <><XCircle className="w-4 h-4" /><span>Cancel</span></>}
-                </button>
-              )}
               {(() => {
-                if (booking.bookingStatus !== 'confirmed' || booking.paymentStatus !== 'paid' || isCash) return null;
-                const departureTime = new Date(booking.schedule.departureDateTime).getTime();
+                if (derivedStatus !== 'awaiting_payment' && derivedStatus !== 'confirmed' && derivedStatus !== 'reserved_cash') return null;
+                
+                const departureTime = new Date(displaySchedule.departureDateTime).getTime();
                 const twoHoursInMs = 2 * 60 * 60 * 1000;
-                const canRequestRefund = departureTime - Date.now() > twoHoursInMs;
+                const canCancel = departureTime - Date.now() > twoHoursInMs;
 
-                return canRequestRefund ? (
-                  <button onClick={handleCancel} disabled={actionLoading === booking.id}
-                    className="w-full px-3 py-2 bg-amber-50 text-amber-700 rounded-lg hover:bg-amber-100 transition-colors border border-amber-200 flex items-center justify-center gap-2">
-                    {actionLoading === booking.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <><AlertTriangle className="w-4 h-4" /><span>Request Refund</span></>}
-                  </button>
-                ) : null;
+                if (derivedStatus === 'awaiting_payment' || canCancel) {
+                  const isRefund = booking.paymentStatus === 'paid';
+                  return (
+                    <button onClick={handleCancel} disabled={actionLoading === booking.id}
+                      className={`w-full px-3 py-2 rounded-lg transition-colors border flex items-center justify-center gap-2 ${isRefund ? 'bg-amber-50 text-amber-700 hover:bg-amber-100 border-amber-200' : 'bg-red-50 text-red-700 hover:bg-red-100 border-red-200'}`}>
+                      {actionLoading === booking.id ? <Loader2 className="w-4 h-4 animate-spin" /> : isRefund ? <><AlertTriangle className="w-4 h-4" /><span>Request Refund</span></> : <><XCircle className="w-4 h-4" /><span>Cancel Booking</span></>}
+                    </button>
+                  );
+                }
+                return null;
               })()}
-              {booking.bookingStatus === 'cancelled' && (
+              {derivedStatus === 'cancelled' && (
                 <button onClick={handleDelete} disabled={actionLoading === booking.id}
                   className="w-full px-3 py-2 bg-gray-50 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors border border-gray-200 flex items-center justify-center gap-2">
                   {actionLoading === booking.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Trash2 className="w-4 h-4" /><span>Delete</span></>}
@@ -410,7 +418,7 @@ const BookingCard = memo<{
         </div>
       </div>
 
-      {booking.bookingStatus === 'confirmed' && booking.paymentStatus === 'pending' && !isCash && (
+      {derivedStatus === 'awaiting_payment' && !isCash && (
         <div className="bg-gradient-to-r from-emerald-50 to-brand-50 border-t border-emerald-200 p-3 sm:p-4">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 bg-emerald-500 rounded-full flex items-center justify-center">
@@ -425,7 +433,7 @@ const BookingCard = memo<{
         </div>
       )}
 
-      {isCash && booking.bookingStatus === 'confirmed' && (
+      {derivedStatus === 'reserved_cash' && (
         <div className="bg-gradient-to-r from-amber-50 to-yellow-50 border-t border-amber-200 p-3 sm:p-4">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 bg-amber-500 rounded-full flex items-center justify-center">
@@ -473,8 +481,6 @@ export default function BookingsClient() {
     userDetails,
     formatTime,
     formatDate,
-    getStatusColor,
-    getPaymentStatusColor,
     fetchBookings,
     handleCancelBooking,
     handleDeleteBooking,
@@ -616,14 +622,7 @@ export default function BookingsClient() {
     return;
   }, [user, router, searchParams, fetchBookings, verifyPaymentStatus]);
 
-  if (loading) return (
-    <div className="min-h-screen bg-gradient-to-br from-brand-50 via-gray-50 to-gray-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-pulse space-y-6">
-        <div className="bg-white rounded-2xl shadow-sm p-6"><div className="h-8 bg-gray-200 rounded w-1/4 mb-4" /><div className="grid grid-cols-1 md:grid-cols-5 gap-4">{[...Array(5)].map((_, i) => (<div key={i} className="bg-gray-100 rounded-xl p-4"><div className="h-4 bg-gray-200 rounded w-3/4 mb-2" /><div className="h-6 bg-gray-200 rounded w-1/2" /></div>))}</div></div>
-        {[...Array(3)].map((_, i) => (<div key={i} className="bg-white rounded-2xl shadow-sm p-6"><div className="h-24 bg-gray-200 rounded" /></div>))}
-      </div>
-    </div>
-  );
+  if (loading) return <BookingsLoading />;
 
   const statCards = [
     { label: 'All Active', value: bookingStats.all, key: 'all', Icon: BusIcon },
@@ -728,7 +727,7 @@ export default function BookingsClient() {
                   {pageBookings.map((b) => (
                     <BookingCard key={b.id} booking={b} onCancel={handleCancelBooking} onDelete={handleDeleteBooking}
                       onDownload={handleDownloadTicket} onPayment={handleProcessPayment} onReviewSubmitted={fetchBookings} actionLoading={actionLoading}
-                      formatTime={formatTime} formatDate={formatDate} getStatusColor={getStatusColor} getPaymentStatusColor={getPaymentStatusColor}
+                      formatTime={formatTime} formatDate={formatDate}
                       router={router}
                     />
                   ))}
