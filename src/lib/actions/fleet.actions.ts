@@ -139,22 +139,76 @@ export async function updateRoute(id: string, data: Partial<Route>) {
 
 export async function deleteRoute(id: string) {
   try {
-    await prisma.route.delete({ where: { id } });
+    await prisma.$transaction(
+      async (tx) => {
+        // ── Count check + delete are a single atomic unit ──────────────────
+        // SERIALIZABLE isolation means no concurrent transaction can INSERT a
+        // Schedule with this routeId between our count read and the DELETE.
+        const scheduleCount = await tx.schedule.count({ where: { routeId: id } });
+        if (scheduleCount > 0) {
+          throw new Error(
+            `Cannot delete route: ${scheduleCount} schedule${
+              scheduleCount !== 1 ? 's' : ''
+            } reference this route. Archive or reassign them first.`
+          );
+        }
+
+        const bookingCount = await tx.booking.count({ where: { routeId: id } });
+        if (bookingCount > 0) {
+          throw new Error(
+            `Cannot delete route: ${bookingCount} booking${
+              bookingCount !== 1 ? 's' : ''
+            } are linked to this route.`
+          );
+        }
+
+        await tx.route.delete({ where: { id } });
+      },
+      { isolationLevel: 'Serializable' }
+    );
+
     revalidatePath('/company/operator/dashboard');
     return { success: true };
   } catch (error: unknown) {
-    console.error('Error deleting route:', error);
-    return { success: false, error: (error as Error).message };
+    const msg = (error as Error).message;
+    console.error('Error deleting route:', msg);
+    return { success: false, error: msg };
   }
 }
 
 export async function deleteBranch(id: string) {
   try {
-    await prisma.region.delete({ where: { id } });
+    await prisma.$transaction(
+      async (tx) => {
+        // ── Count check + delete are a single atomic unit ──────────────────
+        const routeCount = await tx.route.count({ where: { regionId: id } });
+        if (routeCount > 0) {
+          throw new Error(
+            `Cannot delete branch: ${routeCount} route${
+              routeCount !== 1 ? 's' : ''
+            } are assigned to this branch. Reassign or move them first.`
+          );
+        }
+
+        const operatorCount = await tx.operator.count({ where: { regionId: id } });
+        if (operatorCount > 0) {
+          throw new Error(
+            `Cannot delete branch: ${operatorCount} operator${
+              operatorCount !== 1 ? 's' : ''
+            } are assigned to this branch. Reassign them first.`
+          );
+        }
+
+        await tx.region.delete({ where: { id } });
+      },
+      { isolationLevel: 'Serializable' }
+    );
+
     revalidatePath('/company/operator/dashboard');
     return { success: true };
   } catch (error: unknown) {
-    console.error('Error deleting branch:', error);
-    return { success: false, error: (error as Error).message };
+    const msg = (error as Error).message;
+    console.error('Error deleting branch:', msg);
+    return { success: false, error: msg };
   }
 }

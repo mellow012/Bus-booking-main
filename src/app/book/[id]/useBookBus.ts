@@ -712,11 +712,27 @@ export default function useBookBus() {
     }
     setNormalisedStops(stops);
     if (stops.length > 0) {
-      setOriginStopId(stops[0].id);
-      if (stops.length > 1) setDestinationStopId(stops[stops.length - 1].id);
-      else setDestinationStopId("");
+      const urlOrigin = searchParams?.get("originStopId");
+      const urlDest = searchParams?.get("destinationStopId");
+
+      const hasUrlOrigin = urlOrigin && stops.some(s => s.id === urlOrigin);
+      const hasUrlDest = urlDest && stops.some(s => s.id === urlDest);
+
+      if (hasUrlOrigin) {
+        setOriginStopId(urlOrigin);
+      } else {
+        setOriginStopId(stops[0].id);
+      }
+
+      if (hasUrlDest) {
+        setDestinationStopId(urlDest);
+      } else if (stops.length > 1) {
+        setDestinationStopId(stops[stops.length - 1].id);
+      } else {
+        setDestinationStopId("");
+      }
     }
-  }, [route, schedule]);
+  }, [route, schedule, searchParams]);
 
   useEffect(() => {
     if (!route || !normalisedStops.length || !originStopId || !destinationStopId) return;

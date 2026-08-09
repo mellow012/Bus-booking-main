@@ -15,8 +15,8 @@ const APP_URL = (process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000').rep
 // ── GET — browser redirect ────────────────────────────────────────────────────
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-  const txRef     = searchParams.get('tx_ref')     ?? searchParams.get('reference') ?? '';
-  const status    = searchParams.get('status')     ?? '';
+  const txRef = searchParams.get('tx_ref') ?? searchParams.get('reference') ?? '';
+  const status = searchParams.get('status') ?? '';
   const bookingId = searchParams.get('booking_id') ?? '';
 
   // Extract bookingId from custom tx_ref format: pc_{bookingId}_{timestamp}
@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
   }
 
   const qs = new URLSearchParams({
-    ...(txRef  && { tx_ref: txRef }),
+    ...(txRef && { tx_ref: txRef }),
     ...(status && { status }),
   });
 
@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
 
     // Verify signature
     const signatureHeader = req.headers.get('x-paychangu-signature') ?? '';
-    const secretKey       = process.env.PAYCHANGU_SECRET_KEY;
+    const secretKey = process.env.PAYCHANGU_SECRET_KEY;
 
     if (!secretKey) {
       console.error('[paychangu/webhook] PAYCHANGU_SECRET_KEY not set');
@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
       .update(rawBody)
       .digest('hex');
 
-    const sigBuffer      = Buffer.from(signatureHeader, 'hex');
+    const sigBuffer = Buffer.from(signatureHeader, 'hex');
     const expectedBuffer = Buffer.from(expectedSig, 'hex');
 
     const signatureValid =
@@ -147,7 +147,7 @@ export async function POST(req: NextRequest) {
 
     // ── Atomic transaction ──────────────────────────────────────────────────────
     await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      
+
       const currentMetadata = (booking.metadata as Record<string, any>) || {};
       let finalBookingStatus = bookingStatus;
       let finalMetadata = currentMetadata;
@@ -155,7 +155,7 @@ export async function POST(req: NextRequest) {
       // Late webhook guard: do not silently un-cancel an expired/cancelled booking.
       // If they paid late, we flag it for human review.
       if (
-        paymentStatus === 'paid' && 
+        paymentStatus === 'paid' &&
         (booking.bookingStatus === 'expired' || booking.bookingStatus === 'cancelled')
       ) {
         finalBookingStatus = booking.bookingStatus;

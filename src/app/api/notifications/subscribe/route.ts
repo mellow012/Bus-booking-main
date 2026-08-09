@@ -29,17 +29,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    // fcmTokens is typed as JSON array
+    // Clean and filter current tokens to keep only valid Web Push subscriptions
     let currentTokens: any[] = [];
     if (Array.isArray(user.fcmTokens)) {
-      currentTokens = user.fcmTokens;
-    } else if (user.fcmTokens) {
-      try {
-        currentTokens = JSON.parse(user.fcmTokens as string);
-        if (!Array.isArray(currentTokens)) currentTokens = [currentTokens];
-      } catch (e) {
-        currentTokens = [];
-      }
+      currentTokens = user.fcmTokens.filter(sub => sub && typeof sub === 'object' && 'endpoint' in sub && 'keys' in sub);
     }
 
     // Check if subscription already exists by endpoint
@@ -49,12 +42,12 @@ export async function POST(request: Request) {
 
     if (existingIndex === -1) {
       currentTokens.push(subscription);
-      
-      await prisma.user.update({
-        where: { id: userId },
-        data: { fcmTokens: currentTokens }
-      });
     }
+      
+    await prisma.user.update({
+      where: { id: userId },
+      data: { fcmTokens: currentTokens }
+    });
 
     return NextResponse.json({ success: true, message: 'Subscription saved successfully' });
   } catch (error: any) {

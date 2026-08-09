@@ -56,6 +56,55 @@ const getStopIcon = (type: 'origin' | 'destination' | 'passed' | 'current' | 'up
   return L.divIcon({ html, className: '', iconSize: [16, 16], iconAnchor: [8, 8] });
 };
 
+// Smooth Lerp / Interpolation Hook for gliding the bus marker between GPS samples
+function useInterpolatedPosition(
+  targetPos: [number, number] | null,
+  durationMs = 2000
+) {
+  const [currentPos, setCurrentPos] = useState<[number, number] | null>(targetPos);
+  const prevPosRef = useRef<[number, number] | null>(targetPos);
+  const animRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!targetPos) {
+      setCurrentPos(null);
+      prevPosRef.current = null;
+      return;
+    }
+
+    const startPos = prevPosRef.current || targetPos;
+    const startTime = performance.now();
+
+    const animate = (now: number) => {
+      const elapsed = now - startTime;
+      const progress = Math.min(1, elapsed / durationMs);
+
+      // Smooth cubic ease-out
+      const ease = 1 - Math.pow(1 - progress, 3);
+
+      const nextLat = startPos[0] + (targetPos[0] - startPos[0]) * ease;
+      const nextLng = startPos[1] + (targetPos[1] - startPos[1]) * ease;
+
+      setCurrentPos([nextLat, nextLng]);
+
+      if (progress < 1) {
+        animRef.current = requestAnimationFrame(animate);
+      } else {
+        prevPosRef.current = targetPos;
+      }
+    };
+
+    if (animRef.current) cancelAnimationFrame(animRef.current);
+    animRef.current = requestAnimationFrame(animate);
+
+    return () => {
+      if (animRef.current) cancelAnimationFrame(animRef.current);
+    };
+  }, [targetPos?.[0], targetPos?.[1], durationMs]);
+
+  return currentPos;
+}
+
 // Malawian city coordinate database
 const CITY_COORDS: Record<string, [number, number]> = {
   lilongwe: [-13.9626, 33.7741],
@@ -438,7 +487,7 @@ const JourneyMap: React.FC<JourneyMapProps> = ({
     return true;
   }, [livePosition, livePositionAgeMs]);
 
-  let busPosition: [number, number] | null = null;
+  let targetBusPosition: [number, number] | null = null;
   let displayProgress = safeProgress;
 
   if (isLivePositionUsable && livePosition) {
@@ -447,11 +496,11 @@ const JourneyMap: React.FC<JourneyMapProps> = ({
     if (routePoints && routePoints.length >= 2) {
       // Snap live GPS onto the road polyline so the icon always sits on the road
       const { snapped, progress } = snapToPolyline(routePoints, rawPos);
-      busPosition = snapped;
+      targetBusPosition = snapped;
       displayProgress = progress;
     } else if (originCoords && destCoords) {
       // No road polyline yet — place bus on the straight-line segment nearest to GPS
-      busPosition = interpolateAlongPolyline(null, originCoords, destCoords, safeProgress ?? 0);
+      targetBusPosition = interpolateAlongPolyline(null, originCoords, destCoords, safeProgress ?? 0);
       const total = haversineM(originCoords, destCoords);
       if (total > 0) {
         const fromOrigin = haversineM(originCoords, rawPos);
@@ -459,15 +508,16 @@ const JourneyMap: React.FC<JourneyMapProps> = ({
       }
     } else {
       // Last resort: use raw GPS
-      busPosition = rawPos;
+      targetBusPosition = rawPos;
     }
   } else if (safeProgress !== null && originCoords && destCoords) {
     // No live GPS — place bus based on time-based progress along the road
     if (routePoints !== undefined) {
-      busPosition = interpolateAlongPolyline(routePoints, originCoords, destCoords, safeProgress);
+      targetBusPosition = interpolateAlongPolyline(routePoints, originCoords, destCoords, safeProgress);
     }
   }
 
+  const busPosition = useInterpolatedPosition(targetBusPosition, 2000);
   const showBusMarker = isActive && busPosition !== null;
 
   const mapRef = useRef<L.Map | null>(null);
@@ -591,7 +641,11 @@ const JourneyMap: React.FC<JourneyMapProps> = ({
     updateRouteLayer(map, routePoints);
   }, [routePoints, updateRouteLayer]);
 
-  // Effect 3: Render stops based on stopStages
+  const stopStagesKey = useMemo(() => {
+    return stopStages.map(s => `${s.id}:${s.stage}`).join(',');
+  }, [stopStages]);
+
+  // Effect 3: Render stops based on stopStagesKey
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !originCoords || !destCoords) return;
@@ -616,7 +670,8 @@ const JourneyMap: React.FC<JourneyMapProps> = ({
       stopMarkersRef.current.push(L.marker(originCoords, { icon: getStopIcon('origin') }).addTo(map));
       stopMarkersRef.current.push(L.marker(destCoords, { icon: getStopIcon('destination') }).addTo(map));
     }
-  }, [stopStages, originCoords, destCoords]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stopStagesKey, originCoords, destCoords]);
 
   // Effect 4: Dynamically update or add/remove ONLY the bus marker when position changes
   useEffect(() => {
@@ -630,9 +685,9 @@ const JourneyMap: React.FC<JourneyMapProps> = ({
         busMarkerRef.current = L.marker(busPosition, { icon: busIcon, zIndexOffset: 1000 }).addTo(map);
       }
       
-      // Handle following
+      // Handle following: center camera instantly on the animated position to prevent camera jitter
       if (followBus) {
-        map.panTo(busPosition, { animate: true });
+        map.setView(busPosition, map.getZoom(), { animate: false });
       }
     } else if (busMarkerRef.current) {
       busMarkerRef.current.remove();

@@ -154,13 +154,17 @@ async function sendWebPushToUser(userId: string, payload: NotificationPayload): 
     // Fetch push subscriptions stored in the user's profile
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { fcmTokens: true }, // Re-using fcmTokens field to store JSON push subscriptions
+      select: { fcmTokens: true },
     });
 
-    if (!user?.fcmTokens) return;
+    if (!user?.fcmTokens || !Array.isArray(user.fcmTokens)) return;
 
-    const subscriptions = user.fcmTokens as any[];
-    if (!Array.isArray(subscriptions) || subscriptions.length === 0) return;
+    // Keep only valid Web Push subscriptions
+    const validSubs = user.fcmTokens.filter(
+      (sub: any) => sub && typeof sub === 'object' && 'endpoint' in sub && 'keys' in sub
+    );
+
+    if (validSubs.length === 0) return;
 
     const webpush = await import('web-push').catch(() => null);
     if (!webpush) {
@@ -178,9 +182,31 @@ async function sendWebPushToUser(userId: string, payload: NotificationPayload): 
       data: { url: payload.clickAction || '/', ...payload.data },
     });
 
-    await Promise.allSettled(
-      subscriptions.map((sub) => webpush.sendNotification(sub, pushPayload))
+    const failedEndpoints: string[] = [];
+
+    await Promise.all(
+      validSubs.map(async (sub) => {
+        try {
+          await (webpush as any).sendNotification(sub as any, pushPayload);
+        } catch (err: any) {
+          // If subscription is expired (410 Gone or 404 Not Found), mark it for deletion
+          if (err.statusCode === 410 || err.statusCode === 404) {
+            failedEndpoints.push((sub as any).endpoint);
+          }
+          console.warn('[NotificationService] Web Push individual notification failed:', err.message);
+        }
+      })
     );
+
+    // If we have expired subscriptions, clean them from the user's fcmTokens array in the DB
+    if (failedEndpoints.length > 0) {
+      const remainingSubs = validSubs.filter(sub => !failedEndpoints.includes((sub as any).endpoint));
+      await prisma.user.update({
+        where: { id: userId },
+        data: { fcmTokens: remainingSubs }
+      });
+      console.log(`[NotificationService] Cleaned up ${failedEndpoints.length} expired subscriptions for user ${userId}`);
+    }
   } catch (error: any) {
     // Non-fatal: in-app notification was already saved
     console.warn('[NotificationService] Web Push failed (non-fatal):', error.message);

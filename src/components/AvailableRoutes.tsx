@@ -150,10 +150,15 @@ export default function AvailableRoutes({ limit }: AvailableRoutesProps) {
                         <div className="absolute inset-0 flex items-center">
                           <div className="w-full border-t border-gray-300" />
                         </div>
-                        <div className="relative flex justify-center text-sm">
+                        <div className="relative flex flex-col items-center text-sm">
                           <span className="bg-white px-2 text-gray-500">
                             {formatDuration(result.route.duration)}
                           </span>
+                          {Array.isArray(result.route.stops) && result.route.stops.length > 0 && (
+                            <span className="bg-white px-2 text-[10px] font-semibold text-blue-600 mt-0.5">
+                              {result.route.stops.length} stop{result.route.stops.length !== 1 ? 's' : ''}
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>

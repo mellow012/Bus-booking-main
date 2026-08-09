@@ -118,13 +118,11 @@ export async function GET(
       orderBy: { createdAt: 'desc' },
     });
 
-    let avgLat = 0, avgLng = 0, latestSample = null;
+    let latestSample = null;
     let stale = false;
 
     if (recentSamples.length > 0) {
       latestSample = recentSamples[0];
-      avgLat = recentSamples.reduce((sum, s) => sum + s.latitude, 0) / recentSamples.length;
-      avgLng = recentSamples.reduce((sum, s) => sum + s.longitude, 0) / recentSamples.length;
     } else {
       latestSample = await prisma.tripPositionSample.findFirst({
         where: { scheduleId },
@@ -136,10 +134,11 @@ export async function GET(
           message: 'No position data available for this trip',
         });
       }
-      avgLat = latestSample.latitude;
-      avgLng = latestSample.longitude;
       stale = true;
     }
+
+    const latitude = latestSample.latitude;
+    const longitude = latestSample.longitude;
 
     const threeMinsAgo = new Date(Date.now() - 3 * 60 * 1000);
     stale = stale || latestSample.createdAt < threeMinsAgo;
@@ -147,8 +146,8 @@ export async function GET(
     return NextResponse.json({
       available: true,
       position: {
-        latitude: avgLat,
-        longitude: avgLng,
+        latitude: latitude,
+        longitude: longitude,
         accuracy: latestSample.accuracy,
         heading: latestSample.heading,
         speed: latestSample.speed,

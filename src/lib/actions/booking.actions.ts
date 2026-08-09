@@ -544,7 +544,7 @@ export async function createBooking(data: Partial<Booking> & {
         contactEmail: data.contactEmail || '',
         contactPhone: data.contactPhone,
         bookingDate: data.bookingDate ? new Date(data.bookingDate) : new Date(),
-        routeId: data.routeId,
+        route: data.routeId ? { connect: { id: data.routeId } } : undefined,
         
         // Relations using connect
         company: { connect: { id: data.companyId } },

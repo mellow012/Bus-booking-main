@@ -10,6 +10,7 @@ interface LocationAutocompleteProps {
   cities: string[];
   exclude?: string;
   id?: string;
+  onFocus?: () => void;
 }
 
 function levenshtein(a: string, b: string): number {
@@ -69,7 +70,7 @@ function fuzzySearch(query: string, cities: string[], exclude?: string): string[
 }
 
 export const LocationAutocomplete: React.FC<LocationAutocompleteProps> = ({
-  value, onChange, onSelect, placeholder, icon: Icon, cities, exclude, id,
+  value, onChange, onSelect, placeholder, icon: Icon, cities, exclude, id, onFocus,
 }) => {
   const [open, setOpen] = useState(false);
   const [highlight, setHighlight] = useState(-1);
@@ -129,7 +130,7 @@ export const LocationAutocomplete: React.FC<LocationAutocompleteProps> = ({
         placeholder={placeholder}
         value={value}
         onChange={e => { onChange(e.target.value); setOpen(true); setHighlight(-1); }}
-        onFocus={() => setOpen(true)}
+        onFocus={() => { setOpen(true); onFocus?.(); }}
         onKeyDown={handleKey}
         className="w-full pl-9 pr-8 h-11 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white transition-shadow text-gray-900"
         aria-autocomplete="list"

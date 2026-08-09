@@ -50,7 +50,6 @@ export default function HomeSearch() {
     if (!asked && "geolocation" in navigator) {
       requestGeolocation();
     }
-    // We removed the 'else setShowCityPicker(true)' to prevent the annoying auto-popup loop!
   }, []);
 
   const requestGeolocation = useCallback(() => {
@@ -142,6 +141,7 @@ export default function HomeSearch() {
                 icon={MapPin} 
                 cities={MALAWI_CITIES} 
                 exclude={search.to}
+                onFocus={requestGeolocation}
               />
             </div>
             <div className="col-span-1">

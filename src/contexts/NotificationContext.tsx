@@ -124,13 +124,25 @@ export const NotificationProvider: React.FC<{ children: ReactNode; userId?: stri
       .channel(`user-notifications-${userId}`)
       .on(
         'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'Notification', filter: `userId=eq.${userId}` },
+        { event: '*', schema: 'public', table: 'Notification', filter: `userId=eq.${userId}` },
         (payload) => {
-          const newNotification = payload.new as Notification;
-          setNotifications((prev) => [newNotification, ...prev]);
-          import('react-hot-toast').then(({ default: toast }) => {
-            toast(newNotification.title, { icon: '🔔' });
-          });
+          if (payload.eventType === 'INSERT') {
+            const newNotification = payload.new as Notification;
+            setNotifications((prev) => [newNotification, ...prev]);
+            import('react-hot-toast').then(({ default: toast }) => {
+              toast(newNotification.title, { icon: '🔔' });
+            });
+          } else if (payload.eventType === 'UPDATE') {
+            const updated = payload.new as Notification;
+            setNotifications((prev) =>
+              prev.map((n) => (n.id === updated.id ? updated : n))
+            );
+          } else if (payload.eventType === 'DELETE') {
+            const deletedId = (payload.old as any).id;
+            if (deletedId) {
+              setNotifications((prev) => prev.filter((n) => n.id !== deletedId));
+            }
+          }
         }
       )
       .subscribe();
