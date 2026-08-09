@@ -1,5 +1,6 @@
 import React from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { Star, ArrowRight, Calendar, Users, Clock, MapPin, Bus as BusIcon, Flame, CheckCircle, Shield, Navigation, Loader2 } from "lucide-react";
 import { EnhancedSchedule, fillingFast, seatColor, cityMatch, formatDuration, isToday, AMENITY_ICONS, getScheduleCategory } from "@/utils/homeHelpers";
 
@@ -33,7 +34,11 @@ export const ScheduleCard = React.memo(({ s, onBook, userCity }: {
               </div>
             )}
             <div className="min-w-0">
-              <p className="font-semibold text-gray-900 text-xs sm:text-sm truncate group-hover:text-brand-700 transition-colors">{s.companyName}</p>
+              <Link
+                href={`/operators/${s.companyId}`}
+                onClick={(e) => e.stopPropagation()}
+                className="font-semibold text-gray-900 text-xs sm:text-sm truncate hover:text-brand-700 hover:underline underline-offset-2 transition-colors"
+              >{s.companyName}</Link>
               <div className="flex items-center gap-1 sm:gap-1.5 mt-0.5">
                 <span className="text-[10px] sm:text-[11px] text-gray-500 bg-gray-100 px-1.5 sm:px-2 py-0.5 rounded-full">{s.busType}</span>
                 <span className="flex items-center gap-0.5 text-[10px] sm:text-[11px] text-gray-500 font-medium">
@@ -144,7 +149,7 @@ export const ScheduleCard = React.memo(({ s, onBook, userCity }: {
             className="flex-1 h-10 rounded-xl bg-coral-500 hover:bg-coral-600 disabled:bg-gray-100 disabled:text-gray-400 text-white text-xs sm:text-sm font-semibold transition-colors flex items-center justify-center gap-2 group/btn active:scale-[.98]">
             {s.availableSeats <= 0 ? "Fully Booked" : (
               isLoading ? (
-                <>Loading... <Loader2 className="w-4 h-4 animate-spin" /></>
+                <Loader2 className="w-4 h-4 animate-spin" />
               ) : (
                 <>Book Journey <ArrowRight className="w-3.5 h-3.5 group-hover/btn:translate-x-0.5 transition-transform" /></>
               )

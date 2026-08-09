@@ -14,7 +14,7 @@ import {
   CreditCard, CheckCircle, AlertCircle, MapPin,
   Users, Calendar, ArrowRight, Star, ArrowLeft,
   TicketPercent, Loader2, Lock, ArrowDown, Armchair, Bus as BusIcon, MessageSquare,
-  Camera, Share2, ChevronLeft, ChevronRight, X,
+  Camera, Share2, ChevronLeft, ChevronRight, X, ChevronDown,
 } from "lucide-react";
 
 import InlinePassengerForm, { PassengerFormState } from "./InlinePassengerForm";
@@ -165,6 +165,11 @@ export default function BookBus() {
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-brand-50 to-gray-50 pt-28 sm:pt-32 lg:pt-36">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
 
+        {/* ── Back Button ── */}
+        <div className="mb-4">
+          <BackButton href="/schedules" iconOnly hideOnMobile={false} className="border-slate-200 shadow-sm bg-white text-slate-600 hover:text-slate-900" />
+        </div>
+
         {/* ── Header with Share ── */}
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl sm:text-2xl font-bold text-gray-900">
@@ -185,45 +190,61 @@ export default function BookBus() {
               <p className="text-sm text-gray-500 mb-4">Select where you will board and alight.</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="boardAt" className="mb-1.5 block font-medium">
+                  <Label htmlFor="boardAt" className="mb-1.5 block text-xs font-bold text-slate-500 uppercase tracking-wider">
                     🟢 Pick-up Stop <span className="text-red-500">*</span>
                   </Label>
-                  <select
-                    id="boardAt" value={originStopId}
-                    onChange={e => handleOriginChange(e.target.value)}
-                    className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-700 bg-white text-sm"
-                    required
-                  >
-                    {normalisedStops
-                      .filter(s => s.id !== normalisedStops[normalisedStops.length - 1].id)
-                      .map((stop, idx) => (
+                  <div className="relative">
+                    <div className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none text-emerald-500">
+                      <MapPin className="w-4 h-4" />
+                    </div>
+                    <select
+                      id="boardAt" value={originStopId}
+                      onChange={e => handleOriginChange(e.target.value)}
+                      className="w-full appearance-none pl-10 pr-10 py-3 bg-white border border-slate-200 hover:border-slate-350 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent text-slate-800 font-semibold text-sm transition-all shadow-sm cursor-pointer"
+                      required
+                    >
+                      {normalisedStops
+                        .filter(s => s.id !== normalisedStops[normalisedStops.length - 1].id)
+                        .map((stop, idx) => (
+                          <option key={stop.id} value={stop.id}>
+                            {stop.name}
+                            {stop.distanceFromOrigin > 0 && stop.distanceFromOrigin < (route.distance || 0)
+                              ? ` (${stop.distanceFromOrigin} km)` : idx === 0 ? " — Start" : ""}
+                          </option>
+                        ))}
+                    </select>
+                    <div className="absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                      <ChevronDown className="w-4 h-4" />
+                    </div>
+                  </div>
+                </div>
+                <div>
+                  <Label htmlFor="alightAt" className="mb-1.5 block text-xs font-bold text-slate-500 uppercase tracking-wider">
+                    🔴 Drop-off Stop <span className="text-red-500">*</span>
+                  </Label>
+                  <div className="relative">
+                    <div className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none text-rose-500">
+                      <MapPin className="w-4 h-4" />
+                    </div>
+                    <select
+                      id="alightAt" value={destinationStopId}
+                      onChange={e => setDestinationStopId(e.target.value)}
+                      className="w-full appearance-none pl-10 pr-10 py-3 bg-white border border-slate-200 hover:border-slate-350 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent text-slate-800 font-semibold text-sm transition-all shadow-sm cursor-pointer disabled:opacity-60"
+                      required disabled={!originStopId}
+                    >
+                      <option value="">Select drop-off stop</option>
+                      {availableDestinations.map(stop => (
                         <option key={stop.id} value={stop.id}>
                           {stop.name}
                           {stop.distanceFromOrigin > 0 && stop.distanceFromOrigin < (route.distance || 0)
-                            ? ` (${stop.distanceFromOrigin} km)` : idx === 0 ? " — Start" : ""}
+                            ? ` (${stop.distanceFromOrigin} km)` : stop.id === "__destination__" ? " — End" : ""}
                         </option>
                       ))}
-                  </select>
-                </div>
-                <div>
-                  <Label htmlFor="alightAt" className="mb-1.5 block font-medium">
-                    🔴 Drop-off Stop <span className="text-red-500">*</span>
-                  </Label>
-                  <select
-                    id="alightAt" value={destinationStopId}
-                    onChange={e => setDestinationStopId(e.target.value)}
-                    className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-700 bg-white text-sm disabled:opacity-50"
-                    required disabled={!originStopId}
-                  >
-                    <option value="">Select drop-off stop</option>
-                    {availableDestinations.map(stop => (
-                      <option key={stop.id} value={stop.id}>
-                        {stop.name}
-                        {stop.distanceFromOrigin > 0 && stop.distanceFromOrigin < (route.distance || 0)
-                          ? ` (${stop.distanceFromOrigin} km)` : stop.id === "__destination__" ? " — End" : ""}
-                      </option>
-                    ))}
-                  </select>
+                    </select>
+                    <div className="absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                      <ChevronDown className="w-4 h-4" />
+                    </div>
+                  </div>
                 </div>
               </div>
               {originStopId && destinationStopId && displayPrice > 0 && selectedPathStops.length > 0 && (

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { Schedule, Route, Bus, Company } from '@/types';
 import AlertMessage from './AlertMessage';
@@ -120,7 +121,7 @@ export default function AvailableRoutes({ limit }: AvailableRoutesProps) {
                       </span>
                     </div>
                     <div>
-                      <h3 className="font-semibold text-gray-900">{result.company.name}</h3>
+                      <Link href={`/operators/${result.company.id}`} className="font-semibold text-gray-900 hover:text-brand-700 hover:underline underline-offset-2 transition-colors">{result.company.name}</Link>
                       <p className="text-sm text-gray-600">{result.bus.licensePlate}</p>
                     </div>
                   </div>

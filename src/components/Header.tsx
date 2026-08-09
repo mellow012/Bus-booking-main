@@ -54,6 +54,7 @@ const Header: React.FC = () => {
   const navigationItems = [
     { href: '/',          label: t('home'),        icon: HomeIcon },
     { href: '/schedules', label: t('schedules'),   icon: Search },
+    { href: '/operators', label: 'Bus Companies',  icon: BusIcon },
     ...(hasPromotions ? [{ href: '/#promotions-section', label: t('promotions'), icon: Zap }] : []),
   ];
 

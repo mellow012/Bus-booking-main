@@ -36,27 +36,21 @@ const Footer: React.FC = () => {
 
   const quickLinks = [
     { href: '/', label: 'Home', ariaLabel: 'Go to homepage' },
-    { href: '/search', label: 'Search Buses', ariaLabel: 'Search bus schedules' },
-    { href: '/schedules', label: 'Schedules', ariaLabel: 'View bus schedules' },
-    { href: '/bookings', label: 'My Bookings', ariaLabel: 'View your bookings' },
-    { href: '/routes', label: 'Popular Routes', ariaLabel: 'Explore popular routes' },
-    { href: '/#promotions-section', label: 'Special Offers', ariaLabel: 'Check special offers' }
+    { href: '/schedules', label: 'Bus Schedules', ariaLabel: 'Search bus schedules and routes' },
+    { href: '/operators', label: 'Bus Companies', ariaLabel: 'View registered bus partners' },
+    { href: '/bookings', label: 'My Bookings', ariaLabel: 'View your booking history' }
   ];
 
   const support = [
-    { href: '/help', label: 'Help Center', ariaLabel: 'Get help and support' },
-    { href: '/contact', label: 'Contact Us', ariaLabel: 'Contact customer service' },
+    { href: '/contact', label: 'Contact Us', ariaLabel: 'Contact customer support' },
     { href: '/faq', label: 'FAQ', ariaLabel: 'Frequently asked questions' },
-    { href: '/booking-guide', label: 'Booking Guide', ariaLabel: 'Learn how to book' },
-    { href: '/cancellation', label: 'Cancellation', ariaLabel: 'Cancellation policy' },
-    { href: '/refund', label: 'Refunds', ariaLabel: 'Refund information' }
+    { href: '/booking-guide', label: 'Booking Guide', ariaLabel: 'Learn how to book tickets' },
+    { href: '/refund-policy', label: 'Refund & Cancellation Policy', ariaLabel: 'Refund and cancellation rules' }
   ];
 
   const legal = [
     { href: '/terms', label: 'Terms of Service', ariaLabel: 'View terms of service' },
-    { href: '/privacy', label: 'Privacy Policy', ariaLabel: 'View privacy policy' },
-    { href: '/refund-policy', label: 'Refund Policy', ariaLabel: 'View refund policy' },
-    { href: '/safety', label: 'Safety Guidelines', ariaLabel: 'View safety guidelines' }
+    { href: '/privacy', label: 'Privacy Policy', ariaLabel: 'View privacy policy' }
   ];
 
   const features = [
