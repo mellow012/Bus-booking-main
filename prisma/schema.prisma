@@ -548,3 +548,13 @@ model TripPositionSample {
   @@index([scheduleId])
   @@index([createdAt])
 }
+
+model NewsletterSubscriber {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@index([email])
+}
+

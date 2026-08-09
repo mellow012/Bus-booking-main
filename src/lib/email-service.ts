@@ -322,3 +322,51 @@ export async function sendOperatorInviteEmail(
     throw new Error('Failed to send invitation email');
   }
 }
+
+export async function sendNewsletterWelcomeEmail(email: string): Promise<void> {
+  const mailOptions = {
+    to: email,
+    subject: 'Welcome to the TibhukeBus Newsletter! 🚍',
+    html: `
+      <!DOCTYPE html>
+      <html lang="en">
+        <head>
+          <meta charset="UTF-8" />
+          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+          <title>Welcome to our Newsletter</title>
+        </head>
+        <body style="margin:0;padding:0;background-color:#f3f4f6;font-family:'Inter',system-ui,-apple-system,sans-serif;">
+          <div style="max-width: 600px; margin: 40px auto; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.08); border: 1px solid #e2e8f0;">
+            ${getEmailHeaderHtml('Welcome to TibhukeBus!')}
+            <div style="padding: 40px; color: #1e293b;">
+              <h2 style="color: #1e293b; margin-top: 0; font-size: 20px;">Hi there,</h2>
+              <p style="color: #475569; line-height: 1.6; font-size: 15px;">
+                Thank you for subscribing to the TibhukeBus newsletter! You are now part of our community of travelers.
+              </p>
+              <p style="color: #475569; line-height: 1.6; font-size: 15px;">
+                From now on, you'll be the first to know about new routes, special discounts, operator announcements, and smart travel tips across Malawi.
+              </p>
+              <div style="background-color: #f8fafc; border-left: 4px solid #f97316; padding: 15px; border-radius: 5px; margin: 24px 0;">
+                <p style="margin: 0; color: #1e293b; font-size: 13px; line-height: 1.5;">
+                  <strong>💡 Tip:</strong> Add support@tibhukebus.com to your contact list to make sure our emails never end up in your spam folder.
+                </p>
+              </div>
+              <p style="color: #475569; line-height: 1.6; font-size: 15px; margin-bottom: 0;">
+                Safe travels,<br/>
+                <strong>The TibhukeBus Team</strong>
+              </p>
+            </div>
+            ${getEmailFooterHtml()}
+          </div>
+        </body>
+      </html>
+    `,
+  };
+
+  try {
+    const data = await sendResendEmail(mailOptions);
+    console.log('[email-service] Newsletter welcome email sent:', data?.id);
+  } catch (error: any) {
+    console.error('[email-service] Failed to send newsletter welcome email to', email, ':', error.message);
+  }
+}

@@ -1,12 +1,12 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   BusIcon, Phone, Mail, MapPin, Clock, Shield,
   Facebook, Instagram, Linkedin, MessageCircle,
-  ArrowRight, Heart, Award, CheckCircle, ChevronRight
+  ArrowRight, Heart, Award, CheckCircle, ChevronRight, Loader2
 } from 'lucide-react';
 import Image from 'next/image';
 
@@ -25,6 +25,41 @@ const WhatsAppIcon: React.FC<{ className?: string }> = ({ className = "w-5 h-5" 
 const Footer: React.FC = () => {
   const currentYear = new Date().getFullYear();
   const pathname = usePathname() || '';
+
+  const [email, setEmail] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [subscribed, setSubscribed] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+
+  const handleSubscribe = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email) return;
+    setSubmitting(true);
+    setErrorMessage('');
+
+    try {
+      const response = await fetch('/api/newsletter', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email }),
+      });
+
+      const result = await response.json();
+      if (result.success) {
+        setSubscribed(true);
+        setEmail('');
+      } else {
+        setErrorMessage(result.error || 'Failed to subscribe. Please try again.');
+      }
+    } catch (err) {
+      console.error('Subscription error:', err);
+      setErrorMessage('A network error occurred. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   const isAdminPage =
     pathname.startsWith('/admin') ||
@@ -290,26 +325,52 @@ const Footer: React.FC = () => {
               <h3 className="text-white font-bold text-xl mb-2">Stay Updated</h3>
               <p className="text-gray-300">Get the latest offers, routes, and travel tips delivered to your inbox.</p>
             </div>
-            <form className="flex flex-col sm:flex-row gap-4" onSubmit={(e) => e.preventDefault()}>
-              <div className="relative w-full sm:w-80">
-                <input
-                  type="email"
-                  placeholder="Enter your email address"
-                  className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent backdrop-blur-sm"
-                  aria-label="Email address for newsletter subscription"
-                  required
-                />
+            {subscribed ? (
+              <div className="flex items-center gap-3 bg-white/10 backdrop-blur-sm border border-white/10 px-6 py-4 rounded-xl text-white animate-in fade-in duration-300">
+                <CheckCircle className="w-5 h-5 text-emerald-450 shrink-0" />
+                <div>
+                  <p className="font-bold text-sm">Successfully Subscribed!</p>
+                  <p className="text-xs text-gray-300 mt-0.5">Thank you for joining our newsletter.</p>
+                </div>
               </div>
-              {/* Subscribe CTA — coral-500 | white bold text = 3.4:1 (large-text AA ✓) */}
-              <button
-                type="submit"
-                className="px-8 py-3 bg-coral-500 hover:bg-coral-600 text-white rounded-xl transition-all duration-300 font-semibold flex items-center justify-center space-x-2 hover:shadow-lg hover:shadow-coral-500/25 hover:scale-105"
-                aria-label="Subscribe to newsletter"
-              >
-                <span>Subscribe</span>
-                <ArrowRight className="w-4 h-4" />
-              </button>
-            </form>
+            ) : (
+              <form className="flex flex-col sm:flex-row gap-4" onSubmit={handleSubscribe}>
+                <div className="relative w-full sm:w-80">
+                  <input
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(e) => {
+                      setEmail(e.target.value);
+                      if (errorMessage) setErrorMessage('');
+                    }}
+                    placeholder="Enter your email address"
+                    className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent backdrop-blur-sm"
+                    aria-label="Email address for newsletter subscription"
+                    disabled={submitting}
+                  />
+                  {errorMessage && (
+                    <p className="absolute left-0 -bottom-5 text-[10px] text-rose-400 font-semibold">{errorMessage}</p>
+                  )}
+                </div>
+                {/* Subscribe CTA */}
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="px-8 py-3 bg-coral-500 hover:bg-coral-600 disabled:opacity-50 text-white rounded-xl transition-all duration-300 font-semibold flex items-center justify-center space-x-2 hover:shadow-lg hover:shadow-coral-500/25 hover:scale-105 active:scale-98 cursor-pointer min-w-[140px]"
+                  aria-label="Subscribe to newsletter"
+                >
+                  {submitting ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <>
+                      <span>Subscribe</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </>
+                  )}
+                </button>
+              </form>
+            )}
           </div>
         </div>
 
