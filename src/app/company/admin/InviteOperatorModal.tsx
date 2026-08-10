@@ -6,6 +6,8 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Dialog, Transition } from '@headlessui/react';
 import { Loader2, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import AlertMessage from '@/components/AlertMessage';
+import { useAppToast } from '@/contexts/ToastContext';
 import { inviteOperator } from '@/lib/actions/operator.actions';
 
 const inviteSchema = z.object({
@@ -27,6 +29,7 @@ interface InviteOperatorModalProps {
 
 export default function InviteOperatorModal({ isOpen, onClose, branches = [], companyId = '', companyName = '' }: InviteOperatorModalProps) {
   const queryClient = useQueryClient();
+  const toast = useAppToast();
   const {
     register,
     handleSubmit,
@@ -49,8 +52,9 @@ export default function InviteOperatorModal({ isOpen, onClose, branches = [], co
       }
       return response;
     },
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['operators'] });
+      toast.success('Invitation sent', `An invitation has been sent to ${variables.email}.`);
       onClose();
     },
   });
@@ -108,7 +112,14 @@ export default function InviteOperatorModal({ isOpen, onClose, branches = [], co
                     </select>
                     {errors.regionId && <p className="mt-1 text-xs text-red-600">{errors.regionId.message}</p>}
                   </div>
-                  {mutation.isError && <p className="text-xs text-red-600">Error: {mutation.error.message}</p>}
+                  {mutation.isError && (
+                    <AlertMessage
+                      type="error"
+                      message={mutation.error.message}
+                      onClose={() => mutation.reset()}
+                      autoClose={false}
+                    />
+                  )}
                   
                   <div className="flex justify-end gap-3 pt-4 border-t border-gray-50 mt-6">
                     <Button type="button" variant="outline" onClick={onClose} className="rounded-xl h-10">

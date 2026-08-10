@@ -318,9 +318,9 @@ const Header: React.FC = () => {
 
             {!loading && !user && (
               <div className="hidden md:flex items-center space-x-3">
-                <Link href="/login" className="px-4 py-2 text-gray-700 hover:text-brand-700 font-medium transition-colors duration-200">{t('signIn')}</Link>
+                <Link href={`/login?redirect=${encodeURIComponent(pathname)}`} className="px-4 py-2 text-gray-700 hover:text-brand-700 font-medium transition-colors duration-200">{t('signIn')}</Link>
                 {/* coral-500 bg | white bold text = 3.4:1 (large-text AA ✓) */}
-                <Link href="/register" className="px-4 py-2 bg-coral-500 hover:bg-coral-600 text-white rounded-xl font-medium shadow-lg hover:shadow-xl transition-all duration-200">{t('getStarted')}</Link>
+                <Link href={`/register?redirect=${encodeURIComponent(pathname)}`} className="px-4 py-2 bg-coral-500 hover:bg-coral-600 text-white rounded-xl font-medium shadow-lg hover:shadow-xl transition-all duration-200">{t('getStarted')}</Link>
               </div>
             )}
 
@@ -402,9 +402,9 @@ const Header: React.FC = () => {
                 </div>
               ) : (
                   <div className="pt-6 border-t border-gray-100 space-y-3">
-                    <Link href="/login" onClick={() => setIsMenuOpen(false)} className="flex items-center justify-center p-4 text-gray-700 hover:bg-gray-50 rounded-2xl font-bold border border-gray-100">{t('signIn')}</Link>
+                    <Link href={`/login?redirect=${encodeURIComponent(pathname)}`} onClick={() => setIsMenuOpen(false)} className="flex items-center justify-center p-4 text-gray-700 hover:bg-gray-50 rounded-2xl font-bold border border-gray-100">{t('signIn')}</Link>
                     {/* coral-500 bg | white bold text = 3.4:1 (large-text AA ✓) */}
-                    <Link href="/register" onClick={() => setIsMenuOpen(false)} className="flex items-center justify-center p-4 bg-coral-500 text-white rounded-2xl font-bold shadow-lg shadow-coral-100 active:scale-95 transition-all">{t('getStarted')}</Link>
+                    <Link href={`/register?redirect=${encodeURIComponent(pathname)}`} onClick={() => setIsMenuOpen(false)} className="flex items-center justify-center p-4 bg-coral-500 text-white rounded-2xl font-bold shadow-lg shadow-coral-100 active:scale-95 transition-all">{t('getStarted')}</Link>
                   </div>
               )}
             </div>

@@ -169,7 +169,7 @@ function RegisterContent() {
     setIsGoogleLoading(true);
     setGeneralError('');
     try {
-      await signInWithGoogle();
+      await signInWithGoogle(dest || undefined);
     } catch (error: any) {
       console.error('Google login error:', error);
       setGeneralError(error.message || 'Failed to sign in with Google');

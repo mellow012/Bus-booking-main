@@ -8,6 +8,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Dialog, Transition } from '@headlessui/react';
 import { Loader2, Users, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import AlertMessage from '@/components/AlertMessage';
 import { Operator, Region } from '@prisma/client';
 import { useAppToast } from '@/contexts/ToastContext';
 
@@ -161,7 +162,14 @@ export default function EditOperatorModal({ isOpen, onClose, operator, companyId
                     </select>
                     {errors.regionId && <p className="mt-1 text-xs text-red-600">{errors.regionId.message}</p>}
                   </div>
-                  {mutation.isError && <p className="text-xs text-red-600">Error: {mutation.error.message}</p>}
+                  {mutation.isError && (
+                    <AlertMessage
+                      type="error"
+                      message={mutation.error.message}
+                      onClose={() => mutation.reset()}
+                      autoClose={false}
+                    />
+                  )}
                   
                   <div className="flex justify-end gap-3 pt-4 border-t border-gray-50 mt-6">
                     <Button type="button" variant="outline" onClick={onClose} className="rounded-xl h-10">

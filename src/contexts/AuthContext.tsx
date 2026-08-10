@@ -41,7 +41,7 @@ interface AuthContextType {
   user: (User & { uid: string; emailVerified: boolean; getIdToken: () => Promise<string> }) | null;
   userProfile: UserProfile | null; // 👈 Exposed user profile instance
   setUserProfile: (profile: UserProfile | null) => void;
-  signInWithGoogle: () => Promise<void>;
+  signInWithGoogle: (redirectTo?: string) => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, profile: { fullName: string; phone?: string }) => Promise<void>;
   updateUserProfile: (profile: UpdateProfilePayload) => Promise<void>;
@@ -76,7 +76,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const redirectToDashboard = useCallback((profile: UserProfile) => {
     if (typeof window !== 'undefined') {
       const searchParams = new URLSearchParams(window.location.search);
-      const redirect = searchParams.get('redirect');
+      const redirect = searchParams.get('redirect') || searchParams.get('redirectTo') || searchParams.get('from');
       if (redirect && redirect.startsWith('/')) {
         router.push(redirect);
         return;
@@ -212,7 +212,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       '/company/setup', '/company/conductor/setup', '/company/operator/signup',
       '/search', '/schedules',
     ];
-    const isPublicRoute = publicRoutes.includes(pathname) || pathname.startsWith('/bus/');
+    const isPublicRoute =
+      publicRoutes.includes(pathname) ||
+      pathname.startsWith('/bus/') ||
+      pathname.startsWith('/operators') ||
+      pathname.startsWith('/faq') ||
+      pathname.startsWith('/terms') ||
+      pathname.startsWith('/privacy') ||
+      pathname.startsWith('/refund-policy') ||
+      pathname.startsWith('/promotions') ||
+      pathname.startsWith('/booking-guide');
 
     const isRecoveryFlow = pathname === '/reset-password' || 
                           pathname === '/auth/callback' ||
@@ -254,11 +263,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [user, userProfile, isInitialized, router, pathname, redirectToDashboard]);
 
-  const signInWithGoogle = async (): Promise<void> => {
+  const signInWithGoogle = async (redirectToUrl?: string): Promise<void> => {
+    const nextPath = redirectToUrl || '/';
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(nextPath)}`,
         queryParams: { access_type: 'offline', prompt: 'select_account' },
       },
     });
