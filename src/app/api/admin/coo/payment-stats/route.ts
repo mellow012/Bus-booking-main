@@ -96,7 +96,7 @@ export async function GET(req: NextRequest) {
     const companyMap = Object.fromEntries(companies.map(c => [c.id, c.name]));
     const byCompany = byCompanyRaw.map(item => ({
       ...item,
-      companyName: companyMap[item.companyId] ?? item.companyId ?? 'Unknown Company',
+      companyName: item.companyId ? (companyMap[item.companyId] ?? item.companyId) : 'Unknown Company',
     }));
 
     await logger.logSuccess('api', `COO GET /api/admin/coo/payment-stats`, { metadata: { userId: user.id } });

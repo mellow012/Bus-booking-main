@@ -296,9 +296,65 @@ export const useBookingsList = () => {
         
         const returnSegment = mappedSegments.length > 1 ? mappedSegments[1] : undefined;
 
+        const route = b.schedule?.route || b.route || (b.chatterSchedule ? {
+          id: 'chatter-route',
+          origin: b.chatterSchedule.origin,
+          destination: b.chatterSchedule.destination,
+          stops: [],
+          distance: 0,
+          duration: 0,
+        } : {});
+
+        const schedule = b.schedule ? {
+          ...b.schedule,
+          id: b.scheduleId,
+          departureDateTime: parseUtcDate(b.schedule?.departureDateTime),
+          arrivalDateTime: parseUtcDate(b.schedule?.arrivalDateTime),
+          price: b.totalAmount && Array.isArray(b.passengerDetails) && b.passengerDetails.length > 0 ? Math.floor(b.totalAmount / b.passengerDetails.length) : 0,
+          availableSeats: b.schedule?.availableSeats || 0,
+          date: b.schedule?.departureDateTime,
+          tripStatus: b.schedule?.tripStatus || 'scheduled',
+          operatorPhone: b.schedule?.operatorPhone || '',
+          operatorName: b.schedule?.operatorName || '',
+        } : b.chatterSchedule ? {
+          id: b.chatterScheduleId,
+          departureDateTime: parseUtcDate(b.chatterSchedule.travelDate),
+          arrivalDateTime: parseUtcDate(b.chatterSchedule.travelDate),
+          price: b.chatterSchedule.fare,
+          availableSeats: b.chatterSchedule.totalSeats,
+          date: b.chatterSchedule.travelDate,
+          tripStatus: 'scheduled',
+          operatorPhone: b.chatterSchedule.contactPhone,
+          operatorName: 'Chatter Representative',
+        } : undefined;
+
+        const bus = b.schedule?.bus ? {
+          id: b.schedule.bus.id || '',
+          busNumber: normalizeText(b.schedule.bus.licensePlate, 'N/A'),
+          busType: normalizeText(b.schedule.bus.busType, 'N/A'),
+          licensePlate: normalizeText(b.schedule.bus.licensePlate, 'N/A'),
+        } : b.chatterSchedule ? {
+          id: 'chatter-bus',
+          busNumber: 'Chatter',
+          busType: normalizeText(b.chatterSchedule.busName, 'Chatter Bus'),
+          licensePlate: 'N/A',
+        } : {};
+
+        const company = b.schedule?.company ? {
+          id: b.schedule.company.id || '',
+          name: normalizeText(b.schedule.company.name, 'Unknown'),
+          logo: normalizeText(b.schedule.company.logo, ''),
+          phone: normalizeText(b.schedule.company.phone, ''),
+        } : b.chatterSchedule ? {
+          id: 'chatter-company',
+          name: normalizeText(b.chatterSchedule.busName, 'Chatter Bus'),
+          logo: '',
+          phone: b.chatterSchedule.contactPhone,
+        } : {};
+
         return {
           ...b,
-          route: b.schedule?.route || b.route || {},
+          route,
           createdAt: parseUtcDate(b.createdAt),
           updatedAt: parseUtcDate(b.updatedAt),
           seatNumbers: b.seatNumbers || [],
@@ -309,31 +365,10 @@ export const useBookingsList = () => {
           destinationStopName: b.destinationStopName,
           reviewRating: b.reviewRating ?? null,
           reviewText: b.reviewText ?? null,
-          schedule: {
-            ...b.schedule,
-            id: b.scheduleId,
-            departureDateTime: parseUtcDate(b.schedule?.departureDateTime),
-            arrivalDateTime: parseUtcDate(b.schedule?.arrivalDateTime),
-            price: b.totalAmount && Array.isArray(b.passengerDetails) && b.passengerDetails.length > 0 ? Math.floor(b.totalAmount / b.passengerDetails.length) : 0,
-            availableSeats: b.schedule?.availableSeats || 0,
-            date: b.schedule?.departureDateTime,
-            tripStatus: b.schedule?.tripStatus || 'scheduled',
-            operatorPhone: b.schedule?.operatorPhone || '',
-            operatorName: b.schedule?.operatorName || '',
-          } as any,
-          bus: {
-            id: b.schedule?.bus?.id || '',
-            busNumber: normalizeText(b.schedule?.bus?.licensePlate, 'N/A'),
-            busType: normalizeText(b.schedule?.bus?.busType, 'N/A'),
-            licensePlate: normalizeText(b.schedule?.bus?.licensePlate, 'N/A'),
-          } as any,
-          company: {
-            id: b.schedule?.company?.id || '',
-            name: normalizeText(b.schedule?.company?.name, 'Unknown'),
-            logo: normalizeText(b.schedule?.company?.logo, ''),
-            phone: normalizeText(b.schedule?.company?.phone, ''),
-          } as any,
-          operatorPhone: normalizeText(b.schedule?.operatorPhone || b.company?.phone || b.schedule?.company?.phone, ''),
+          schedule: schedule as any,
+          bus: bus as any,
+          company: company as any,
+          operatorPhone: normalizeText(b.schedule?.operatorPhone || b.company?.phone || b.schedule?.company?.phone || b.chatterSchedule?.contactPhone, ''),
           segments: mappedSegments,
           returnSegment,
           returnDate: b.returnDate ? parseUtcDate(b.returnDate) : (typeof b.metadata?.returnDate === 'string' ? parseUtcDate(b.metadata.returnDate) : undefined),

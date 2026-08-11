@@ -648,15 +648,16 @@ export async function cancelBooking(bookingId: string, scheduleId?: string, seat
       // 1. Fetch booking with segments and schedule to release seats and enforce 2-hour refund policy
       const existingBooking = await tx.booking.findUnique({
         where: { id: bookingId },
-        include: { segments: true, schedule: true },
+        include: { segments: true, schedule: true, chatterSchedule: true },
       });
 
       if (!existingBooking) {
         throw new Error('Booking not found');
       }
 
-      if (existingBooking.schedule) {
-        const depTime = new Date(existingBooking.schedule.departureDateTime).getTime();
+      const travelDate = existingBooking.schedule?.departureDateTime ?? existingBooking.chatterSchedule?.travelDate;
+      if (travelDate) {
+        const depTime = new Date(travelDate).getTime();
         const timeUntilDep = depTime - Date.now();
         if (timeUntilDep < 2 * 60 * 60 * 1000) {
           throw new Error('Bookings cannot be cancelled or refunded within 2 hours of scheduled departure time as per TibhukeBus policy.');
@@ -744,6 +745,7 @@ export async function getUserBookings(userId: string) {
             bus: true
           }
         },
+        chatterSchedule: true,
         company: true
       },
       orderBy: { updatedAt: 'desc' }

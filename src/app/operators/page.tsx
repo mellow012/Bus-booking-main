@@ -48,12 +48,14 @@ export default async function OperatorsPage() {
 
   // Map aggregates to a fast-lookup object
   const ratingsMap = ratingAggregates.reduce((acc, curr) => {
-    acc[curr.companyId] = {
-      averageRating: curr._avg.reviewRating
-        ? Math.round(curr._avg.reviewRating * 10) / 10
-        : 4.5,
-      totalReviews: curr._count.reviewRating || 0,
-    };
+    if (curr.companyId) {
+      acc[curr.companyId] = {
+        averageRating: curr._avg.reviewRating
+          ? Math.round(curr._avg.reviewRating * 10) / 10
+          : 4.5,
+        totalReviews: curr._count.reviewRating || 0,
+      };
+    }
     return acc;
   }, {} as Record<string, { averageRating: number; totalReviews: number }>);
 

@@ -42,6 +42,7 @@ model User {
   reservations     SeatReservation[]
   company          Company?              @relation("CompanyStaff", fields: [companyId], references: [id], onDelete: Restrict, onUpdate: NoAction)
   conversations    Conversation[]        @relation("UserConversations")
+  chatterSchedules ChatterSchedule[]     @relation("ChatterScheduleRep")
 }
 
 model Operator {
@@ -107,6 +108,7 @@ model Company {
   schedules                 Schedule[]
   scheduleTemplates         ScheduleTemplate[]
   staff                     User[]              @relation("CompanyStaff")
+  charterRequests           GroupCharterRequest[]
 
   @@index([status])
 }
@@ -227,6 +229,7 @@ model Schedule {
   route                Route                @relation(fields: [routeId], references: [id])
   reservations         SeatReservation[]
   positionSamples      TripPositionSample[]
+  charterRequests      GroupCharterRequest[] @relation("ChatterResultSchedule")
 
   @@index([companyId])
   @@index([busId])
@@ -241,8 +244,9 @@ model Booking {
   id                String           @id @default(uuid())
   bookingReference  String           @unique
   userId            String
-  scheduleId        String
-  companyId         String
+  scheduleId        String?
+  chatterScheduleId String?
+  companyId         String?
   totalAmount       Int
   currency          String           @default("MWK")
   bookingStatus     String           @default("pending")
@@ -268,14 +272,16 @@ model Booking {
   reviewText        String?
   discountAmount    Int?             @default(0)
   discountPercent   Float?           @default(0)
-  company           Company          @relation(fields: [companyId], references: [id], onDelete: Restrict, onUpdate: NoAction)
-  schedule          Schedule         @relation(fields: [scheduleId], references: [id])
+  company           Company?         @relation(fields: [companyId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  schedule          Schedule?        @relation(fields: [scheduleId], references: [id])
+  chatterSchedule   ChatterSchedule? @relation(fields: [chatterScheduleId], references: [id])
   user              User             @relation(fields: [userId], references: [id])
   route             Route?           @relation(fields: [routeId], references: [id], onDelete: Restrict)
   segments          BookingSegment[] @relation("BookingSegmentBooking")
   payments          Payment[]
 
   @@index([scheduleId])
+  @@index([chatterScheduleId])
   @@index([userId])
   @@index([companyId])
 }
@@ -495,25 +501,37 @@ model Promotion {
 }
 
 model GroupCharterRequest {
-  id             String              @id @default(uuid())
-  userId         String
-  organizerName  String
-  organizerPhone String
-  origin         String
-  destination    String
-  departureDate  DateTime
-  estimatedPax   Int
-  status         String              @default("pending")
-  charterType    String              @default("student")
-  notes          String?
-  budget         Int?
-  createdAt      DateTime            @default(now())
-  updatedAt      DateTime            @updatedAt
-  quotes         GroupCharterQuote[]
-  user           User                @relation(fields: [userId], references: [id])
+  id                  String              @id @default(uuid())
+  userId              String
+  organizerName       String
+  organizerPhone      String
+  origin              String
+  destination         String
+  departureDate       DateTime
+  estimatedPax        Int
+  status              String              @default("pending")
+  charterType         String              @default("student")
+  notes               String?
+  budget              Int?
+  seatsRequested      Int?
+  proposedFare        Int?
+  contactPhone        String?
+  confirmedPrice      Int?
+  resultingScheduleId String?
+  companyId           String?
+  charterSource       String              @default("charter")
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  quotes              GroupCharterQuote[]
+  user                User                @relation(fields: [userId], references: [id])
+  resultingSchedule   Schedule?           @relation("ChatterResultSchedule", fields: [resultingScheduleId], references: [id])
+  company             Company?            @relation(fields: [companyId], references: [id])
 
   @@index([userId])
   @@index([status])
+  @@index([resultingScheduleId])
+  @@index([charterSource])
+  @@index([companyId])
 }
 
 model GroupCharterQuote {
@@ -534,19 +552,43 @@ model GroupCharterQuote {
 }
 
 model TripPositionSample {
-  id         String   @id @default(uuid())
-  scheduleId String
-  latitude   Float
-  longitude  Float
-  accuracy   Float?
-  heading    Float?
-  speed      Float?
-  source     String   @default("rider")
-  createdAt  DateTime @default(now())
-  schedule   Schedule @relation(fields: [scheduleId], references: [id])
+  id                String           @id @default(uuid())
+  scheduleId        String?
+  chatterScheduleId String?
+  latitude          Float
+  longitude         Float
+  accuracy          Float?
+  heading           Float?
+  speed             Float?
+  source            String           @default("rider")
+  createdAt         DateTime         @default(now())
+  schedule          Schedule?        @relation(fields: [scheduleId], references: [id])
+  chatterSchedule   ChatterSchedule? @relation(fields: [chatterScheduleId], references: [id])
 
   @@index([scheduleId])
+  @@index([chatterScheduleId])
   @@index([createdAt])
+}
+
+model ChatterSchedule {
+  id              String               @id @default(uuid())
+  repUserId       String
+  busName         String
+  origin          String
+  destination     String
+  travelDate      DateTime
+  fare            Int
+  totalSeats      Int
+  contactPhone    String
+  status          String               @default("active")
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+  rep             User                 @relation("ChatterScheduleRep", fields: [repUserId], references: [id])
+  bookings        Booking[]
+  positionSamples TripPositionSample[]
+
+  @@index([repUserId])
+  @@index([status])
 }
 
 model NewsletterSubscriber {

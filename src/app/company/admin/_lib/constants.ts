@@ -5,6 +5,7 @@
 import {
   DollarSign, Users, Calendar, MapPin, User, Settings,
   Bell, LayoutDashboard, PieChart, Bus as BusIcon, MessageSquare, Globe,
+  Megaphone,
 } from 'lucide-react';
 import { Company, Booking, Schedule } from '@/types';
 
@@ -18,6 +19,7 @@ export const TABS = [
   { id: 'buses'         as const, label: 'Buses',          icon: BusIcon },
   { id: 'bookings'      as const, label: 'Bookings',       icon: Users },
   { id: 'charters'      as const, label: 'Charters',       icon: Users },
+  { id: 'chatter'       as const, label: 'Chatter',        icon: Megaphone },
   { id: 'operators'     as const, label: 'Team',           icon: Users },
   { id: 'reports'       as const, label: 'Reports',        icon: PieChart },
   { id: 'profile'       as const, label: 'Profile',        icon: User },
@@ -34,6 +36,7 @@ export const CATEGORIES = [
   { id: 'regions',   label: 'Branches',             icon: Globe,           subTabs: ['regions'] },
   { id: 'fleet',     label: 'Fleet Manager',        icon: BusIcon,         subTabs: ['buses'] },
   { id: 'sales',     label: 'Bookings',             icon: Users,           subTabs: ['bookings'] },
+  { id: 'charters',  label: 'Charters & Chatter',   icon: Megaphone,       subTabs: ['charters', 'chatter'] },
   { id: 'revenue',   label: 'Revenue',              icon: DollarSign,      subTabs: ['revenue'] },
   { id: 'config',    label: 'Profile',              icon: User,            subTabs: ['profile'] },
 ] as const;

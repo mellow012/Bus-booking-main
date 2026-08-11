@@ -169,7 +169,8 @@ export default async function Page() {
   const revenueLastMonth = revenueLastMonthRaw._sum.totalAmount ?? 0;
 
   // ── Top routes — enrich with route metadata ────────────────────────────────
-  const scheduleIds = topRoutesRaw.map(r => r.scheduleId).filter(Boolean);
+  const validTopRoutes = topRoutesRaw.filter(r => r.scheduleId !== null);
+  const scheduleIds = validTopRoutes.map(r => r.scheduleId as string);
   const schedulesForTop = await prisma.schedule.findMany({
     where: { id: { in: scheduleIds } },
     select: { id: true, route: { select: { name: true, origin: true, destination: true } } }
@@ -178,8 +179,8 @@ export default async function Page() {
   schedulesForTop.forEach(s => {
     if (s.route) scheduleMap[s.id] = { origin: s.route.origin, destination: s.route.destination, name: s.route.name };
   });
-  const topRoutes = topRoutesRaw.map(r => ({
-    route: scheduleMap[r.scheduleId]?.name || scheduleMap[r.scheduleId]?.origin + ' → ' + scheduleMap[r.scheduleId]?.destination || 'Unknown Route',
+  const topRoutes = validTopRoutes.map(r => ({
+    route: scheduleMap[r.scheduleId as string]?.name || scheduleMap[r.scheduleId as string]?.origin + ' → ' + scheduleMap[r.scheduleId as string]?.destination || 'Unknown Route',
     bookings: r._count.id,
     revenue: r._sum.totalAmount ?? 0,
   }));

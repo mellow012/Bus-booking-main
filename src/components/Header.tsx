@@ -8,6 +8,7 @@ import { useTranslations } from 'next-intl';
 import {
   Menu, X, User, LogOut, Search, Calendar,
   Shield, ChevronDown, HomeIcon, BusIcon, Zap, LayoutDashboard,
+  Megaphone,
 } from 'lucide-react';
 import { NotificationBell } from '@/contexts/NotificationContext';
 import Image from 'next/image';
@@ -158,6 +159,27 @@ const Header: React.FC = () => {
   );
   const handleProfileNavigate = () => router.push('/profile');
 
+  const [hasChatterData, setHasChatterData] = useState(false);
+
+  useEffect(() => {
+    if (!user) {
+      setHasChatterData(false);
+      return;
+    }
+    const checkChatter = async () => {
+      try {
+        const res = await fetch('/api/chatter/my-summary');
+        const json = await res.json();
+        if (json.chatterScheduleCount > 0 || json.chatterRequestCount > 0) {
+          setHasChatterData(true);
+        }
+      } catch (err) {
+        console.error('Failed to fetch chatter summary in header:', err);
+      }
+    };
+    checkChatter();
+  }, [user]);
+
   const adminRoute = isSuperAdmin ? '/admin' : isCompanyAdmin ? '/company/admin' : isOperator ? '/company/operator/dashboard' : null;
   const adminLabel = isOperator ? t('operatorPanel') : t('adminPanel');
 
@@ -289,6 +311,11 @@ const Header: React.FC = () => {
                           <Calendar className="w-4 h-4" /><span>{t('myBookings')}</span>
                         </Link>
                       )}
+                      {hasChatterData && (
+                        <Link href="/chatter/my-schedules" onClick={() => setIsUserMenuOpen(false)} className="flex items-center space-x-3 px-4 py-2 text-gray-700 hover:bg-brand-50 hover:text-brand-700 transition-colors duration-200">
+                          <BusIcon className="w-4 h-4" /><span>My Schedules</span>
+                        </Link>
+                      )}
                       {(isCustomer || isChiefOfGrowth) && (
                         <Link href="/profile" onClick={() => setIsUserMenuOpen(false)} className="flex items-center space-x-3 px-4 py-2 text-gray-700 hover:bg-brand-50 hover:text-brand-700 transition-colors duration-200">
                           <User className="w-4 h-4" />
@@ -384,6 +411,11 @@ const Header: React.FC = () => {
                         {isCustomer && (
                           <Link href="/bookings" onClick={() => setIsMenuOpen(false)} className="flex items-center space-x-3 p-4 text-gray-700 hover:bg-gray-50 rounded-2xl font-bold">
                             <Calendar className="w-5 h-5 text-gray-400" /><span>{t('myBookings')}</span>
+                          </Link>
+                        )}
+                        {hasChatterData && (
+                          <Link href="/chatter/my-schedules" onClick={() => setIsMenuOpen(false)} className="flex items-center space-x-3 p-4 text-gray-700 hover:bg-gray-50 rounded-2xl font-bold">
+                            <BusIcon className="w-5 h-5 text-brand-700" /><span>My Schedules</span>
                           </Link>
                         )}
                         {(isCustomer || isChiefOfGrowth) && (

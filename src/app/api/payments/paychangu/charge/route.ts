@@ -48,7 +48,8 @@ export async function POST(req: NextRequest) {
     const rawAmount = booking.totalAmount;
     const amount    = typeof rawAmount === "number" ? rawAmount : Number(rawAmount ?? 0);
 
-    if (!companyId) {
+    const isChatter = !!booking.chatterScheduleId;
+    if (!companyId && !isChatter) {
       return NextResponse.json({ error: "Booking is missing associated bus company information" }, { status: 400 });
     }
 

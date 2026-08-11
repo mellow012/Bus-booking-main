@@ -54,44 +54,86 @@ export async function POST(
     }
     rateLimits.set(rateKey, Date.now());
 
-    // Verify the schedule exists
-    const schedule = await prisma.schedule.findUnique({
-      where: { id: scheduleId },
-      select: { id: true, tripStatus: true },
-    });
+    const isChatter = new URL(request.url).searchParams.get('chatter') === 'true';
 
-    if (!schedule) {
-      return NextResponse.json({ error: 'Schedule not found' }, { status: 404 });
-    }
-
-    if (source === 'rider') {
-      const booking = await prisma.booking.findFirst({
-        where: {
-          userId: user.id,
-          scheduleId: scheduleId,
-          bookingStatus: 'confirmed',
-          paymentStatus: { in: ['paid', 'pending'] }
-        }
+    if (isChatter) {
+      const chatterSchedule = await prisma.chatterSchedule.findUnique({
+        where: { id: scheduleId },
+        select: { id: true, status: true },
       });
 
-      if (!booking) {
-        return NextResponse.json({ error: 'No active booking found for this trip' }, { status: 403 });
+      if (!chatterSchedule) {
+        return NextResponse.json({ error: 'Chatter schedule not found' }, { status: 404 });
       }
+
+      if (source === 'rider') {
+        const booking = await prisma.booking.findFirst({
+          where: {
+            userId: user.id,
+            chatterScheduleId: scheduleId,
+            bookingStatus: 'confirmed',
+            paymentStatus: { in: ['paid', 'pending'] }
+          }
+        });
+
+        if (!booking) {
+          return NextResponse.json({ error: 'No active booking found for this trip' }, { status: 403 });
+        }
+      }
+
+      const sample = await prisma.tripPositionSample.create({
+        data: {
+          chatterScheduleId: scheduleId,
+          latitude,
+          longitude,
+          accuracy: typeof accuracy === 'number' ? accuracy : null,
+          heading: typeof heading === 'number' ? heading : null,
+          speed: typeof speed === 'number' ? speed : null,
+          source: source === 'conductor' ? 'conductor' : 'rider',
+        },
+      });
+
+      return NextResponse.json({ success: true, id: sample.id });
+    } else {
+      // Verify the schedule exists
+      const schedule = await prisma.schedule.findUnique({
+        where: { id: scheduleId },
+        select: { id: true, tripStatus: true },
+      });
+
+      if (!schedule) {
+        return NextResponse.json({ error: 'Schedule not found' }, { status: 404 });
+      }
+
+      if (source === 'rider') {
+        const booking = await prisma.booking.findFirst({
+          where: {
+            userId: user.id,
+            scheduleId: scheduleId,
+            bookingStatus: 'confirmed',
+            paymentStatus: { in: ['paid', 'pending'] }
+          }
+        });
+
+        if (!booking) {
+          return NextResponse.json({ error: 'No active booking found for this trip' }, { status: 403 });
+        }
+      }
+
+      const sample = await prisma.tripPositionSample.create({
+        data: {
+          scheduleId,
+          latitude,
+          longitude,
+          accuracy: typeof accuracy === 'number' ? accuracy : null,
+          heading: typeof heading === 'number' ? heading : null,
+          speed: typeof speed === 'number' ? speed : null,
+          source: source === 'conductor' ? 'conductor' : 'rider',
+        },
+      });
+
+      return NextResponse.json({ success: true, id: sample.id });
     }
-
-    const sample = await prisma.tripPositionSample.create({
-      data: {
-        scheduleId,
-        latitude,
-        longitude,
-        accuracy: typeof accuracy === 'number' ? accuracy : null,
-        heading: typeof heading === 'number' ? heading : null,
-        speed: typeof speed === 'number' ? speed : null,
-        source: source === 'conductor' ? 'conductor' : 'rider',
-      },
-    });
-
-    return NextResponse.json({ success: true, id: sample.id });
   } catch (error) {
     console.error('POST /api/trips/[id]/position error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
@@ -109,10 +151,13 @@ export async function GET(
       return NextResponse.json({ error: 'Valid schedule ID is required' }, { status: 400 });
     }
 
+    const isChatter = new URL(request.url).searchParams.get('chatter') === 'true';
+    const where = isChatter ? { chatterScheduleId: scheduleId } : { scheduleId };
+
     const ninetySecondsAgo = new Date(Date.now() - 90000);
     const recentSamples = await prisma.tripPositionSample.findMany({
       where: {
-        scheduleId,
+        ...where,
         createdAt: { gte: ninetySecondsAgo },
       },
       orderBy: { createdAt: 'desc' },
@@ -125,7 +170,7 @@ export async function GET(
       latestSample = recentSamples[0];
     } else {
       latestSample = await prisma.tripPositionSample.findFirst({
-        where: { scheduleId },
+        where,
         orderBy: { createdAt: 'desc' },
       });
       if (!latestSample) {

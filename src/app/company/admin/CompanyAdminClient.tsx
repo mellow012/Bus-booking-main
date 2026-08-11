@@ -13,6 +13,8 @@ import RevenueTab from './RevenueTab';
 import ProfileTab from './ProfileTab';
 import BookingsTab from './BookingsTab';
 import BusesTab from './BusesTab';
+import ChatterRequestsTab from './ChatterRequestsTab';
+import ChartersTab from '@/components/ChartersTab';
 
 import AlertMessage from '@/components/AlertMessage';
 import { NotificationBell } from '@/contexts/NotificationContext';
@@ -57,6 +59,16 @@ function AdminDashboardInner() {
         return <BusesTab dashboard={dashboard} />;
       case 'bookings':
         return <BookingsTab dashboard={dashboard} />;
+      case 'chatter':
+        return <ChatterRequestsTab dashboard={dashboard} />;
+      case 'charters':
+        return (
+          <ChartersTab
+            companyId={dashboard.dashboardData?.company?.id || ''}
+            setError={(msg: string) => dashboard.showAlert?.('error', msg)}
+            setSuccess={(msg: string) => dashboard.showAlert?.('success', msg)}
+          />
+        );
       default:
         return (
           <div className="p-8 text-center bg-white rounded-xl shadow-sm border border-gray-100">

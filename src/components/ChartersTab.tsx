@@ -44,6 +44,8 @@ export default function ChartersTab({ companyId, setError, setSuccess }: Charter
       const { data, error } = await supabase
         .from('GroupCharterRequest')
         .select('*')
+        .eq('companyId', companyId)
+        .neq('charterSource', 'chatter')
         .order('createdAt', { ascending: false });
 
       if (error) throw error;

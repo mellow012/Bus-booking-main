@@ -22,7 +22,7 @@ export async function POST(
     // Fetch booking with schedule to restore available seats
     const booking = await prisma.booking.findUnique({
       where: { id: bookingId },
-      include: { schedule: true },
+      include: { schedule: true, chatterSchedule: true },
     });
 
     if (!booking) {
@@ -43,7 +43,7 @@ export async function POST(
     }
 
     // Check refund/cancellation 2-hour pre-departure cutoff policy
-    const departureTime = new Date(booking.schedule.departureDateTime);
+    const departureTime = new Date(booking.schedule?.departureDateTime || booking.chatterSchedule?.travelDate || Date.now());
     const twoHoursMs = 2 * 60 * 60 * 1000;
     const timeUntilDeparture = departureTime.getTime() - Date.now();
 
@@ -71,7 +71,7 @@ export async function POST(
       : 0;
 
     // Cancel booking and restore available seats in transaction
-    const result = await prisma.$transaction([
+    const txOps: any[] = [
       // Update booking status
       prisma.booking.update({
         where: { id: bookingId },
@@ -81,16 +81,22 @@ export async function POST(
           updatedAt: new Date(),
         },
       }),
-      // Restore available seats
-      prisma.schedule.update({
-        where: { id: booking.scheduleId },
-        data: {
-          availableSeats: {
-            increment: passengerCount,
+    ];
+
+    if (!booking.chatterScheduleId && booking.scheduleId) {
+      txOps.push(
+        prisma.schedule.update({
+          where: { id: booking.scheduleId },
+          data: {
+            availableSeats: {
+              increment: passengerCount,
+            },
           },
-        },
-      }),
-    ]);
+        })
+      );
+    }
+
+    const result = await prisma.$transaction(txOps);
 
     return NextResponse.json({
       message: 'Booking cancelled successfully',

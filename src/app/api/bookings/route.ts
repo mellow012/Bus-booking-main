@@ -67,6 +67,7 @@ export async function GET(req: NextRequest) {
       prisma.booking.findMany({
         where,
         include: {
+          chatterSchedule: true,
           schedule: {
             include: {
               route: {

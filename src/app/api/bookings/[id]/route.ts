@@ -21,6 +21,7 @@ export async function GET(
     const booking = await prisma.booking.findUnique({
       where: { id: bookingId },
       include: {
+        chatterSchedule: true,
         schedule: {
           include: {
             route: true,
