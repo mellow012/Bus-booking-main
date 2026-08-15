@@ -11,6 +11,10 @@
     {
       "path": "/api/cron/generate-trips",
       "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/cron/archive-chatter-schedules",
+      "schedule": "0 3 * * *"
     }
   ]
 }

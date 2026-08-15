@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { useState, useRef, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
 import {
@@ -31,7 +31,21 @@ const iconCls =
 
 export default function RequestFormClient({ companies }: RequestFormClientProps) {
   const router = useRouter();
-  const [useOwnBus, setUseOwnBus] = useState(false);
+  const searchParams = useSearchParams();
+  
+  // Check tab query parameter: tab=own / mode=own => useOwnBus = true
+  const initialTab = searchParams ? (searchParams.get('tab') || searchParams.get('mode')) : null;
+  const [useOwnBus, setUseOwnBus] = useState(initialTab === 'own' || initialTab === 'my-bus' || initialTab === 'direct');
+
+  useEffect(() => {
+    if (!searchParams) return;
+    const tabParam = searchParams.get('tab') || searchParams.get('mode');
+    if (tabParam === 'own' || tabParam === 'my-bus' || tabParam === 'direct') {
+      setUseOwnBus(true);
+    } else if (tabParam === 'platform' || tabParam === 'company') {
+      setUseOwnBus(false);
+    }
+  }, [searchParams]);
 
   /* shared */
   const [origin, setOrigin] = useState('');

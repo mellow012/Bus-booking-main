@@ -33,6 +33,7 @@ export default async function MySchedulesPage() {
             <MySchedulesClient
               initialSchedules={(res.success ? res.data?.schedules || [] : []) as any}
               initialRequests={(res.success ? res.data?.requests || [] : []) as any}
+              initialStats={(res.success ? res.data?.stats : { totalBooked: 0, totalPaid: 0 }) as any}
             />
           </div>
         </div>

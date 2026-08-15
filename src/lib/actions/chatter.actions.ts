@@ -184,7 +184,18 @@ export async function getRepChatterSchedules() {
 
     const [schedules, requests] = await Promise.all([
       prisma.chatterSchedule.findMany({
-        where: { repUserId: user.id },
+        where: { repUserId: user.id, isArchived: false },
+        include: {
+          bookings: {
+            where: {
+              bookingStatus: { notIn: ['cancelled'] },
+            },
+            select: {
+              seatNumbers: true,
+              paymentStatus: true,
+            },
+          },
+        },
         orderBy: { travelDate: 'desc' },
       }),
       prisma.groupCharterRequest.findMany({
@@ -209,11 +220,35 @@ export async function getRepChatterSchedules() {
       }),
     ]);
 
+    // Aggregate booking counts across all the rep's schedules for the stats bar
+    const scheduleIds = schedules.map((s) => s.id);
+    let totalBooked = 0;
+    let totalPaid = 0;
+    if (scheduleIds.length > 0) {
+      const [bookedCount, paidCount] = await Promise.all([
+        prisma.booking.count({
+          where: {
+            chatterScheduleId: { in: scheduleIds },
+            bookingStatus: { notIn: ['cancelled'] },
+          },
+        }),
+        prisma.booking.count({
+          where: {
+            chatterScheduleId: { in: scheduleIds },
+            paymentStatus: 'paid',
+          },
+        }),
+      ]);
+      totalBooked = bookedCount;
+      totalPaid = paidCount;
+    }
+
     return {
       success: true,
       data: {
         schedules,
         requests,
+        stats: { totalBooked, totalPaid },
       },
     };
   } catch (error: any) {
@@ -221,6 +256,7 @@ export async function getRepChatterSchedules() {
     return { success: false, error: error.message };
   }
 }
+
 
 export async function createChatterRequest(payload: {
   companyId: string;
@@ -421,6 +457,94 @@ export async function deleteChatterSchedule(id: string) {
     return { success: true, data: updated };
   } catch (error: any) {
     console.error('Error deleting chatter schedule:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Permanently hard-delete a cancelled ChatterSchedule.
+ * Blocked if any booking on the schedule has paymentStatus 'paid' or 'pending'.
+ * Bookings with paymentStatus 'failed' are cascade-deleted freely.
+ */
+export async function hardDeleteChatterSchedule(id: string) {
+  try {
+    const user = await getCurrentUserFromServer();
+    if (!user) {
+      return { success: false, error: 'Unauthorized' };
+    }
+
+    const schedule = await prisma.chatterSchedule.findUnique({
+      where: { id },
+      select: { repUserId: true, status: true },
+    });
+
+    if (!schedule) {
+      return { success: false, error: 'Schedule not found' };
+    }
+
+    if (schedule.repUserId !== user.id && user.role !== 'admin') {
+      return { success: false, error: 'Unauthorized' };
+    }
+
+    if (schedule.status !== 'cancelled') {
+      return {
+        success: false,
+        error: 'Only cancelled schedules can be permanently deleted. Use the cancel action first.',
+      };
+    }
+
+    // Guard: block hard-delete if any booking is still paid or pending
+    const blockingBookings = await prisma.booking.findMany({
+      where: {
+        chatterScheduleId: id,
+        paymentStatus: { in: ['paid', 'pending'] },
+      },
+      select: { id: true, paymentStatus: true },
+    });
+
+    if (blockingBookings.length > 0) {
+      const paidCount = blockingBookings.filter((b) => b.paymentStatus === 'paid').length;
+      const pendingCount = blockingBookings.filter((b) => b.paymentStatus === 'pending').length;
+
+      const parts: string[] = [];
+      if (paidCount > 0) parts.push(`${paidCount} paid booking${paidCount > 1 ? 's' : ''}`);
+      if (pendingCount > 0) parts.push(`${pendingCount} pending booking${pendingCount > 1 ? 's' : ''}`);
+
+      return {
+        success: false,
+        error: `This schedule has ${parts.join(' and ')} and cannot be permanently deleted. Refund or resolve those bookings first.`,
+      };
+    }
+
+    // Safe to delete — only failed bookings remain (cascade handled by DB relation)
+    await prisma.booking.deleteMany({
+      where: { chatterScheduleId: id },
+    });
+
+    await prisma.chatterSchedule.delete({ where: { id } });
+
+    revalidatePath('/chatter/my-schedules');
+    return { success: true };
+  } catch (error: any) {
+    console.error('Error hard-deleting chatter schedule:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Soft-archive a ChatterSchedule (called by the cron job).
+ * Sets isArchived = true and stamps archivedAt.
+ */
+export async function archiveChatterSchedule(id: string) {
+  try {
+    const updated = await prisma.chatterSchedule.update({
+      where: { id },
+      data: { isArchived: true, archivedAt: new Date() },
+    });
+    revalidatePath('/chatter/my-schedules');
+    return { success: true, data: updated };
+  } catch (error: any) {
+    console.error('Error archiving chatter schedule:', error);
     return { success: false, error: error.message };
   }
 }
