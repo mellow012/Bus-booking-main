@@ -24,6 +24,7 @@ const nextConfig: NextConfig = {
     optimizePackageImports: ['lucide-react', '@heroicons/react'],
   },
   images: {
+    unoptimized: true,
     remotePatterns: [
       {
         protocol: 'https',

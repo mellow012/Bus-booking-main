@@ -2,11 +2,15 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { 
-  Bus as BusIcon, MapPin, Calendar, Clock, Phone, 
-  User, ShieldCheck, Share2, ArrowRight, Loader2, Info
+import {
+  Bus as BusIcon, MapPin, Calendar, Clock, Phone,
+  User, ShieldCheck, Share2, ArrowRight, Loader2, Info, X, ChevronLeft, ChevronRight
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { generateSeatRows } from '@/lib/chatterSeatUtils';
+import { toDate } from '@/lib/chatterHelpers';
+import ChatterConfirmModal from './ChatterConfirmModal';
+import { useAppToast } from '@/contexts/ToastContext';
 
 interface ChatterSchedule {
   id: string;
@@ -17,6 +21,11 @@ interface ChatterSchedule {
   fare: number;
   totalSeats: number;
   contactPhone: string;
+  pickupPoint?: string | null;
+  dropoffPoint?: string | null;
+  departureTime?: string;
+  status?: string | null;
+  images?: string[];
   availableSeats: number;
   bookedSeatsCount: number;
   bookedSeats?: string[];
@@ -33,17 +42,56 @@ interface ChatterBookClientProps {
 
 export default function ChatterBookClient({ schedule }: ChatterBookClientProps) {
   const router = useRouter();
+  const { success } = useAppToast();
+
+  const scheduleDateObj = toDate(schedule.travelDate);
+  const scheduleTime = scheduleDateObj ? scheduleDateObj.getTime() : 0;
+  const now = Date.now();
+  const hasDeparted = scheduleDateObj ? scheduleTime < now : false;
+
   const [selectedSeats, setSelectedSeats] = useState<string[]>([]);
   const [phone, setPhone] = useState('');
-  const [passengers, setPassengers] = useState<Array<{ firstName: string; lastName: string; seatNumber: string }>>([]);
+
+  const [passengers, setPassengers] = useState<Array<{
+    firstName: string;
+    lastName: string;
+    age: string;
+    gender: 'male' | 'female' | 'other' | '';
+    seatNumber: string;
+  }>>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Generate 40 seats for layout
-  const seatLayout = Array.from({ length: 40 }, (_, i) => String(i + 1));
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [activeImageIndex, setActiveImageIndex] = useState(0);
+  const [confirmModalOpen, setConfirmModalOpen] = useState(false);
+
+  React.useEffect(() => {
+    const images = schedule.images;
+    if (!lightboxOpen || !images) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setLightboxOpen(false);
+      } else if (e.key === 'ArrowLeft' && images.length > 1) {
+        setActiveImageIndex((prev) => (prev === 0 ? images.length - 1 : prev - 1));
+      } else if (e.key === 'ArrowRight' && images.length > 1) {
+        setActiveImageIndex((prev) => (prev === images.length - 1 ? 0 : prev + 1));
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [lightboxOpen, schedule.images]);
+
+  const openLightbox = (index: number) => {
+    setActiveImageIndex(index);
+    setLightboxOpen(true);
+  };
+
+  const seatRows = generateSeatRows(schedule.totalSeats, 4);
   const bookedSeats = schedule.bookedSeats || [];
 
   const handleSeatClick = (seat: string) => {
+    if (hasDeparted || (schedule.status && schedule.status !== 'active')) return;
     if (bookedSeats.includes(seat)) return;
 
     if (selectedSeats.includes(seat)) {
@@ -51,11 +99,17 @@ export default function ChatterBookClient({ schedule }: ChatterBookClientProps) 
       setPassengers(prev => prev.filter(p => p.seatNumber !== seat));
     } else {
       setSelectedSeats(prev => [...prev, seat].sort((a, b) => parseInt(a) - parseInt(b)));
-      setPassengers(prev => [...prev, { firstName: '', lastName: '', seatNumber: seat }]);
+      setPassengers(prev => [...prev, {
+        firstName: '',
+        lastName: '',
+        age: '',
+        gender: '',
+        seatNumber: seat,
+      }]);
     }
   };
 
-  const handlePassengerChange = (seatNumber: string, field: 'firstName' | 'lastName', value: string) => {
+  const handlePassengerChange = (seatNumber: string, field: 'firstName' | 'lastName' | 'age' | 'gender', value: string) => {
     setPassengers(prev =>
       prev.map(p => (p.seatNumber === seatNumber ? { ...p, [field]: value } : p))
     );
@@ -67,7 +121,7 @@ export default function ChatterBookClient({ schedule }: ChatterBookClientProps) 
       try {
         await navigator.share({
           title: `Join our trip: ${schedule.origin} to ${schedule.destination}`,
-          text: `Book a seat on ${schedule.busName} leaving on ${new Date(schedule.travelDate).toLocaleDateString()}`,
+          text: `Book a seat on ${schedule.busName} leaving on ${scheduleDateObj ? scheduleDateObj.toLocaleDateString() : 'TBD'}`,
           url: shareUrl,
         });
       } catch (err) {
@@ -79,8 +133,15 @@ export default function ChatterBookClient({ schedule }: ChatterBookClientProps) 
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleProceedToPayment = () => {
+    if (hasDeparted) {
+      setError('This trip has already departed and can no longer accept new bookings.');
+      return;
+    }
+    if (schedule.status && schedule.status !== 'active') {
+      setError('This schedule is no longer active for booking.');
+      return;
+    }
     if (selectedSeats.length === 0) {
       setError('Please select at least one seat.');
       return;
@@ -90,24 +151,41 @@ export default function ChatterBookClient({ schedule }: ChatterBookClientProps) 
       return;
     }
 
-    const invalidPassenger = passengers.some(p => !p.firstName || !p.lastName);
-    if (invalidPassenger) {
-      setError('Please fill in first name and last name for all selected seats.');
+    if (passengers.length !== selectedSeats.length) {
+      setError(`Please provide details for all ${selectedSeats.length} passengers.`);
       return;
     }
 
+    const incomplete = passengers.some(
+      (p) => !p.firstName.trim() || !p.lastName.trim() || !p.age || !p.gender
+    );
+    if (incomplete) {
+      setError('Please complete all passenger fields before proceeding.');
+      return;
+    }
+
+    setError(null);
+    setConfirmModalOpen(true);
+  };
+
+  const handleBookingSubmit = async () => {
     try {
       setLoading(true);
       setError(null);
 
       // 1. Create booking
+      const payloadPassengers = passengers.map((p) => ({
+        ...p,
+        age: Number(p.age),
+      }));
+
       const bookRes = await fetch('/api/chatter/bookings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           chatterScheduleId: schedule.id,
           seatNumbers: selectedSeats,
-          passengerDetails: passengers,
+          passengerDetails: payloadPassengers,
           contactPhone: phone,
         }),
       });
@@ -144,6 +222,8 @@ export default function ChatterBookClient({ schedule }: ChatterBookClientProps) 
 
       // Redirect to checkout URL
       if (paymentJson.checkoutUrl) {
+        setConfirmModalOpen(false);
+        success('Success', 'Redirecting to PayChangu…');
         window.location.href = paymentJson.checkoutUrl;
       } else {
         setError('Payment link not received.');
@@ -160,25 +240,43 @@ export default function ChatterBookClient({ schedule }: ChatterBookClientProps) 
   return (
     <div className="max-w-5xl mx-auto px-4">
       <div className="grid md:grid-cols-12 gap-8">
-        
+
         {/* Left Column: Trip Info & Seat Map */}
         <div className="md:col-span-7 space-y-6">
+          {/* If schedule isn't active or has departed, show a clear alert */}
+          {(schedule.status && schedule.status !== 'active') || hasDeparted ? (
+            <div className="bg-amber-50 border border-amber-100 text-amber-800 rounded-2xl p-4">
+              {hasDeparted ? (
+                <div>
+                  <p className="font-bold">This trip has departed</p>
+                  <p className="text-sm">Departure was on {scheduleDateObj ? scheduleDateObj.toLocaleString() : 'Unknown'}.</p>
+                </div>
+              ) : (
+                <div>
+                  <p className="font-bold">This trip is not open for booking</p>
+                  <p className="text-sm">Current status: {schedule.status}. If you think this is an error contact the representative.</p>
+                </div>
+              )}
+            </div>
+          ) : null}
           <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm space-y-4">
-            <div className="flex justify-between items-start">
+            <div className="flex justify-between items-start mb-6">
               <div>
-                <span className="text-[10px] font-bold tracking-widest text-indigo-600 uppercase bg-indigo-50 px-2.5 py-1 rounded-full">
-                  Group Booking
+                <span className="inline-block px-2.5 py-1 bg-brand-100 text-brand-700 text-xs font-semibold rounded-full tracking-wider mb-3">
+                  GROUP BOOKING
                 </span>
-                <h1 className="text-2xl font-bold text-slate-800 mt-2">{schedule.busName}</h1>
+                <h1 className="text-2xl font-bold text-slate-800">{schedule.busName}</h1>
               </div>
-              <Button variant="outline" size="sm" onClick={handleShare} className="rounded-xl font-semibold border-slate-200">
+              <Button
+                variant="outline"
+                size="sm" onClick={handleShare} className="rounded-xl font-semibold border-slate-200">
                 <Share2 className="w-4 h-4 mr-2" /> Share Trip
               </Button>
             </div>
 
-            <div className="flex items-center justify-between text-slate-700 py-3 border-y border-slate-50">
-              <div className="flex items-center gap-2">
-                <MapPin className="w-5 h-5 text-indigo-500" />
+            <div className="flex flex-col gap-4 text-slate-700 py-3 border-y border-slate-50 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start gap-2">
+                <MapPin className="w-5 h-5 text-coral-600 mt-0.5" />
                 <div>
                   <p className="text-xs text-slate-400 font-semibold uppercase">Route</p>
                   <p className="font-bold flex items-center gap-1">
@@ -188,24 +286,34 @@ export default function ChatterBookClient({ schedule }: ChatterBookClientProps) 
               </div>
               <div className="text-right">
                 <p className="text-xs text-slate-400 font-semibold uppercase">Fare</p>
-                <p className="font-bold text-indigo-600">MWK {schedule.fare.toLocaleString()}</p>
+                <p className="font-bold text-coral-700">MWK {schedule.fare.toLocaleString()}</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 text-sm text-slate-600 pt-3">
+              <div className="rounded-3xl bg-slate-50 p-3 border border-slate-100">
+                <p className="text-[10px] uppercase tracking-[0.3em] text-slate-400 font-semibold">Pickup point</p>
+                <p className="mt-2 text-sm font-semibold text-slate-900">{schedule.pickupPoint || 'Not specified'}</p>
+              </div>
+              <div className="rounded-3xl bg-slate-50 p-3 border border-slate-100">
+                <p className="text-[10px] uppercase tracking-[0.3em] text-slate-400 font-semibold">Drop-off point</p>
+                <p className="mt-2 text-sm font-semibold text-slate-900">{schedule.dropoffPoint || 'Not specified'}</p>
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4 text-sm text-slate-600">
               <div className="flex items-center gap-2">
                 <Calendar className="w-4 h-4 text-slate-400" />
-                <span>{new Date(schedule.travelDate).toLocaleDateString()}</span>
+                <span>{scheduleDateObj ? scheduleDateObj.toLocaleDateString() : 'TBD'}</span>
               </div>
               <div className="flex items-center gap-2 justify-end">
                 <Clock className="w-4 h-4 text-slate-400" />
-                <span>{new Date(schedule.travelDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                <span>{schedule.departureTime || '-'}</span>
               </div>
             </div>
 
             {schedule.rep && (
               <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 flex items-center gap-3">
-                <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600 font-bold text-sm">
+                <div className="w-10 h-10 bg-coral-100 rounded-full flex items-center justify-center text-coral-700 font-bold text-sm">
                   {schedule.rep.firstName?.[0] || 'R'}
                 </div>
                 <div>
@@ -214,6 +322,34 @@ export default function ChatterBookClient({ schedule }: ChatterBookClientProps) 
                     {schedule.rep.firstName} {schedule.rep.lastName}
                   </p>
                 </div>
+              </div>
+            )}
+          </div>
+
+          {/* Vehicle Images */}
+          <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm space-y-4">
+            <div>
+              <h2 className="text-lg font-bold text-slate-800">Vehicle Photos</h2>
+              <p className="text-xs text-slate-400 mt-1">Check out the bus for this trip</p>
+            </div>
+
+            {schedule.images && schedule.images.length > 0 ? (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {schedule.images.map((img, idx) => (
+                  <div
+                    key={idx}
+                    className="aspect-square rounded-xl overflow-hidden border border-slate-100 shadow-sm relative group cursor-pointer"
+                    onClick={() => openLightbox(idx)}
+                  >
+                    <img src={img} alt={`Bus image ${idx + 1}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-10 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                <BusIcon className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                <p className="text-sm text-slate-500 font-semibold">No photos available</p>
+                <p className="text-xs text-slate-400 mt-1">The representative hasn't uploaded any photos yet.</p>
               </div>
             )}
           </div>
@@ -231,7 +367,7 @@ export default function ChatterBookClient({ schedule }: ChatterBookClientProps) 
                 <span>Available</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-4 h-4 bg-indigo-600 rounded-md"></div>
+                <div className="w-4 h-4 bg-coral-500 rounded-md"></div>
                 <span>Selected</span>
               </div>
               <div className="flex items-center gap-2">
@@ -246,35 +382,59 @@ export default function ChatterBookClient({ schedule }: ChatterBookClientProps) 
               <div className="absolute top-2 right-4 w-6 h-6 border-2 border-slate-400 rounded-full flex items-center justify-center text-slate-400 font-bold text-[8px]">
                 W
               </div>
-              
-              <div className="grid grid-cols-4 gap-3 pt-10">
-                {seatLayout.map((seat, index) => {
-                  const isBooked = bookedSeats.includes(seat);
-                  const isSelected = selectedSeats.includes(seat);
-                  
-                  // Aisle between column 2 and 3
-                  const isAisle = index % 4 === 2;
 
-                  return (
-                    <React.Fragment key={seat}>
-                      {isAisle && <div className="col-span-1"></div>}
-                      <button
-                        type="button"
-                        onClick={() => handleSeatClick(seat)}
-                        disabled={isBooked}
-                        className={`h-9 rounded-md flex items-center justify-center font-bold text-xs transition-all ${
-                          isBooked 
-                            ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
-                            : isSelected
-                            ? 'bg-indigo-600 text-white shadow-md shadow-indigo-100 scale-105'
-                            : 'bg-white border border-slate-200 text-slate-700 hover:border-indigo-400'
-                        }`}
-                      >
-                        {seat}
-                      </button>
-                    </React.Fragment>
-                  );
-                })}
+              <div className="space-y-3 pt-10">
+                {seatRows.map((row, rowIndex) => (
+                  <div key={`row-${rowIndex}`} className="flex items-center justify-between gap-3">
+                    <div className="flex w-2/5 justify-end gap-3">
+                      {row.slice(0, 2).map((seat) => {
+                        const isBooked = bookedSeats.includes(seat);
+                        const isSelected = selectedSeats.includes(seat);
+                        return (
+                          <button
+                            key={seat}
+                            type="button"
+                            onClick={() => handleSeatClick(seat)}
+                            disabled={isBooked}
+                            className={`h-10 w-10 rounded-md flex items-center justify-center font-bold text-xs transition-all ${isBooked
+                              ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
+                              : isSelected
+                                ? 'bg-coral-500 text-white shadow-md shadow-coral-100 scale-105'
+                                : 'bg-white border border-slate-200 text-slate-700 hover:border-coral-400'
+                              }`}
+                          >
+                            {seat}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <div className="w-1/5 text-center text-[7px] font-bold text-gray-300 uppercase tracking-widest">Aisle</div>
+
+                    <div className="flex w-2/5 justify-start gap-3">
+                      {row.slice(2).map((seat) => {
+                        const isBooked = bookedSeats.includes(seat);
+                        const isSelected = selectedSeats.includes(seat);
+                        return (
+                          <button
+                            key={seat}
+                            type="button"
+                            onClick={() => handleSeatClick(seat)}
+                            disabled={isBooked}
+                            className={`h-10 w-10 rounded-md flex items-center justify-center font-bold text-xs transition-all ${isBooked
+                              ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
+                              : isSelected
+                                ? 'bg-coral-500 text-white shadow-md shadow-coral-100 scale-105'
+                                : 'bg-white border border-slate-200 text-slate-700 hover:border-coral-400'
+                              }`}
+                          >
+                            {seat}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
@@ -282,7 +442,7 @@ export default function ChatterBookClient({ schedule }: ChatterBookClientProps) 
 
         {/* Right Column: Checkout Form */}
         <div className="md:col-span-5">
-          <form onSubmit={handleSubmit} className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm space-y-6 sticky top-28">
+          <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm space-y-6 sticky top-28">
             <div>
               <h2 className="text-lg font-bold text-slate-800">Booking Summary</h2>
               <p className="text-xs text-slate-400 mt-1">Provide passenger details to secure tickets</p>
@@ -299,16 +459,25 @@ export default function ChatterBookClient({ schedule }: ChatterBookClientProps) 
             {selectedSeats.length > 0 ? (
               <div className="space-y-4 max-h-[300px] overflow-y-auto pr-1">
                 {passengers.map((p, idx) => (
-                  <div key={p.seatNumber} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 space-y-3">
-                    <div className="flex justify-between items-center">
+                  <div key={p.seatNumber} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 space-y-3 relative group">
+                    <div className="flex justify-between items-center pr-8">
                       <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
                         Passenger {idx + 1}
                       </span>
-                      <span className="text-xs font-bold bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-full">
+                      <span className="text-xs font-bold bg-coral-50 text-coral-600 px-2 py-0.5 rounded-full">
                         Seat {p.seatNumber}
                       </span>
                     </div>
-                    <div className="grid grid-cols-2 gap-2">
+                    {/* Remove passenger button */}
+                    <button
+                      type="button"
+                      onClick={() => handleSeatClick(p.seatNumber)}
+                      className="absolute top-2.5 right-3 w-7 h-7 rounded-full bg-white border border-slate-200 text-slate-400 flex items-center justify-center hover:bg-red-50 hover:text-red-500 hover:border-red-200 transition-colors shadow-sm"
+                      title="Remove seat"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                       <div className="space-y-1">
                         <label className="text-[10px] font-bold text-slate-400 uppercase">First Name</label>
                         <div className="relative">
@@ -317,7 +486,7 @@ export default function ChatterBookClient({ schedule }: ChatterBookClientProps) 
                             type="text"
                             required
                             placeholder="John"
-                            className="w-full pl-9 pr-3 h-10 bg-white border border-slate-200 rounded-xl focus:border-indigo-500 focus:ring-0 text-sm font-medium"
+                            className="w-full pl-9 pr-3 h-10 bg-white border border-slate-200 rounded-xl focus:border-coral-500 focus:ring-0 text-sm font-medium"
                             value={p.firstName}
                             onChange={(e) => handlePassengerChange(p.seatNumber, 'firstName', e.target.value)}
                           />
@@ -331,11 +500,39 @@ export default function ChatterBookClient({ schedule }: ChatterBookClientProps) 
                             type="text"
                             required
                             placeholder="Doe"
-                            className="w-full pl-9 pr-3 h-10 bg-white border border-slate-200 rounded-xl focus:border-indigo-500 focus:ring-0 text-sm font-medium"
+                            className="w-full pl-9 pr-3 h-10 bg-white border border-slate-200 rounded-xl focus:border-coral-500 focus:ring-0 text-sm font-medium"
                             value={p.lastName}
                             onChange={(e) => handlePassengerChange(p.seatNumber, 'lastName', e.target.value)}
                           />
                         </div>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase">Gender</label>
+                        <select
+                          required
+                          value={p.gender}
+                          onChange={(e) => handlePassengerChange(p.seatNumber, 'gender', e.target.value)}
+                          className="w-full h-10 bg-white border border-slate-200 rounded-xl pl-3 pr-10 text-sm font-medium focus:border-coral-500 focus:ring-0"
+                        >
+                          <option value="">Select gender</option>
+                          <option value="male">Male</option>
+                          <option value="female">Female</option>
+                          <option value="other">Other</option>
+                        </select>
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase">Age</label>
+                        <input
+                          type="number"
+                          required
+                          min="1"
+                          placeholder="Age"
+                          className="w-full h-10 bg-white border border-slate-200 rounded-xl pl-3 pr-3 text-sm font-medium focus:border-coral-500 focus:ring-0"
+                          value={p.age}
+                          onChange={(e) => handlePassengerChange(p.seatNumber, 'age', e.target.value)}
+                        />
                       </div>
                     </div>
                   </div>
@@ -357,7 +554,7 @@ export default function ChatterBookClient({ schedule }: ChatterBookClientProps) 
                     type="tel"
                     required
                     placeholder="+265 999 123 456"
-                    className="w-full pl-9 pr-3 h-11 bg-slate-50/50 border border-slate-200 rounded-xl focus:border-indigo-500 focus:ring-0 text-sm font-medium"
+                    className="w-full pl-9 pr-3 h-11 bg-slate-50/50 border border-slate-200 rounded-xl focus:border-coral-500 focus:ring-0 text-sm font-medium"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
                   />
@@ -372,13 +569,14 @@ export default function ChatterBookClient({ schedule }: ChatterBookClientProps) 
               </div>
               <div className="flex justify-between text-base font-bold text-slate-800">
                 <span>Total Amount</span>
-                <span className="text-indigo-600">MWK {totalAmount.toLocaleString()}</span>
+                <span className="text-coral-700">MWK {totalAmount.toLocaleString()}</span>
               </div>
             </div>
 
             <Button
-              type="submit"
-              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold h-12 rounded-2xl shadow-lg shadow-indigo-100"
+              type="button"
+              className="w-full bg-coral-500 hover:bg-coral-600 text-white font-bold h-12 rounded-2xl shadow-lg shadow-coral-100"
+              onClick={handleProceedToPayment}
               disabled={loading || selectedSeats.length === 0}
             >
               {loading ? (
@@ -388,10 +586,77 @@ export default function ChatterBookClient({ schedule }: ChatterBookClientProps) 
               )}
               Confirm Booking & Pay
             </Button>
-          </form>
+          </div>
         </div>
-        
+
       </div>
+
+      <ChatterConfirmModal
+        isOpen={confirmModalOpen}
+        onClose={() => {
+          if (!loading) setConfirmModalOpen(false);
+        }}
+        schedule={schedule}
+        selectedSeats={selectedSeats}
+        passengers={passengers}
+        totalAmount={totalAmount}
+        loading={loading}
+        onConfirm={handleBookingSubmit}
+      />
+
+      {/* Lightbox Modal */}
+      {lightboxOpen && schedule.images && schedule.images.length > 0 && (
+        <div
+          className="fixed inset-0 bg-black/95 backdrop-blur-md z-[150] flex flex-col items-center justify-center animate-in fade-in duration-200"
+          onClick={() => setLightboxOpen(false)}
+        >
+          {/* Top Bar */}
+          <div className="absolute top-0 inset-x-0 h-16 flex items-center justify-between px-6 bg-gradient-to-b from-black/60 to-transparent text-white z-10 select-none">
+            <span className="text-sm font-medium text-gray-300">
+              {activeImageIndex + 1} / {schedule.images.length}
+            </span>
+            <button
+              onClick={() => setLightboxOpen(false)}
+              className="w-10 h-10 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 transition-colors text-white focus:outline-none"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          {/* Main Image Container */}
+          <div className="relative w-full max-w-5xl px-4 flex items-center justify-center h-[80vh]" onClick={(e) => e.stopPropagation()}>
+            <img
+              src={schedule.images[activeImageIndex]}
+              alt={`Bus view ${activeImageIndex + 1}`}
+              className="max-w-full max-h-full object-contain rounded-lg shadow-2xl select-none animate-in zoom-in-95 duration-200"
+            />
+
+            {/* Navigation Buttons */}
+            {schedule.images.length > 1 && (
+              <>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setActiveImageIndex((prev) => (prev === 0 ? schedule.images!.length - 1 : prev - 1));
+                  }}
+                  className="absolute left-2 md:left-6 w-10 h-10 md:w-12 md:h-12 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/25 transition-all text-white border border-white/10 hover:scale-105 active:scale-95 focus:outline-none"
+                >
+                  <ChevronLeft className="w-6 h-6" />
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setActiveImageIndex((prev) => (prev === schedule.images!.length - 1 ? 0 : prev + 1));
+                  }}
+                  className="absolute right-2 md:right-6 w-10 h-10 md:w-12 md:h-12 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/25 transition-all text-white border border-white/10 hover:scale-105 active:scale-95 focus:outline-none"
+                >
+                  <ChevronRight className="w-6 h-6" />
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

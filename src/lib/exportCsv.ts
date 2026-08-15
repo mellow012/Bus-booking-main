@@ -1,5 +1,6 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { toDate } from '@/lib/chatterHelpers';
 
 export interface ManifestBookingRow {
   bookingReference: string;
@@ -92,8 +93,9 @@ export function exportBookingsAsPdf(
   doc.rect(0, 34, W, 2.5, 'F');
 
   // ── Trip Info block ───────────────────────────────────────────────────
-  const tDate = schedule.travelDate
-    ? new Date(schedule.travelDate).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+  const sd = toDate(schedule.travelDate);
+  const tDate = sd
+    ? sd.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
     : 'N/A';
 
   const paidCount = bookings.filter((b) => b.paymentStatus === 'paid').length;
@@ -146,9 +148,10 @@ export function exportBookingsAsPdf(
     b.contactPhone || '—',
     b.bookingReference,
     b.paymentStatus,
-    b.createdAt instanceof Date
-      ? b.createdAt.toLocaleDateString()
-      : new Date(b.createdAt).toLocaleDateString(),
+    (() => {
+      const cd = toDate((b as any).createdAt);
+      return cd ? cd.toLocaleDateString() : String(b.createdAt);
+    })(),
   ]);
 
   autoTable(doc, {

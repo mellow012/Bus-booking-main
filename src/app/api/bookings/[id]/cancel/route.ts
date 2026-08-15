@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth-utils';
+import { parseUtcDate } from '@/lib/timezone';
 import prisma from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 
@@ -43,7 +44,8 @@ export async function POST(
     }
 
     // Check refund/cancellation 2-hour pre-departure cutoff policy
-    const departureTime = new Date(booking.schedule?.departureDateTime || booking.chatterSchedule?.travelDate || Date.now());
+    const depRaw = booking.schedule?.departureDateTime ?? booking.chatterSchedule?.travelDate ?? Date.now();
+    const departureTime = depRaw instanceof Date ? depRaw : parseUtcDate(depRaw);
     const twoHoursMs = 2 * 60 * 60 * 1000;
     const timeUntilDeparture = departureTime.getTime() - Date.now();
 

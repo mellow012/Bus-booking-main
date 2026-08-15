@@ -220,13 +220,13 @@ export async function GET(req: NextRequest) {
 
       return {
         ...b,
-        schedule: {
+        schedule: b.schedule ? {
           ...b.schedule,
           tripStatus: effectiveStatus,
           operatorPhone: phone,
           // Name of the person assigned to run this schedule (for ticket display)
           operatorName: b.schedule?.operator?.name || '',
-        },
+        } : null,
       };
     });
 

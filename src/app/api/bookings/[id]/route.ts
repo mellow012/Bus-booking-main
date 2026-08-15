@@ -137,6 +137,10 @@ export async function DELETE(
     // Fetch booking
     const booking = await prisma.booking.findUnique({
       where: { id: bookingId },
+      include: {
+        schedule: true,
+        chatterSchedule: true,
+      }
     });
 
     if (!booking) {
@@ -148,10 +152,28 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
-    // Only allow deletion of cancelled bookings
-    if (booking.bookingStatus !== 'cancelled') {
+    // Determine trip time
+    const arrRaw = booking.schedule?.arrivalDateTime || (booking as any).arrivalDateTime;
+    const depRaw = booking.schedule?.departureDateTime || (booking as any).departureDateTime;
+    const arr = arrRaw ? new Date(arrRaw) : null;
+    const dep = depRaw ? new Date(depRaw) : null;
+    const tripTime = (arr && !isNaN(arr.getTime())) ? arr.getTime() : (dep && !isNaN(dep.getTime())) ? dep.getTime() : null;
+
+    let isPast48Hours = false;
+    if (tripTime !== null) {
+      isPast48Hours = Date.now() > tripTime + (48 * 60 * 60 * 1000);
+    }
+
+    const isDeletable = 
+      booking.bookingStatus === 'cancelled' || 
+      booking.bookingStatus === 'archived' || 
+      booking.bookingStatus === 'expired' || 
+      isPast48Hours;
+
+    // Only allow deletion of allowed bookings
+    if (!isDeletable) {
       return NextResponse.json(
-        { error: 'Only cancelled bookings can be deleted' },
+        { error: 'Only cancelled, expired, or bookings >48 hours old can be deleted' },
         { status: 400 }
       );
     }

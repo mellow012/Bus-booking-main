@@ -126,14 +126,23 @@ export function checkIsArchived(b: BookingWithDetails): boolean {
   const tripTime = (arr && !isNaN(arr.getTime())) ? arr.getTime() : (dep && !isNaN(dep.getTime())) ? dep.getTime() : null;
 
   if (tripTime !== null) {
-    const fiveHoursMs = 5 * 60 * 60 * 1000;
-    if (Date.now() > tripTime + fiveHoursMs) {
+    const sixHoursMs = 6 * 60 * 60 * 1000;
+    if (Date.now() > tripTime + sixHoursMs) {
       return true;
     }
   }
 
   const isConcluded = (b.bookingStatus as string) === 'cancelled' || (b.bookingStatus as string) === 'payment_failed';
   if (!isConcluded) return false;
+  
+  // For cancelled or failed bookings, archive them 6 hours after they were last updated/cancelled
+  const updatedDate = b.updatedAt instanceof Date ? b.updatedAt : (b.updatedAt ? parseUtcDate(b.updatedAt as unknown as string) : null);
+  if (updatedDate && !isNaN(updatedDate.getTime())) {
+    const ageMs = Date.now() - updatedDate.getTime();
+    if (ageMs > 6 * 60 * 60 * 1000) return true;
+  }
+  
+  // Fallback for concluded bookings
   if (!dep || isNaN(dep.getTime())) return false;
   const ageMs = Date.now() - dep.getTime();
   return ageMs > ARCHIVED_AGE_DAYS * 24 * 60 * 60 * 1000;
@@ -175,6 +184,7 @@ export const useBookingsList = () => {
     else if (typeof dateTime === 'string') d = parseUtcDate(dateTime);
     else if ((dateTime as any)?.seconds) d = new Date((dateTime as any).seconds * 1000);
     else return 'N/A';
+    if (isNaN(d.getTime())) return 'N/A';
     return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
   }, []);
 
@@ -184,6 +194,7 @@ export const useBookingsList = () => {
     else if (typeof dateTime === 'string') d = parseUtcDate(dateTime);
     else if ((dateTime as any)?.seconds) d = new Date((dateTime as any).seconds * 1000);
     else return 'N/A';
+    if (isNaN(d.getTime())) return 'N/A';
     return d.toLocaleDateString('en-GB', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
   }, []);
 
@@ -220,7 +231,7 @@ export const useBookingsList = () => {
         });
 
         if (af === 'confirmed') return derived === 'confirmed' || derived === 'reserved_cash';
-        if (af === 'pending') return derived === 'awaiting_payment';
+        if (af === 'pending') return derived === 'payment_incomplete';
         if (af === 'cancelled') return derived === 'cancelled' || derived === 'payment_failed';
         if (af === 'in_transit') return derived === 'in_transit';
         if (af === 'upcoming') return (derived === 'confirmed' || derived === 'reserved_cash') && new Date() < new Date(b.schedule?.departureDateTime as any);
@@ -251,6 +262,10 @@ export const useBookingsList = () => {
           setBookings([]);
           setFilteredBookings([]);
           setLoading(false);
+          toast.error('Session Expired', 'Please log in again to view your bookings.');
+          setTimeout(() => {
+            window.location.href = '/login?redirect=/bookings';
+          }, 1500);
           return;
         }
         console.error('fetch /api/bookings failed', response.status, json);
@@ -295,6 +310,9 @@ export const useBookingsList = () => {
           : [];
         
         const returnSegment = mappedSegments.length > 1 ? mappedSegments[1] : undefined;
+        if (b.chatterSchedule) {
+          console.log(`[useBookingsList] Chatter Booking ${b.id} schedule travelDate:`, b.chatterSchedule.travelDate);
+        }
 
         const route = b.schedule?.route || b.route || (b.chatterSchedule ? {
           id: 'chatter-route',
@@ -304,6 +322,17 @@ export const useBookingsList = () => {
           distance: 0,
           duration: 0,
         } : {});
+
+        const chatterDeparture = b.chatterSchedule && b.chatterSchedule.departureTime
+            ? parseUtcDate(`${String(b.chatterSchedule.travelDate).split('T')[0]}T${b.chatterSchedule.departureTime}${b.chatterSchedule.departureTime.split(':').length === 2 ? ':00' : ''}`)
+            : b.chatterSchedule ? parseUtcDate(b.chatterSchedule.travelDate) : new Date(NaN);
+            
+        const chatterDuration = b.chatterSchedule ? getEstimatedDuration(
+            normalizeText(b.chatterSchedule.origin, 'Unknown'),
+            normalizeText(b.chatterSchedule.destination, 'Unknown')
+        ) : 0;
+        
+        const chatterArrival = new Date(chatterDeparture.getTime() + chatterDuration * 60 * 1000);
 
         const schedule = b.schedule ? {
           ...b.schedule,
@@ -317,26 +346,27 @@ export const useBookingsList = () => {
           operatorPhone: b.schedule?.operatorPhone || '',
           operatorName: b.schedule?.operatorName || '',
         } : b.chatterSchedule ? {
-          id: b.chatterScheduleId,
-          departureDateTime: parseUtcDate(b.chatterSchedule.travelDate),
-          arrivalDateTime: parseUtcDate(b.chatterSchedule.travelDate),
-          price: b.chatterSchedule.fare,
-          availableSeats: b.chatterSchedule.totalSeats,
-          date: b.chatterSchedule.travelDate,
-          tripStatus: 'scheduled',
-          operatorPhone: b.chatterSchedule.contactPhone,
-          operatorName: 'Chatter Representative',
+            id: b.chatterScheduleId,
+            // Ensure departureTime has seconds so it parses correctly across all browsers
+            departureDateTime: chatterDeparture,
+            arrivalDateTime: chatterArrival,
+            price: b.chatterSchedule.fare,
+            availableSeats: b.chatterSchedule.totalSeats,
+            date: b.chatterSchedule.travelDate,
+            tripStatus: 'scheduled',
+            operatorPhone: b.chatterSchedule.contactPhone,
+            operatorName: 'Chatter Representative',
         } : undefined;
 
         const bus = b.schedule?.bus ? {
           id: b.schedule.bus.id || '',
           busNumber: normalizeText(b.schedule.bus.licensePlate, 'N/A'),
-          busType: normalizeText(b.schedule.bus.busType, 'N/A'),
+          busType: normalizeText(b.schedule.bus.busType, 'Standard Class'),
           licensePlate: normalizeText(b.schedule.bus.licensePlate, 'N/A'),
         } : b.chatterSchedule ? {
           id: 'chatter-bus',
-          busNumber: 'Chatter',
-          busType: normalizeText(b.chatterSchedule.busName, 'Chatter Bus'),
+          busNumber: b.chatterSchedule.busName || 'Chatter Bus',
+          busType: b.chatterSchedule.busName || 'Chatter Bus',
           licensePlate: 'N/A',
         } : {};
 
@@ -450,6 +480,25 @@ export const useBookingsList = () => {
     finally { setActionLoading(null); }
   }, [bookings, fetchBookings, toast]);
 
+  const handleArchiveBooking = useCallback(async (bookingId: string) => {
+    const b = bookings.find((x) => x.id === bookingId);
+    if (!b || !['cancelled', 'completed', 'payment_failed', 'expired'].includes(b.bookingStatus)) {
+      setError('Only concluded bookings can be archived.'); return;
+    }
+    if (!window.confirm('Move this booking to the Archive/Past tab?')) return;
+    setActionLoading(bookingId);
+    try {
+      const response = await fetch(`/api/bookings/${bookingId}/archive`, { method: 'POST' });
+      if (!response.ok) throw new Error('Failed to archive booking');
+      setSuccess('Booking archived.');
+      toast.success('Booking Archived', 'The booking has been moved to your archives.');
+      setTimeout(() => setSuccess(''), 5000);
+      fetchBookings();
+    }
+    catch (err: unknown) { setError(`Failed to archive: ${err instanceof Error ? err.message : String(err)}`); }
+    finally { setActionLoading(null); }
+  }, [bookings, fetchBookings, toast]);
+
   const handleDownloadTicket = useCallback(async (booking: BookingWithDetails, includeQR: boolean) => {
     setActionLoading(`download_${booking.id}`);
     try {
@@ -513,10 +562,19 @@ export const useBookingsList = () => {
         const originId = isReturn && booking.returnSegment ? booking.returnSegment.originStopId : booking.originStopId;
         const destId = isReturn && booking.returnSegment ? booking.returnSegment.destinationStopId : booking.destinationStopId;
         
+        const chatterLogistics = (booking as any).chatterSchedule || (booking as any).metadata || {};
+        const firstPaxLogistics = Array.isArray(booking.passengerDetails) && booking.passengerDetails[0] ? booking.passengerDetails[0] : {};
+        const chatterPickup = chatterLogistics.pickupPoint || (firstPaxLogistics as any).pickupPoint || '';
+        const chatterDropoff = chatterLogistics.dropoffPoint || (firstPaxLogistics as any).dropoffPoint || '';
+
         const originName = normalizeText(routeObj.origin, 'Unknown Origin');
         const destName = normalizeText(routeObj.destination, 'Unknown Dest');
-        const originStop = normalizeText(resolveStopName(originId, undefined, routeObj, routeObj.origin));
-        const destStop = normalizeText(resolveStopName(destId, undefined, routeObj, routeObj.destination));
+        const originStop = normalizeText(
+          chatterPickup ? `Pickup: ${chatterPickup}` : resolveStopName(originId, undefined, routeObj, routeObj.origin)
+        );
+        const destStop = normalizeText(
+          chatterDropoff ? `Dropoff: ${chatterDropoff}` : resolveStopName(destId, undefined, routeObj, routeObj.destination)
+        );
         
         const depTime = formatTime(schedObj.departureDateTime);
         const depDate = formatDate(schedObj.departureDateTime);
@@ -839,7 +897,7 @@ export const useBookingsList = () => {
         arrivalTime: b.schedule?.arrivalDateTime,
       });
       if (derived === 'confirmed' || derived === 'reserved_cash') stats.confirmed++;
-      if (derived === 'awaiting_payment') stats.pending++;
+      if (derived === 'payment_incomplete') stats.pending++;
       if (derived === 'cancelled' || derived === 'payment_failed') stats.cancelled++;
       if (derived === 'in_transit') stats.in_transit++;
       if ((derived === 'confirmed' || derived === 'reserved_cash') && new Date() < new Date(b.schedule?.departureDateTime as any)) stats.upcoming++;
@@ -891,6 +949,7 @@ export const useBookingsList = () => {
     fetchBookings,
     handleCancelBooking,
     handleDeleteBooking,
+    handleArchiveBooking,
     handleDownloadTicket,
     handleProcessPayment,
     handleMethodSelect,

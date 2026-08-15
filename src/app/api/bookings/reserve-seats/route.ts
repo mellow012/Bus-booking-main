@@ -165,7 +165,7 @@ export async function POST(req: NextRequest) {
             const activeSegments = await tx.bookingSegment.findMany({
               where: {
                 scheduleId,
-                booking: { bookingStatus: { not: 'cancelled' } },
+                booking: { bookingStatus: { in: ['pending', 'confirmed', 'completed'] } },
               },
               select: {
                 seatNumbers: true,

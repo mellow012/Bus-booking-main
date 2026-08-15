@@ -17,7 +17,7 @@ export const bookingMatchesSchedule = (booking: Booking, scheduleId: string): bo
   return false;
 };
 
-export type DerivedDisplayStatus = 'awaiting_payment' | 'reserved_cash' | 'confirmed' | 'in_transit' | 'delayed' | 'completed' | 'payment_failed' | 'expired' | 'cancelled' | 'flagged_for_review' | 'anomaly';
+export type DerivedDisplayStatus = 'payment_incomplete' | 'reserved_cash' | 'confirmed' | 'in_transit' | 'delayed' | 'completed' | 'payment_failed' | 'expired' | 'cancelled' | 'flagged_for_review' | 'archived' | 'anomaly';
 
 export function deriveBookingStatus({
   bookingStatus,
@@ -38,7 +38,16 @@ export function deriveBookingStatus({
   let baseStatus: DerivedDisplayStatus;
 
   if (bookingStatus === 'pending' && paymentStatus === 'pending') {
-    baseStatus = 'awaiting_payment';
+    if (departureTime) {
+      const dep = departureTime instanceof Date ? departureTime : new Date(departureTime);
+      if (!isNaN(dep.getTime()) && new Date() >= dep) {
+        baseStatus = 'expired';
+      } else {
+        baseStatus = 'payment_incomplete';
+      }
+    } else {
+      baseStatus = 'payment_incomplete';
+    }
   } else if (bookingStatus === 'confirmed' && paymentStatus === 'paid') {
     baseStatus = 'confirmed';
   } else if (bookingStatus === 'confirmed' && paymentStatus === 'pending') {
@@ -56,6 +65,8 @@ export function deriveBookingStatus({
     baseStatus = 'flagged_for_review';
   } else if (bookingStatus === 'cancelled') {
     baseStatus = 'cancelled';
+  } else if (bookingStatus === 'archived') {
+    baseStatus = 'archived';
   } else if (bookingStatus === 'completed' && (paymentStatus === 'paid' || isCash)) {
     baseStatus = 'completed';
   } else {
@@ -94,7 +105,7 @@ export function deriveBookingStatus({
 
 export function getDisplayStatusUI(status: DerivedDisplayStatus): { label: string; colorClass: string; isPulsing: boolean } {
   switch (status) {
-    case 'awaiting_payment': return { label: 'Awaiting Payment', colorClass: 'bg-amber-100 text-amber-800 border-amber-200', isPulsing: false };
+    case 'payment_incomplete': return { label: 'Payment Incomplete', colorClass: 'bg-amber-100 text-amber-800 border-amber-200', isPulsing: false };
     case 'reserved_cash': return { label: 'Reserved (Cash)', colorClass: 'bg-gray-100 text-gray-800 border-gray-200', isPulsing: false };
     case 'confirmed': return { label: 'Confirmed', colorClass: 'bg-emerald-100 text-emerald-800 border-emerald-200', isPulsing: false };
     case 'in_transit': return { label: 'In Transit', colorClass: 'bg-brand-50 text-brand-700 border-brand-200', isPulsing: true };
@@ -103,6 +114,7 @@ export function getDisplayStatusUI(status: DerivedDisplayStatus): { label: strin
     case 'payment_failed': return { label: 'Payment Failed', colorClass: 'bg-red-100 text-red-800 border-red-200', isPulsing: false };
     case 'expired': return { label: 'Expired', colorClass: 'bg-gray-100 text-gray-800 border-gray-200', isPulsing: false };
     case 'cancelled': return { label: 'Cancelled', colorClass: 'bg-red-100 text-red-800 border-red-200', isPulsing: false };
+    case 'archived': return { label: 'Archived', colorClass: 'bg-gray-100 text-gray-800 border-gray-200', isPulsing: false };
     case 'flagged_for_review': return { label: 'Review Needed', colorClass: 'bg-orange-100 text-orange-800 border-orange-200', isPulsing: false };
     case 'anomaly': return { label: 'Unknown', colorClass: 'bg-gray-100 text-gray-800 border-gray-200', isPulsing: false };
     default: return { label: 'Unknown', colorClass: 'bg-gray-100 text-gray-800 border-gray-200', isPulsing: false };

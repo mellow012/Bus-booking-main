@@ -8,6 +8,7 @@ import MySchedulesClient from './MySchedulesClient';
 
 export const dynamic = 'force-dynamic';
 
+
 export const metadata = {
   title: 'My Schedules | TibhukeBus',
   description: 'Manage your active group booking schedules and requests.',

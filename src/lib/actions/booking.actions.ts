@@ -5,6 +5,7 @@ import type { Prisma } from '@prisma/client';
 import { revalidatePath } from 'next/cache';
 import { Booking, BookingStatus } from '@/types';
 import { createClient } from '@/utils/supabase/server';
+import { parseUtcDate } from '@/lib/timezone';
 import { getCurrentUserFromServer } from '@/lib/auth-utils';
 import { logger } from '@/lib/logger';
 import { serverCache } from '@/lib/cache';
@@ -657,7 +658,8 @@ export async function cancelBooking(bookingId: string, scheduleId?: string, seat
 
       const travelDate = existingBooking.schedule?.departureDateTime ?? existingBooking.chatterSchedule?.travelDate;
       if (travelDate) {
-        const depTime = new Date(travelDate).getTime();
+        const dep = travelDate instanceof Date ? travelDate : parseUtcDate(travelDate as any);
+        const depTime = dep.getTime();
         const timeUntilDep = depTime - Date.now();
         if (timeUntilDep < 2 * 60 * 60 * 1000) {
           throw new Error('Bookings cannot be cancelled or refunded within 2 hours of scheduled departure time as per TibhukeBus policy.');

@@ -10,7 +10,7 @@ import {
   Bus as BusIcon, MapPin, Clock, Download, XCircle, CheckCircle, Loader2,
   Search, CreditCard, Armchair, Bell, AlertTriangle, Calendar, Users,
   RefreshCw, Zap, Shield, Smartphone, ArrowRight, ArrowLeft, Trash2,
-  ChevronRight, Building2, Wallet, Star, Navigation, Archive,
+  ChevronRight, Building2, Wallet, Star, Navigation, Archive, Phone,
 } from 'lucide-react';
 import nextDynamic from 'next/dynamic';
 
@@ -18,6 +18,7 @@ import Modal from '../../components/Modals';
 import AlertMessage from '../../components/AlertMessage';
 import { useAppToast } from '@/contexts/ToastContext';
 import useBookingsList, { BookingWithDetails, SearchFilters, resolveStopName, getEstimatedDuration } from './useBookingsList';
+import { parseUtcDate } from '@/lib/timezone';
 import { deriveBookingStatus, getDisplayStatusUI } from '@/lib/booking-utils';
 import BookingCheckoutDrawer from './BookingCheckoutFlow';
 import BookingStatsGrid from './BookingStatsGrid';
@@ -48,23 +49,30 @@ const BookingCard = memo<{
   const handleDLOnly = useCallback(() => onDownload(booking, false), [booking, onDownload]);
   const handlePayment = useCallback(() => onPayment(booking), [booking, onPayment]);
 
+  const rawSchedule: any = booking.schedule ?? (booking as any).chatterSchedule;
+  const bookingSchedule: any = rawSchedule ? {
+    ...rawSchedule,
+    departureDateTime: rawSchedule.departureDateTime ?? rawSchedule.travelDate,
+    arrivalDateTime: rawSchedule.arrivalDateTime ?? rawSchedule.travelDate,
+  } : null;
+  const bookingRoute: any = booking.route ?? (booking as any).chatterSchedule;
   const outboundCompleted =
-    booking.schedule.tripStatus === 'completed' ||
-    (booking.schedule.tripStatus !== 'in_transit' && new Date() >= new Date(booking.schedule.arrivalDateTime));
+    bookingSchedule?.tripStatus === 'completed' ||
+    (bookingSchedule?.tripStatus !== 'in_transit' && new Date() >= parseUtcDate(bookingSchedule?.arrivalDateTime));
 
   const activeSegment = (outboundCompleted && booking.returnSegment) ? booking.returnSegment : null;
 
-  const displaySchedule = activeSegment ? activeSegment.schedule : booking.schedule;
-  const displayRoute = activeSegment ? activeSegment.route : booking.route;
+  const displaySchedule = activeSegment ? activeSegment.schedule : bookingSchedule;
+  const displayRoute = activeSegment ? activeSegment.route : bookingRoute;
   const displayOriginStopId = activeSegment ? activeSegment.originStopId : booking.originStopId;
   const displayDestinationStopId = activeSegment ? activeSegment.destinationStopId : booking.destinationStopId;
 
   const displayOriginName = resolveStopName(displayOriginStopId, activeSegment ? undefined : booking.originStopName, displayRoute, displayRoute?.origin || 'N/A');
   const displayAlightName = resolveStopName(displayDestinationStopId, activeSegment ? undefined : booking.destinationStopName, displayRoute, displayRoute?.destination || 'N/A');
 
-  const originName = resolveStopName(booking.originStopId, booking.originStopName, booking.route, booking.route?.origin || 'N/A');
-  const alightName = resolveStopName(booking.destinationStopId, booking.destinationStopName, booking.route, booking.route?.destination || 'N/A');
-  const isSegment = originName !== (booking.route?.origin || '') || alightName !== (booking.route?.destination || '');
+  const originName = resolveStopName(booking.originStopId, booking.originStopName, bookingRoute as any, bookingRoute?.origin || 'N/A');
+  const alightName = resolveStopName(booking.destinationStopId, booking.destinationStopName, bookingRoute as any, bookingRoute?.destination || 'N/A');
+  const isSegment = originName !== (bookingRoute?.origin || '') || alightName !== (bookingRoute?.destination || '');
   const isCash = (booking as any).paymentMethod === 'cash_on_boarding';
   const hasSecuredSeat = booking.bookingStatus === 'confirmed' &&
     (booking.paymentStatus === 'paid' || isCash);
@@ -76,14 +84,14 @@ const BookingCard = memo<{
   const journey = useJourneyTracker({
     bookingId: booking.id,
     scheduleId: activeSegment ? activeSegment.scheduleId : booking.scheduleId,
-    departureDateTime: activeSegment ? activeSegment.schedule.departureDateTime : booking.schedule.departureDateTime,
-    arrivalDateTime: activeSegment ? activeSegment.schedule.arrivalDateTime : booking.schedule.arrivalDateTime,
-    tripStatus: activeSegment ? activeSegment.schedule.tripStatus : booking.schedule.tripStatus,
+    departureDateTime: parseUtcDate(activeSegment ? activeSegment.schedule.departureDateTime : (bookingSchedule?.departureDateTime ?? bookingSchedule?.travelDate)),
+    arrivalDateTime: parseUtcDate(activeSegment ? activeSegment.schedule.arrivalDateTime : (bookingSchedule?.arrivalDateTime ?? bookingSchedule?.travelDate)),
+    tripStatus: activeSegment ? activeSegment.schedule.tripStatus : (bookingSchedule?.tripStatus ?? 'scheduled'),
     bookingStatus: booking.bookingStatus,
     paymentStatus: booking.paymentStatus,
     paymentMethod: (booking as any).paymentMethod || booking.paymentProvider,
     reviewRating: activeLegReviewRating,
-    destinationCity: activeSegment ? (activeSegment.route?.destination || '') : (booking.route?.destination || ''),
+    destinationCity: activeSegment ? (activeSegment.route?.destination || '') : (bookingRoute?.destination || ''),
   });
 
   const [reviewForm, setReviewForm] = useState({ rating: 0, hover: 0, text: '' });
@@ -92,9 +100,9 @@ const BookingCard = memo<{
     bookingStatus: booking.bookingStatus,
     paymentStatus: booking.paymentStatus,
     paymentMethod: (booking as any).paymentMethod || booking.paymentProvider,
-    tripStatus: activeSegment ? activeSegment.schedule.tripStatus : booking.schedule.tripStatus,
-    departureTime: activeSegment ? activeSegment.schedule.departureDateTime : booking.schedule.departureDateTime,
-    arrivalTime: activeSegment ? activeSegment.schedule.arrivalDateTime : booking.schedule.arrivalDateTime
+    tripStatus: activeSegment ? activeSegment.schedule.tripStatus : (bookingSchedule?.tripStatus ?? 'scheduled'),
+    departureTime: parseUtcDate(activeSegment ? activeSegment.schedule.departureDateTime : (bookingSchedule?.departureDateTime ?? bookingSchedule?.travelDate)),
+    arrivalTime: parseUtcDate(activeSegment ? activeSegment.schedule.arrivalDateTime : (bookingSchedule?.arrivalDateTime ?? bookingSchedule?.travelDate))
   });
   const statusUI = getDisplayStatusUI(derivedStatus);
 
@@ -115,7 +123,9 @@ const BookingCard = memo<{
             )}
             <div className="min-w-0">
               <h3 className="text-base sm:text-lg font-semibold text-gray-900 truncate">{booking.company.name}</h3>
-              <p className="text-sm text-gray-600 truncate">Ref: {booking.bookingReference || booking.id.slice(-8)}</p>
+              <div className="flex items-center gap-3 text-sm text-gray-600 truncate flex-wrap">
+                <span>Ref: {booking.bookingReference || booking.id.slice(-8)}</span>
+              </div>
             </div>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
@@ -134,9 +144,16 @@ const BookingCard = memo<{
         {/* Route timeline */}
         <div className="flex flex-col sm:flex-row items-center gap-4 p-3 bg-gray-50 rounded-xl mb-4">
           <div className="text-center min-w-[80px]">
-            <div className="text-lg sm:text-xl font-bold text-gray-900">{formatTime(displaySchedule.departureDateTime)}</div>
+            <div className="text-lg sm:text-xl font-bold text-gray-900">{formatTime(displaySchedule?.departureDateTime ?? displaySchedule?.travelDate)}</div>
             <div className="text-sm text-gray-600 flex items-center justify-center gap-1"><MapPin className="w-3 h-3" /><span className="truncate">{displayOriginName}</span></div>
-            <div className="text-xs text-gray-500 mt-1">{formatDate(displaySchedule.departureDateTime)}</div>
+            {((booking as any).chatterSchedule?.pickupPoint || (booking as any).metadata?.pickupPoint) && (
+              <div className="text-[11px] font-medium text-brand-700 mt-0.5 truncate max-w-[140px] mx-auto">
+                Pickup: {(booking as any).chatterSchedule?.pickupPoint || (booking as any).metadata?.pickupPoint}
+              </div>
+            )}
+            <div className="text-xs text-gray-500 mt-1">
+              {formatDate(displaySchedule?.departureDateTime ?? displaySchedule?.travelDate)}
+            </div>
           </div>
           <div className="flex-1 mx-2 hidden sm:block">
             <div className="relative">
@@ -156,8 +173,10 @@ const BookingCard = memo<{
             </div>
             
             {(() => {
-              const depTime = new Date(displaySchedule.departureDateTime).getTime();
-              const arrTime = new Date(displaySchedule.arrivalDateTime).getTime();
+              const rawDep = displaySchedule?.departureDateTime ?? displaySchedule?.travelDate;
+              const rawArr = displaySchedule?.arrivalDateTime ?? displaySchedule?.travelDate;
+              const depTime = rawDep ? parseUtcDate(rawDep).getTime() : 0;
+              const arrTime = rawArr ? parseUtcDate(rawArr).getTime() : 0;
               const calcMinutes = (arrTime && depTime && arrTime > depTime)
                 ? Math.round((arrTime - depTime) / (1000 * 60))
                 : getEstimatedDuration(displayOriginName, displayAlightName, displayRoute?.duration, displayRoute?.distance);
@@ -176,15 +195,20 @@ const BookingCard = memo<{
             })()}
           </div>
           <div className="text-center min-w-[80px]">
-            <div className="text-lg sm:text-xl font-bold text-gray-900">{formatTime(displaySchedule.arrivalDateTime)}</div>
+            <div className="text-lg sm:text-xl font-bold text-gray-900">{formatTime(displaySchedule?.arrivalDateTime ?? displaySchedule?.travelDate)}</div>
             <div className="text-sm text-gray-600 flex items-center justify-center gap-1"><MapPin className="w-3 h-3" /><span className="truncate">{displayAlightName}</span></div>
-            <div className="text-xs text-gray-500 mt-1">{formatDate(displaySchedule.arrivalDateTime)}</div>
+            {((booking as any).chatterSchedule?.dropoffPoint || (booking as any).metadata?.dropoffPoint) && (
+              <div className="text-[11px] font-medium text-slate-600 mt-0.5 truncate max-w-[140px] mx-auto">
+                Dropoff: {(booking as any).chatterSchedule?.dropoffPoint || (booking as any).metadata?.dropoffPoint}
+              </div>
+            )}
+            <div className="text-xs text-gray-500 mt-1">{formatDate(displaySchedule?.arrivalDateTime ?? displaySchedule?.travelDate)}</div>
           </div>
         </div>
 
         {isSegment && (
           <div className="mb-4 px-3 py-2 bg-orange-50 border border-orange-100 rounded-lg text-xs text-orange-700">
-            Full route: {booking.route?.origin} → {booking.route?.destination}
+            Full route: {bookingRoute?.origin} → {bookingRoute?.destination}
           </div>
         )}
 
@@ -231,8 +255,8 @@ const BookingCard = memo<{
             {journey.locationConsent && (
               <JourneyMap 
                 key={`map-${booking.id}`}
-                origin={activeSegment ? (activeSegment.route?.origin || '') : (booking.route?.origin || '')}
-                destination={activeSegment ? (activeSegment.route?.destination || '') : (booking.route?.destination || '')}
+                origin={activeSegment ? (activeSegment.route?.origin || '') : (bookingRoute?.origin || '')}
+                destination={activeSegment ? (activeSegment.route?.destination || '') : (bookingRoute?.destination || '')}
                 progress={journey.progress}
                 livePosition={journey.livePosition}
                 onClick={() => router.push(`/bookings/${booking.id}/journey`)}
@@ -342,11 +366,29 @@ const BookingCard = memo<{
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="md:col-span-2">
+            <div className="mb-3">
+              <div className="flex items-center gap-2 text-sm text-gray-900 font-medium">
+                <BusIcon className="w-4 h-4 text-gray-500 shrink-0" />
+                <span className="truncate">
+                  {booking.bus?.busType && booking.bus?.licensePlate && booking.bus?.licensePlate !== 'N/A'
+                    ? `${booking.bus.busType} · ${booking.bus.licensePlate}`
+                    : (booking.bus?.busType || (booking as any).chatterSchedule?.busName || 'Standard Bus')}
+                </span>
+              </div>
+              {((booking as any).chatterSchedule?.contactPhone || (booking.company as any)?.phone || bookingSchedule?.operatorPhone) && (
+                <div className="flex items-center gap-2 text-sm text-gray-600 mt-1 pl-6">
+                  <Phone className="w-3.5 h-3.5 text-gray-400" />
+                  <a href={`tel:${(booking as any).chatterSchedule?.contactPhone || (booking.company as any)?.phone || bookingSchedule?.operatorPhone}`} className="hover:underline hover:text-brand-600 transition-colors">
+                    {(booking as any).chatterSchedule?.contactPhone || (booking.company as any)?.phone || bookingSchedule?.operatorPhone}
+                  </a>
+                </div>
+              )}
+            </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm text-gray-600">
-              <div className="flex items-center gap-2"><BusIcon className="w-4 h-4 text-gray-400 shrink-0" /><span className="truncate">{booking.bus?.busType || 'N/A'} · {booking.bus?.licensePlate || 'N/A'}</span></div>
               <div className="flex items-center gap-2"><Users className="w-4 h-4 text-gray-400 shrink-0" /><span>{booking.passengerDetails?.length || 0} passenger{(booking.passengerDetails?.length || 0) > 1 ? 's' : ''}</span></div>
               <div className="flex items-center gap-2"><Armchair className="w-4 h-4 text-gray-400 shrink-0" /><span className="truncate">Seats: {booking.seatNumbers.join(', ')}</span></div>
-              <div className="flex items-center gap-2"><Clock className="w-4 h-4 text-gray-400 shrink-0" /><span className="truncate">Booked: {formatDate(booking.createdAt)}</span></div>
+              <div className="flex items-center gap-2 sm:col-span-2"><Clock className="w-4 h-4 text-gray-400 shrink-0" /><span className="truncate">Booked: {formatDate(booking.createdAt)}</span></div>
             </div>
           </div>
 
@@ -371,10 +413,10 @@ const BookingCard = memo<{
               )}
             </div>
             <div className="space-y-2">
-              {derivedStatus === 'awaiting_payment' && (
+              {derivedStatus === 'payment_incomplete' && (
                 <button onClick={handlePayment} disabled={actionLoading === booking.id}
                   className="w-full px-3 py-2 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-lg hover:from-emerald-600 hover:to-emerald-700 transition-all shadow-md flex items-center justify-center gap-2">
-                  {actionLoading === booking.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Zap className="w-4 h-4" /><span className="font-medium">Pay Now</span></>}
+                  {actionLoading === booking.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Zap className="w-4 h-4" /><span className="font-medium">Retry Payment</span></>}
                 </button>
               )}
               {booking.paymentStatus === 'paid' && (
@@ -383,20 +425,20 @@ const BookingCard = memo<{
                   <Download className="w-4 h-4" /><span>Ticket Only</span>
                 </button>
               )}
-              {isCash && derivedStatus !== 'awaiting_payment' && derivedStatus !== 'cancelled' && (
+              {isCash && derivedStatus !== 'payment_incomplete' && derivedStatus !== 'cancelled' && (
                 <button onClick={handleDLWithQR} disabled={actionLoading === `download_${booking.id}`}
                   className="w-full px-3 py-2 bg-brand-50 text-brand-700 rounded-lg hover:bg-brand-100 transition-colors border border-brand-100 flex items-center justify-center gap-2">
                   {actionLoading === `download_${booking.id}` ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Download className="w-4 h-4" /><span>Boarding Pass</span></>}
                 </button>
               )}
               {(() => {
-                if (derivedStatus !== 'awaiting_payment' && derivedStatus !== 'confirmed' && derivedStatus !== 'reserved_cash') return null;
+                if (derivedStatus !== 'payment_incomplete' && derivedStatus !== 'confirmed' && derivedStatus !== 'reserved_cash') return null;
                 
-                const departureTime = new Date(displaySchedule.departureDateTime).getTime();
+                const departureTime = parseUtcDate(displaySchedule.departureDateTime).getTime();
                 const twoHoursInMs = 2 * 60 * 60 * 1000;
                 const canCancel = departureTime - Date.now() > twoHoursInMs;
 
-                if (derivedStatus === 'awaiting_payment' || canCancel) {
+                if (derivedStatus === 'payment_incomplete' || canCancel) {
                   const isRefund = booking.paymentStatus === 'paid';
                   return (
                     <button onClick={handleCancel} disabled={actionLoading === booking.id}
@@ -407,28 +449,45 @@ const BookingCard = memo<{
                 }
                 return null;
               })()}
-              {derivedStatus === 'cancelled' && (
-                <button onClick={handleDelete} disabled={actionLoading === booking.id}
-                  className="w-full px-3 py-2 bg-gray-50 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors border border-gray-200 flex items-center justify-center gap-2">
-                  {actionLoading === booking.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Trash2 className="w-4 h-4" /><span>Delete</span></>}
-                </button>
-              )}
+              {(() => {
+                const arrRaw = displaySchedule?.arrivalDateTime;
+                const depRaw = displaySchedule?.departureDateTime;
+                const arr = arrRaw ? (arrRaw instanceof Date ? arrRaw : parseUtcDate(arrRaw)) : null;
+                const dep = depRaw ? (depRaw instanceof Date ? depRaw : parseUtcDate(depRaw)) : null;
+                const tripTime = (arr && !isNaN(arr.getTime())) ? arr.getTime() : (dep && !isNaN(dep.getTime())) ? dep.getTime() : null;
+                const isPast48Hours = tripTime !== null && Date.now() > tripTime + (48 * 60 * 60 * 1000);
+
+                const isDeletable = 
+                  derivedStatus === 'cancelled' || 
+                  derivedStatus === 'expired' || 
+                  (derivedStatus === 'archived' && (booking.bookingStatus === 'cancelled' || booking.bookingStatus === 'expired' || isPast48Hours)) ||
+                  isPast48Hours;
+
+                if (!isDeletable) return null;
+
+                return (
+                  <button onClick={handleDelete} disabled={actionLoading === booking.id}
+                    className="w-full px-3 py-2 bg-gray-50 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors border border-gray-200 flex items-center justify-center gap-2">
+                    {actionLoading === booking.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Trash2 className="w-4 h-4" /><span>Delete</span></>}
+                  </button>
+                );
+              })()}
             </div>
           </div>
         </div>
       </div>
 
-      {derivedStatus === 'awaiting_payment' && !isCash && (
-        <div className="bg-gradient-to-r from-emerald-50 to-brand-50 border-t border-emerald-200 p-3 sm:p-4">
+      {derivedStatus === 'payment_incomplete' && !isCash && (
+        <div className="bg-gradient-to-r from-amber-50 to-brand-50 border-t border-amber-200 p-3 sm:p-4">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-emerald-500 rounded-full flex items-center justify-center">
-              <CheckCircle className="w-4 h-4 text-white" />
+            <div className="w-8 h-8 bg-amber-500 rounded-full flex items-center justify-center">
+              <AlertTriangle className="w-4 h-4 text-white" />
             </div>
             <div>
-              <p className="text-sm font-medium text-emerald-800">Booking Approved — Payment Required</p>
-              <p className="text-xs text-emerald-700">Complete payment via PayChangu (mobile money) to secure your seats.</p>
+              <p className="text-sm font-medium text-amber-800">Payment wasn't completed</p>
+              <p className="text-xs text-amber-700">Re-initiate PayChangu checkout or cancel your booking.</p>
             </div>
-            <Shield className="w-5 h-5 text-emerald-600 ml-auto" />
+            <Shield className="w-5 h-5 text-amber-600 ml-auto" />
           </div>
         </div>
       )}

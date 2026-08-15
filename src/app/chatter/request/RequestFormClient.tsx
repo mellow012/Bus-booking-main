@@ -9,6 +9,7 @@ import {
   BadgeDollarSign, Phone, MessageSquareDot,
   Loader2, AlertCircle, Bus, SendHorizonal, ImagePlus, X, ChevronLeft,
 } from 'lucide-react';
+import { uploadBusImage } from '@/utils/supabase/storage-utils';
 
 interface Company {
   id: string;
@@ -155,9 +156,33 @@ export default function RequestFormClient({ companies }: RequestFormClientProps)
     try {
       setLoading(true);
       setError(null);
+      
+      const travelDateObj = new Date(travelDate);
+      if (isNaN(travelDateObj.getTime())) {
+        setError('Invalid travel date format.');
+        setLoading(false);
+        return;
+      }
+      
+      let uploadedImageUrls: string[] = [];
+      if (busImages.length > 0) {
+        const uniqueUploadId = crypto.randomUUID();
+        try {
+          const uploadPromises = busImages.map(img => 
+            uploadBusImage(img.file, 'chatter', uniqueUploadId)
+          );
+          uploadedImageUrls = await Promise.all(uploadPromises);
+        } catch (uploadErr: any) {
+          setError(`Failed to upload images: ${uploadErr.message}`);
+          setLoading(false);
+          return;
+        }
+      }
+
+      const timeString = travelDate.split('T')[1] || '00:00';
       const body = useOwnBus
-        ? { useOwnBus: true, busName, totalSeats: parseInt(totalSeats, 10), fare: parseInt(fare, 10), origin, destination, pickupPoint, dropoffPoint, travelDate, contactPhone, notes }
-        : { useOwnBus: false, companyId, origin, destination, pickupPoint, dropoffPoint, travelDate, seatsRequested: parseInt(seatsRequested, 10), proposedFare: parseInt(proposedFare, 10), contactPhone, notes };
+        ? { useOwnBus: true, busName, totalSeats: parseInt(totalSeats, 10), fare: parseInt(fare, 10), origin, destination, pickupPoint, dropoffPoint, travelDate: travelDateObj.toISOString(), departureTime: timeString, contactPhone, notes, images: uploadedImageUrls }
+        : { useOwnBus: false, companyId, origin, destination, pickupPoint, dropoffPoint, travelDate: travelDateObj.toISOString(), departureTime: timeString, seatsRequested: parseInt(seatsRequested, 10), proposedFare: parseInt(proposedFare, 10), contactPhone, notes, images: uploadedImageUrls };
 
       const res = await fetch('/api/chatter/requests', {
         method: 'POST',

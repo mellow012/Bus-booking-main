@@ -1,0 +1,2 @@
+Γùç injected env (0) from .env.local // tip: Γîÿ override existing { override: true }
+Γùç injected env (37) from .env // tip: Γîÿ custom filepath { path: '/custom/path/.env' }

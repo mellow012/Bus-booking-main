@@ -3,13 +3,14 @@
 import React, { useState } from 'react';
 import {
   Calendar, MapPin, Users, Share2, Download,
-  ArrowRight, Megaphone, Loader2, Plus, Bus, Building2,
-  Phone, Armchair, BadgeDollarSign, ChevronDown,
-  ChevronUp, X, Clock, Eye, ChevronLeft,
+  ArrowRight, Check, X, Megaphone, Loader2, Info, Plus, Bus, Building2
 } from 'lucide-react';
-import { format, isPast, differenceInDays } from 'date-fns';
+import { format } from 'date-fns';
+import { toDate } from '@/lib/chatterHelpers';
 import Link from 'next/link';
-import { exportBookingsAsPdf } from '@/lib/exportCsv';
+import { useRouter } from 'next/navigation';
+import { exportBookingsAsCsv } from '@/lib/exportCsv';
+import { deleteChatterSchedule } from '@/lib/actions/chatter.actions';
 
 interface ChatterSchedule {
   id: string;
@@ -45,98 +46,52 @@ interface MySchedulesClientProps {
   initialRequests: ChatterRequest[];
 }
 
-/* ─── Seat Map component ─── */
-function SeatMap({
-  totalSeats,
-  bookedSeats = new Set(),
-  pendingSeats = new Set(),
-  compact = false,
-}: {
-  totalSeats: number;
-  bookedSeats?: Set<string>;
-  pendingSeats?: Set<string>;
-  compact?: boolean;
-}) {
-  if (!totalSeats || totalSeats <= 0 || totalSeats > 100) return null;
-  const perRow = 4;
-  const rows = Math.ceil(totalSeats / perRow);
-  const sz = compact ? 'w-6 h-6 text-[8px]' : 'w-8 h-8 text-[10px]';
-
-  const seatCls = (n: string) => {
-    if (bookedSeats.has(n)) return 'bg-emerald-500 text-white border-emerald-600 shadow-emerald-200';
-    if (pendingSeats.has(n)) return 'bg-amber-400 text-white border-amber-500 shadow-amber-200';
-    return 'bg-white text-slate-600 border-gray-200 hover:border-brand-400';
-  };
-
-  return (
-    <div className={`mx-auto border-[3px] border-slate-300 rounded-t-[2rem] rounded-b-xl bg-white shadow-inner ${compact ? 'max-w-[200px] p-2.5' : 'max-w-[240px] p-3.5'}`}>
-      {/* Driver row */}
-      <div className="flex justify-between items-center border-b-2 border-dashed border-slate-200 pb-2.5 mb-2.5">
-        <div className={`${compact ? 'w-5 h-5 text-[7px]' : 'w-7 h-7 text-[8px]'} rounded-full bg-brand-600 flex items-center justify-center font-black text-white`}>D</div>
-        <div className={`${compact ? 'h-3.5 w-7 text-[5px]' : 'h-4 w-9 text-[6px]'} bg-slate-100 rounded border border-slate-200 uppercase tracking-wider text-slate-400 font-bold flex items-center justify-center`}>Door</div>
-      </div>
-      <div className={compact ? 'space-y-1' : 'space-y-1.5'}>
-        {Array.from({ length: rows }).map((_, ri) => {
-          const start = ri * perRow;
-          const rowSeats = Array.from({ length: Math.min(perRow, totalSeats - start) }, (_, i) => String(start + i + 1));
-          return (
-            <div key={ri} className="flex items-center gap-0.5">
-              <div className="flex gap-0.5 flex-1 justify-end">
-                {rowSeats.slice(0, 2).map((n) => (
-                  <div key={n} className={`${sz} rounded-md border flex items-center justify-center font-bold shadow-sm transition-all ${seatCls(n)}`}>{n}</div>
-                ))}
-                {rowSeats.length < 2 && <div className={`${sz} opacity-0`} />}
-              </div>
-              <div className="w-4 shrink-0" />
-              <div className="flex gap-0.5 flex-1">
-                {rowSeats.slice(2).map((n) => (
-                  <div key={n} className={`${sz} rounded-md border flex items-center justify-center font-bold shadow-sm transition-all ${seatCls(n)}`}>{n}</div>
-                ))}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
 export default function MySchedulesClient({ initialSchedules, initialRequests }: MySchedulesClientProps) {
-  const [schedules] = useState<ChatterSchedule[]>(initialSchedules);
+  const router = useRouter();
+  const [schedules, setSchedules] = useState<ChatterSchedule[]>(initialSchedules);
   const [requests] = useState<ChatterRequest[]>(initialRequests);
   const [activeTab, setActiveTab] = useState<'schedules' | 'requests'>('schedules');
 
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-
-  /* bookings modal state */
-  const [modalScheduleId, setModalScheduleId] = useState<string | null>(null);
+  // Bookings list state
+  const [selectedScheduleId, setSelectedScheduleId] = useState<string | null>(null);
   const [bookings, setBookings] = useState<any[]>([]);
   const [bookingsLoading, setBookingsLoading] = useState(false);
   const [bookingError, setBookingError] = useState<string | null>(null);
 
-  const totalSeatsAll = schedules.reduce((s, sc) => s + sc.totalSeats, 0);
-  const pendingReqs = requests.filter((r) => r.status === 'pending').length;
+  const totalSeatsAcrossSchedules = schedules.reduce((sum, schedule) => sum + schedule.totalSeats, 0);
 
-  /* ── handlers ── */
+  
+
   const handleShare = async (id: string, busName: string, origin: string, destination: string) => {
     const shareUrl = `${window.location.origin}/chatter/${id}`;
     if (navigator.share) {
-      try { await navigator.share({ title: `Book seats: ${origin} → ${destination}`, text: `Check out this trip on ${busName}!`, url: shareUrl }); } catch { /* cancelled */ }
+      try {
+        await navigator.share({
+          title: `Book seats: ${origin} to ${destination}`,
+          text: `Check out this group booking trip for ${busName}!`,
+          url: shareUrl,
+        });
+      } catch (err) {
+        console.error('Share failed', err);
+      }
     } else {
       await navigator.clipboard.writeText(shareUrl);
-      alert('Link copied!');
+      alert('Link copied to clipboard!');
     }
   };
 
-  const openBookingsModal = async (id: string) => {
-    setModalScheduleId(id);
+  const handleViewBookings = async (id: string) => {
+    setSelectedScheduleId(id);
     setBookingsLoading(true);
     setBookingError(null);
     try {
       const res = await fetch(`/api/chatter/schedules/${id}/bookings`);
       const json = await res.json();
-      if (json.success) setBookings(json.data || []);
-      else setBookingError(json.error || 'Failed to load bookings.');
+      if (json.success) {
+        setBookings(json.data || []);
+      } else {
+        setBookingError(json.error || 'Failed to load bookings.');
+      }
     } catch (err: any) {
       setBookingError(err.message || 'Something went wrong.');
     } finally {
@@ -145,273 +100,401 @@ export default function MySchedulesClient({ initialSchedules, initialRequests }:
   };
 
   const handleDownloadManifest = (schedule: ChatterSchedule) => {
-    exportBookingsAsPdf(
-      bookings.map((b) => ({
-        bookingReference: b.bookingReference,
-        passengerName: b.passengerDetails?.[0]?.name || b.user?.firstName || 'Passenger',
-        contactPhone: b.contactPhone || '',
-        seat: b.seatNumbers?.[0] || 'N/A',
-        paymentStatus: b.paymentStatus || 'pending',
-        createdAt: b.bookingDate || b.createdAt,
-      })),
-      {
-        busName: schedule.busName,
-        origin: schedule.origin,
-        destination: schedule.destination,
-        travelDate: schedule.travelDate,
-        totalSeats: schedule.totalSeats,
-        fare: schedule.fare,
-      },
-      `${schedule.busName}_manifest_${schedule.id.slice(0, 8)}.pdf`,
+    const manifestBookings = bookings.map((b) => ({
+      bookingReference: b.bookingReference,
+      passengerName: b.passengerDetails?.[0]?.name || b.user?.firstName || 'Passenger',
+      contactPhone: b.contactPhone || '',
+      seat: b.seatNumbers?.[0] || 'N/A',
+      paymentStatus: b.paymentStatus || 'pending',
+      createdAt: b.bookingDate || b.createdAt,
+    }));
+    exportBookingsAsCsv(manifestBookings, `${schedule.busName}_manifest_${schedule.id.slice(0, 8)}.csv`);
+  };
+
+  const handleDeleteSchedule = async (id: string) => {
+    if (!window.confirm('Are you sure you want to delete this schedule?')) return;
+    try {
+      const res = await deleteChatterSchedule(id);
+      if (res.success) {
+        setSchedules(prev => prev.filter(s => s.id !== id));
+        router.refresh();
+      } else {
+        alert(res.error || 'Failed to delete schedule.');
+      }
+    } catch (err: any) {
+      alert(err.message || 'Something went wrong.');
+    }
+  };
+
+  // Helper to render Seat Map inside the Bookings Dialog
+  const renderInteractiveSeatMap = (schedule: ChatterSchedule) => {
+    const total = schedule.totalSeats;
+    if (!total || total <= 0 || total > 100) return null;
+
+    const seatsPerRow = 4;
+    const rowsCount = Math.ceil(total / seatsPerRow);
+
+    // Parse booked seats list
+    const bookedSeatNumbers = new Set(
+      bookings
+        .filter(b => b.paymentStatus === 'paid')
+        .flatMap(b => b.seatNumbers || [])
+    );
+    const pendingSeatNumbers = new Set(
+      bookings
+        .filter(b => b.paymentStatus !== 'paid')
+        .flatMap(b => b.seatNumbers || [])
+    );
+
+    return (
+      <div className="border border-gray-100 bg-slate-50/50 rounded-2xl p-4">
+        <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2">Live Seat Occupation Map</h4>
+        <div className="flex flex-wrap gap-4 mb-4 pb-2 border-b border-gray-200/60 justify-center">
+          <span className="flex items-center gap-1 text-[10px] font-bold text-gray-500 uppercase">
+            <span className="w-2.5 h-2.5 bg-brand-500 rounded block"></span> Driver
+          </span>
+          <span className="flex items-center gap-1 text-[10px] font-bold text-gray-500 uppercase">
+            <span className="w-2.5 h-2.5 bg-emerald-500 rounded block"></span> Paid
+          </span>
+          <span className="flex items-center gap-1 text-[10px] font-bold text-gray-500 uppercase">
+            <span className="w-2.5 h-2.5 bg-amber-500 rounded block"></span> Pending
+          </span>
+          <span className="flex items-center gap-1 text-[10px] font-bold text-gray-500 uppercase">
+            <span className="w-2.5 h-2.5 bg-white rounded border border-gray-300 block"></span> Empty
+          </span>
+        </div>
+
+        {/* Bus shell grid */}
+        <div className="max-w-[240px] mx-auto border-4 border-slate-300 rounded-t-3xl rounded-b-xl bg-white p-3.5 shadow-inner">
+          <div className="flex justify-between items-center border-b border-slate-100 pb-3 mb-3">
+            <div className="w-7 h-7 rounded-full bg-brand-500 flex items-center justify-center text-[9px] font-black text-white shadow-sm">
+              steering
+            </div>
+            <div className="h-5 w-10 bg-slate-100 rounded border border-slate-200 text-[8px] uppercase tracking-wider text-slate-400 font-bold flex items-center justify-center">
+              Door
+            </div>
+          </div>
+
+          <div className="space-y-2.5">
+            {Array.from({ length: rowsCount }).map((_, rowIndex) => {
+              const rowStartIdx = rowIndex * seatsPerRow;
+              const rowSeats = Array.from({ length: total }, (_, i) => String(i + 1)).slice(rowStartIdx, rowStartIdx + seatsPerRow);
+
+              return (
+                <div key={rowIndex} className="flex justify-between items-center gap-1.5">
+                  {/* Left row (1 & 2) */}
+                  <div className="flex gap-1.5 w-2/5 justify-end">
+                    {rowSeats.slice(0, 2).map((seatNum) => {
+                      const isPaid = bookedSeatNumbers.has(seatNum);
+                      const isPending = pendingSeatNumbers.has(seatNum);
+                      let seatBg = 'bg-white text-slate-700 border-gray-300';
+                      if (isPaid) seatBg = 'bg-emerald-500 text-white border-emerald-600';
+                      else if (isPending) seatBg = 'bg-amber-500 text-white border-amber-600';
+
+                      return (
+                        <div
+                          key={seatNum}
+                          className={`w-7 h-7 rounded-md border flex items-center justify-center text-[9px] font-bold shadow-sm transition-all ${seatBg}`}
+                          title={`Seat ${seatNum} - ${isPaid ? 'Paid' : isPending ? 'Pending' : 'Available'}`}
+                        >
+                          {seatNum}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div className="w-1/5 text-center text-[7px] font-bold text-gray-300 uppercase tracking-widest">
+                    Aisle
+                  </div>
+
+                  {/* Right row (3 & 4) */}
+                  <div className="flex gap-1.5 w-2/5 justify-start">
+                    {rowSeats.slice(2, 4).map((seatNum) => {
+                      const isPaid = bookedSeatNumbers.has(seatNum);
+                      const isPending = pendingSeatNumbers.has(seatNum);
+                      let seatBg = 'bg-white text-slate-700 border-gray-300';
+                      if (isPaid) seatBg = 'bg-emerald-500 text-white border-emerald-600';
+                      else if (isPending) seatBg = 'bg-amber-500 text-white border-amber-600';
+
+                      return (
+                        <div
+                          key={seatNum}
+                          className={`w-7 h-7 rounded-md border flex items-center justify-center text-[9px] font-bold shadow-sm transition-all ${seatBg}`}
+                          title={`Seat ${seatNum} - ${isPaid ? 'Paid' : isPending ? 'Pending' : 'Available'}`}
+                        >
+                          {seatNum}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
     );
   };
 
-  /* ════════════════ RENDER ════════════════ */
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
 
-      {/* Back button & title */}
-      <div className="flex items-center gap-2">
-        <Link href="/" className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-slate-700 transition-colors border border-gray-200">
-          <ChevronLeft className="w-4 h-4" />
-        </Link>
-        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">My Schedules</span>
-      </div>
-
-      {/* ── Quick stats row ── */}
-      <div className="grid grid-cols-3 gap-3">
-        {[
-          { label: 'Schedules', value: schedules.length, icon: Bus, accent: 'text-brand-700' },
-          { label: 'Total Seats', value: totalSeatsAll, icon: Armchair, accent: 'text-slate-700' },
-          { label: 'Pending Req', value: pendingReqs, icon: Clock, accent: 'text-amber-600' },
-        ].map((s) => (
-          <div key={s.label} className="bg-slate-50 rounded-2xl border border-gray-100 px-4 py-3.5 flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-white border border-gray-100 flex items-center justify-center shadow-sm">
-              <s.icon className={`w-4 h-4 ${s.accent}`} />
-            </div>
-            <div>
-              <p className={`text-xl font-extrabold leading-none ${s.accent}`}>{s.value}</p>
-              <p className="text-[9px] font-bold uppercase tracking-wider text-gray-400 mt-0.5">{s.label}</p>
-            </div>
+      <div className="rounded-[2rem] border border-brand-100 bg-brand-50/80 p-6 lg:p-8 shadow-2xl shadow-brand-500/10">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="max-w-3xl">
+            <p className="text-sm font-semibold uppercase tracking-[0.3em] text-brand-700">Chatter Control Centre</p>
+            <h1 className="mt-3 text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight">Manage your group schedules with confidence</h1>
+            <p className="mt-3 text-sm text-slate-500 max-w-2xl">Every active trip can be shared, managed, and reviewed from a single premium dashboard. Expand any schedule to inspect its live seat layout, trip stats, and comms details.</p>
           </div>
-        ))}
-      </div>
-
-      {/* ── Header row ── */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-bold text-slate-800 tracking-tight">Manage Trips</h2>
-          <p className="text-[11px] text-slate-400 mt-0.5">Direct schedules & company trip requests.</p>
+          <Link href="/chatter/request" className="inline-flex items-center justify-center rounded-3xl bg-coral-500 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-coral-500/25 hover:bg-coral-600 transition-colors">
+            <Plus className="w-4 h-4 mr-2" /> Request a trip
+          </Link>
         </div>
-        <Link href="/chatter/request">
-          <button className="flex items-center gap-1.5 px-4 h-9 bg-coral-500 hover:bg-coral-600 text-white font-bold text-[10px] uppercase tracking-widest rounded-xl transition-all shadow-md active:scale-95">
-            <Plus className="w-3.5 h-3.5" /> New Trip
-          </button>
-        </Link>
+
+        <div className="mt-8 grid gap-4 md:grid-cols-3">
+          <div className="rounded-3xl border border-brand-100 bg-white p-5 shadow-sm">
+            <div className="text-[10px] uppercase tracking-[0.35em] text-slate-400 font-bold">Active schedules</div>
+            <div className="mt-4 text-4xl font-extrabold text-slate-900">{schedules.length}</div>
+            <p className="mt-2 text-sm text-slate-500">Direct group routes ready for sharing.</p>
+          </div>
+          <div className="rounded-3xl border border-brand-100 bg-white p-5 shadow-sm">
+            <div className="text-[10px] uppercase tracking-[0.35em] text-slate-400 font-bold">Open requests</div>
+            <div className="mt-4 text-4xl font-extrabold text-slate-900">{requests.length}</div>
+            <p className="mt-2 text-sm text-slate-500">Company trip requests pending operator matching.</p>
+          </div>
+          <div className="rounded-3xl border border-brand-100 bg-white p-5 shadow-sm">
+            <div className="text-[10px] uppercase tracking-[0.35em] text-slate-400 font-bold">Total seats</div>
+            <div className="mt-4 text-4xl font-extrabold text-slate-900">{totalSeatsAcrossSchedules}</div>
+            <p className="mt-2 text-sm text-slate-500">Capacity across all published trips.</p>
+          </div>
+        </div>
       </div>
 
-      {/* ── Tabs ── */}
       <div className="flex gap-1.5">
-        {[
-          { key: 'schedules' as const, label: 'My Direct Schedules', icon: Bus, count: schedules.length },
-          { key: 'requests' as const, label: 'Company Trip Requests', icon: Building2, count: requests.length },
-        ].map((t) => (
-          <button
-            key={t.key}
-            onClick={() => setActiveTab(t.key)}
-            className={`flex-1 flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest py-3 rounded-xl border transition-all duration-200 ${
-              activeTab === t.key
-                ? 'bg-brand-700 text-white border-brand-700 shadow-md'
-                : 'bg-gray-50 text-gray-500 border-gray-100 hover:border-brand-100 hover:text-brand-700 hover:bg-white'
+        <button
+          onClick={() => setActiveTab('schedules')}
+          className={`flex-1 flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest py-3 rounded-xl border transition-all duration-200 ${activeTab === 'schedules'
+              ? 'bg-brand-700 text-white border-brand-700 shadow-md shadow-brand-50'
+              : 'bg-gray-50 text-gray-500 border-gray-100 hover:border-brand-100 hover:text-brand-700 hover:bg-white'
             }`}
-          >
-            <t.icon className="w-3.5 h-3.5" />
-            {t.label}
-            {t.count > 0 && (
-              <span className={`ml-0.5 px-1.5 py-0.5 rounded-full text-[8px] font-black ${
-                activeTab === t.key ? 'bg-white/20' : 'bg-brand-100 text-brand-700'
-              }`}>{t.count}</span>
-            )}
-          </button>
-        ))}
+        >
+          <Bus className="w-3.5 h-3.5" />
+          My Direct Schedules
+        </button>
+        <button
+          onClick={() => setActiveTab('requests')}
+          className={`flex-1 flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest py-3 rounded-xl border transition-all duration-200 ${activeTab === 'requests'
+              ? 'bg-brand-700 text-white border-brand-700 shadow-md shadow-brand-50'
+              : 'bg-gray-50 text-gray-500 border-gray-100 hover:border-brand-100 hover:text-brand-700 hover:bg-white'
+            }`}
+        >
+          <Building2 className="w-3.5 h-3.5" />
+          Company Trip Requests
+        </button>
       </div>
 
-      {/* ════════════ SCHEDULES TAB ════════════ */}
       {activeTab === 'schedules' ? (
-        <div className="space-y-4">
-          {schedules.map((sc) => {
-            const isOpen = expandedId === sc.id;
-            const travelDate = new Date(sc.travelDate);
-            const past = isPast(travelDate);
-            const daysLeft = differenceInDays(travelDate, new Date());
+        <div className="grid gap-6">
+          {schedules.map((schedule) => {
+            const isExpanded = selectedScheduleId === schedule.id;
+            const isExpired = schedule.travelDate ? new Date(schedule.travelDate) < new Date() : false;
+            const paidBookings = bookings.filter(b => b.paymentStatus === 'paid').length;
+            const pendingBookings = bookings.filter(b => b.paymentStatus !== 'paid').length;
+            const occupancyLabel = bookings.length > 0 ? `${bookings.length}/${schedule.totalSeats} seats` : 'Tap to view live bookings';
+            const displayStatus = isExpired ? 'Expired' : schedule.status;
+            const statusClasses = isExpired
+              ? 'bg-rose-50 text-rose-700 border border-rose-200'
+              : schedule.status === 'confirmed'
+                ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+                : schedule.status === 'pending'
+                  ? 'bg-amber-50 text-amber-800 border border-amber-100'
+                  : 'bg-slate-100 text-slate-700 border border-slate-200';
 
             return (
-              <div key={sc.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all overflow-hidden">
-                {/* Colour strip */}
-                <div className={`h-1 ${past ? 'bg-gray-300' : daysLeft <= 2 ? 'bg-coral-500' : 'bg-brand-500'}`} />
-
-                <div className="p-5">
-                  {/* Top row: icon + name + badges + actions */}
-                  <div className="flex items-start justify-between gap-3 mb-4">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-10 h-10 rounded-xl bg-brand-50 border border-brand-100 flex items-center justify-center shrink-0">
-                        <Bus className="w-5 h-5 text-brand-700" />
+              <div key={schedule.id} className={`relative overflow-hidden rounded-[2rem] border ${isExpanded ? 'border-brand-200 bg-brand-50/80 shadow-2xl shadow-brand-500/10' : 'border-gray-100 bg-white shadow-xl'} transition-all hover:-translate-y-0.5 ${isExpired ? 'opacity-85' : ''}`}>
+                <div className={`absolute inset-x-0 top-0 h-1 ${isExpired ? 'bg-slate-300' : 'bg-gradient-to-r from-brand-600 via-brand-700 to-brand-800'}`}></div>
+                <div className="relative p-6 lg:p-8 space-y-6">
+                  <div className="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-6">
+                    <div className="flex-1 space-y-4">
+                      <div className="flex flex-wrap items-center gap-3">
+                        <span className="px-3 py-1.5 rounded-full bg-brand-50 text-brand-700 text-[10px] font-semibold uppercase tracking-[0.2em]">Direct Schedule</span>
+                        <span className={`px-3 py-1.5 rounded-full text-[10px] font-semibold uppercase tracking-[0.2em] ${statusClasses}`}>{displayStatus}</span>
                       </div>
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <h3 className="text-sm font-bold text-slate-800 truncate">{sc.busName}</h3>
-                          <span className="text-[8px] font-extrabold tracking-widest text-brand-700 uppercase bg-brand-50 border border-brand-100/50 px-2 py-0.5 rounded-full">Direct</span>
-                          {past && <span className="text-[8px] font-extrabold tracking-widest text-gray-500 uppercase bg-gray-100 px-2 py-0.5 rounded-full">Past</span>}
-                          {!past && daysLeft <= 2 && (
-                            <span className="text-[8px] font-extrabold tracking-widest text-coral-600 uppercase bg-coral-50 px-2 py-0.5 rounded-full animate-pulse">
-                              {daysLeft === 0 ? 'Today' : `${daysLeft}d left`}
-                            </span>
-                          )}
+                      <div className="space-y-3">
+                        <h3 className="text-2xl font-extrabold text-slate-900">{schedule.busName}</h3>
+                        <p className="text-sm text-slate-500 max-w-2xl">Premium group travel route for your booked passengers, designed for easy sharing and smooth operations.</p>
+                      </div>
+
+                      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                        <div className="rounded-3xl border border-gray-100 bg-slate-50 p-4">
+                          <p className="text-[10px] uppercase tracking-[0.3em] text-slate-400 font-bold">Route</p>
+                          <p className="mt-3 text-sm font-semibold text-slate-900 flex items-center gap-2"><MapPin className="w-4 h-4 text-brand-600" />{schedule.origin} <ArrowRight className="w-3 h-3 inline" /> {schedule.destination}</p>
                         </div>
-                        <p className="text-[10px] text-gray-400 mt-0.5">Created {format(new Date(sc.createdAt), 'MMM d, yyyy')}</p>
-                      </div>
-                    </div>
-
-                    <div className="flex gap-1.5 shrink-0">
-                      <button
-                        onClick={() => handleShare(sc.id, sc.busName, sc.origin, sc.destination)}
-                        className="h-8 w-8 border border-gray-200 text-slate-500 rounded-lg bg-white hover:bg-slate-50 flex items-center justify-center transition-all"
-                        title="Share"
-                      >
-                        <Share2 className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={() => openBookingsModal(sc.id)}
-                        className="h-8 px-3 bg-coral-500 hover:bg-coral-600 text-white font-bold text-[9px] uppercase tracking-wider rounded-lg flex items-center gap-1 transition-all active:scale-95"
-                      >
-                        <Eye className="w-3 h-3" /> Bookings
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Route / date / seats / fare — compact info bar */}
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
-                    <div className="bg-slate-50 rounded-xl px-3 py-2 border border-gray-100/60">
-                      <p className="text-[8px] font-bold text-gray-400 uppercase tracking-wider">Route</p>
-                      <p className="text-[11px] font-bold text-slate-700 flex items-center gap-1 mt-0.5">
-                        <MapPin className="w-3 h-3 text-brand-500 shrink-0" />
-                        <span className="truncate">{sc.origin}</span>
-                        <ArrowRight className="w-2.5 h-2.5 text-gray-300 shrink-0" />
-                        <span className="truncate">{sc.destination}</span>
-                      </p>
-                    </div>
-                    <div className="bg-slate-50 rounded-xl px-3 py-2 border border-gray-100/60">
-                      <p className="text-[8px] font-bold text-gray-400 uppercase tracking-wider">Date</p>
-                      <p className="text-[11px] font-bold text-slate-700 flex items-center gap-1 mt-0.5">
-                        <Calendar className="w-3 h-3 text-brand-500 shrink-0" />
-                        {format(travelDate, 'EEE, MMM d')}
-                      </p>
-                    </div>
-                    <div className="bg-slate-50 rounded-xl px-3 py-2 border border-gray-100/60">
-                      <p className="text-[8px] font-bold text-gray-400 uppercase tracking-wider">Seats</p>
-                      <p className="text-[11px] font-bold text-slate-700 flex items-center gap-1 mt-0.5">
-                        <Armchair className="w-3 h-3 text-brand-500 shrink-0" />
-                        {sc.totalSeats} total
-                      </p>
-                    </div>
-                    <div className="bg-slate-50 rounded-xl px-3 py-2 border border-gray-100/60">
-                      <p className="text-[8px] font-bold text-gray-400 uppercase tracking-wider">Fare</p>
-                      <p className="text-[11px] font-bold text-slate-700 flex items-center gap-1 mt-0.5">
-                        <BadgeDollarSign className="w-3 h-3 text-brand-500 shrink-0" />
-                        MWK {sc.fare?.toLocaleString() || '—'}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Expand toggle */}
-                  <button
-                    onClick={() => setExpandedId(isOpen ? null : sc.id)}
-                    className="w-full flex items-center justify-center gap-1.5 text-[9px] font-bold uppercase tracking-widest text-brand-600 hover:text-brand-800 bg-brand-50/50 hover:bg-brand-50 rounded-xl py-2 transition-all border border-brand-100/40"
-                  >
-                    {isOpen ? <><ChevronUp className="w-3 h-3" /> Hide Details</> : <><ChevronDown className="w-3 h-3" /> Bus Details &amp; Seat Map</>}
-                  </button>
-
-                  {/* ── Expanded: About Bus + Seat Map ── */}
-                  {isOpen && (
-                    <div className="mt-4 pt-4 border-t border-gray-100 grid grid-cols-1 md:grid-cols-5 gap-4">
-
-                      {/* About This Bus — 3 col */}
-                      <div className="md:col-span-3 space-y-3">
-                        <h4 className="text-[10px] font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1.5">
-                          <Bus className="w-3.5 h-3.5 text-brand-500" /> About This Bus
-                        </h4>
-                        <div className="bg-gradient-to-br from-slate-50 to-white rounded-xl border border-gray-100 p-4 space-y-3">
-                          {/* Bus identity */}
-                          <div className="flex items-center gap-3 pb-3 border-b border-gray-100">
-                            <div className="w-10 h-10 rounded-xl bg-brand-100/50 flex items-center justify-center">
-                              <Bus className="w-5 h-5 text-brand-700" />
-                            </div>
-                            <div>
-                              <p className="text-sm font-bold text-slate-800">{sc.busName}</p>
-                              <p className="text-[10px] text-gray-400">Direct group schedule</p>
-                            </div>
-                            <span className={`ml-auto inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[8px] font-bold uppercase ${past ? 'bg-gray-100 text-gray-500' : 'bg-emerald-50 text-emerald-600'}`}>
-                              <span className={`w-1.5 h-1.5 rounded-full ${past ? 'bg-gray-400' : 'bg-emerald-500'}`} />
-                              {past ? 'Completed' : 'Active'}
-                            </span>
-                          </div>
-
-                          {/* Detail grid */}
-                          <div className="grid grid-cols-2 gap-2.5">
-                            <div className="bg-white rounded-lg border border-gray-100 p-3">
-                              <p className="text-[8px] font-bold text-gray-400 uppercase tracking-wider">Capacity</p>
-                              <p className="text-sm font-bold text-slate-700 mt-1">{sc.totalSeats} seats</p>
-                            </div>
-                            <div className="bg-white rounded-lg border border-gray-100 p-3">
-                              <p className="text-[8px] font-bold text-gray-400 uppercase tracking-wider">Fare / Seat</p>
-                              <p className="text-sm font-bold text-slate-700 mt-1">MWK {sc.fare?.toLocaleString() || '—'}</p>
-                            </div>
-                            <div className="bg-white rounded-lg border border-gray-100 p-3">
-                              <p className="text-[8px] font-bold text-gray-400 uppercase tracking-wider">Contact</p>
-                              <p className="text-sm font-bold text-slate-700 mt-1 flex items-center gap-1">
-                                <Phone className="w-3 h-3 text-gray-400" /> {sc.contactPhone || 'N/A'}
+                        <div className="rounded-3xl border border-gray-100 bg-slate-50 p-4">
+                          <p className="text-[10px] uppercase tracking-[0.3em] text-slate-400 font-bold">Departure</p>
+                          {(() => {
+                            const d = toDate(schedule.travelDate);
+                            return (
+                              <p className="mt-3 text-sm font-semibold text-slate-900 flex items-center gap-2">
+                                <Calendar className="w-4 h-4 text-brand-600" />
+                                {d ? format(d, 'EEE, MMM d') : 'TBD'}
                               </p>
-                            </div>
-                            <div className="bg-white rounded-lg border border-gray-100 p-3">
-                              <p className="text-[8px] font-bold text-gray-400 uppercase tracking-wider">Travel Date</p>
-                              <p className="text-sm font-bold text-slate-700 mt-1">{format(travelDate, 'EEEE, MMM d')}</p>
-                            </div>
-                          </div>
+                            );
+                          })()}
+                        </div>
+                        <div className="rounded-3xl border border-gray-100 bg-slate-50 p-4">
+                          <p className="text-[10px] uppercase tracking-[0.3em] text-slate-400 font-bold">Fare</p>
+                          <p className="mt-3 text-sm font-semibold text-slate-900">MK {schedule.fare.toLocaleString()}</p>
+                        </div>
+                      </div>
+                    </div>
 
-                          {/* Route line */}
-                          <div className="flex items-center gap-2 bg-brand-50/50 rounded-lg px-3 py-2 border border-brand-100/50">
-                            <MapPin className="w-3.5 h-3.5 text-brand-600 shrink-0" />
-                            <span className="text-xs font-semibold text-slate-700">{sc.origin}</span>
-                            <div className="flex-1 border-t border-dashed border-brand-200 mx-1" />
-                            <ArrowRight className="w-3 h-3 text-brand-400 shrink-0" />
-                            <div className="flex-1 border-t border-dashed border-brand-200 mx-1" />
-                            <span className="text-xs font-semibold text-slate-700">{sc.destination}</span>
-                            <MapPin className="w-3.5 h-3.5 text-coral-500 shrink-0" />
+                    <div className="w-full xl:w-[340px] space-y-4">
+                      <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+                        <div className="flex items-center justify-between text-slate-500 text-xs uppercase tracking-[0.25em] font-bold">Trip snapshot</div>
+                        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                          <div className="rounded-3xl bg-slate-50 p-4">
+                            <p className="text-[10px] uppercase tracking-[0.25em] text-slate-400 font-semibold">Capacity</p>
+                            <p className="mt-2 text-2xl font-bold text-slate-900">{schedule.totalSeats}</p>
+                          </div>
+                          <div className="rounded-3xl bg-slate-50 p-4">
+                            <p className="text-[10px] uppercase tracking-[0.25em] text-slate-400 font-semibold">Live occupancy</p>
+                            <p className="mt-2 text-2xl font-bold text-slate-900">{occupancyLabel}</p>
                           </div>
                         </div>
                       </div>
+                      <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
+                        <div className="flex items-center justify-between text-slate-500 text-xs uppercase tracking-[0.25em] font-bold">Seat preview</div>
+                        <div className="mt-4 grid grid-cols-4 gap-2">
+                          {Array.from({ length: 8 }).map((_, index) => (
+                            <div key={index} className="h-10 rounded-2xl border border-slate-200 bg-white flex items-center justify-center text-xs font-bold text-slate-500">
+                              {index + 1}
+                            </div>
+                          ))}
+                        </div>
+                        <p className="mt-3 text-xs text-slate-500">Open a schedule to render the full seat layout and passenger details.</p>
+                      </div>
+                    </div>
+                  </div>
 
-                      {/* Seat Map — 2 col */}
-                      <div className="md:col-span-2">
-                        <h4 className="text-[10px] font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1.5 mb-3">
-                          <Armchair className="w-3.5 h-3.5 text-brand-500" /> Seat Layout
-                        </h4>
-                        <div className="bg-gradient-to-br from-slate-50 to-white rounded-xl border border-gray-100 p-4">
-                          {/* Legend */}
-                          <div className="flex justify-center gap-3 mb-3 pb-2 border-b border-gray-100">
-                            <span className="flex items-center gap-1 text-[8px] font-bold text-gray-500 uppercase">
-                              <span className="w-2 h-2 bg-brand-600 rounded block" /> Driver
-                            </span>
-                            <span className="flex items-center gap-1 text-[8px] font-bold text-gray-500 uppercase">
-                              <span className="w-2 h-2 bg-white rounded border border-gray-300 block" /> Available
-                            </span>
+                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                    <button
+                      onClick={() => isExpanded ? setSelectedScheduleId(null) : handleViewBookings(schedule.id)}
+                      className="flex items-center justify-center gap-2 rounded-3xl border border-brand-200 bg-brand-700 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-brand-500/10 hover:bg-brand-800 transition-colors"
+                    >
+                      {isExpanded ? 'Hide details' : 'View bookings'}
+                      <ArrowRight className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => handleShare(schedule.id, schedule.busName, schedule.origin, schedule.destination)}
+                      className="flex items-center justify-center gap-2 rounded-3xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+                    >
+                      <Share2 className="w-4 h-4 text-brand-700" /> Share link
+                    </button>
+                    <button
+                      onClick={() => handleDeleteSchedule(schedule.id)}
+                      className="flex items-center justify-center gap-2 rounded-3xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-600 hover:bg-red-100 transition-colors"
+                    >
+                      <X className="w-4 h-4" /> Delete
+                    </button>
+                    {isExpanded && bookings.length > 0 && (
+                      <button
+                        onClick={() => handleDownloadManifest(schedule)}
+                        className="flex items-center justify-center gap-2 rounded-3xl border border-brand-200 bg-coral-500 px-4 py-3 text-sm font-semibold text-white hover:bg-coral-600 transition-colors"
+                      >
+                        <Download className="w-4 h-4" /> Download manifest
+                      </button>
+                    )}
+                  </div>
+
+                  {isExpanded && (
+                    <div className="rounded-[2rem] border border-brand-100 bg-white p-6 shadow-sm">
+                      <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
+                        <div className="space-y-5">
+                          <div className="rounded-3xl border border-slate-100 bg-slate-50 p-5">
+                            <div className="flex items-center justify-between gap-3">
+                              <div>
+                                <p className="text-[10px] uppercase tracking-[0.3em] text-slate-400 font-semibold">About this bus</p>
+                                <h4 className="mt-3 text-lg font-bold text-slate-900">Premium rider experience</h4>
+                              </div>
+                              <span className={`rounded-2xl px-3 py-1 text-xs font-semibold ${statusClasses}`}>{schedule.status}</span>
+                            </div>
+                            <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                              <div className="rounded-3xl bg-white p-4 border border-slate-100">
+                                <p className="text-[10px] uppercase tracking-[0.3em] text-slate-400 font-bold">Operator contact</p>
+                                <p className="mt-2 text-sm font-semibold text-slate-900">{schedule.contactPhone}</p>
+                              </div>
+                              <div className="rounded-3xl bg-white p-4 border border-slate-100">
+                                <p className="text-[10px] uppercase tracking-[0.3em] text-slate-400 font-bold">Created</p>
+                                {(() => {
+                                  const d = toDate(schedule.createdAt);
+                                  return <p className="mt-2 text-sm font-semibold text-slate-900">{d ? format(d, 'MMM d, yyyy') : 'Unknown'}</p>;
+                                })()}
+                              </div>
+                              <div className="rounded-3xl bg-white p-4 border border-slate-100">
+                                <p className="text-[10px] uppercase tracking-[0.3em] text-slate-400 font-bold">Estimated passengers</p>
+                                <p className="mt-2 text-sm font-semibold text-slate-900">{bookings.length || '—'}</p>
+                              </div>
+                              <div className="rounded-3xl bg-white p-4 border border-slate-100">
+                                <p className="text-[10px] uppercase tracking-[0.3em] text-slate-400 font-bold">Trip revenue</p>
+                                <p className="mt-2 text-sm font-semibold text-slate-900">MK {((paidBookings + pendingBookings) * schedule.fare).toLocaleString()}</p>
+                              </div>
+                            </div>
                           </div>
 
-                          <SeatMap totalSeats={sc.totalSeats} />
+                          <div className="rounded-3xl border border-slate-100 bg-white p-5">
+                            <div className="flex items-center gap-3 text-slate-900 font-semibold">
+                              <Info className="w-4 h-4 text-brand-600" />
+                              <span>Trip details</span>
+                            </div>
+                            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                              <div className="rounded-3xl bg-brand-50 p-4">
+                                <p className="text-[10px] uppercase tracking-[0.3em] text-brand-700 font-semibold">Seats paid</p>
+                                <p className="mt-2 text-2xl font-bold text-slate-900">{paidBookings}</p>
+                              </div>
+                              <div className="rounded-3xl bg-amber-50 p-4">
+                                <p className="text-[10px] uppercase tracking-[0.3em] text-amber-700 font-semibold">Seats pending</p>
+                                <p className="mt-2 text-2xl font-bold text-slate-900">{pendingBookings}</p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
 
-                          <p className="text-center text-[9px] text-gray-400 mt-3">
-                            {sc.totalSeats} seats · {Math.ceil(sc.totalSeats / 4)} rows
-                          </p>
+                        <div className="space-y-5">
+                          <div className="rounded-3xl bg-brand-950 p-5 text-white shadow-xl">
+                            <div className="flex items-center justify-between gap-3">
+                              <div>
+                                <p className="text-[10px] uppercase tracking-[0.3em] text-brand-300 font-semibold">Live manifest</p>
+                                <h4 className="mt-3 text-xl font-bold">Booking flow</h4>
+                              </div>
+                              <div className="rounded-3xl bg-brand-800 px-3 py-2 text-xs uppercase tracking-[0.3em] text-brand-100">Updated live</div>
+                            </div>
+                            <div className="mt-6 grid gap-3">
+                              <div className="rounded-3xl bg-brand-900/90 p-4">
+                                <p className="text-[10px] uppercase tracking-[0.3em] text-brand-300">Paid seats</p>
+                                <p className="mt-2 text-3xl font-bold">{paidBookings}</p>
+                              </div>
+                              <div className="rounded-3xl bg-white/10 p-4">
+                                <p className="text-[10px] uppercase tracking-[0.3em] text-brand-200">Pending seats</p>
+                                <p className="mt-2 text-3xl font-bold text-white">{pendingBookings}</p>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
+                            {bookingsLoading ? (
+                              <div className="flex flex-col items-center justify-center py-12">
+                                <Loader2 className="w-8 h-8 text-brand-700 animate-spin mb-3" />
+                                <p className="text-xs text-slate-500 font-medium">Loading passenger manifest…</p>
+                              </div>
+                            ) : bookingError ? (
+                              <div className="rounded-3xl border border-red-100 bg-red-50 p-4 text-sm text-red-700">
+                                {bookingError}
+                              </div>
+                            ) : (
+                              renderInteractiveSeatMap(schedule)
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -422,184 +505,143 @@ export default function MySchedulesClient({ initialSchedules, initialRequests }:
           })}
 
           {schedules.length === 0 && (
-            <div className="text-center py-16 bg-white rounded-2xl border border-dashed border-gray-200">
-              <div className="w-12 h-12 rounded-2xl bg-slate-50 flex items-center justify-center mx-auto mb-3">
-                <Megaphone className="w-6 h-6 text-gray-300" />
-              </div>
+            <div className="text-center py-16 bg-white rounded-3xl border border-dashed border-gray-200">
+              <Megaphone className="w-10 h-10 text-gray-300 mx-auto mb-3" />
               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">No direct schedules yet</p>
-              <p className="text-xs text-gray-400 mt-1 max-w-xs mx-auto">Create a group booking schedule if you&apos;re running your own bus.</p>
-              <Link href="/chatter/request">
-                <button className="mt-4 h-8 px-4 bg-brand-700 hover:bg-brand-800 text-white font-bold text-[10px] uppercase tracking-wider rounded-xl transition-all">
-                  <Plus className="w-3 h-3 inline mr-1" /> Create Schedule
-                </button>
-              </Link>
+              <p className="text-xs text-gray-400 mt-1 max-w-xs mx-auto">Create a direct group booking schedule if you are running your own bus.</p>
             </div>
           )}
         </div>
-
       ) : (
-        /* ════════════ REQUESTS TAB ════════════ */
-        <div className="space-y-4">
-          {requests.map((req) => {
-            const statusStyle: Record<string, string> = {
-              pending: 'text-amber-600 bg-amber-50 border-amber-100',
-              confirmed: 'text-emerald-600 bg-emerald-50 border-emerald-100',
-              rejected: 'text-red-600 bg-red-50 border-red-100',
-            };
-            const stripColor: Record<string, string> = { pending: 'bg-amber-400', confirmed: 'bg-emerald-500', rejected: 'bg-red-400' };
-
-            return (
-              <div key={req.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all overflow-hidden">
-                <div className={`h-1 ${stripColor[req.status] || 'bg-gray-300'}`} />
-                <div className="p-5">
-                  {/* Top row */}
-                  <div className="flex items-start justify-between gap-3 mb-4">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-10 h-10 rounded-xl bg-slate-50 border border-gray-100 flex items-center justify-center shrink-0">
-                        <Building2 className="w-5 h-5 text-slate-500" />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <h3 className="text-sm font-bold text-slate-800 truncate">{req.company?.name || 'Platform Company'}</h3>
-                          <span className={`text-[8px] font-extrabold tracking-widest uppercase px-2 py-0.5 rounded-full border ${statusStyle[req.status] || 'text-gray-500 bg-gray-50 border-gray-100'}`}>
-                            {req.status}
-                          </span>
-                        </div>
-                        <p className="text-[10px] text-gray-400 mt-0.5">Trip Request</p>
-                      </div>
-                    </div>
-
-                    {req.status === 'confirmed' && req.resultingScheduleId && (
-                      <Link href={`/book/${req.resultingScheduleId}`}>
-                        <button className="h-8 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[9px] uppercase tracking-wider rounded-lg transition-all active:scale-95">
-                          Book Tickets
-                        </button>
-                      </Link>
-                    )}
+        <div className="grid gap-4">
+          {requests.map((req) => (
+            <div key={req.id} className="bg-slate-50/50 rounded-2xl p-5 border border-gray-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 transition-all hover:bg-slate-50">
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <span className="text-[9px] font-extrabold tracking-widest text-brand-700 uppercase bg-brand-50 border border-brand-100/50 px-2.5 py-1 rounded-full">
+                    Requested Trip
+                  </span>
+                  <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider ${req.status === 'pending'
+                      ? 'text-amber-600 bg-amber-50'
+                      : req.status === 'confirmed'
+                        ? 'text-emerald-600 bg-emerald-50'
+                        : 'text-red-600 bg-red-50'
+                    }`}>
+                    {req.status}
+                  </span>
+                </div>
+                <h3 className="text-base font-bold text-slate-800 pt-1">
+                  {req.company?.name || 'Platform Company'}
+                </h3>
+                <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 font-medium">
+                  <div className="flex items-center gap-1">
+                    <MapPin className="w-3.5 h-3.5 text-gray-400" />
+                    <span>{req.origin} <ArrowRight className="w-3 h-3 inline mx-0.5" /> {req.destination}</span>
                   </div>
-
-                  {/* Info bar */}
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                    <div className="bg-slate-50 rounded-xl px-3 py-2 border border-gray-100/60">
-                      <p className="text-[8px] font-bold text-gray-400 uppercase tracking-wider">Route</p>
-                      <p className="text-[11px] font-bold text-slate-700 flex items-center gap-1 mt-0.5">
-                        <MapPin className="w-3 h-3 text-brand-500 shrink-0" />
-                        <span className="truncate">{req.origin}</span>
-                        <ArrowRight className="w-2.5 h-2.5 text-gray-300 shrink-0" />
-                        <span className="truncate">{req.destination}</span>
-                      </p>
-                    </div>
-                    <div className="bg-slate-50 rounded-xl px-3 py-2 border border-gray-100/60">
-                      <p className="text-[8px] font-bold text-gray-400 uppercase tracking-wider">Date</p>
-                      <p className="text-[11px] font-bold text-slate-700 flex items-center gap-1 mt-0.5">
-                        <Calendar className="w-3 h-3 text-brand-500 shrink-0" />
-                        {format(new Date(req.departureDate), 'EEE, MMM d')}
-                      </p>
-                    </div>
-                    <div className="bg-slate-50 rounded-xl px-3 py-2 border border-gray-100/60">
-                      <p className="text-[8px] font-bold text-gray-400 uppercase tracking-wider">Pax</p>
-                      <p className="text-[11px] font-bold text-slate-700 flex items-center gap-1 mt-0.5">
-                        <Users className="w-3 h-3 text-brand-500 shrink-0" />
-                        {req.seatsRequested || req.estimatedPax} seats
-                      </p>
-                    </div>
-                    <div className="bg-slate-50 rounded-xl px-3 py-2 border border-gray-100/60">
-                      <p className="text-[8px] font-bold text-gray-400 uppercase tracking-wider">Fare</p>
-                      <p className="text-[11px] font-bold text-slate-700 flex items-center gap-1 mt-0.5">
-                        <BadgeDollarSign className="w-3 h-3 text-brand-500 shrink-0" />
-                        {req.confirmedPrice ? `MWK ${req.confirmedPrice.toLocaleString()}` : req.proposedFare ? `MWK ${req.proposedFare.toLocaleString()}` : 'TBD'}
-                      </p>
-                    </div>
+                  <div className="flex items-center gap-1">
+                    <Calendar className="w-3.5 h-3.5 text-gray-400" />
+                    <span>{(() => { const d = toDate(req.departureDate); return d ? format(d, 'MMM d, yyyy') : 'TBD'; })()}</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Users className="w-3.5 h-3.5 text-gray-400" />
+                    <span>{req.seatsRequested || req.estimatedPax} Seats</span>
                   </div>
                 </div>
               </div>
-            );
-          })}
+
+              {req.status === 'confirmed' && req.resultingScheduleId && (
+                <Link href={`/book/${req.resultingScheduleId}`} className="w-full md:w-auto">
+                  <button className="h-10 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all shadow-md w-full">
+                    Book Tickets
+                  </button>
+                </Link>
+              )}
+            </div>
+          ))}
 
           {requests.length === 0 && (
-            <div className="text-center py-16 bg-white rounded-2xl border border-dashed border-gray-200">
-              <div className="w-12 h-12 rounded-2xl bg-slate-50 flex items-center justify-center mx-auto mb-3">
-                <Building2 className="w-6 h-6 text-gray-300" />
-              </div>
+            <div className="text-center py-16 bg-white rounded-3xl border border-dashed border-gray-200">
+              <Megaphone className="w-10 h-10 text-gray-300 mx-auto mb-3" />
               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">No requests yet</p>
-              <p className="text-xs text-gray-400 mt-1 max-w-xs mx-auto">Submit a trip request for platform buses.</p>
-              <Link href="/chatter/request">
-                <button className="mt-4 h-8 px-4 bg-brand-700 hover:bg-brand-800 text-white font-bold text-[10px] uppercase tracking-wider rounded-xl transition-all">
-                  <Plus className="w-3 h-3 inline mr-1" /> Request Trip
-                </button>
-              </Link>
+              <p className="text-xs text-gray-400 mt-1 max-w-xs mx-auto">Submit a trip request to operators if you want to book seats on platform buses.</p>
             </div>
           )}
         </div>
       )}
 
-      {/* ════════════ BOOKINGS MODAL ════════════ */}
-      {modalScheduleId && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setModalScheduleId(null)}>
-          <div className="bg-white rounded-2xl max-w-3xl w-full max-h-[85vh] flex flex-col overflow-hidden shadow-2xl border border-gray-100" onClick={(e) => e.stopPropagation()}>
-            {/* Header */}
-            <div className="px-5 py-4 border-b border-gray-100 flex justify-between items-center">
+      {/* Bookings Modal / Live Seat Map Drawer */}
+      {selectedScheduleId && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-3xl w-full max-h-[85vh] flex flex-col overflow-hidden shadow-2xl border border-slate-100">
+            <div className="p-5 border-b border-slate-100 flex justify-between items-center">
               <div>
-                <h3 className="text-sm font-bold text-slate-800">Passenger Bookings & Live Map</h3>
-                <p className="text-[10px] text-gray-400 mt-0.5">
-                  {schedules.find((s) => s.id === modalScheduleId)?.busName} · {bookings.length} booking{bookings.length !== 1 ? 's' : ''}
-                </p>
+                <h3 className="text-base font-bold text-slate-800">Passenger Bookings & Live Map</h3>
+                <p className="text-xs text-slate-400">View passengers and current seat occupancies</p>
               </div>
-              <button onClick={() => setModalScheduleId(null)} className="w-7 h-7 rounded-full bg-slate-50 hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-600 transition-all">
-                <X className="w-3.5 h-3.5" />
+              <button
+                onClick={() => setSelectedScheduleId(null)}
+                className="w-7 h-7 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 hover:text-slate-600 text-xs font-bold transition-all"
+              >
+                ✕
               </button>
             </div>
 
-            {/* Body */}
-            <div className="p-5 overflow-y-auto flex-grow">
+            <div className="p-5 overflow-y-auto flex-grow space-y-5">
               {bookingsLoading ? (
-                <div className="flex flex-col items-center justify-center py-16">
-                  <Loader2 className="w-7 h-7 text-brand-700 animate-spin mb-3" />
-                  <p className="text-xs text-slate-400">Loading bookings…</p>
+                <div className="flex flex-col items-center justify-center py-12">
+                  <Loader2 className="w-8 h-8 text-brand-700 animate-spin mb-3" />
+                  <p className="text-xs text-slate-400 font-medium">Fetching manifest bookings...</p>
                 </div>
               ) : bookingError ? (
-                <div className="bg-red-50 border border-red-100 rounded-xl p-4 text-xs text-red-600">{bookingError}</div>
+                <div className="bg-red-50 border border-red-100 rounded-2xl p-4 text-xs text-red-600">
+                  {bookingError}
+                </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-5 gap-5">
-                  {/* Passenger list — 3 col */}
-                  <div className="md:col-span-3 space-y-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  {/* Left Column: List and Manifest Download */}
+                  <div className="space-y-4">
                     <div className="flex justify-between items-center">
-                      <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Passenger List</span>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Passenger List</span>
                       {bookings.length > 0 && (
                         <button
-                          onClick={() => handleDownloadManifest(schedules.find((s) => s.id === modalScheduleId)!)}
-                          className="h-7 px-2.5 bg-coral-500 hover:bg-coral-600 text-white font-bold text-[9px] uppercase tracking-wider rounded-lg transition-all flex items-center gap-1"
+                          onClick={() => handleDownloadManifest(schedules.find(s => s.id === selectedScheduleId)!)}
+                          className="h-8 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[10px] uppercase tracking-wider rounded-lg transition-all flex items-center gap-1.5"
                         >
-                          <Download className="w-3 h-3" /> PDF
+                          <Download className="w-3.5 h-3.5" /> Manifest CSV
                         </button>
                       )}
                     </div>
 
                     {bookings.length === 0 ? (
-                      <div className="text-center py-12 text-slate-400 text-xs border border-dashed border-gray-100 rounded-xl bg-slate-50/50">
+                      <div className="text-center py-12 text-slate-400 text-xs border border-dashed border-slate-100 rounded-xl bg-slate-50/50">
                         No bookings found for this schedule.
                       </div>
                     ) : (
-                      <div className="border border-gray-100 rounded-xl overflow-hidden max-h-[400px] overflow-y-auto">
+                      <div className="overflow-x-auto border border-slate-100 rounded-xl bg-white shadow-sm max-h-[300px] overflow-y-auto">
                         <table className="w-full text-left text-xs">
                           <thead>
-                            <tr className="border-b border-gray-100 bg-slate-50/50 text-[8px] text-gray-500 font-bold uppercase tracking-wider">
-                              <th className="py-2 px-3">Seat</th>
-                              <th className="py-2 px-3">Ref</th>
-                              <th className="py-2 px-3">Name</th>
-                              <th className="py-2 px-3">Status</th>
+                            <tr className="border-b border-slate-100 bg-slate-50/50 text-slate-500 font-bold uppercase tracking-wider">
+                              <th className="py-2.5 px-3">Seat</th>
+                              <th className="py-2.5 px-3">Ref</th>
+                              <th className="py-2.5 px-3">Name</th>
+                              <th className="py-2.5 px-3">Status</th>
                             </tr>
                           </thead>
                           <tbody>
                             {bookings.map((b) => (
-                              <tr key={b.id} className="border-b border-gray-50 text-slate-700 font-medium last:border-0 hover:bg-slate-50/50">
-                                <td className="py-2 px-3 font-bold text-brand-700">{b.seatNumbers?.[0] || '—'}</td>
-                                <td className="py-2 px-3 font-mono text-[9px] text-gray-500">{b.bookingReference}</td>
-                                <td className="py-2 px-3 truncate max-w-[120px]">{b.passengerDetails?.[0]?.name || b.user?.firstName || 'Passenger'}</td>
-                                <td className="py-2 px-3">
-                                  <span className={`px-1.5 py-0.5 rounded-full text-[7px] font-bold uppercase ${
-                                    b.paymentStatus === 'paid' ? 'text-emerald-600 bg-emerald-50' : 'text-amber-600 bg-amber-50'
-                                  }`}>{b.paymentStatus}</span>
+                              <tr key={b.id} className="border-b border-slate-50 text-slate-700 font-medium last:border-b-0 hover:bg-slate-50/50">
+                                <td className="py-2.5 px-3 font-bold text-brand-700">
+                                  {b.seatNumbers?.[0] || 'N/A'}
+                                </td>
+                                <td className="py-2.5 px-3 font-mono text-[10px] text-gray-500">{b.bookingReference}</td>
+                                <td className="py-2.5 px-3 truncate max-w-[100px]">{b.passengerDetails?.[0]?.name || b.user?.firstName || 'Passenger'}</td>
+                                <td className="py-2.5 px-3">
+                                  <span className={`px-2 py-0.5 rounded-full text-[8px] font-bold uppercase tracking-wider ${b.paymentStatus === 'paid'
+                                      ? 'text-emerald-600 bg-emerald-50'
+                                      : 'text-amber-600 bg-amber-50'
+                                    }`}>
+                                    {b.paymentStatus}
+                                  </span>
                                 </td>
                               </tr>
                             ))}
@@ -609,29 +651,9 @@ export default function MySchedulesClient({ initialSchedules, initialRequests }:
                     )}
                   </div>
 
-                  {/* Live seat map — 2 col */}
-                  <div className="md:col-span-2">
-                    <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block mb-3">Live Seat Map</span>
-                    <div className="bg-gradient-to-br from-slate-50 to-white rounded-xl border border-gray-100 p-4">
-                      <div className="flex justify-center gap-3 mb-3 pb-2 border-b border-gray-100">
-                        <span className="flex items-center gap-1 text-[8px] font-bold text-gray-500 uppercase">
-                          <span className="w-2 h-2 bg-emerald-500 rounded block" /> Paid
-                        </span>
-                        <span className="flex items-center gap-1 text-[8px] font-bold text-gray-500 uppercase">
-                          <span className="w-2 h-2 bg-amber-400 rounded block" /> Pending
-                        </span>
-                        <span className="flex items-center gap-1 text-[8px] font-bold text-gray-500 uppercase">
-                          <span className="w-2 h-2 bg-white rounded border border-gray-300 block" /> Empty
-                        </span>
-                      </div>
-                      {(() => {
-                        const sch = schedules.find((s) => s.id === modalScheduleId);
-                        if (!sch) return null;
-                        const paid = new Set(bookings.filter((b) => b.paymentStatus === 'paid').flatMap((b) => b.seatNumbers || []));
-                        const pending = new Set(bookings.filter((b) => b.paymentStatus !== 'paid').flatMap((b) => b.seatNumbers || []));
-                        return <SeatMap totalSeats={sch.totalSeats} bookedSeats={paid} pendingSeats={pending} compact />;
-                      })()}
-                    </div>
+                  {/* Right Column: Seat Map Grid */}
+                  <div>
+                    {renderInteractiveSeatMap(schedules.find(s => s.id === selectedScheduleId)!)}
                   </div>
                 </div>
               )}
@@ -639,6 +661,7 @@ export default function MySchedulesClient({ initialSchedules, initialRequests }:
           </div>
         </div>
       )}
+
     </div>
   );
 }

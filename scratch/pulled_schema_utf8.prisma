@@ -1,3 +1,11 @@
+﻿node.exe : Loaded Prisma config from prisma.config.ts.
+At line:1 char:1
++ & "C:\Program Files\nodejs/node.exe" "C:\Program Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Loaded Prisma c...isma.config.ts.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -21,7 +29,6 @@ model User {
   emailVerified    Boolean               @default(false)
   setupCompleted   Boolean               @default(false)
   passwordSet      Boolean               @default(false)
-  profilePicture   String?
   fcmTokens        Json?
   createdAt        DateTime              @default(now())
   updatedAt        DateTime              @updatedAt
@@ -33,6 +40,7 @@ model User {
   createdBy        String?
   sessionVersion   Int                   @default(1)
   preferences      Json?
+  profilePicture   String?
   activities       ActivityLog[]
   bookings         Booking[]
   sentMessages     ChatMessage[]
@@ -40,9 +48,8 @@ model User {
   groupRequests    GroupRequest[]
   notifications    Notification[]
   reservations     SeatReservation[]
-  company          Company?              @relation("CompanyStaff", fields: [companyId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  company          Company?              @relation("CompanyStaff", fields: [companyId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   conversations    Conversation[]        @relation("UserConversations")
-  chatterSchedules ChatterSchedule[]     @relation("ChatterScheduleRep")
 }
 
 model Operator {
@@ -61,7 +68,7 @@ model Operator {
   createdAt         DateTime   @default(now())
   updatedAt         DateTime   @updatedAt
   regionId          String?
-  company           Company    @relation(fields: [companyId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  company           Company    @relation(fields: [companyId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   region            Region?    @relation(fields: [regionId], references: [id])
   schedules         Schedule[] @relation("OperatorSchedules")
   buses             Bus[]      @relation("OperatorBuses")
@@ -108,7 +115,6 @@ model Company {
   schedules                 Schedule[]
   scheduleTemplates         ScheduleTemplate[]
   staff                     User[]              @relation("CompanyStaff")
-  charterRequests           GroupCharterRequest[]
 
   @@index([status])
 }
@@ -122,7 +128,7 @@ model Region {
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
   operators Operator[]
-  company   Company?   @relation(fields: [companyId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  company   Company?   @relation(fields: [companyId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   routes    Route[]
 
   @@index([companyId])
@@ -148,7 +154,7 @@ model Bus {
   nextMaintenanceDate DateTime?
   conductorIds        String[]           @default([])
   images              String[]           @default([])
-  company             Company            @relation(fields: [companyId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  company             Company            @relation(fields: [companyId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   schedules           Schedule[]
   scheduleTemplates   ScheduleTemplate[]
   conductors          Operator[]         @relation("OperatorBuses")
@@ -171,13 +177,11 @@ model Route {
   updatedAt         DateTime           @updatedAt
   regionId          String?
   groupRequests     GroupRequest[]
-  company           Company            @relation(fields: [companyId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  company           Company            @relation(fields: [companyId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   region            Region?            @relation(fields: [regionId], references: [id])
   schedules         Schedule[]
   scheduleTemplates ScheduleTemplate[]
   operators         Operator[]         @relation("OperatorRoutes")
-  bookings          Booking[]
-
 
   @@index([origin])
   @@index([destination])
@@ -224,12 +228,11 @@ model Schedule {
   bookingSegments      BookingSegment[]     @relation("BookingSegmentSchedule")
   groupRequests        GroupRequest[]
   bus                  Bus                  @relation(fields: [busId], references: [id])
-  company              Company              @relation(fields: [companyId], references: [id], onDelete: Restrict, onUpdate: NoAction)
-  operator             Operator?            @relation("OperatorSchedules", fields: [operatorId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  company              Company              @relation(fields: [companyId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  operator             Operator?            @relation("OperatorSchedules", fields: [operatorId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   route                Route                @relation(fields: [routeId], references: [id])
   reservations         SeatReservation[]
   positionSamples      TripPositionSample[]
-  charterRequests      GroupCharterRequest[] @relation("ChatterResultSchedule")
 
   @@index([companyId])
   @@index([busId])
@@ -244,9 +247,8 @@ model Booking {
   id                String           @id @default(uuid())
   bookingReference  String           @unique
   userId            String
-  scheduleId        String?
-  chatterScheduleId String?
-  companyId         String?
+  scheduleId        String
+  companyId         String
   totalAmount       Int
   currency          String           @default("MWK")
   bookingStatus     String           @default("pending")
@@ -272,18 +274,11 @@ model Booking {
   reviewText        String?
   discountAmount    Int?             @default(0)
   discountPercent   Float?           @default(0)
-  company           Company?         @relation(fields: [companyId], references: [id], onDelete: Restrict, onUpdate: NoAction)
-  schedule          Schedule?        @relation(fields: [scheduleId], references: [id])
-  chatterSchedule   ChatterSchedule? @relation(fields: [chatterScheduleId], references: [id])
+  company           Company          @relation(fields: [companyId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  schedule          Schedule         @relation(fields: [scheduleId], references: [id])
   user              User             @relation(fields: [userId], references: [id])
-  route             Route?           @relation(fields: [routeId], references: [id], onDelete: Restrict)
   segments          BookingSegment[] @relation("BookingSegmentBooking")
   payments          Payment[]
-
-  @@index([scheduleId])
-  @@index([chatterScheduleId])
-  @@index([userId])
-  @@index([companyId])
 }
 
 model BookingSegment {
@@ -303,7 +298,7 @@ model BookingSegment {
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
   booking           Booking           @relation("BookingSegmentBooking", fields: [bookingId], references: [id])
-  company           Company           @relation("BookingSegmentCompany", fields: [companyId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  company           Company           @relation("BookingSegmentCompany", fields: [companyId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   schedule          Schedule          @relation("BookingSegmentSchedule", fields: [scheduleId], references: [id])
   reservations      SeatReservation[] @relation("SeatReservationBookingSegment")
 
@@ -330,8 +325,6 @@ model Payment {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
   booking           Booking? @relation(fields: [bookingId], references: [id])
-
-  @@index([txRef])
 }
 
 model Notification {
@@ -347,8 +340,6 @@ model Notification {
   data      Json?
   createdAt DateTime  @default(now())
   user      User      @relation(fields: [userId], references: [id])
-
-  @@index([userId])
 }
 
 model Conversation {
@@ -359,7 +350,7 @@ model Conversation {
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
   messages     ChatMessage[]
-  company      Company       @relation(fields: [companyId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  company      Company       @relation(fields: [companyId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   participants User[]        @relation("UserConversations")
 
   @@index([companyId])
@@ -392,13 +383,9 @@ model SeatReservation {
   bookingSegmentId  String?
   destinationStopId String?
   originStopId      String?
-  bookingSegment    BookingSegment? @relation("SeatReservationBookingSegment", fields: [bookingSegmentId], references: [id], onDelete: Restrict, onUpdate: NoAction)
-  schedule          Schedule        @relation(fields: [scheduleId], references: [id], onDelete: Restrict, onUpdate: NoAction)
-  user              User            @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: NoAction)
-
-  @@index([scheduleId])
-  @@index([userId])
-  @@index([bookingSegmentId])
+  bookingSegment    BookingSegment? @relation("SeatReservationBookingSegment", fields: [bookingSegmentId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  schedule          Schedule        @relation(fields: [scheduleId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  user              User            @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 }
 
 model ScheduleTemplate {
@@ -414,12 +401,8 @@ model ScheduleTemplate {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
   bus           Bus      @relation(fields: [busId], references: [id])
-  company       Company  @relation(fields: [companyId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  company       Company  @relation(fields: [companyId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   route         Route    @relation(fields: [routeId], references: [id])
-
-  @@index([routeId])
-  @@index([companyId])
-  @@index([busId])
 }
 
 model ActivityLog {
@@ -431,12 +414,9 @@ model ActivityLog {
   description String
   metadata    Json?
   createdAt   DateTime  @default(now())
-  company     Company?  @relation(fields: [companyId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  company     Company?  @relation(fields: [companyId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   schedule    Schedule? @relation(fields: [scheduleId], references: [id])
   user        User      @relation(fields: [userId], references: [id])
-
-  @@index([companyId])
-  @@index([scheduleId])
 }
 
 model GroupRequest {
@@ -453,7 +433,7 @@ model GroupRequest {
   notes          String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
-  company        Company  @relation(fields: [companyId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  company        Company  @relation(fields: [companyId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   route          Route    @relation(fields: [routeId], references: [id])
   schedule       Schedule @relation(fields: [scheduleId], references: [id])
   user           User     @relation(fields: [userId], references: [id])
@@ -475,7 +455,7 @@ model DailyReport {
   avgOccupancyRate   Float
   reportData         Json
   createdAt          DateTime @default(now())
-  company            Company  @relation(fields: [companyId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  company            Company  @relation(fields: [companyId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@index([companyId])
   @@index([date])
@@ -501,40 +481,25 @@ model Promotion {
 }
 
 model GroupCharterRequest {
-  id                  String              @id @default(uuid())
-  userId              String
-  organizerName       String
-  organizerPhone      String
-  origin              String
-  destination         String
-  departureDate       DateTime
-  departureTime       String?
-  estimatedPax        Int
-  status              String              @default("pending")
-  charterType         String              @default("student")
-  notes               String?
-  budget              Int?
-  seatsRequested      Int?
-  proposedFare        Int?
-  contactPhone        String?
-  pickupPoint         String?
-  dropoffPoint        String?
-  confirmedPrice      Int?
-  resultingScheduleId String?
-  companyId           String?
-  charterSource       String              @default("charter")
-  createdAt           DateTime            @default(now())
-  updatedAt           DateTime            @updatedAt
-  quotes              GroupCharterQuote[]
-  user                User                @relation(fields: [userId], references: [id])
-  resultingSchedule   Schedule?           @relation("ChatterResultSchedule", fields: [resultingScheduleId], references: [id])
-  company             Company?            @relation(fields: [companyId], references: [id])
+  id             String              @id @default(uuid())
+  userId         String
+  organizerName  String
+  organizerPhone String
+  origin         String
+  destination    String
+  departureDate  DateTime
+  estimatedPax   Int
+  status         String              @default("pending")
+  charterType    String              @default("student")
+  notes          String?
+  budget         Int?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  quotes         GroupCharterQuote[]
+  user           User                @relation(fields: [userId], references: [id])
 
   @@index([userId])
   @@index([status])
-  @@index([resultingScheduleId])
-  @@index([charterSource])
-  @@index([companyId])
 }
 
 model GroupCharterQuote {
@@ -547,7 +512,7 @@ model GroupCharterQuote {
   validUntil DateTime?
   createdAt  DateTime            @default(now())
   updatedAt  DateTime            @updatedAt
-  company    Company             @relation(fields: [companyId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  company    Company             @relation(fields: [companyId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   request    GroupCharterRequest @relation(fields: [requestId], references: [id])
 
   @@index([requestId])
@@ -555,56 +520,19 @@ model GroupCharterQuote {
 }
 
 model TripPositionSample {
-  id                String           @id @default(uuid())
-  scheduleId        String?
-  chatterScheduleId String?
-  latitude          Float
-  longitude         Float
-  accuracy          Float?
-  heading           Float?
-  speed             Float?
-  source            String           @default("rider")
-  createdAt         DateTime         @default(now())
-  schedule          Schedule?        @relation(fields: [scheduleId], references: [id])
-  chatterSchedule   ChatterSchedule? @relation(fields: [chatterScheduleId], references: [id])
+  id         String   @id @default(uuid())
+  scheduleId String
+  latitude   Float
+  longitude  Float
+  accuracy   Float?
+  heading    Float?
+  speed      Float?
+  source     String   @default("rider")
+  createdAt  DateTime @default(now())
+  schedule   Schedule @relation(fields: [scheduleId], references: [id])
 
   @@index([scheduleId])
-  @@index([chatterScheduleId])
   @@index([createdAt])
 }
 
-model ChatterSchedule {
-  id              String               @id @default(uuid())
-  repUserId       String
-  busName         String
-  origin          String
-  destination     String
-  travelDate      DateTime
-  departureTime   String               @default("08:00")
-  fare            Int
-  totalSeats      Int
-  contactPhone    String
-  pickupPoint     String?
-  dropoffPoint    String?
-  notes           String?
-  images          String[]
-  status          String               @default("active")
-  createdAt       DateTime             @default(now())
-  updatedAt       DateTime             @updatedAt
-  rep             User                 @relation("ChatterScheduleRep", fields: [repUserId], references: [id])
-  bookings        Booking[]
-  positionSamples TripPositionSample[]
-
-  @@index([repUserId])
-  @@index([status])
-}
-
-model NewsletterSubscriber {
-  id        String   @id @default(uuid())
-  email     String   @unique
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-
-  @@index([email])
-}
 

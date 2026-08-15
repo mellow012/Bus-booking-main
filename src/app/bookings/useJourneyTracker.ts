@@ -250,18 +250,21 @@ export function useJourneyTracker({
     const remainMin = Math.max(0, Math.ceil(remainMs / 60_000));
     const hours = Math.floor(remainMin / 60);
     const mins = remainMin % 60;
+    const isValidDep = !isNaN(dep.getTime());
+    const isValidArr = !isNaN(arr.getTime());
+
     let countdown = '';
-    if (state === 'upcoming') {
+    if (isValidDep && state === 'upcoming') {
       const depRemainMs = dep.getTime() - now.getTime();
       const depRemainMin = Math.max(0, Math.ceil(depRemainMs / 60_000));
       const dh = Math.floor(depRemainMin / 60);
       const dm = depRemainMin % 60;
       countdown = dh > 0 ? `${dh}h ${dm}m to departure` : `${dm}m to departure`;
-    } else if (state === 'in_transit') {
+    } else if (isValidArr && state === 'in_transit') {
       countdown = hours > 0 ? `${hours}h ${mins}m to arrival` : `${mins}m to arrival`;
     } else if (state === 'delayed') {
       countdown = 'Delayed • Running Late';
-    } else if (state === 'arrived' || state === 'completed') {
+    } else if (isValidArr && (state === 'arrived' || state === 'completed')) {
       // Return arrival time formatted as HH:mm
       const hh = arr.getHours().toString().padStart(2, '0');
       const mm = arr.getMinutes().toString().padStart(2, '0');

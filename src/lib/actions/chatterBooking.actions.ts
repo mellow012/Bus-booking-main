@@ -64,6 +64,10 @@ export async function createChatterBooking(payload: {
         throw new Error('This schedule is no longer active for booking.');
       }
 
+      if (new Date(chatterSchedule.travelDate) < new Date()) {
+        throw new Error('This trip has already departed and can no longer accept bookings.');
+      }
+
       // 2. Fetch existing bookings for this schedule to check seat conflicts
       const existingBookings = await tx.booking.findMany({
         where: {
@@ -100,6 +104,9 @@ export async function createChatterBooking(payload: {
       const totalAmount = chatterSchedule.fare * passengerCount;
       const bookingReference = generateBookingReference();
 
+      const pickupPoint = chatterSchedule.pickupPoint || null;
+      const dropoffPoint = chatterSchedule.dropoffPoint || null;
+
       const normalisedPassengers = passengerDetails.map((p) => ({
         name: `${p.firstName} ${p.lastName}`.trim() || p.firstName,
         age: p.age ?? 0,
@@ -108,8 +115,10 @@ export async function createChatterBooking(payload: {
         ticketType: 'adult',
         originStopId: '__origin__',
         destinationStopId: '__destination__',
-        originStopName: chatterSchedule.origin,
-        destinationStopName: chatterSchedule.destination,
+        originStopName: pickupPoint ? `${chatterSchedule.origin} (${pickupPoint})` : chatterSchedule.origin,
+        destinationStopName: dropoffPoint ? `${chatterSchedule.destination} (${dropoffPoint})` : chatterSchedule.destination,
+        pickupPoint,
+        dropoffPoint,
       }));
 
       // Create Booking (companyId is null)
@@ -127,6 +136,10 @@ export async function createChatterBooking(payload: {
           contactEmail: userData.email || '',
           contactPhone,
           bookingDate: new Date(),
+          metadata: {
+            pickupPoint,
+            dropoffPoint,
+          },
         },
       });
 
