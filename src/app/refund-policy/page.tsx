@@ -1,4 +1,5 @@
 import React from 'react';
+import BackButton from '@/components/BackButton';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,6 +11,9 @@ export const metadata = {
 export default function RefundPolicyPage() {
   return (
     <div className="max-w-4xl mx-auto px-4 py-12 sm:px-6 lg:px-8">
+      <div className="mb-4">
+        <BackButton hideOnMobile={false} />
+      </div>
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 sm:p-12">
         <div className="mb-8 border-b pb-6">
           <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight sm:text-4xl">

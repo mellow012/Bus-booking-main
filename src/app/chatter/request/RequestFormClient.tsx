@@ -5,11 +5,12 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
 import {
-  Building2, MapPin, CalendarDays, Users2,
+  Building2, MapPin, CalendarDays, Clock, Users2,
   BadgeDollarSign, Phone, MessageSquareDot,
   Loader2, AlertCircle, Bus, SendHorizonal, ImagePlus, X, ChevronLeft,
 } from 'lucide-react';
 import { uploadBusImage } from '@/utils/supabase/storage-utils';
+import { useAppToast } from '@/contexts/ToastContext';
 
 interface Company {
   id: string;
@@ -28,6 +29,38 @@ const labelCls =
   'block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5 ml-1';
 const iconCls =
   'absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none';
+
+/* ── Canonical Malawi Towns list ─────────────────────────────── */
+export const MALAWI_TOWNS = [
+  'Balaka',
+  'Blantyre',
+  'Chikwawa',
+  'Chiradzulu',
+  'Chitipa',
+  'Dedza',
+  'Dowa',
+  'Karonga',
+  'Kasungu',
+  'Lilongwe',
+  'Machinga',
+  'Mangochi',
+  'Mchinji',
+  'Mulanje',
+  'Mwanza',
+  'Mzimba',
+  'Mzuzu',
+  'Neno',
+  'Nkhata Bay',
+  'Nkhotakota',
+  'Nsanje',
+  'Ntcheu',
+  'Ntchisi',
+  'Phalombe',
+  'Rumphi',
+  'Salima',
+  'Thyolo',
+  'Zomba',
+];
 
 export default function RequestFormClient({ companies }: RequestFormClientProps) {
   const router = useRouter();
@@ -52,7 +85,9 @@ export default function RequestFormClient({ companies }: RequestFormClientProps)
   const [destination, setDestination] = useState('');
   const [pickupPoint, setPickupPoint] = useState('');
   const [dropoffPoint, setDropoffPoint] = useState('');
-  const [travelDate, setTravelDate] = useState('');
+  const [travelDate, setTravelDate] = useState(''); // YYYY-MM-DD
+  const [departureTime, setDepartureTime] = useState('08:00'); // HH:MM
+  const [arrivalTime, setArrivalTime] = useState(''); // HH:MM (optional)
   const [contactPhone, setContactPhone] = useState('');
   const [notes, setNotes] = useState('');
 
@@ -72,6 +107,7 @@ export default function RequestFormClient({ companies }: RequestFormClientProps)
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const toast = useAppToast();
 
   const handleAddImages = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -161,19 +197,24 @@ export default function RequestFormClient({ companies }: RequestFormClientProps)
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (
-      (!useOwnBus && (!companyId || !origin || !destination || !travelDate || !seatsRequested || !proposedFare || !contactPhone)) ||
-      (useOwnBus && (!busName || !totalSeats || !fare || !origin || !destination || !travelDate || !contactPhone))
+      (!useOwnBus && (!companyId || !origin || !destination || !travelDate || !departureTime || !seatsRequested || !proposedFare || !contactPhone)) ||
+      (useOwnBus && (!busName || !totalSeats || !fare || !origin || !destination || !travelDate || !departureTime || !contactPhone))
     ) {
       setError('Please fill in all required fields.');
+      return;
+    }
+    if (origin.toLowerCase() === destination.toLowerCase()) {
+      setError('Origin and destination cannot be the same town.');
       return;
     }
     try {
       setLoading(true);
       setError(null);
       
-      const travelDateObj = new Date(travelDate);
+      const timePart = departureTime.split(':').length === 2 ? `${departureTime}:00` : departureTime;
+      const travelDateObj = new Date(`${travelDate}T${timePart}+02:00`);
       if (isNaN(travelDateObj.getTime())) {
-        setError('Invalid travel date format.');
+        setError('Invalid travel date or departure time format.');
         setLoading(false);
         return;
       }
@@ -193,10 +234,9 @@ export default function RequestFormClient({ companies }: RequestFormClientProps)
         }
       }
 
-      const timeString = travelDate.split('T')[1] || '00:00';
       const body = useOwnBus
-        ? { useOwnBus: true, busName, totalSeats: parseInt(totalSeats, 10), fare: parseInt(fare, 10), origin, destination, pickupPoint, dropoffPoint, travelDate: travelDateObj.toISOString(), departureTime: timeString, contactPhone, notes, images: uploadedImageUrls }
-        : { useOwnBus: false, companyId, origin, destination, pickupPoint, dropoffPoint, travelDate: travelDateObj.toISOString(), departureTime: timeString, seatsRequested: parseInt(seatsRequested, 10), proposedFare: parseInt(proposedFare, 10), contactPhone, notes, images: uploadedImageUrls };
+        ? { useOwnBus: true, busName, totalSeats: parseInt(totalSeats, 10), fare: parseInt(fare, 10), origin, destination, pickupPoint, dropoffPoint, travelDate: travelDateObj.toISOString(), departureTime, arrivalTime: arrivalTime || undefined, contactPhone, notes, images: uploadedImageUrls }
+        : { useOwnBus: false, companyId, origin, destination, pickupPoint, dropoffPoint, travelDate: travelDateObj.toISOString(), departureTime, arrivalTime: arrivalTime || undefined, seatsRequested: parseInt(seatsRequested, 10), proposedFare: parseInt(proposedFare, 10), contactPhone, notes, images: uploadedImageUrls };
 
       const res = await fetch('/api/chatter/requests', {
         method: 'POST',
@@ -204,10 +244,20 @@ export default function RequestFormClient({ companies }: RequestFormClientProps)
         body: JSON.stringify(body),
       });
       const json = await res.json();
-      if (!json.success) { setError(json.error || 'Failed to submit request.'); return; }
+      if (!json.success) {
+        const errMsg = json.error || 'Failed to submit request.';
+        setError(errMsg);
+        toast.error('Submission failed', errMsg);
+        return;
+      }
+      toast.success('Trip request submitted!', useOwnBus
+        ? 'Your schedule is now live. Share it with passengers.'
+        : 'Your request has been sent to the bus company.');
       router.push('/chatter/my-schedules');
     } catch (err: any) {
-      setError(err.message || 'Something went wrong.');
+      const errMsg = err.message || 'Something went wrong.';
+      setError(errMsg);
+      toast.error('Submission failed', errMsg);
     } finally {
       setLoading(false);
     }
@@ -267,7 +317,7 @@ export default function RequestFormClient({ companies }: RequestFormClientProps)
               <label className={labelCls}>Bus Company</label>
               <div className="relative">
                 <Building2 className={iconCls} />
-                <select required className={`${inputCls} appearance-none`}
+                <select required className={`${inputCls} appearance-none bg-white`}
                   value={companyId} onChange={(e) => setCompanyId(e.target.value)}>
                   <option value="">Choose a company…</option>
                   {companies.map((c) => (
@@ -277,19 +327,29 @@ export default function RequestFormClient({ companies }: RequestFormClientProps)
               </div>
             </div>
             <div>
-              <label className={labelCls}>Origin</label>
+              <label className={labelCls}>Origin Town</label>
               <div className="relative">
                 <MapPin className={iconCls} />
-                <input type="text" required placeholder="e.g. Lilongwe" className={inputCls}
-                  value={origin} onChange={(e) => setOrigin(e.target.value)} />
+                <select required className={`${inputCls} appearance-none bg-white`}
+                  value={origin} onChange={(e) => setOrigin(e.target.value)}>
+                  <option value="">Select origin town…</option>
+                  {MALAWI_TOWNS.map((town) => (
+                    <option key={town} value={town}>{town}</option>
+                  ))}
+                </select>
               </div>
             </div>
             <div>
-              <label className={labelCls}>Destination</label>
+              <label className={labelCls}>Destination Town</label>
               <div className="relative">
                 <MapPin className={iconCls} />
-                <input type="text" required placeholder="e.g. Blantyre" className={inputCls}
-                  value={destination} onChange={(e) => setDestination(e.target.value)} />
+                <select required className={`${inputCls} appearance-none bg-white`}
+                  value={destination} onChange={(e) => setDestination(e.target.value)}>
+                  <option value="">Select destination town…</option>
+                  {MALAWI_TOWNS.map((town) => (
+                    <option key={town} value={town}>{town}</option>
+                  ))}
+                </select>
               </div>
             </div>
           </div>
@@ -314,16 +374,36 @@ export default function RequestFormClient({ companies }: RequestFormClientProps)
             </div>
           </div>
 
-          {/* Row 2 */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {/* Row 2: Date & Time */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
-              <label className={labelCls}>Travel Date</label>
+              <label className={labelCls}>Departure Date</label>
               <div className="relative">
                 <CalendarDays className={iconCls} />
-                <input type="datetime-local" required className={inputCls}
+                <input type="date" required className={inputCls}
                   value={travelDate} onChange={(e) => setTravelDate(e.target.value)} />
               </div>
             </div>
+            <div>
+              <label className={labelCls}>Departure Time</label>
+              <div className="relative">
+                <Clock className={iconCls} />
+                <input type="time" required className={inputCls}
+                  value={departureTime} onChange={(e) => setDepartureTime(e.target.value)} />
+              </div>
+            </div>
+            <div>
+              <label className={labelCls}>Est. Arrival <span className="normal-case font-normal text-gray-400">(estimate, optional)</span></label>
+              <div className="relative">
+                <Clock className={iconCls} />
+                <input type="time" className={inputCls}
+                  value={arrivalTime} onChange={(e) => setArrivalTime(e.target.value)} />
+              </div>
+            </div>
+          </div>
+
+          {/* Row 3: Pricing & Contact */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label className={labelCls}>Seats Requested</label>
               <div className="relative">
@@ -380,6 +460,44 @@ export default function RequestFormClient({ companies }: RequestFormClientProps)
             </div>
           </div>
 
+          {/* Row 2: Route Dropdowns */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+            <div>
+              <label className={labelCls}>Origin Town</label>
+              <div className="relative">
+                <MapPin className={iconCls} />
+                <select required className={`${inputCls} appearance-none bg-white`}
+                  value={origin} onChange={(e) => setOrigin(e.target.value)}>
+                  <option value="">Select origin town…</option>
+                  {MALAWI_TOWNS.map((town) => (
+                    <option key={town} value={town}>{town}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div>
+              <label className={labelCls}>Destination Town</label>
+              <div className="relative">
+                <MapPin className={iconCls} />
+                <select required className={`${inputCls} appearance-none bg-white`}
+                  value={destination} onChange={(e) => setDestination(e.target.value)}>
+                  <option value="">Select destination town…</option>
+                  {MALAWI_TOWNS.map((town) => (
+                    <option key={town} value={town}>{town}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div>
+              <label className={labelCls}>Contact Phone</label>
+              <div className="relative">
+                <Phone className={iconCls} />
+                <input type="tel" required placeholder="+265…" className={inputCls}
+                  value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} />
+              </div>
+            </div>
+          </div>
+
           {/* Pickup / Drop-off */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
@@ -400,38 +518,30 @@ export default function RequestFormClient({ companies }: RequestFormClientProps)
             </div>
           </div>
 
-          {/* Row 2 */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {/* Row 3: Date & Time */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
-              <label className={labelCls}>Origin</label>
-              <div className="relative">
-                <MapPin className={iconCls} />
-                <input type="text" required placeholder="e.g. Lilongwe" className={inputCls}
-                  value={origin} onChange={(e) => setOrigin(e.target.value)} />
-              </div>
-            </div>
-            <div>
-              <label className={labelCls}>Destination</label>
-              <div className="relative">
-                <MapPin className={iconCls} />
-                <input type="text" required placeholder="e.g. Blantyre" className={inputCls}
-                  value={destination} onChange={(e) => setDestination(e.target.value)} />
-              </div>
-            </div>
-            <div>
-              <label className={labelCls}>Travel Date</label>
+              <label className={labelCls}>Departure Date</label>
               <div className="relative">
                 <CalendarDays className={iconCls} />
-                <input type="datetime-local" required className={inputCls}
+                <input type="date" required className={inputCls}
                   value={travelDate} onChange={(e) => setTravelDate(e.target.value)} />
               </div>
             </div>
             <div>
-              <label className={labelCls}>Contact Phone</label>
+              <label className={labelCls}>Departure Time</label>
               <div className="relative">
-                <Phone className={iconCls} />
-                <input type="tel" required placeholder="+265…" className={inputCls}
-                  value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} />
+                <Clock className={iconCls} />
+                <input type="time" required className={inputCls}
+                  value={departureTime} onChange={(e) => setDepartureTime(e.target.value)} />
+              </div>
+            </div>
+            <div>
+              <label className={labelCls}>Est. Arrival <span className="normal-case font-normal text-gray-400">(estimate, optional)</span></label>
+              <div className="relative">
+                <Clock className={iconCls} />
+                <input type="time" className={inputCls}
+                  value={arrivalTime} onChange={(e) => setArrivalTime(e.target.value)} />
               </div>
             </div>
           </div>
@@ -514,7 +624,10 @@ export default function RequestFormClient({ companies }: RequestFormClientProps)
               }`}
           >
             {loading ? (
-              <Loader2 className="w-5 h-5 animate-spin" />
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>Submitting…</span>
+              </>
             ) : (
               <>
                 <SendHorizonal className="w-4 h-4" />

@@ -43,6 +43,8 @@ interface ChatterSchedule {
   origin: string;
   destination: string;
   travelDate: string;
+  departureTime?: string;
+  arrivalTime?: string | null;
   fare: number;
   totalSeats: number;
   contactPhone: string;
@@ -210,13 +212,23 @@ export default function MySchedulesClient({
     e.stopPropagation();
     setSharingId(s.id);
     const url = `${window.location.origin}/chatter/${s.id}`;
+    const scheduleDate = toDate(s.travelDate);
+    const dateStr = scheduleDate ? scheduleDate.toLocaleDateString() : 'TBD';
+    const title = `Book ${s.busName}: ${s.origin} to ${s.destination}`;
+    const shareText = `Book ${s.busName}: ${s.origin} to ${s.destination}. Join this group booking on TibhukeBus. Date: ${dateStr}, Departs: ${s.departureTime || '08:00'}, Fare: MWK ${s.fare?.toLocaleString() || 0}.`;
+
     try {
       if (navigator.share) {
-        try { await navigator.share({ title: `Book seats: ${s.origin} → ${s.destination}`, url }); }
-        catch { /* user cancelled */ }
+        try {
+          await navigator.share({
+            title,
+            text: shareText,
+            url,
+          });
+        } catch { /* user cancelled */ }
       } else {
-        await navigator.clipboard.writeText(url);
-        alert('Share link copied to clipboard!');
+        await navigator.clipboard.writeText(`${shareText}\n${url}`);
+        alert('Trip details & link copied to clipboard!');
       }
     } finally {
       setTimeout(() => setSharingId(null), 400);

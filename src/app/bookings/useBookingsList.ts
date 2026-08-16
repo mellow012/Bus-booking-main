@@ -3,7 +3,7 @@ import { sendNotification, useNotifications } from '@/contexts/NotificationConte
 import { useAuth } from '@/contexts/AuthContext';
 import { useAppToast } from '@/contexts/ToastContext';
 import { Booking, Schedule, Bus, Route, Company, UserProfile } from '@/types';
-import { parseUtcDate } from '@/lib/timezone';
+import { parseUtcDate, formatDateISO } from '@/lib/timezone';
 import { deriveBookingStatus } from '@/lib/booking-utils';
 
 // PaymentProvider type
@@ -323,8 +323,17 @@ export const useBookingsList = () => {
           duration: 0,
         } : {});
 
+        // departureTime (e.g. "12:00") is a CAT local-time string stored separately.
+        // The travelDate DateTime is stored as UTC in Prisma but represents a CAT wall-clock date.
+        // We must extract the calendar date in CAT (not UTC) to avoid a cross-midnight shift,
+        // then suffix with +02:00 so the Date constructor does NOT reinterpret it as UTC.
         const chatterDeparture = b.chatterSchedule && b.chatterSchedule.departureTime
-            ? parseUtcDate(`${String(b.chatterSchedule.travelDate).split('T')[0]}T${b.chatterSchedule.departureTime}${b.chatterSchedule.departureTime.split(':').length === 2 ? ':00' : ''}`)
+            ? (() => {
+                const catDate = formatDateISO(b.chatterSchedule.travelDate); // "YYYY-MM-DD" in CAT
+                const t = b.chatterSchedule.departureTime;
+                const timePart = t.split(':').length === 2 ? `${t}:00` : t;
+                return new Date(`${catDate}T${timePart}+02:00`);
+              })()
             : b.chatterSchedule ? parseUtcDate(b.chatterSchedule.travelDate) : new Date(NaN);
             
         const chatterDuration = b.chatterSchedule ? getEstimatedDuration(
@@ -332,7 +341,18 @@ export const useBookingsList = () => {
             normalizeText(b.chatterSchedule.destination, 'Unknown')
         ) : 0;
         
-        const chatterArrival = new Date(chatterDeparture.getTime() + chatterDuration * 60 * 1000);
+        // Use rep-entered arrivalTime if available; otherwise synthesize from duration.
+        // Both cases are labeled as "estimated" in the UI since actual travel time varies.
+        const repArrivalTime: string | null = (b.chatterSchedule as any)?.arrivalTime || null;
+        const chatterArrival = repArrivalTime && b.chatterSchedule
+            ? (() => {
+                const catDate = formatDateISO(b.chatterSchedule.travelDate);
+                const t = repArrivalTime;
+                const timePart = t.split(':').length === 2 ? `${t}:00` : t;
+                return new Date(`${catDate}T${timePart}+02:00`);
+              })()
+            : new Date(chatterDeparture.getTime() + chatterDuration * 60 * 1000);
+        const isChatterArrivalEstimated = true; // always label as estimated (even rep-entered times are estimates)
 
         const schedule = b.schedule ? {
           ...b.schedule,
@@ -350,6 +370,7 @@ export const useBookingsList = () => {
             // Ensure departureTime has seconds so it parses correctly across all browsers
             departureDateTime: chatterDeparture,
             arrivalDateTime: chatterArrival,
+            isArrivalEstimated: isChatterArrivalEstimated,
             price: b.chatterSchedule.fare,
             availableSeats: b.chatterSchedule.totalSeats,
             date: b.chatterSchedule.travelDate,
@@ -582,6 +603,9 @@ export const useBookingsList = () => {
         
         const depTime = formatTime(schedObj.departureDateTime);
         const depDate = formatDate(schedObj.departureDateTime);
+        const isChatterTrip = !!((booking as any).chatterSchedule || (booking as any).chatterScheduleId);
+        const arrTime = schedObj.arrivalDateTime ? formatTime(schedObj.arrivalDateTime) : '';
+        const arrLabel = isChatterTrip ? `Est: ${arrTime}` : arrTime;
         const totalFare = booking.totalAmount?.toLocaleString() || '0';
         const isPaid = booking.paymentStatus === 'paid' || (booking as any).paymentMethod === 'cash_on_boarding';
         const paymentStatusText = isPaid ? 'CONFIRMED' : 'PENDING';
@@ -677,6 +701,7 @@ export const useBookingsList = () => {
       <text x="160" y="0" font-family="system-ui, -apple-system, sans-serif" font-weight="700" font-size="11" fill="${ticketSubtleTextColor}" letter-spacing="1" text-anchor="end">TO</text>
       <text x="160" y="28" font-family="system-ui, -apple-system, sans-serif" font-weight="800" font-size="26" fill="${ticketContentTextColor}" text-anchor="end">${escapeXml(destName)}</text>
       <text x="160" y="46" font-family="system-ui, -apple-system, sans-serif" font-weight="600" font-size="12" fill="${ticketContentTextColor}" text-anchor="end">${escapeXml(destStop)}</text>
+      ${arrTime ? `<text x="160" y="60" font-family="monospace, monospace" font-weight="600" font-size="10" fill="${ticketSubtleTextColor}" text-anchor="end">${escapeXml(arrLabel)}${isChatterTrip ? ' (est.)' : ''}</text>` : ''}
     </g>
 
     <line x1="32" y1="195" x2="488" y2="195" stroke="${ticketSurfaceColor}" stroke-width="1.5" />

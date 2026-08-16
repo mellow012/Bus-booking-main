@@ -581,6 +581,7 @@ model ChatterSchedule {
   destination     String
   travelDate      DateTime
   departureTime   String               @default("08:00")
+  arrivalTime     String?
   fare            Int
   totalSeats      Int
   contactPhone    String

@@ -9,6 +9,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { generateSeatRows } from '@/lib/chatterSeatUtils';
 import { toDate, isChatterScheduleExpired } from '@/lib/chatterHelpers';
+import { getEstimatedDuration } from '@/app/bookings/useBookingsList';
 import ChatterConfirmModal from './ChatterConfirmModal';
 import { useAppToast } from '@/contexts/ToastContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -26,6 +27,7 @@ interface ChatterSchedule {
   pickupPoint?: string | null;
   dropoffPoint?: string | null;
   departureTime?: string;
+  arrivalTime?: string | null;
   status?: string | null;
   images?: string[];
   availableSeats: number;
@@ -183,20 +185,26 @@ export default function ChatterBookClient({ schedule }: ChatterBookClientProps) 
   };
 
   const handleShare = async () => {
-    const shareUrl = window.location.href;
+    const shareUrl = typeof window !== 'undefined'
+      ? `${window.location.origin}/chatter/${schedule.id}`
+      : `/chatter/${schedule.id}`;
+    const scheduleDate = scheduleDateObj ? scheduleDateObj.toLocaleDateString() : 'TBD';
+    const title = `Book ${schedule.busName}: ${schedule.origin} to ${schedule.destination}`;
+    const shareText = `Book ${schedule.busName}: ${schedule.origin} to ${schedule.destination}. Join this group booking on TibhukeBus. Date: ${scheduleDate}, Departs: ${schedule.departureTime || '08:00'}, Fare: MWK ${schedule.fare.toLocaleString()}.`;
+
     if (navigator.share) {
       try {
         await navigator.share({
-          title: `Join our trip: ${schedule.origin} to ${schedule.destination}`,
-          text: `Book a seat on ${schedule.busName} leaving on ${scheduleDateObj ? scheduleDateObj.toLocaleDateString() : 'TBD'}`,
+          title,
+          text: shareText,
           url: shareUrl,
         });
       } catch (err) {
         console.error('Share failed', err);
       }
     } else {
-      await navigator.clipboard.writeText(shareUrl);
-      alert('Link copied to clipboard!');
+      await navigator.clipboard.writeText(`${shareText}\n${shareUrl}`);
+      alert('Trip details & link copied to clipboard!');
     }
   };
 
@@ -351,9 +359,17 @@ export default function ChatterBookClient({ schedule }: ChatterBookClientProps) 
                   </p>
                 </div>
               </div>
-              <div className="text-right">
-                <p className="text-xs text-slate-400 font-semibold uppercase">Fare</p>
-                <p className="font-bold text-coral-700">MWK {schedule.fare.toLocaleString()}</p>
+              <div className="flex items-center gap-4 sm:text-right">
+                <div className="text-left sm:text-right">
+                  <p className="text-xs text-slate-400 font-semibold uppercase">Seats Left</p>
+                  <p className="font-bold text-brand-700">
+                    {schedule.availableSeats} <span className="text-xs font-normal text-slate-400">/ {schedule.totalSeats}</span>
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-xs text-slate-400 font-semibold uppercase">Fare</p>
+                  <p className="font-bold text-coral-700">MWK {schedule.fare.toLocaleString()}</p>
+                </div>
               </div>
             </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 text-sm text-slate-600 pt-3">
@@ -367,16 +383,41 @@ export default function ChatterBookClient({ schedule }: ChatterBookClientProps) 
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4 text-sm text-slate-600">
-              <div className="flex items-center gap-2">
-                <Calendar className="w-4 h-4 text-slate-400" />
-                <span>{scheduleDateObj ? scheduleDateObj.toLocaleDateString() : 'TBD'}</span>
-              </div>
-              <div className="flex items-center gap-2 justify-end">
-                <Clock className="w-4 h-4 text-slate-400" />
-                <span>{schedule.departureTime || '-'}</span>
-              </div>
-            </div>
+            {(() => {
+              const depTimeStr = schedule.departureTime || '-';
+              let displayArrTimeStr = schedule.arrivalTime;
+              if (!displayArrTimeStr && schedule.departureTime) {
+                const durationMin = getEstimatedDuration(schedule.origin || '', schedule.destination || '');
+                const [h, m] = schedule.departureTime.split(':').map(Number);
+                if (!isNaN(h) && !isNaN(m)) {
+                  const totalMin = h * 60 + m + durationMin;
+                  const arrH = Math.floor(totalMin / 60) % 24;
+                  const arrM = totalMin % 60;
+                  displayArrTimeStr = `${String(arrH).padStart(2, '0')}:${String(arrM).padStart(2, '0')}`;
+                }
+              }
+
+              return (
+                <div className="space-y-2 text-sm text-slate-600">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Calendar className="w-4 h-4 text-slate-400" />
+                      <span>{scheduleDateObj ? scheduleDateObj.toLocaleDateString() : 'TBD'}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Clock className="w-4 h-4 text-slate-400" />
+                      <span>Departs: <strong className="text-slate-800 font-semibold">{depTimeStr}</strong></span>
+                    </div>
+                  </div>
+                  {displayArrTimeStr && (
+                    <div className="flex items-center justify-end gap-1.5 text-xs text-slate-500">
+                      <span>Est. arrival: <strong className="text-slate-700 font-medium">{displayArrTimeStr}</strong></span>
+                      <span className="text-[10px] text-slate-400 italic">(estimated)</span>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             {schedule.rep && (
               <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 flex items-center gap-3">
@@ -423,9 +464,14 @@ export default function ChatterBookClient({ schedule }: ChatterBookClientProps) 
 
           {/* Seat Map */}
           <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm space-y-6">
-            <div>
-              <h2 className="text-lg font-bold text-slate-800">Select Seats</h2>
-              <p className="text-xs text-slate-400 mt-1">Pick your preferred seats from the map below</p>
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-bold text-slate-800">Select Seats</h2>
+                <p className="text-xs text-slate-400 mt-1">Pick your preferred seats from the map below</p>
+              </div>
+              <span className="px-3 py-1 bg-brand-50 text-brand-700 text-xs font-bold rounded-full border border-brand-100">
+                {schedule.availableSeats} of {schedule.totalSeats} seats available
+              </span>
             </div>
 
             <div className="flex justify-center gap-6 text-xs font-semibold py-2 border-b border-slate-50">

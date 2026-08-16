@@ -11,6 +11,7 @@ export async function createChatterSchedule(payload: {
   destination: string;
   travelDate: string;
   departureTime: string;
+  arrivalTime?: string;
   fare: number;
   totalSeats: number;
   contactPhone: string;
@@ -36,6 +37,7 @@ export async function createChatterSchedule(payload: {
         destination: payload.destination,
         travelDate: travelDateObj,
         departureTime: payload.departureTime,
+        arrivalTime: payload.arrivalTime || null,
         fare: payload.fare,
         totalSeats: payload.totalSeats,
         contactPhone: payload.contactPhone,
@@ -196,7 +198,7 @@ export async function getRepChatterSchedules() {
             },
           },
         },
-        orderBy: { travelDate: 'desc' },
+        orderBy: { createdAt: 'desc' },
       }),
       prisma.groupCharterRequest.findMany({
         where: {

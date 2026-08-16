@@ -6,6 +6,8 @@ import ChatterBookClient from './ChatterBookClient';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 
+export const dynamic = 'force-dynamic';
+
 interface Props {
   params: Promise<{ id: string }>;
 }

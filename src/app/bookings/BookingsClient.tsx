@@ -140,17 +140,35 @@ const BookingCard = memo<{
               <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl overflow-hidden border border-gray-100 shrink-0 relative">
                 <img src={booking.company.logo} alt={booking.company.name} className="w-full h-full object-cover" />
               </div>
-            ) : (
-              <div className="w-12 h-12 sm:w-14 sm:h-14 bg-gradient-to-br from-brand-700 to-brand-600 rounded-xl flex items-center justify-center shadow-lg shrink-0">
-                <span className="text-white font-bold text-lg">{booking.company.name?.charAt(0) || 'C'}</span>
-              </div>
-            )}
-            <div className="min-w-0">
-              <h3 className="text-base sm:text-lg font-semibold text-gray-900 truncate">{booking.company.name}</h3>
-              <div className="flex items-center gap-3 text-sm text-gray-600 truncate flex-wrap">
-                <span>Ref: {booking.bookingReference || booking.id.slice(-8)}</span>
-              </div>
-            </div>
+            ) : (() => {
+              const isChatter = !!(booking as any).chatterScheduleId || !!(booking as any).chatterSchedule;
+              const busName = (booking as any).chatterSchedule?.busName;
+              const avatarLetter = isChatter && busName ? busName.charAt(0) : booking.company.name?.charAt(0) || 'C';
+              return (
+                <div className="w-12 h-12 sm:w-14 sm:h-14 bg-gradient-to-br from-brand-700 to-brand-600 rounded-xl flex items-center justify-center shadow-lg shrink-0">
+                  <span className="text-white font-bold text-lg">{avatarLetter}</span>
+                </div>
+              );
+            })()}
+            {(() => {
+              const isChatter = !!(booking as any).chatterScheduleId || !!(booking as any).chatterSchedule;
+              const busName = (booking as any).chatterSchedule?.busName;
+              return (
+                <div className="min-w-0">
+                  <h3 className="text-base sm:text-lg font-semibold text-gray-900 truncate">
+                    {isChatter && busName ? busName : booking.company.name}
+                  </h3>
+                  <div className="flex items-center gap-3 text-sm text-gray-600 truncate flex-wrap">
+                    {isChatter && (
+                      <span className="text-xs font-medium text-brand-700 bg-brand-50 px-2 py-0.5 rounded-full">
+                        {booking.company.name}
+                      </span>
+                    )}
+                    <span>Ref: {booking.bookingReference || booking.id.slice(-8)}</span>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             <span className={`px-3 py-1 rounded-full text-xs font-medium border ${statusUI.colorClass} flex items-center gap-1 ${statusUI.isPulsing ? 'animate-pulse' : ''}`}>
@@ -221,6 +239,9 @@ const BookingCard = memo<{
           <div className="text-center min-w-[80px]">
             <div className="text-lg sm:text-xl font-bold text-gray-900">{formatTime(displaySchedule?.arrivalDateTime ?? displaySchedule?.travelDate)}</div>
             <div className="text-sm text-gray-600 flex items-center justify-center gap-1"><MapPin className="w-3 h-3" /><span className="truncate">{displayAlightName}</span></div>
+            {(booking as any).chatterSchedule && (
+              <div className="text-[10px] text-gray-400 mt-0.5 italic">Est. arrival</div>
+            )}
             {((booking as any).chatterSchedule?.dropoffPoint || (booking as any).metadata?.dropoffPoint) && (
               <div className="text-[11px] font-medium text-slate-600 mt-0.5 truncate max-w-[140px] mx-auto">
                 Dropoff: {(booking as any).chatterSchedule?.dropoffPoint || (booking as any).metadata?.dropoffPoint}
