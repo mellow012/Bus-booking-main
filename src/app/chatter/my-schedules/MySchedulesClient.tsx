@@ -21,7 +21,7 @@ import {
   Users,
 } from 'lucide-react';
 import { format } from 'date-fns';
-import { toDate } from '@/lib/chatterHelpers';
+import { toDate, isChatterScheduleExpired } from '@/lib/chatterHelpers';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -314,61 +314,67 @@ export default function MySchedulesClient({
     <div className="space-y-6">
 
       {/* ═══════════════════════════════════════════════════════════════════════
-          HERO HEADER + STATS BAR
+          HEADER + STATS (Flat, unboxed design)
       ═══════════════════════════════════════════════════════════════════════ */}
-      <div className="rounded-[2rem] border border-brand-100 bg-gradient-to-br from-brand-50/90 to-white p-6 lg:p-8 shadow-xl shadow-brand-500/5">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+      <div className="space-y-6 pt-2">
+        {/* Title + Action */}
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-[10px] font-extrabold uppercase tracking-[0.35em] text-brand-600">
-              Chatter Control Centre
+            <p className="text-xs font-bold text-brand-700 tracking-normal">
+              Chatter
             </p>
-            <h1 className="mt-2.5 text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight leading-tight">
-              Manage your group schedules
+            <h1 className="mt-1 text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
+              Your group schedules
             </h1>
-            <p className="mt-2 text-sm text-slate-500 max-w-xl">
-              Click any schedule to scope the stats and inspect live bookings inline.
+            <p className="mt-1 text-sm text-slate-500">
+              Click a schedule to see its numbers and bookings.
             </p>
           </div>
           <Link
             href="/chatter/request"
-            className="inline-flex items-center gap-2 self-start rounded-2xl bg-coral-500 px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-coral-500/25 hover:bg-coral-600 active:scale-95 transition-all"
+            className="inline-flex items-center justify-center gap-2 self-start rounded-xl bg-coral-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-coral-600 active:scale-98 transition-colors shrink-0"
           >
             <Plus className="w-4 h-4" />
             Request a trip
           </Link>
         </div>
 
-        {/* ── Stats bar (4 cards) ─────────────────────────────────────────── */}
-        <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {/* ── Stats bar (4 flat tiles) ─────────────────────────────────────────── */}
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {(
             [
-              { label: 'Schedules',   value: stats.scheduleCount, sub: statsScheduleId ? 'Selected' : 'Direct routes'     },
-              { label: 'Total seats', value: stats.totalSeats,    sub: 'Combined capacity'                                },
-              { label: 'Booked',      value: stats.booked ?? '–', sub: statsScheduleId ? 'This schedule' : 'Active bookings' },
-              { label: 'Paid',        value: stats.paid   ?? '–', sub: statsScheduleId ? 'This schedule' : 'Confirmed payments' },
+              { label: 'Schedules',   value: stats.scheduleCount },
+              { label: 'Total seats', value: stats.totalSeats    },
+              { label: 'Booked',      value: stats.booked ?? '–' },
+              { label: 'Paid',        value: stats.paid   ?? '–' },
             ] as const
-          ).map(({ label, value, sub }) => (
+          ).map(({ label, value }) => (
             <div
               key={label}
-              className="flex flex-col justify-between rounded-2xl border border-brand-100/60 bg-white px-5 py-4 shadow-sm"
+              className="flex flex-col justify-between rounded-xl bg-slate-100/70 p-4 transition-colors"
             >
-              <span className="text-[9px] font-extrabold uppercase tracking-[0.35em] text-slate-400">{label}</span>
-              <span className="mt-2 text-[2.25rem] font-black text-slate-900 leading-none">{value}</span>
-              <span className="mt-1.5 text-[11px] text-slate-400">{sub}</span>
+              <span className="text-xs font-semibold text-slate-500">{label}</span>
+              <span className="mt-2 text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">{value}</span>
             </div>
           ))}
         </div>
 
-        {/* ── Scope label ──────────────────────────────────────────────────── */}
+        {/* ── Scope filter chip ────────────────────────────────────────────── */}
         {statsScheduleId && scopeSchedule && (
-          <div className="mt-3 flex items-center gap-2 text-xs">
-            <span className="inline-block w-1.5 h-1.5 rounded-full bg-brand-500 animate-pulse" />
-            <span className="text-brand-700">
-              Showing <strong>&apos;{scopeSchedule.busName}&apos;</strong> only
+          <div className="flex items-center gap-2.5 flex-wrap pt-1">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-50 border border-brand-200/80 px-3 py-1 text-xs font-medium text-brand-900">
+              <span>{scopeSchedule.busName}</span>
+              <button
+                onClick={() => { setStatsScheduleId(null); setExpandedId(null); }}
+                className="rounded-full p-0.5 text-brand-600 hover:bg-brand-100 hover:text-brand-900 transition-colors"
+                title="Clear filter"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
             </span>
             <button
               onClick={() => { setStatsScheduleId(null); setExpandedId(null); }}
-              className="ml-1 text-brand-600 underline underline-offset-2 hover:text-brand-900 transition-colors"
+              className="text-xs font-medium text-slate-500 hover:text-slate-800 transition-colors"
             >
               Reset to all schedules
             </button>
@@ -412,7 +418,7 @@ export default function MySchedulesClient({
         <div className="space-y-4">
           {pagedSchedules.map(schedule => {
             const travelDt     = toDate(schedule.travelDate);
-            const isExpired    = travelDt ? travelDt < new Date() : false;
+            const isExpired    = isChatterScheduleExpired(schedule.travelDate);
             const { label: statusLabel, cls: statusCls } = getStatusBadge(schedule.status, isExpired);
             const isSelected   = statsScheduleId === schedule.id;
             const isExpanded   = expandedId       === schedule.id;
@@ -476,16 +482,34 @@ export default function MySchedulesClient({
                       </p>
                     </div>
 
-                    {/* List / Map toggle */}
-                    <button
-                      onClick={e => handleViewToggle(e, schedule.id)}
-                      title={curViewMode === 'map' ? 'Switch to list view' : 'Switch to seat map'}
-                      className="p-2 rounded-xl border border-slate-200 bg-slate-50 text-slate-500 hover:bg-brand-50 hover:text-brand-700 hover:border-brand-200 transition-all shrink-0"
-                    >
-                      {curViewMode === 'map'
-                        ? <LayoutList className="w-4 h-4" />
-                        : <Grid3X3   className="w-4 h-4" />}
-                    </button>
+                    {/* Actions: View Toggle + Dismiss X when selected */}
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {/* List / Map toggle */}
+                      <button
+                        onClick={e => handleViewToggle(e, schedule.id)}
+                        title={curViewMode === 'map' ? 'Switch to list view' : 'Switch to seat map'}
+                        className="p-2 rounded-xl border border-slate-200 bg-slate-50 text-slate-500 hover:bg-brand-50 hover:text-brand-700 hover:border-brand-200 transition-all"
+                      >
+                        {curViewMode === 'map'
+                          ? <LayoutList className="w-4 h-4" />
+                          : <Grid3X3   className="w-4 h-4" />}
+                      </button>
+
+                      {/* Close / Unscope button when card is active */}
+                      {isSelected && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setStatsScheduleId(null);
+                            setExpandedId(null);
+                          }}
+                          title="Close details & reset stats"
+                          className="p-2 rounded-xl border border-brand-200 bg-brand-50 text-brand-700 hover:bg-brand-100 hover:text-brand-900 transition-all"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   {/* ── TRIP INFO ROW ──────────────────────────────────────── */}

@@ -8,9 +8,11 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { generateSeatRows } from '@/lib/chatterSeatUtils';
-import { toDate } from '@/lib/chatterHelpers';
+import { toDate, isChatterScheduleExpired } from '@/lib/chatterHelpers';
 import ChatterConfirmModal from './ChatterConfirmModal';
 import { useAppToast } from '@/contexts/ToastContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { Label } from '@/components/ui/Label';
 
 interface ChatterSchedule {
   id: string;
@@ -43,14 +45,14 @@ interface ChatterBookClientProps {
 export default function ChatterBookClient({ schedule }: ChatterBookClientProps) {
   const router = useRouter();
   const { success } = useAppToast();
+  const { user, userProfile } = useAuth();
 
   const scheduleDateObj = toDate(schedule.travelDate);
-  const scheduleTime = scheduleDateObj ? scheduleDateObj.getTime() : 0;
-  const now = Date.now();
-  const hasDeparted = scheduleDateObj ? scheduleTime < now : false;
+  const hasDeparted = isChatterScheduleExpired(schedule.travelDate);
 
   const [selectedSeats, setSelectedSeats] = useState<string[]>([]);
   const [phone, setPhone] = useState('');
+  const [bookingForSelf, setBookingForSelf] = useState(true);
 
   const [passengers, setPassengers] = useState<Array<{
     firstName: string;
@@ -65,6 +67,65 @@ export default function ChatterBookClient({ schedule }: ChatterBookClientProps) 
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
+
+  // Auto-fill phone on profile load if empty
+  React.useEffect(() => {
+    if (!phone && (userProfile?.phone || (user as any)?.phone)) {
+      setPhone(userProfile?.phone || (user as any)?.phone || '');
+    }
+  }, [userProfile, user, phone]);
+
+  // Profile names extraction helper
+  const getProfileNames = React.useCallback(() => {
+    const fn = userProfile?.firstName || (user as any)?.user_metadata?.first_name || '';
+    const ln = userProfile?.lastName || (user as any)?.user_metadata?.last_name || '';
+    const sex = (userProfile?.sex?.toLowerCase() as 'male' | 'female' | 'other') || '';
+    return { firstName: fn, lastName: ln, gender: sex };
+  }, [userProfile, user]);
+
+  // Sync passenger 1 when profile finishes loading if bookingForSelf is true
+  React.useEffect(() => {
+    if (!bookingForSelf || passengers.length === 0) return;
+    const { firstName, lastName, gender } = getProfileNames();
+    if (!firstName && !lastName) return;
+
+    setPassengers((prev) => {
+      if (prev.length === 0) return prev;
+      const next = [...prev];
+      if (next[0] && (!next[0].firstName || !next[0].lastName || next[0].firstName !== firstName)) {
+        next[0] = {
+          ...next[0],
+          firstName: firstName || next[0].firstName,
+          lastName: lastName || next[0].lastName,
+          gender: gender || next[0].gender || '',
+        };
+        return next;
+      }
+      return prev;
+    });
+  }, [userProfile, bookingForSelf, getProfileNames, passengers.length]);
+
+  const toggleBookingForSelf = (val: boolean) => {
+    setBookingForSelf(val);
+    const { firstName, lastName, gender } = getProfileNames();
+
+    setPassengers((prev) => {
+      if (prev.length === 0) return prev;
+      return prev.map((p, idx) => {
+        if (idx !== 0) return p;
+        return {
+          ...p,
+          firstName: val ? firstName : '',
+          lastName: val ? lastName : '',
+          gender: val ? (gender || p.gender) : p.gender,
+        };
+      });
+    });
+
+    if (val && !phone && (userProfile?.phone || (user as any)?.phone)) {
+      setPhone(userProfile?.phone || (user as any)?.phone || '');
+    }
+  };
 
   React.useEffect(() => {
     const images = schedule.images;
@@ -95,15 +156,21 @@ export default function ChatterBookClient({ schedule }: ChatterBookClientProps) 
     if (bookedSeats.includes(seat)) return;
 
     if (selectedSeats.includes(seat)) {
-      setSelectedSeats(prev => prev.filter(s => s !== seat));
+      const nextSeats = selectedSeats.filter(s => s !== seat);
+      setSelectedSeats(nextSeats);
       setPassengers(prev => prev.filter(p => p.seatNumber !== seat));
     } else {
-      setSelectedSeats(prev => [...prev, seat].sort((a, b) => parseInt(a) - parseInt(b)));
+      const nextSeats = [...selectedSeats, seat].sort((a, b) => parseInt(a) - parseInt(b));
+      setSelectedSeats(nextSeats);
+      
+      const isFirstSeat = selectedSeats.length === 0;
+      const { firstName, lastName, gender } = getProfileNames();
+
       setPassengers(prev => [...prev, {
-        firstName: '',
-        lastName: '',
-        age: '',
-        gender: '',
+        firstName: isFirstSeat && bookingForSelf ? firstName : '',
+        lastName: isFirstSeat && bookingForSelf ? lastName : '',
+        age: isFirstSeat && bookingForSelf ? '18' : '',
+        gender: isFirstSeat && bookingForSelf && gender ? gender : '',
         seatNumber: seat,
       }]);
     }
@@ -457,7 +524,21 @@ export default function ChatterBookClient({ schedule }: ChatterBookClientProps) 
 
             {/* Passenger Forms */}
             {selectedSeats.length > 0 ? (
-              <div className="space-y-4 max-h-[300px] overflow-y-auto pr-1">
+              <div className="space-y-4 max-h-[360px] overflow-y-auto pr-1">
+                {/* Opt-in Auto-fill Toggle */}
+                <div className="flex items-center gap-2 p-3 bg-brand-50/60 rounded-xl border border-brand-100">
+                  <input
+                    type="checkbox"
+                    id="chatterBookingForSelf"
+                    checked={bookingForSelf}
+                    onChange={(e) => toggleBookingForSelf(e.target.checked)}
+                    className="w-4 h-4 accent-brand-700 border-gray-300 rounded focus:ring-brand-700 cursor-pointer"
+                  />
+                  <Label htmlFor="chatterBookingForSelf" className="text-xs font-semibold text-brand-900 cursor-pointer select-none">
+                    I am travelling (Auto-fill my details)
+                  </Label>
+                </div>
+
                 {passengers.map((p, idx) => (
                   <div key={p.seatNumber} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 space-y-3 relative group">
                     <div className="flex justify-between items-center pr-8">

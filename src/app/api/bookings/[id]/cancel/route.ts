@@ -44,8 +44,22 @@ export async function POST(
     }
 
     // Check refund/cancellation 2-hour pre-departure cutoff policy
-    const depRaw = booking.schedule?.departureDateTime ?? booking.chatterSchedule?.travelDate ?? Date.now();
+    const depRaw = booking.schedule?.departureDateTime ?? booking.chatterSchedule?.travelDate;
+    if (!depRaw) {
+      return NextResponse.json(
+        { error: 'Booking schedule not found' },
+        { status: 404 }
+      );
+    }
+
     const departureTime = depRaw instanceof Date ? depRaw : parseUtcDate(depRaw);
+    if (isNaN(departureTime.getTime())) {
+      return NextResponse.json(
+        { error: 'Invalid departure time on booking schedule' },
+        { status: 500 }
+      );
+    }
+
     const twoHoursMs = 2 * 60 * 60 * 1000;
     const timeUntilDeparture = departureTime.getTime() - Date.now();
 

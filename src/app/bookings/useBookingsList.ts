@@ -370,6 +370,9 @@ export const useBookingsList = () => {
           licensePlate: 'N/A',
         } : {};
 
+        const chatterRepName = b.chatterSchedule?.rep?.firstName || b.chatterSchedule?.rep?.name?.split(' ')[0] || '';
+        const chatterCompanyName = chatterRepName ? `Group trip — ${chatterRepName}` : 'Group trip';
+
         const company = b.schedule?.company ? {
           id: b.schedule.company.id || '',
           name: normalizeText(b.schedule.company.name, 'Unknown'),
@@ -377,7 +380,7 @@ export const useBookingsList = () => {
           phone: normalizeText(b.schedule.company.phone, ''),
         } : b.chatterSchedule ? {
           id: 'chatter-company',
-          name: normalizeText(b.chatterSchedule.busName, 'Chatter Bus'),
+          name: chatterCompanyName,
           logo: '',
           phone: b.chatterSchedule.contactPhone,
         } : {};
@@ -465,14 +468,15 @@ export const useBookingsList = () => {
 
   const handleDeleteBooking = useCallback(async (bookingId: string) => {
     const b = bookings.find((x) => x.id === bookingId);
-    if (!b || b.bookingStatus !== 'cancelled') { setError('Only cancelled bookings can be deleted.'); return; }
-    if (!window.confirm('Permanently delete this cancelled booking?')) return;
+    if (!b) return;
+    if (!window.confirm('Permanently delete this booking record?')) return;
     setActionLoading(bookingId);
     try {
       const response = await fetch(`/api/bookings/${bookingId}`, { method: 'DELETE' });
-      if (!response.ok) throw new Error('Failed to delete booking');
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || 'Failed to delete booking');
       setSuccess('Booking deleted.');
-      toast.info('Booking Removed', 'The cancelled booking has been deleted.');
+      toast.info('Booking Removed', 'The booking record has been deleted.');
       setTimeout(() => setSuccess(''), 5000);
       fetchBookings();
     }

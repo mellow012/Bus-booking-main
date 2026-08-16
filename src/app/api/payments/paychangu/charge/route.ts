@@ -2,6 +2,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { paymentRateLimiter, getClientIp } from "@/lib/rateLimit";
+import { isChatterScheduleExpired } from "@/lib/chatterHelpers";
+import { parseUtcDate } from "@/lib/timezone";
 
 export async function POST(req: NextRequest) {
   try {
@@ -37,18 +39,48 @@ export async function POST(req: NextRequest) {
     // ── Fetch booking from PostgreSQL ──────────────────────────────────────────
     const booking = await prisma.booking.findUnique({
       where: { id: bookingId },
-      include: { company: true, schedule: true },
+      include: { company: true, schedule: true, chatterSchedule: true },
     });
     
     if (!booking) {
       return NextResponse.json({ error: "Booking not found" }, { status: 404 });
+    }
+
+    const isChatter = !!booking.chatterScheduleId || !!booking.chatterSchedule;
+
+    // ── Check underlying schedule validity before allowing payment ────────────
+    if (isChatter) {
+      const cs = booking.chatterSchedule;
+      if (!cs) {
+        return NextResponse.json({ error: "Associated group schedule not found." }, { status: 404 });
+      }
+      if (cs.status === 'cancelled') {
+        return NextResponse.json({ error: "This group trip has been cancelled and cannot accept payments." }, { status: 400 });
+      }
+      if (cs.isArchived) {
+        return NextResponse.json({ error: "This group trip has been archived and is no longer available." }, { status: 400 });
+      }
+      if (isChatterScheduleExpired(cs.travelDate)) {
+        return NextResponse.json({ error: "This group trip has expired and is no longer accepting payments." }, { status: 400 });
+      }
+    } else {
+      const s = booking.schedule;
+      if (!s) {
+        return NextResponse.json({ error: "Associated bus schedule not found." }, { status: 404 });
+      }
+      if (s.tripStatus === 'cancelled') {
+        return NextResponse.json({ error: "This scheduled trip has been cancelled and cannot accept payments." }, { status: 400 });
+      }
+      const depDate = s.departureDateTime instanceof Date ? s.departureDateTime : (s.departureDateTime ? parseUtcDate(s.departureDateTime) : null);
+      if (depDate && !isNaN(depDate.getTime()) && depDate.getTime() < Date.now()) {
+        return NextResponse.json({ error: "This trip has already departed and cannot accept payments." }, { status: 400 });
+      }
     }
     
     const companyId = booking.companyId || booking.schedule?.companyId || booking.company?.id;
     const rawAmount = booking.totalAmount;
     const amount    = typeof rawAmount === "number" ? rawAmount : Number(rawAmount ?? 0);
 
-    const isChatter = !!booking.chatterScheduleId;
     if (!companyId && !isChatter) {
       return NextResponse.json({ error: "Booking is missing associated bus company information" }, { status: 400 });
     }

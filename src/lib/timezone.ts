@@ -71,11 +71,12 @@ export function isTodayMalawi(dateStrOrObj: string | Date): boolean {
 }
 
 /**
- * Safely parses a Date from an API string, ensuring that strings without a timezone 
+ * Safely parses a Date from an API string, number, or Date object, ensuring that strings without a timezone 
  * identifier are treated as UTC (resolving PostgREST dropping 'Z' suffixes).
  */
 export function parseUtcDate(date: Date | string | number | undefined | null): Date {
   if (!date) return new Date(NaN);
+  if (date instanceof Date) return isNaN(date.getTime()) ? new Date(NaN) : date;
   if (typeof date === 'string') {
     // If it doesn't end with Z and doesn't have a timezone offset like +02:00 or -0500, append Z
     if (!date.endsWith('Z') && !date.match(/[+-]\d{2}:?\d{2}$/)) {

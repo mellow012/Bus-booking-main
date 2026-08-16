@@ -21,12 +21,15 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const scheduleDate = toDate(schedule.travelDate);
   const description = `Join this group booking on TibhukeBus. travelDate: ${scheduleDate ? scheduleDate.toLocaleDateString() : 'TBD'}, Fare: MWK ${schedule.fare.toLocaleString()}`;
 
-  const ogUrl = new URL(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/og`);
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://tibhukebus.com';
+  const ogUrl = new URL(`${appUrl}/api/og`);
   ogUrl.searchParams.set('route', `${schedule.origin} to ${schedule.destination}`);
   ogUrl.searchParams.set('date', scheduleDate ? scheduleDate.toISOString() : '');
   ogUrl.searchParams.set('fare', String(schedule.fare));
   ogUrl.searchParams.set('company', schedule.busName);
   ogUrl.searchParams.set('busType', 'Group Booking');
+
+  const ogImageUrl = ogUrl.toString();
 
   return {
     title,
@@ -34,13 +37,23 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     openGraph: {
       title,
       description,
+      type: 'website',
+      url: `${appUrl}/chatter/${id}`,
+      siteName: 'TibhukeBus',
       images: [
         {
-          url: ogUrl.toString(),
+          url: ogImageUrl,
           width: 1200,
           height: 630,
+          alt: title,
         },
       ],
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title,
+      description,
+      images: [ogImageUrl],
     },
   };
 }

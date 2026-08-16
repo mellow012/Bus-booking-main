@@ -37,8 +37,9 @@ export async function POST(request: NextRequest) {
     }
 
     const ARCHIVE_AFTER_DAYS = 7;
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - ARCHIVE_AFTER_DAYS);
+    const GRACE_PERIOD_HOURS = 48;
+    // Window: 7 days after the 48-hour grace period (i.e. travelDate + 48h + 7 days < now)
+    const cutoff = new Date(Date.now() - (ARCHIVE_AFTER_DAYS * 24 * 60 * 60 * 1000 + GRACE_PERIOD_HOURS * 60 * 60 * 1000));
 
     // Identify active, non-archived schedules past the cutoff
     const toArchive = await prisma.chatterSchedule.findMany({

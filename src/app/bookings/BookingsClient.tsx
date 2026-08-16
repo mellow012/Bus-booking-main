@@ -20,6 +20,7 @@ import { useAppToast } from '@/contexts/ToastContext';
 import useBookingsList, { BookingWithDetails, SearchFilters, resolveStopName, getEstimatedDuration } from './useBookingsList';
 import { parseUtcDate } from '@/lib/timezone';
 import { deriveBookingStatus, getDisplayStatusUI } from '@/lib/booking-utils';
+import { isChatterScheduleExpired } from '@/lib/chatterHelpers';
 import BookingCheckoutDrawer from './BookingCheckoutFlow';
 import BookingStatsGrid from './BookingStatsGrid';
 import { useJourneyTracker } from './useJourneyTracker';
@@ -50,11 +51,31 @@ const BookingCard = memo<{
   const handlePayment = useCallback(() => onPayment(booking), [booking, onPayment]);
 
   const rawSchedule: any = booking.schedule ?? (booking as any).chatterSchedule;
-  const bookingSchedule: any = rawSchedule ? {
-    ...rawSchedule,
-    departureDateTime: rawSchedule.departureDateTime ?? rawSchedule.travelDate,
-    arrivalDateTime: rawSchedule.arrivalDateTime ?? rawSchedule.travelDate,
-  } : null;
+  const rawRoute: any = booking.route ?? (booking as any).chatterSchedule;
+  
+  const bookingSchedule: any = rawSchedule ? (() => {
+    const dep = rawSchedule.departureDateTime ?? rawSchedule.travelDate;
+    let arr = rawSchedule.arrivalDateTime;
+
+    if (!arr && (rawRoute?.origin || rawRoute?.destination)) {
+      const depDate = dep instanceof Date ? dep : parseUtcDate(dep);
+      if (!isNaN(depDate.getTime())) {
+        const durMinutes = getEstimatedDuration(
+          rawRoute?.origin || '',
+          rawRoute?.destination || '',
+          rawRoute?.duration,
+          rawRoute?.distance
+        );
+        arr = new Date(depDate.getTime() + durMinutes * 60 * 1000);
+      }
+    }
+
+    return {
+      ...rawSchedule,
+      departureDateTime: dep,
+      arrivalDateTime: arr ?? dep,
+    };
+  })() : null;
   const bookingRoute: any = booking.route ?? (booking as any).chatterSchedule;
   const outboundCompleted =
     bookingSchedule?.tripStatus === 'completed' ||
@@ -96,12 +117,15 @@ const BookingCard = memo<{
 
   const [reviewForm, setReviewForm] = useState({ rating: 0, hover: 0, text: '' });
 
+  const rawDeparture = activeSegment ? activeSegment.schedule.departureDateTime : (bookingSchedule?.departureDateTime ?? bookingSchedule?.travelDate);
+  const parsedDeparture = parseUtcDate(rawDeparture);
+
   const derivedStatus = deriveBookingStatus({
     bookingStatus: booking.bookingStatus,
     paymentStatus: booking.paymentStatus,
     paymentMethod: (booking as any).paymentMethod || booking.paymentProvider,
     tripStatus: activeSegment ? activeSegment.schedule.tripStatus : (bookingSchedule?.tripStatus ?? 'scheduled'),
-    departureTime: parseUtcDate(activeSegment ? activeSegment.schedule.departureDateTime : (bookingSchedule?.departureDateTime ?? bookingSchedule?.travelDate)),
+    departureTime: parsedDeparture,
     arrivalTime: parseUtcDate(activeSegment ? activeSegment.schedule.arrivalDateTime : (bookingSchedule?.arrivalDateTime ?? bookingSchedule?.travelDate))
   });
   const statusUI = getDisplayStatusUI(derivedStatus);
@@ -413,12 +437,48 @@ const BookingCard = memo<{
               )}
             </div>
             <div className="space-y-2">
-              {derivedStatus === 'payment_incomplete' && (
-                <button onClick={handlePayment} disabled={actionLoading === booking.id}
-                  className="w-full px-3 py-2 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-lg hover:from-emerald-600 hover:to-emerald-700 transition-all shadow-md flex items-center justify-center gap-2">
-                  {actionLoading === booking.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Zap className="w-4 h-4" /><span className="font-medium">Retry Payment</span></>}
-                </button>
-              )}
+              {(derivedStatus === 'payment_incomplete' || derivedStatus === 'payment_failed') && (() => {
+                const isChatter = !!(booking as any).chatterScheduleId || !!(booking as any).chatterSchedule;
+                let isScheduleInvalid = false;
+
+                if (isChatter) {
+                  const cs = (booking as any).chatterSchedule;
+                  const isCancelled = cs?.status === 'cancelled';
+                  const isArchived = cs?.isArchived === true;
+                  const isExpired = isChatterScheduleExpired(cs?.travelDate);
+                  isScheduleInvalid = isCancelled || isArchived || isExpired;
+                } else {
+                  const s = booking.schedule;
+                  const isCancelled = s?.tripStatus === 'cancelled';
+                  const depDate = s?.departureDateTime instanceof Date ? s.departureDateTime : (s?.departureDateTime ? parseUtcDate(s.departureDateTime) : null);
+                  const isDeparted = depDate ? depDate.getTime() < Date.now() : false;
+                  isScheduleInvalid = isCancelled || isDeparted;
+                }
+
+                if (isScheduleInvalid) {
+                  return (
+                    <div className="space-y-1.5">
+                      <button
+                        disabled
+                        className="w-full px-3 py-2 bg-slate-100 text-slate-400 rounded-lg cursor-not-allowed border border-slate-200 flex items-center justify-center gap-2 text-xs font-semibold"
+                      >
+                        <Zap className="w-4 h-4 opacity-50" />
+                        <span>Pay Unavailable</span>
+                      </button>
+                      <p className="text-[11px] font-medium text-amber-700 text-center">
+                        This trip is no longer available
+                      </p>
+                    </div>
+                  );
+                }
+
+                return (
+                  <button onClick={handlePayment} disabled={actionLoading === booking.id}
+                    className="w-full px-3 py-2 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-lg hover:from-emerald-600 hover:to-emerald-700 transition-all shadow-md flex items-center justify-center gap-2">
+                    {actionLoading === booking.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Zap className="w-4 h-4" /><span className="font-medium">Retry Payment</span></>}
+                  </button>
+                );
+              })()}
               {booking.paymentStatus === 'paid' && (
                 <button onClick={handleDLOnly} disabled={actionLoading === `download_${booking.id}`}
                   className="w-full px-3 py-2 bg-gray-50 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors border border-gray-200 flex items-center justify-center gap-2">

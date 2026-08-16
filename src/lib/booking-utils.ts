@@ -112,7 +112,7 @@ export function getDisplayStatusUI(status: DerivedDisplayStatus): { label: strin
     case 'delayed': return { label: 'Delayed', colorClass: 'bg-amber-50 text-amber-700 border-amber-200', isPulsing: true };
     case 'completed': return { label: 'Completed', colorClass: 'bg-emerald-50 text-emerald-700 border-emerald-200', isPulsing: false };
     case 'payment_failed': return { label: 'Payment Failed', colorClass: 'bg-red-100 text-red-800 border-red-200', isPulsing: false };
-    case 'expired': return { label: 'Expired', colorClass: 'bg-gray-100 text-gray-800 border-gray-200', isPulsing: false };
+    case 'expired': return { label: 'Payment expired', colorClass: 'bg-gray-100 text-gray-800 border-gray-200', isPulsing: false };
     case 'cancelled': return { label: 'Cancelled', colorClass: 'bg-red-100 text-red-800 border-red-200', isPulsing: false };
     case 'archived': return { label: 'Archived', colorClass: 'bg-gray-100 text-gray-800 border-gray-200', isPulsing: false };
     case 'flagged_for_review': return { label: 'Review Needed', colorClass: 'bg-orange-100 text-orange-800 border-orange-200', isPulsing: false };

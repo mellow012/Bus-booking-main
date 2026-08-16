@@ -35,6 +35,14 @@ export function parsePickupDrop(notes?: string) {
   return { pickup, dropoff };
 }
 
+export const CHATTER_GRACE_PERIOD_MS = 48 * 60 * 60 * 1000; // 48 hours
+
+export function isChatterScheduleExpired(travelDate: any): boolean {
+  const dt = toDate(travelDate);
+  if (!dt) return false;
+  return Date.now() > (dt.getTime() + CHATTER_GRACE_PERIOD_MS);
+}
+
 export function formatTimeAMPM(timeStr: string | null | undefined): string {
   if (!timeStr) return '-';
   const [h, m] = timeStr.split(':');
@@ -46,4 +54,4 @@ export function formatTimeAMPM(timeStr: string | null | undefined): string {
   return `${hour.toString().padStart(2, '0')}:${m} ${ampm}`;
 }
 
-export default { toDate, parsePickupDrop, formatTimeAMPM };
+export default { toDate, parsePickupDrop, formatTimeAMPM, isChatterScheduleExpired, CHATTER_GRACE_PERIOD_MS };

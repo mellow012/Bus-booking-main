@@ -6,6 +6,7 @@ import { revalidatePath } from 'next/cache';
 import { getCurrentUserFromServer } from '@/lib/auth-utils';
 import { sendNotificationToUser } from '@/lib/notificationService';
 import { logger } from '@/lib/logger';
+import { isChatterScheduleExpired } from '@/lib/chatterHelpers';
 
 function generateBookingReference(): string {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -64,8 +65,8 @@ export async function createChatterBooking(payload: {
         throw new Error('This schedule is no longer active for booking.');
       }
 
-      if (new Date(chatterSchedule.travelDate) < new Date()) {
-        throw new Error('This trip has already departed and can no longer accept bookings.');
+      if (isChatterScheduleExpired(chatterSchedule.travelDate)) {
+        throw new Error('This trip has expired and can no longer accept bookings.');
       }
 
       // 2. Fetch existing bookings for this schedule to check seat conflicts

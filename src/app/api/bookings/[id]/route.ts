@@ -21,7 +21,17 @@ export async function GET(
     const booking = await prisma.booking.findUnique({
       where: { id: bookingId },
       include: {
-        chatterSchedule: true,
+        chatterSchedule: {
+          include: {
+            rep: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+              },
+            },
+          },
+        },
         schedule: {
           include: {
             route: true,
@@ -153,8 +163,8 @@ export async function DELETE(
     }
 
     // Determine trip time
-    const arrRaw = booking.schedule?.arrivalDateTime || (booking as any).arrivalDateTime;
-    const depRaw = booking.schedule?.departureDateTime || (booking as any).departureDateTime;
+    const arrRaw = booking.schedule?.arrivalDateTime || booking.chatterSchedule?.travelDate;
+    const depRaw = booking.schedule?.departureDateTime || booking.chatterSchedule?.travelDate;
     const arr = arrRaw ? new Date(arrRaw) : null;
     const dep = depRaw ? new Date(depRaw) : null;
     const tripTime = (arr && !isNaN(arr.getTime())) ? arr.getTime() : (dep && !isNaN(dep.getTime())) ? dep.getTime() : null;
