@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
     const where: any = {
       status: 'active',
       availableSeats: { gt: 0 },
-      company: { status: 'active' }, // Only show schedules from active companies
+      company: { status: 'active' },
       departureDateTime: { gte: recentDepartureCutoff },
       arrivalDateTime: { gt: now },
     };
@@ -172,8 +172,17 @@ export async function GET(request: NextRequest) {
         busNumber: bus?.licensePlate || 'N/A',
         busType: bus?.busType || 'Standard',
         amenities: (bus?.amenities as string[]) || [],
+        bookingEnabled: company?.bookingEnabled ?? true,
+        isPartner: company?.isPartner ?? true,
       };
     }).filter((item: any) => item !== null);
+
+    // Partnered operators first, unpartnered timetable-only after
+    enhanced.sort((a: any, b: any) => {
+      const aB = a.bookingEnabled !== false ? 0 : 1;
+      const bB = b.bookingEnabled !== false ? 0 : 1;
+      return aB - bB;
+    });
 
     return NextResponse.json({
       success: true,

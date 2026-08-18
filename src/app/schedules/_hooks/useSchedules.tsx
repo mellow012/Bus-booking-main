@@ -96,14 +96,21 @@ export default function useSchedules(initialSchedules: any[], initialCompanies: 
         departureTime: schedule.departureTime || formatTime24(schedule.departureDateTime),
         arrivalTime: schedule.arrivalTime || formatTime24(schedule.arrivalDateTime),
         availableSeats: schedule.availableSeats,
+        totalSeats: schedule.totalSeats,
         price: schedule.price,
         duration: schedule.duration || 0,
+        distance: schedule.distance || 0,
         date: schedule.date || formatDateISO(schedule.departureDateTime),
         companyLogo: schedule.companyLogo || null,
         companyId: schedule.companyId,
         routeId: schedule.routeId,
         departureLocation: schedule.departureLocation,
-        arrivalLocation: schedule.arrivalLocation
+        arrivalLocation: schedule.arrivalLocation,
+        stopsCount: schedule.stopsCount || 0,
+        amenities: schedule.amenities || [],
+        status: schedule.status,
+        bookingEnabled: schedule.bookingEnabled ?? true,
+        isPartner: schedule.isPartner ?? true,
       }));
 
       setSchedules(enhancedSchedules);

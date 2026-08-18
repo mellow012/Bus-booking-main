@@ -94,6 +94,11 @@ model Company {
   createdAt                 DateTime            @default(now())
   updatedAt                 DateTime            @updatedAt
   returnTripDiscountPercent Float               @default(0)
+  isPartner                 Boolean             @default(false)
+  bookingEnabled            Boolean             @default(false)
+  category                  String?
+  invitationSent            Boolean             @default(false)
+  invitationSentAt          DateTime?
   activities                ActivityLog[]
   bookings                  Booking[]
   bookingSegments           BookingSegment[]    @relation("BookingSegmentCompany")

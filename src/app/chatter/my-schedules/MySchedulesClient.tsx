@@ -298,12 +298,12 @@ export default function MySchedulesClient({
     }
   };
 
-  // ── Hard-delete (cancelled schedules, blocked if paid/pending bookings) ────
+  // ── Hard-delete (cancelled schedules or schedules 48h past trip) ───────────
   const handleHardDelete = async (e: React.MouseEvent, s: ChatterSchedule) => {
     e.stopPropagation();
     setDeleteError(null);
     if (!window.confirm(
-      `Permanently delete "${s.busName}"?\n\nThis cannot be undone. Booking records with status "failed" will also be removed.`,
+      `Permanently delete "${s.busName}"?\n\nThis cannot be undone. Any unpaid, expired, or abandoned bookings will also be removed.`,
     )) return;
 
     setDeletingId(s.id);
@@ -656,8 +656,22 @@ export default function MySchedulesClient({
                       {sharingId === schedule.id ? 'Sharing...' : 'Share link'}
                     </button>
 
-                    {/* Delete — soft-cancel (active) or hard-delete (cancelled) */}
-                    {schedule.status === 'active' && (
+                    {/* Delete — soft-cancel (active within 48h) or hard-delete (cancelled or past 48h) */}
+                    {isExpired || schedule.status === 'cancelled' ? (
+                      <button
+                        onClick={e => handleHardDelete(e, schedule)}
+                        disabled={deletingId === schedule.id}
+                        className="ml-auto flex items-center gap-1.5 px-3.5 py-2 rounded-2xl border border-red-300 bg-red-600 text-white text-xs font-bold hover:bg-red-700 active:scale-95 transition-all shadow-sm shadow-red-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                        title={isExpired ? "Delete schedule permanently (trip ended > 48h ago)" : "Delete schedule permanently"}
+                      >
+                        {deletingId === schedule.id ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin text-white" />
+                        ) : (
+                          <Trash2 className="w-3.5 h-3.5" />
+                        )}
+                        {deletingId === schedule.id ? 'Deleting...' : 'Delete permanently'}
+                      </button>
+                    ) : (
                       <button
                         onClick={e => handleSoftDelete(e, schedule.id)}
                         disabled={cancellingId === schedule.id}
@@ -669,20 +683,6 @@ export default function MySchedulesClient({
                           <X className="w-3.5 h-3.5" />
                         )}
                         {cancellingId === schedule.id ? 'Cancelling...' : 'Cancel schedule'}
-                      </button>
-                    )}
-                    {schedule.status === 'cancelled' && (
-                      <button
-                        onClick={e => handleHardDelete(e, schedule)}
-                        disabled={deletingId === schedule.id}
-                        className="ml-auto flex items-center gap-1.5 px-3.5 py-2 rounded-2xl border border-red-300 bg-red-600 text-white text-xs font-bold hover:bg-red-700 active:scale-95 transition-all shadow-sm shadow-red-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {deletingId === schedule.id ? (
-                          <Loader2 className="w-3.5 h-3.5 animate-spin text-white" />
-                        ) : (
-                          <Trash2 className="w-3.5 h-3.5" />
-                        )}
-                        {deletingId === schedule.id ? 'Deleting...' : 'Delete permanently'}
                       </button>
                     )}
                   </div>

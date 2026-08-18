@@ -11,6 +11,9 @@ const withPWA = withPWAInit({
   cacheOnFrontEndNav: false,
   aggressiveFrontEndNavCaching: false,
   reloadOnOnline: false,
+  fallbacks: {
+    document: '/~offline',
+  },
   workboxOptions: {
     skipWaiting: true,
   },
@@ -20,9 +23,6 @@ const nextConfig: NextConfig = {
   // Strict build mode enabled for production readiness, but we allow ESLint warnings to pass.
   eslint: { ignoreDuringBuilds: true },
   typescript: { ignoreBuildErrors: false },
-  experimental: {
-    optimizePackageImports: ['lucide-react', '@heroicons/react'],
-  },
   images: {
     unoptimized: true,
     remotePatterns: [

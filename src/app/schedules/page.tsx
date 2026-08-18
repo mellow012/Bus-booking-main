@@ -45,7 +45,7 @@ export default async function SchedulesPage({
 
   const where: any = {
     status: 'active',
-    availableSeats: { gt: 0 },
+    isArchived: false,
     company: { status: 'active' },
     route: { isActive: true },
   };
@@ -160,6 +160,7 @@ export default async function SchedulesPage({
         departureTime: formatTime24(sch.departureDateTime),
         arrivalTime: formatTime24(sch.arrivalDateTime),
         availableSeats: actualAvailableSeats,
+        totalSeats,
         price: sch.price,
         duration: durationMin,
         distance: distanceKm,
@@ -169,6 +170,11 @@ export default async function SchedulesPage({
         routeId: sch.routeId,
         departureLocation: sch.departureLocation || company.address || `${route.origin} Main Terminal`,
         arrivalLocation: sch.arrivalLocation || `${route.destination} Main Terminal`,
+        stopsCount: Array.isArray(route.stops) ? route.stops.length : 0,
+        amenities: (bus.amenities as string[]) || [],
+        status: sch.status,
+        bookingEnabled: company.bookingEnabled ?? true,
+        isPartner: company.isPartner ?? true,
       };
     })
     .filter((item): item is NonNullable<typeof item> => item !== null);

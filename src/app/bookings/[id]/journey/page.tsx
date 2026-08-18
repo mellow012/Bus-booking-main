@@ -207,13 +207,15 @@ export default function DedicatedJourneyPage() {
   let nextStopName = upcomingStops.length > 0 ? upcomingStops[0].name : destinationName;
   if (journey.state === 'completed') nextStopName = destinationName;
 
+  const isChatter = !!(booking as any).chatterScheduleId || !!(booking as any).chatterSchedule;
   const derivedStatus = deriveBookingStatus({
     bookingStatus: booking.bookingStatus,
     paymentStatus: booking.paymentStatus,
     paymentMethod: (booking as any).paymentMethod || booking.paymentProvider,
     tripStatus: activeSegment ? activeSegment.schedule.tripStatus : booking.schedule.tripStatus,
     departureTime: activeSegment ? activeSegment.schedule.departureDateTime : booking.schedule.departureDateTime,
-    arrivalTime: activeSegment ? activeSegment.schedule.arrivalDateTime : booking.schedule.arrivalDateTime
+    arrivalTime: activeSegment ? activeSegment.schedule.arrivalDateTime : booking.schedule.arrivalDateTime,
+    isChatter,
   });
   const statusUI = getDisplayStatusUI(derivedStatus);
 

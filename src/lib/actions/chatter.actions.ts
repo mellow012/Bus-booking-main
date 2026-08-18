@@ -477,7 +477,7 @@ export async function hardDeleteChatterSchedule(id: string) {
 
     const schedule = await prisma.chatterSchedule.findUnique({
       where: { id },
-      select: { repUserId: true, status: true },
+      select: { repUserId: true, status: true, travelDate: true },
     });
 
     if (!schedule) {
@@ -488,18 +488,22 @@ export async function hardDeleteChatterSchedule(id: string) {
       return { success: false, error: 'Unauthorized' };
     }
 
-    if (schedule.status !== 'cancelled') {
+    const travelDt = toDate(schedule.travelDate);
+    const is48hAfterTrip = travelDt ? (Date.now() > travelDt.getTime() + 48 * 60 * 60 * 1000) : false;
+
+    if (schedule.status !== 'cancelled' && !is48hAfterTrip) {
       return {
         success: false,
-        error: 'Only cancelled schedules can be permanently deleted. Use the cancel action first.',
+        error: 'Only cancelled schedules or schedules 48 hours past the trip date can be permanently deleted.',
       };
     }
 
-    // Guard: block hard-delete if any booking is still paid or pending
+    // Guard: block hard-delete if any booking is still paid (or pending if within 48h of trip)
+    const blockingStatusList = is48hAfterTrip ? ['paid'] : ['paid', 'pending'];
     const blockingBookings = await prisma.booking.findMany({
       where: {
         chatterScheduleId: id,
-        paymentStatus: { in: ['paid', 'pending'] },
+        paymentStatus: { in: blockingStatusList },
       },
       select: { id: true, paymentStatus: true },
     });
@@ -518,7 +522,7 @@ export async function hardDeleteChatterSchedule(id: string) {
       };
     }
 
-    // Safe to delete — only failed bookings remain (cascade handled by DB relation)
+    // Safe to delete — remove any remaining bookings (pending/failed/unpaid)
     await prisma.booking.deleteMany({
       where: { chatterScheduleId: id },
     });

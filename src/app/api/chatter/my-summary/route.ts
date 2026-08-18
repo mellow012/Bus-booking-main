@@ -9,21 +9,49 @@ export async function GET() {
       return NextResponse.json({ chatterScheduleCount: 0, chatterRequestCount: 0 });
     }
 
-    const [chatterScheduleCount, chatterRequestCount] = await Promise.all([
+    const now = new Date();
+    const todayStart = new Date(now);
+    todayStart.setHours(0, 0, 0, 0);
+
+    const [chatterScheduleCount, chatterRequestCount, bookedChatterCount] = await Promise.all([
       prisma.chatterSchedule.count({
-        where: { repUserId: user.id },
+        where: {
+          repUserId: user.id,
+          status: 'active',
+          isArchived: false,
+          travelDate: { gte: todayStart },
+        },
       }),
       prisma.groupCharterRequest.count({
         where: {
           userId: user.id,
           charterSource: 'chatter',
+          status: { in: ['pending', 'approved', 'confirmed'] },
+          departureDate: { gte: todayStart },
+        },
+      }),
+      prisma.booking.count({
+        where: {
+          userId: user.id,
+          chatterScheduleId: { not: null },
+          bookingStatus: { notIn: ['cancelled', 'expired'] },
+          chatterSchedule: {
+            isArchived: false,
+            status: 'active',
+            travelDate: { gte: todayStart },
+          },
         },
       }),
     ]);
 
+    const hasActiveCharter = (chatterScheduleCount + chatterRequestCount + bookedChatterCount) > 0;
+
     return NextResponse.json({
+      success: true,
+      hasActiveCharter,
       chatterScheduleCount,
       chatterRequestCount,
+      bookedChatterCount,
     });
   } catch (error: any) {
     console.error('Error fetching chatter my-summary:', error);

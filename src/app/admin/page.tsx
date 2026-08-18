@@ -1939,6 +1939,7 @@ export default function SuperAdminDashboard() {
     try {
       const result = await dbActions.updateCompany(selectedCompany.id, {
         name: formData.name.trim(),
+        email: formData.email.trim(),
         contact: formData.contact?.trim() || '',
         address: formData.address?.trim() || '',
         description: formData.description?.trim() || '',
@@ -1946,6 +1947,15 @@ export default function SuperAdminDashboard() {
         updatedAt: new Date(),
       });
       if (!result.success) throw new Error(result.error);
+      setCompanies(prev => prev.map(c => c.id === selectedCompany.id ? { 
+        ...c, 
+        name: formData.name.trim(),
+        email: formData.email.trim(),
+        contact: formData.contact?.trim() || '',
+        address: formData.address?.trim() || '',
+        description: formData.description?.trim() || '',
+        status: formData.status,
+      } : c));
       showAlert('success', 'Company updated successfully!');
       closeModal('edit');
     } catch (e: unknown) { showAlert('error', `Failed to update company: ${(e as Error).message}`); }
@@ -1972,6 +1982,20 @@ export default function SuperAdminDashboard() {
       setCompanies(prev => prev.map(c => c.id === companyId ? { ...c, status: newStatus } : c));
       showAlert('success', `Company status updated to ${newStatus}`);
     } catch (e: unknown) { showAlert('error', `Failed to update status: ${(e as Error).message}`); }
+  };
+
+  const handleToggleBooking = async (company: Company) => {
+    const newBookingState = !company.bookingEnabled;
+    try {
+      const result = await dbActions.updateCompany(company.id, { 
+        bookingEnabled: newBookingState,
+        isPartner: newBookingState,
+        updatedAt: new Date() 
+      });
+      if (!result.success) throw new Error(result.error);
+      setCompanies(prev => prev.map(c => c.id === company.id ? { ...c, bookingEnabled: newBookingState, isPartner: newBookingState } : c));
+      showAlert('success', `${company.name} booking is now ${newBookingState ? 'ENABLED (Online Booking Active)' : 'DISABLED (Schedule Only)'}`);
+    } catch (e: unknown) { showAlert('error', `Failed to toggle booking: ${(e as Error).message}`); }
   };
 
   // ── Modal helpers ──────────────────────────────────────────────────────────
@@ -2299,7 +2323,7 @@ export default function SuperAdminDashboard() {
                         <table className="w-full text-left">
                           <thead className="bg-gray-50/50 border-b border-gray-50">
                             <tr>
-                              {['Company Identity', 'Operational Contact', 'Network Size', 'Subscription', 'Status', 'Actions'].map(h => (
+                              {['Company Identity', 'Operational Contact', 'Booking Mode', 'Subscription', 'Status', 'Actions'].map(h => (
                                 <th key={h} className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">{h}</th>
                               ))}
                             </tr>
@@ -2319,6 +2343,11 @@ export default function SuperAdminDashboard() {
                                       <p className="text-[11px] font-bold text-gray-400 truncate flex items-center gap-1.5 lowercase">
                                         <Mail className="w-3 h-3" />{company.email}
                                       </p>
+                                      {company.category && (
+                                        <span className="inline-block mt-1 text-[9px] font-bold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100">
+                                          {company.category}
+                                        </span>
+                                      )}
                                     </div>
                                   </div>
                                 </td>
@@ -2331,17 +2360,19 @@ export default function SuperAdminDashboard() {
                                   </p>
                                 </td>
                                 <td className="px-6 py-4">
-                                  <div className="flex items-center gap-3">
-                                    <div className="flex -space-x-2">
-                                      {[...Array(3)].map((_, i) => (
-                                        <div key={i} className={`w-6 h-6 rounded-full border-2 border-white flex items-center justify-center text-[8px] font-black text-white ${['bg-indigo-400', 'bg-blue-400', 'bg-violet-400'][i]}`}>
-                                          {['B', 'R', 'O'][i]}
-                                        </div>
-                                      ))}
-                                    </div>
-                                    <div className="text-[10px] font-bold text-gray-500 uppercase tracking-tighter">
-                                      Active Assets
-                                    </div>
+                                  <div className="flex flex-col gap-1">
+                                    <button
+                                      onClick={() => handleToggleBooking(company)}
+                                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-wider border transition-all ${
+                                        company.bookingEnabled
+                                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 shadow-sm'
+                                          : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200'
+                                      }`}
+                                      title={company.bookingEnabled ? "Click to switch to Schedule Only (Disable Booking)" : "Click to Enable Online Booking"}
+                                    >
+                                      <span className={`w-2 h-2 rounded-full ${company.bookingEnabled ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
+                                      {company.bookingEnabled ? 'Booking Active' : 'Schedule Only'}
+                                    </button>
                                   </div>
                                 </td>
                                 <td className="px-6 py-4">
@@ -3205,9 +3236,12 @@ export default function SuperAdminDashboard() {
                   {formErrors.name && <p className="text-red-500 text-xs mt-1">{formErrors.name}</p>}
                 </div>
                 <div>
-                  <label htmlFor="edit-email" className="block text-sm font-medium text-gray-700">Admin Email</label>
-                  <input type="email" id="edit-email" value={formData.email} disabled
-                    className="mt-1 block w-full border border-gray-300 rounded-md p-2 bg-gray-50 text-gray-500 cursor-not-allowed" />
+                  <label htmlFor="edit-email" className="block text-sm font-medium text-gray-700">Official / Admin Email</label>
+                  <input type="email" id="edit-email" value={formData.email}
+                    onChange={e => setFormData(p => ({ ...p, email: e.target.value }))}
+                    className={`mt-1 block w-full border rounded-md p-2 ${formErrors.email ? 'border-red-500' : 'border-gray-300'}`} />
+                  <p className="text-[11px] text-gray-400 mt-0.5">When partnering, replace the unclaimed placeholder email with the operator's official email.</p>
+                  {formErrors.email && <p className="text-red-500 text-xs mt-1">{formErrors.email}</p>}
                 </div>
                 <div>
                   <label htmlFor="edit-contact" className="block text-sm font-medium text-gray-700">Contact Phone</label>

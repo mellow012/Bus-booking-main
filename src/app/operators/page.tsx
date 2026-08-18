@@ -8,14 +8,7 @@ const getCachedOperators = unstable_cache(
   async () => {
     const companies = await prisma.company.findMany({
       where: { status: "active" },
-      select: {
-        id: true,
-        name: true,
-        logo: true,
-        description: true,
-        email: true,
-        phone: true,
-        address: true,
+      include: {
         regions: {
           where: { isActive: true },
           select: { id: true, name: true },
@@ -59,7 +52,7 @@ export default async function OperatorsPage() {
     return acc;
   }, {} as Record<string, { averageRating: number; totalReviews: number }>);
 
-  const formattedCompanies = companies.map((c) => {
+  const formattedCompanies = companies.map((c: any) => {
     const rating = ratingsMap[c.id] || { averageRating: 4.5, totalReviews: 0 };
     return {
       id: c.id,
@@ -69,11 +62,20 @@ export default async function OperatorsPage() {
       email: c.email,
       phone: c.phone || "",
       address: c.address || "",
-      regions: c.regions.map((r) => r.name),
-      activeRoutesCount: c.routes.length,
+      regions: (c.regions || []).map((r: any) => r.name),
+      activeRoutesCount: (c.routes || []).length,
       averageRating: rating.averageRating,
       totalReviews: rating.totalReviews,
+      isPartner: c.isPartner ?? true,
+      bookingEnabled: c.bookingEnabled ?? true,
     };
+  });
+
+  // Ensure partnered operators always rank at top
+  formattedCompanies.sort((a, b) => {
+    const aP = a.isPartner ? 0 : 1;
+    const bP = b.isPartner ? 0 : 1;
+    return aP - bP;
   });
 
   return (

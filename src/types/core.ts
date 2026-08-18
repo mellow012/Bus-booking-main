@@ -91,6 +91,11 @@
 
     planType?: string;
     returnTripDiscountPercent?: number;
+    isPartner?: boolean;
+    bookingEnabled?: boolean;
+    category?: string;
+    invitationSent?: boolean;
+    invitationSentAt?: DBDate;
     metadata?: Record<string, unknown>;
   }
 

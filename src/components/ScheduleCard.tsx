@@ -23,7 +23,7 @@ export const ScheduleCard = React.memo(({ s, onBook, userCity }: {
 
       <div className="p-4 sm:p-5 flex flex-col flex-1">
         <div className="flex items-start justify-between gap-2 sm:gap-3 mb-3 sm:mb-4">
-          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
             {s.companyLogo ? (
               <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl overflow-hidden border border-gray-100 shrink-0 relative">
                 <Image src={s.companyLogo} alt={s.companyName} fill className="object-cover" />
@@ -33,15 +33,16 @@ export const ScheduleCard = React.memo(({ s, onBook, userCity }: {
                 {s.companyName.charAt(0)}
               </div>
             )}
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <Link
                 href={`/operators/${s.companyId}`}
                 onClick={(e) => e.stopPropagation()}
-                className="font-semibold text-gray-900 text-xs sm:text-sm truncate hover:text-brand-700 hover:underline underline-offset-2 transition-colors"
+                className="font-semibold text-gray-900 text-xs sm:text-sm truncate block hover:text-brand-700 hover:underline underline-offset-2 transition-colors"
+                title={s.companyName}
               >{s.companyName}</Link>
               <div className="flex items-center gap-1 sm:gap-1.5 mt-0.5">
-                <span className="text-[10px] sm:text-[11px] text-gray-500 bg-gray-100 px-1.5 sm:px-2 py-0.5 rounded-full">{s.busType}</span>
-                <span className="flex items-center gap-0.5 text-[10px] sm:text-[11px] text-gray-500 font-medium">
+                <span className="text-[10px] sm:text-[11px] text-gray-500 bg-gray-100 px-1.5 sm:px-2 py-0.5 rounded-full truncate max-w-[90px]">{s.busType}</span>
+                <span className="flex items-center gap-0.5 text-[10px] sm:text-[11px] text-gray-500 font-medium shrink-0">
                   <Star className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-yellow-400 fill-yellow-400" />
                   {(s as any).companyRating ?? (s as any).company?.contactSettings?.rating ?? '4.5'}
                 </span>
@@ -49,7 +50,7 @@ export const ScheduleCard = React.memo(({ s, onBook, userCity }: {
             </div>
           </div>
           <div className="text-right shrink-0">
-            <p className="text-base sm:text-lg font-bold text-brand-700 leading-tight">MWK {s.price.toLocaleString()}</p>
+            <p className="text-base sm:text-lg font-bold text-brand-700 leading-tight whitespace-nowrap">MWK {s.price.toLocaleString()}</p>
             <p className="text-[10px] sm:text-[11px] text-gray-400">per person</p>
           </div>
         </div>
@@ -134,27 +135,40 @@ export const ScheduleCard = React.memo(({ s, onBook, userCity }: {
           {isToday(s.date) && <span className="flex items-center gap-0.5 sm:gap-1 text-[10px] sm:text-[11px] px-1.5 sm:px-2 py-0.5 sm:py-1 bg-emerald-50 text-emerald-700 rounded-full border border-emerald-100 font-semibold"><CheckCircle className="w-2.5 h-2.5 sm:w-3 sm:h-3" />Today</span>}
           {isLocal && <span className="flex items-center gap-0.5 sm:gap-1 text-[10px] sm:text-[11px] px-1.5 sm:px-2 py-0.5 sm:py-1 bg-teal-50 text-teal-700 rounded-full border border-teal-100 font-semibold"><MapPin className="w-2.5 h-2.5 sm:w-3 sm:h-3" />Near You</span>}
           {s.status === 'in_transit' && <span className="flex items-center gap-0.5 sm:gap-1 text-[10px] sm:text-[11px] px-1.5 sm:px-2 py-0.5 sm:py-1 bg-amber-50 text-amber-700 rounded-full border border-amber-200 font-semibold shadow-sm animate-pulse"><Navigation className="w-2.5 h-2.5 sm:w-3 sm:h-3" />In Transit</span>}
-          {s.status === 'completed' && <span className="flex items-center gap-0.5 sm:gap-1 text-[10px] sm:text-[11px] px-1.5 sm:px-2 py-0.5 sm:py-1 bg-gray-50 text-gray-600 rounded-full border border-gray-200 font-semibold"><CheckCircle className="w-2.5 h-2.5 sm:w-3 sm:h-3" />Completed</span>}
+          {s.isPartner === false && (
+            <span className="flex items-center gap-0.5 sm:gap-1 text-[10px] sm:text-[11px] px-1.5 sm:px-2 py-0.5 sm:py-1 bg-slate-100 text-slate-700 rounded-full border border-slate-200 font-medium">
+              Timetable View Only
+            </span>
+          )}
         </div>
 
-        <div className="flex gap-2 mt-auto">
-          <button 
-            onClick={() => {
-              setIsLoading(true);
-              onBook();
-              // Reset after a delay in case navigation fails or takes too long, or it redirects to login and they press back
-              setTimeout(() => setIsLoading(false), 3000);
-            }} 
-            disabled={s.availableSeats <= 0 || isLoading}
-            className="flex-1 h-10 rounded-xl bg-coral-500 hover:bg-coral-600 disabled:bg-gray-100 disabled:text-gray-400 text-white text-xs sm:text-sm font-semibold transition-colors flex items-center justify-center gap-2 group/btn active:scale-[.98]">
-            {s.availableSeats <= 0 ? "Fully Booked" : (
-              isLoading ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <>Book Journey <ArrowRight className="w-3.5 h-3.5 group-hover/btn:translate-x-0.5 transition-transform" /></>
-              )
-            )}
-          </button>
+        <div className="flex flex-col gap-2 mt-auto">
+          {s.bookingEnabled === false ? (
+            <button
+              disabled
+              className="w-full h-10 rounded-xl bg-slate-100 text-slate-500 text-xs sm:text-sm font-medium flex items-center justify-center cursor-not-allowed border border-slate-200 select-none"
+            >
+              Schedule only — booking unavailable
+            </button>
+          ) : (
+            <button
+              onClick={() => {
+                setIsLoading(true);
+                onBook();
+                setTimeout(() => setIsLoading(false), 3000);
+              }}
+              disabled={s.availableSeats <= 0 || isLoading}
+              className="w-full h-10 rounded-xl bg-coral-500 hover:bg-coral-600 disabled:bg-gray-100 disabled:text-gray-400 text-white text-xs sm:text-sm font-semibold transition-colors flex items-center justify-center gap-2 group/btn active:scale-[.98]"
+            >
+              {s.availableSeats <= 0 ? "Fully Booked" : (
+                isLoading ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <>Book Journey <ArrowRight className="w-3.5 h-3.5 group-hover/btn:translate-x-0.5 transition-transform" /></>
+                )
+              )}
+            </button>
+          )}
         </div>
       </div>
     </article>

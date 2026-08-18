@@ -88,6 +88,8 @@ interface CompanyProfileData {
   buses: BusData[];
   averageRating: number;
   totalReviews: number;
+  isPartner?: boolean;
+  bookingEnabled?: boolean;
 }
 
 interface OperatorProfileClientProps {
@@ -184,9 +186,16 @@ export default function OperatorProfileClient({ company }: OperatorProfileClient
                 </div>
               )}
               <div className="space-y-1.5">
-                <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight font-display text-white">
-                  {company.name}
-                </h1>
+                <div className="flex items-center gap-2">
+                  <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight font-display text-white">
+                    {company.name}
+                  </h1>
+                  {company.isPartner === false && (
+                    <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-white/20 text-white border border-white/30 backdrop-blur-xs">
+                      Timetable Only
+                    </span>
+                  )}
+                </div>
                 <div className="flex items-center gap-1.5 text-brand-100">
                   <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
                   <span className="text-sm font-bold text-white">
@@ -527,9 +536,21 @@ export default function OperatorProfileClient({ company }: OperatorProfileClient
                             MWK {route.baseFare.toLocaleString()}
                           </span>
                         </div>
-                        <button className="py-2.5 px-4 rounded-xl bg-coral-500 group-hover:bg-coral-600 text-white text-xs font-bold transition-colors flex items-center gap-1.5">
-                          Book Journey
-                        </button>
+                        {company.bookingEnabled === false ? (
+                          <button
+                            disabled
+                            className="py-2.5 px-4 rounded-xl bg-slate-100 text-slate-500 text-xs font-medium border border-slate-200 cursor-not-allowed select-none"
+                          >
+                            Schedule only — booking unavailable
+                          </button>
+                        ) : (
+                          <button 
+                            onClick={() => router.push(`/schedules?companyId=${company.id}&from=${encodeURIComponent(route.origin)}&to=${encodeURIComponent(route.destination)}`)}
+                            className="py-2.5 px-4 rounded-xl bg-coral-500 hover:bg-coral-600 text-white text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer active:scale-95"
+                          >
+                            Book Journey
+                          </button>
+                        )}
                       </div>
                     </article>
                   ))}

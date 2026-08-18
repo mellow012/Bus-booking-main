@@ -206,12 +206,18 @@ export default function HomeSchedules() {
     }
 
     return [...results].sort((a, b) => {
-      // Prioritize active trips (In Transit, Boarding, Arrived)
+      // 1. Prioritize active trips (In Transit, Boarding, Arrived)
       const aActive = (a.status === 'en_route' || a.status === 'boarding' || a.status === 'arrived');
       const bActive = (b.status === 'en_route' || b.status === 'boarding' || b.status === 'arrived');
       if (aActive && !bActive) return -1;
       if (!aActive && bActive) return 1;
 
+      // 2. Prioritize Partnered (bookingEnabled) operators over unpartnered timetable-only
+      const aPartner = (a.bookingEnabled !== false && a.isPartner !== false) ? 0 : 1;
+      const bPartner = (b.bookingEnabled !== false && b.isPartner !== false) ? 0 : 1;
+      if (aPartner !== bPartner) return aPartner - bPartner;
+
+      // 3. User-selected sort options within each group
       if (sortKey === "price_asc") return a.price - b.price;
       if (sortKey === "price_desc") return b.price - a.price;
       if (sortKey === "seats") return b.availableSeats - a.availableSeats;

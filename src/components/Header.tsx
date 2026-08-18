@@ -8,7 +8,7 @@ import { useTranslations } from 'next-intl';
 import {
   Menu, X, User, LogOut, Search, Calendar,
   Shield, ChevronDown, HomeIcon, BusIcon, Zap, LayoutDashboard,
-  Megaphone,
+  Megaphone, Users,
 } from 'lucide-react';
 import { NotificationBell } from '@/contexts/NotificationContext';
 import Image from 'next/image';
@@ -48,15 +48,17 @@ const Header: React.FC = () => {
   const [userMenuStyle, setUserMenuStyle] = useState<{ top: number; left: number } | null>(null);
   const [isScrolled,     setIsScrolled]     = useState(false);
   const [hasPromotions,   setHasPromotions]   = useState(false);
+  const [hasActiveChatter, setHasActiveChatter] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
   const userToggleRef = useRef<HTMLButtonElement | null>(null);
 
   // ── navigation items use translations ──────────────────────────────────────
   const navigationItems = [
-    { href: '/',          label: t('home'),        icon: HomeIcon },
-    { href: '/schedules', label: t('schedules'),   icon: Search },
-    { href: '/operators', label: t('busCompanies'), icon: BusIcon },
-    ...(hasPromotions ? [{ href: '/#promotions-section', label: t('promotions'), icon: Zap }] : []),
+    { href: '/',          label: t('home'),        icon: HomeIcon, isSpecial: false },
+    { href: '/schedules', label: t('schedules'),   icon: Search,   isSpecial: false },
+    { href: '/operators', label: t('busCompanies'), icon: BusIcon,  isSpecial: false },
+    ...(hasActiveChatter ? [{ href: '/chatter/my-schedules', label: 'Group Booking', icon: Users, isSpecial: true }] : []),
+    ...(hasPromotions ? [{ href: '/#promotions-section', label: t('promotions'), icon: Zap, isSpecial: false }] : []),
   ];
 
   const isAdminPage =
@@ -159,26 +161,22 @@ const Header: React.FC = () => {
   );
   const handleProfileNavigate = () => router.push('/profile');
 
-  const [hasChatterData, setHasChatterData] = useState(false);
-
   useEffect(() => {
     if (!user) {
-      setHasChatterData(false);
+      setHasActiveChatter(false);
       return;
     }
     const checkChatter = async () => {
       try {
         const res = await fetch('/api/chatter/my-summary');
         const json = await res.json();
-        if (json.chatterScheduleCount > 0 || json.chatterRequestCount > 0) {
-          setHasChatterData(true);
-        }
+        setHasActiveChatter(Boolean(json.hasActiveCharter));
       } catch (err) {
         console.error('Failed to fetch chatter summary in header:', err);
       }
     };
     checkChatter();
-  }, [user]);
+  }, [user, pathname]);
 
   const adminRoute = isSuperAdmin ? '/admin' : isCompanyAdmin ? '/company/admin' : isOperator ? '/company/operator/dashboard' : null;
   const adminLabel = isOperator ? t('operatorPanel') : t('adminPanel');
@@ -233,12 +231,21 @@ const Header: React.FC = () => {
           <nav className="hidden lg:flex items-center space-x-1">
             {navigationItems.map(item => {
               const active = isActivePage(item.href);
+              const isSpecial = (item as any).isSpecial;
               return (
                 <Link key={item.href} href={item.href}
-                  // Active: brand-700 on brand-50 = 7.0:1 (AAA) ✓
-                  // Hover: brand-600 on white = 4.7:1 (AA) ✓
-                  className={`flex items-center space-x-2 px-4 py-2 rounded-xl font-medium transition-all duration-200 ${active ? 'bg-brand-50 text-brand-700 shadow-sm' : 'text-gray-700 hover:bg-gray-100 hover:text-brand-600'}`}>
-                  <item.icon className="w-4 h-4" /><span>{item.label}</span>
+                  className={`flex items-center space-x-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 ${
+                    isSpecial ? 'animate-in fade-in slide-in-from-top-1 zoom-in-95 duration-500' : ''
+                  } ${
+                    active 
+                      ? 'bg-brand-50 text-brand-700 shadow-sm font-semibold' 
+                      : 'text-gray-700 hover:bg-gray-100 hover:text-brand-600'
+                  }`}>
+                  <item.icon className="w-4 h-4" />
+                  <span>{item.label}</span>
+                  {isSpecial && (
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0 ml-0.5" />
+                  )}
                 </Link>
               );
             })}
@@ -311,9 +318,10 @@ const Header: React.FC = () => {
                           <Calendar className="w-4 h-4" /><span>{t('myBookings')}</span>
                         </Link>
                       )}
-                      {hasChatterData && (
-                        <Link href="/chatter/my-schedules" onClick={() => setIsUserMenuOpen(false)} className="flex items-center space-x-3 px-4 py-2 text-gray-700 hover:bg-brand-50 hover:text-brand-700 transition-colors duration-200">
-                          <BusIcon className="w-4 h-4" /><span>My Schedules</span>
+                      {hasActiveChatter && (
+                        <Link href="/chatter/my-schedules" onClick={() => setIsUserMenuOpen(false)} className="flex items-center space-x-3 px-4 py-2 text-emerald-700 font-semibold hover:bg-emerald-50 transition-colors duration-200">
+                          <Users className="w-4 h-4 text-emerald-600" /><span>Group Booking</span>
+                          <span className="ml-auto text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800">Active</span>
                         </Link>
                       )}
                       {(isCustomer || isChiefOfGrowth) && (
@@ -371,11 +379,21 @@ const Header: React.FC = () => {
               <nav className="space-y-1">
                 {navigationItems.map(item => {
                   const active = isActivePage(item.href);
+                  const isSpecial = (item as any).isSpecial;
                   return (
                     <Link key={item.href} href={item.href} onClick={() => setIsMenuOpen(false)}
-                      // Active: white on brand-700 = 7.8:1 (AAA) ✓
-                      className={`flex items-center space-x-3 p-4 rounded-2xl font-bold transition-all duration-200 ${active ? 'bg-brand-700 text-white shadow-lg shadow-brand-100' : 'text-gray-700 hover:bg-gray-100'}`}>
-                      <item.icon className={`w-5 h-5 ${active ? 'text-white' : 'text-gray-400'}`} /><span>{item.label}</span>
+                      className={`flex items-center space-x-3 p-4 rounded-2xl font-bold transition-all duration-300 ${
+                        isSpecial ? 'animate-in fade-in slide-in-from-left-2 duration-500' : ''
+                      } ${
+                        active 
+                          ? 'bg-brand-700 text-white shadow-lg shadow-brand-100' 
+                          : 'text-gray-700 hover:bg-gray-100'
+                      }`}>
+                      <item.icon className={`w-5 h-5 ${active ? 'text-white' : 'text-gray-400'}`} />
+                      <span>{item.label}</span>
+                      {isSpecial && (
+                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse ml-auto shrink-0" />
+                      )}
                     </Link>
                   );
                 })}
@@ -413,9 +431,10 @@ const Header: React.FC = () => {
                             <Calendar className="w-5 h-5 text-gray-400" /><span>{t('myBookings')}</span>
                           </Link>
                         )}
-                        {hasChatterData && (
-                          <Link href="/chatter/my-schedules" onClick={() => setIsMenuOpen(false)} className="flex items-center space-x-3 p-4 text-gray-700 hover:bg-gray-50 rounded-2xl font-bold">
-                            <BusIcon className="w-5 h-5 text-brand-700" /><span>My Schedules</span>
+                        {hasActiveChatter && (
+                          <Link href="/chatter/my-schedules" onClick={() => setIsMenuOpen(false)} className="flex items-center space-x-3 p-4 text-emerald-800 bg-emerald-50/50 hover:bg-emerald-50 rounded-2xl font-bold border border-emerald-100">
+                            <Users className="w-5 h-5 text-emerald-600" /><span>Group Booking</span>
+                            <span className="ml-auto text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-emerald-200/60 text-emerald-800">Active</span>
                           </Link>
                         )}
                         {(isCustomer || isChiefOfGrowth) && (

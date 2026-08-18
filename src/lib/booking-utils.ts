@@ -17,7 +17,7 @@ export const bookingMatchesSchedule = (booking: Booking, scheduleId: string): bo
   return false;
 };
 
-export type DerivedDisplayStatus = 'payment_incomplete' | 'reserved_cash' | 'confirmed' | 'in_transit' | 'delayed' | 'completed' | 'payment_failed' | 'expired' | 'cancelled' | 'flagged_for_review' | 'archived' | 'anomaly';
+export type DerivedDisplayStatus = 'awaiting_confirmation' | 'awaiting_payment' | 'payment_incomplete' | 'reserved_cash' | 'confirmed' | 'in_transit' | 'delayed' | 'completed' | 'payment_failed' | 'expired' | 'cancelled' | 'flagged_for_review' | 'archived' | 'anomaly';
 
 export function deriveBookingStatus({
   bookingStatus,
@@ -25,7 +25,8 @@ export function deriveBookingStatus({
   paymentMethod,
   tripStatus,
   departureTime,
-  arrivalTime
+  arrivalTime,
+  isChatter
 }: {
   bookingStatus: string;
   paymentStatus: string;
@@ -33,6 +34,7 @@ export function deriveBookingStatus({
   tripStatus?: string;
   departureTime?: Date | string | null;
   arrivalTime?: Date | string | null;
+  isChatter?: boolean;
 }): DerivedDisplayStatus {
   const isCash = paymentMethod === 'cash_on_boarding' || paymentMethod === 'cash';
   let baseStatus: DerivedDisplayStatus;
@@ -43,10 +45,10 @@ export function deriveBookingStatus({
       if (!isNaN(dep.getTime()) && new Date() >= dep) {
         baseStatus = 'expired';
       } else {
-        baseStatus = 'payment_incomplete';
+        baseStatus = isChatter ? 'awaiting_payment' : 'awaiting_confirmation';
       }
     } else {
-      baseStatus = 'payment_incomplete';
+      baseStatus = isChatter ? 'awaiting_payment' : 'awaiting_confirmation';
     }
   } else if (bookingStatus === 'confirmed' && paymentStatus === 'paid') {
     baseStatus = 'confirmed';
@@ -54,10 +56,9 @@ export function deriveBookingStatus({
     if (isCash) {
       baseStatus = 'reserved_cash';
     } else {
-      console.warn(`Anomaly: confirmed booking with pending payment and non-cash method (${paymentMethod})`);
-      baseStatus = 'anomaly';
+      baseStatus = 'awaiting_payment';
     }
-  } else if (bookingStatus === 'payment_failed' && paymentStatus === 'failed') {
+  } else if (bookingStatus === 'payment_failed' || paymentStatus === 'failed') {
     baseStatus = 'payment_failed';
   } else if (bookingStatus === 'expired' && paymentStatus === 'pending') {
     baseStatus = 'expired';
@@ -105,7 +106,9 @@ export function deriveBookingStatus({
 
 export function getDisplayStatusUI(status: DerivedDisplayStatus): { label: string; colorClass: string; isPulsing: boolean } {
   switch (status) {
-    case 'payment_incomplete': return { label: 'Payment Incomplete', colorClass: 'bg-amber-100 text-amber-800 border-amber-200', isPulsing: false };
+    case 'awaiting_confirmation': return { label: 'Pending Confirmation', colorClass: 'bg-amber-50 text-amber-800 border-amber-200', isPulsing: false };
+    case 'awaiting_payment': return { label: 'Payment Required', colorClass: 'bg-emerald-50 text-emerald-800 border-emerald-200', isPulsing: false };
+    case 'payment_incomplete': return { label: 'Payment Required', colorClass: 'bg-emerald-50 text-emerald-800 border-emerald-200', isPulsing: false };
     case 'reserved_cash': return { label: 'Reserved (Cash)', colorClass: 'bg-gray-100 text-gray-800 border-gray-200', isPulsing: false };
     case 'confirmed': return { label: 'Confirmed', colorClass: 'bg-emerald-100 text-emerald-800 border-emerald-200', isPulsing: false };
     case 'in_transit': return { label: 'In Transit', colorClass: 'bg-brand-50 text-brand-700 border-brand-200', isPulsing: true };

@@ -119,6 +119,7 @@ const BookingCard = memo<{
 
   const rawDeparture = activeSegment ? activeSegment.schedule.departureDateTime : (bookingSchedule?.departureDateTime ?? bookingSchedule?.travelDate);
   const parsedDeparture = parseUtcDate(rawDeparture);
+  const isChatter = !!(booking as any).chatterScheduleId || !!(booking as any).chatterSchedule;
 
   const derivedStatus = deriveBookingStatus({
     bookingStatus: booking.bookingStatus,
@@ -126,7 +127,8 @@ const BookingCard = memo<{
     paymentMethod: (booking as any).paymentMethod || booking.paymentProvider,
     tripStatus: activeSegment ? activeSegment.schedule.tripStatus : (bookingSchedule?.tripStatus ?? 'scheduled'),
     departureTime: parsedDeparture,
-    arrivalTime: parseUtcDate(activeSegment ? activeSegment.schedule.arrivalDateTime : (bookingSchedule?.arrivalDateTime ?? bookingSchedule?.travelDate))
+    arrivalTime: parseUtcDate(activeSegment ? activeSegment.schedule.arrivalDateTime : (bookingSchedule?.arrivalDateTime ?? bookingSchedule?.travelDate)),
+    isChatter,
   });
   const statusUI = getDisplayStatusUI(derivedStatus);
 
@@ -458,7 +460,7 @@ const BookingCard = memo<{
               )}
             </div>
             <div className="space-y-2">
-              {(derivedStatus === 'payment_incomplete' || derivedStatus === 'payment_failed') && (() => {
+              {(derivedStatus === 'awaiting_payment' || derivedStatus === 'payment_incomplete' || derivedStatus === 'payment_failed') && (() => {
                 const isChatter = !!(booking as any).chatterScheduleId || !!(booking as any).chatterSchedule;
                 let isScheduleInvalid = false;
 
@@ -493,10 +495,23 @@ const BookingCard = memo<{
                   );
                 }
 
+                const isFailed = derivedStatus === 'payment_failed';
+
                 return (
                   <button onClick={handlePayment} disabled={actionLoading === booking.id}
-                    className="w-full px-3 py-2 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-lg hover:from-emerald-600 hover:to-emerald-700 transition-all shadow-md flex items-center justify-center gap-2">
-                    {actionLoading === booking.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Zap className="w-4 h-4" /><span className="font-medium">Retry Payment</span></>}
+                    className={`w-full px-3 py-2 text-white rounded-lg transition-all shadow-md flex items-center justify-center gap-2 ${
+                      isFailed
+                        ? 'bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700'
+                        : 'bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700'
+                    }`}>
+                    {actionLoading === booking.id ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <>
+                        <Zap className="w-4 h-4" />
+                        <span className="font-medium">{isFailed ? 'Retry Payment' : 'Pay Now'}</span>
+                      </>
+                    )}
                   </button>
                 );
               })()}
@@ -506,20 +521,21 @@ const BookingCard = memo<{
                   <Download className="w-4 h-4" /><span>Ticket Only</span>
                 </button>
               )}
-              {isCash && derivedStatus !== 'payment_incomplete' && derivedStatus !== 'cancelled' && (
+              {isCash && derivedStatus !== 'awaiting_payment' && derivedStatus !== 'payment_incomplete' && derivedStatus !== 'cancelled' && (
                 <button onClick={handleDLWithQR} disabled={actionLoading === `download_${booking.id}`}
                   className="w-full px-3 py-2 bg-brand-50 text-brand-700 rounded-lg hover:bg-brand-100 transition-colors border border-brand-100 flex items-center justify-center gap-2">
                   {actionLoading === `download_${booking.id}` ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Download className="w-4 h-4" /><span>Boarding Pass</span></>}
                 </button>
               )}
               {(() => {
-                if (derivedStatus !== 'payment_incomplete' && derivedStatus !== 'confirmed' && derivedStatus !== 'reserved_cash') return null;
+                const isPendingOrFailed = derivedStatus === 'awaiting_confirmation' || derivedStatus === 'awaiting_payment' || derivedStatus === 'payment_incomplete' || derivedStatus === 'payment_failed';
+                if (!isPendingOrFailed && derivedStatus !== 'confirmed' && derivedStatus !== 'reserved_cash') return null;
                 
                 const departureTime = parseUtcDate(displaySchedule.departureDateTime).getTime();
                 const twoHoursInMs = 2 * 60 * 60 * 1000;
                 const canCancel = departureTime - Date.now() > twoHoursInMs;
 
-                if (derivedStatus === 'payment_incomplete' || canCancel) {
+                if (isPendingOrFailed || canCancel) {
                   const isRefund = booking.paymentStatus === 'paid';
                   return (
                     <button onClick={handleCancel} disabled={actionLoading === booking.id}
@@ -558,17 +574,47 @@ const BookingCard = memo<{
         </div>
       </div>
 
-      {derivedStatus === 'payment_incomplete' && !isCash && (
-        <div className="bg-gradient-to-r from-amber-50 to-brand-50 border-t border-amber-200 p-3 sm:p-4">
+      {derivedStatus === 'awaiting_confirmation' && !isCash && (
+        <div className="bg-gradient-to-r from-amber-50 to-orange-50 border-t border-amber-200 p-3 sm:p-4">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-amber-500 rounded-full flex items-center justify-center">
+            <div className="w-8 h-8 bg-amber-500 rounded-full flex items-center justify-center shadow-sm shrink-0">
+              <Clock className="w-4 h-4 text-white" />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-amber-900">Awaiting Operator Confirmation</p>
+              <p className="text-xs text-amber-700">The bus operator is reviewing your booking. You will be able to pay once confirmed.</p>
+            </div>
+            <Shield className="w-5 h-5 text-amber-600 ml-auto shrink-0" />
+          </div>
+        </div>
+      )}
+
+      {(derivedStatus === 'awaiting_payment' || derivedStatus === 'payment_incomplete') && !isCash && (
+        <div className="bg-gradient-to-r from-emerald-50 to-brand-50 border-t border-emerald-200 p-3 sm:p-4">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 bg-emerald-500 rounded-full flex items-center justify-center shadow-sm shrink-0">
+              <CheckCircle className="w-4 h-4 text-white" />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-emerald-800">Booking Approved — Payment Required</p>
+              <p className="text-xs text-emerald-700">Your booking was confirmed by the operator! Complete payment via PayChangu (Mobile Money) or select Cash on Boarding to finalize your ticket.</p>
+            </div>
+            <Shield className="w-5 h-5 text-emerald-600 ml-auto shrink-0" />
+          </div>
+        </div>
+      )}
+
+      {derivedStatus === 'payment_failed' && !isCash && (
+        <div className="bg-gradient-to-r from-rose-50 to-amber-50 border-t border-rose-200 p-3 sm:p-4">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 bg-rose-500 rounded-full flex items-center justify-center shadow-sm shrink-0">
               <AlertTriangle className="w-4 h-4 text-white" />
             </div>
             <div>
-              <p className="text-sm font-medium text-amber-800">Payment wasn't completed</p>
-              <p className="text-xs text-amber-700">Re-initiate PayChangu checkout or cancel your booking.</p>
+              <p className="text-sm font-medium text-rose-800">Payment Unsuccessful</p>
+              <p className="text-xs text-rose-700">Payment was not completed. Please retry PayChangu checkout or select another payment option.</p>
             </div>
-            <Shield className="w-5 h-5 text-amber-600 ml-auto" />
+            <Shield className="w-5 h-5 text-rose-600 ml-auto shrink-0" />
           </div>
         </div>
       )}

@@ -951,7 +951,7 @@ export default function useBookBus() {
         } catch {}
       }
 
-      setSuccess("Booking created successfully! Redirecting to payment…");
+      setSuccess("Booking submitted successfully! Redirecting to your bookings…");
       setConfirmModalOpen(false);
       setTimeout(() => router.push(`/bookings`), 1500);
     } catch (e: any) {

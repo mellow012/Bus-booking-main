@@ -221,6 +221,7 @@ export const useBookingsList = () => {
         if (checkIsArchived(b)) return false;
         if (af === 'all') return true;
         
+        const isChatter = !!(b as any).chatterScheduleId || !!(b as any).chatterSchedule;
         const derived = deriveBookingStatus({
           bookingStatus: b.bookingStatus,
           paymentStatus: b.paymentStatus,
@@ -228,10 +229,11 @@ export const useBookingsList = () => {
           tripStatus: b.schedule?.tripStatus,
           departureTime: b.schedule?.departureDateTime,
           arrivalTime: b.schedule?.arrivalDateTime,
+          isChatter,
         });
 
         if (af === 'confirmed') return derived === 'confirmed' || derived === 'reserved_cash';
-        if (af === 'pending') return derived === 'payment_incomplete';
+        if (af === 'pending') return derived === 'awaiting_confirmation' || derived === 'awaiting_payment' || derived === 'payment_incomplete';
         if (af === 'cancelled') return derived === 'cancelled' || derived === 'payment_failed';
         if (af === 'in_transit') return derived === 'in_transit';
         if (af === 'upcoming') return (derived === 'confirmed' || derived === 'reserved_cash') && new Date() < new Date(b.schedule?.departureDateTime as any);
@@ -917,6 +919,7 @@ export const useBookingsList = () => {
         return;
       }
       stats.all++;
+      const isChatter = !!(b as any).chatterScheduleId || !!(b as any).chatterSchedule;
       const derived = deriveBookingStatus({
         bookingStatus: b.bookingStatus,
         paymentStatus: b.paymentStatus,
@@ -924,9 +927,10 @@ export const useBookingsList = () => {
         tripStatus: b.schedule?.tripStatus,
         departureTime: b.schedule?.departureDateTime,
         arrivalTime: b.schedule?.arrivalDateTime,
+        isChatter,
       });
       if (derived === 'confirmed' || derived === 'reserved_cash') stats.confirmed++;
-      if (derived === 'payment_incomplete') stats.pending++;
+      if (derived === 'awaiting_confirmation' || derived === 'awaiting_payment' || derived === 'payment_incomplete') stats.pending++;
       if (derived === 'cancelled' || derived === 'payment_failed') stats.cancelled++;
       if (derived === 'in_transit') stats.in_transit++;
       if ((derived === 'confirmed' || derived === 'reserved_cash') && new Date() < new Date(b.schedule?.departureDateTime as any)) stats.upcoming++;

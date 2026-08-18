@@ -55,6 +55,8 @@ export async function GET(
             email: true,
             phone: true,
             status: true,
+            isPartner: true,
+            bookingEnabled: true,
             returnTripDiscountPercent: true,
             paymentSettings: true,
           },
@@ -66,6 +68,18 @@ export async function GET(
       return NextResponse.json(
         { error: 'Schedule not found' },
         { status: 404 }
+      );
+    }
+
+    // Check if online booking is enabled for this operator
+    if (schedule.company.bookingEnabled === false) {
+      return NextResponse.json(
+        { 
+          error: 'Online booking is not currently available for this operator. Timetable is provided for informational purposes.',
+          isScheduleOnly: true,
+          phone: schedule.company.phone,
+        },
+        { status: 403 }
       );
     }
 

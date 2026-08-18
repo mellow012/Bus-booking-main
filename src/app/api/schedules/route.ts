@@ -107,7 +107,6 @@ async function querySchedules(params: {
 
   const where: any = {
     status: 'active',
-    availableSeats: { gt: 0 },
     company: { status: 'active' },
     route: routeFilter,
   };
@@ -297,6 +296,9 @@ async function querySchedules(params: {
         departureLocation: sch.departureLocation || company.address || `${route.origin} Main Terminal`,
         arrivalLocation: sch.arrivalLocation || `${route.destination} Main Terminal`,
         stopsCount: Array.isArray(route.stops) ? route.stops.length : 0,
+        bookingEnabled: company.bookingEnabled ?? true,
+        isPartner: company.isPartner ?? true,
+        companyPhone: company.phone || undefined,
       };
     })
     .filter((item: any) => item !== null) as EnhancedSchedule[];
@@ -310,6 +312,13 @@ async function querySchedules(params: {
     seen.add(key);
     deduplicated.push(item);
   }
+
+  // Partnered (bookingEnabled) operators surface first — unpartnered timetable-only after
+  deduplicated.sort((a, b) => {
+    const aBookable = (a as any).bookingEnabled !== false ? 0 : 1;
+    const bBookable = (b as any).bookingEnabled !== false ? 0 : 1;
+    return aBookable - bBookable;
+  });
 
   return {
     data: deduplicated,

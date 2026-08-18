@@ -49,10 +49,9 @@ export async function POST(request: Request) {
         departureDateTime: {
           gte: date ? new Date(date) : new Date(),
         },
-        availableSeats: {
-          gte: parseInt(passengers.toString()) || 1,
-        },
         status: "active",
+        isArchived: false,
+        company: { status: { in: ['active', 'unclaimed'] } },
       },
       include: {
         route: true,

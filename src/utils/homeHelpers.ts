@@ -9,6 +9,9 @@ export interface EnhancedSchedule {
   departureLocation?: string;
   arrivalLocation?: string;
   stopsCount?: number;
+  bookingEnabled?: boolean;
+  isPartner?: boolean;
+  companyPhone?: string;
 }
 
 export type GeoStatus = "idle" | "detecting" | "granted" | "denied" | "unavailable";

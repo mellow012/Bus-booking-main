@@ -177,6 +177,8 @@ export default async function OperatorProfilePage({ params }: PageProps) {
         })),
         averageRating,
         totalReviews,
+        isPartner: company.isPartner ?? true,
+        bookingEnabled: company.bookingEnabled ?? true,
       }}
     />
   );

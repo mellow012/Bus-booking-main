@@ -18,6 +18,8 @@ interface CompanyCardData {
   activeRoutesCount: number;
   averageRating: number;
   totalReviews: number;
+  isPartner?: boolean;
+  bookingEnabled?: boolean;
 }
 
 interface OperatorsClientProps {
@@ -48,6 +50,10 @@ export default function OperatorsClient({ initialCompanies }: OperatorsClientPro
         selectedRegion === "all" || company.regions.includes(selectedRegion);
 
       return matchesSearch && matchesRegion;
+    }).sort((a, b) => {
+      const aP = a.isPartner ? 0 : 1;
+      const bP = b.isPartner ? 0 : 1;
+      return aP - bP;
     });
   }, [initialCompanies, searchTerm, selectedRegion]);
 
@@ -134,10 +140,17 @@ export default function OperatorsClient({ initialCompanies }: OperatorsClientPro
                       </div>
                     )}
 
-                    <div className="space-y-1 min-w-0">
-                      <h2 className="font-bold text-slate-900 text-lg group-hover:text-brand-700 transition-colors truncate">
-                        {company.name}
-                      </h2>
+                    <div className="space-y-1 min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <h2 className="font-bold text-slate-900 text-lg group-hover:text-brand-700 transition-colors truncate">
+                          {company.name}
+                        </h2>
+                        {company.isPartner === false && (
+                          <span className="shrink-0 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-600 border border-slate-200">
+                            Timetable Only
+                          </span>
+                        )}
+                      </div>
                       
                       {/* Rating display */}
                       <div className="flex items-center gap-1.5">
