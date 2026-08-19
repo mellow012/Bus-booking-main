@@ -5,7 +5,7 @@ export interface EnhancedSchedule {
   price: number; availableSeats: number; totalSeats: number; status: string;
   date: string; departureTime: string; arrivalTime: string;
   companyName: string; origin: string; destination: string;
-  duration: number; distance: number; busNumber: string; busType: string; amenities: string[];
+  duration: number; distance: number; busNumber?: string | null; busType?: string | null; amenities?: string[];
   departureLocation?: string;
   arrivalLocation?: string;
   stopsCount?: number;

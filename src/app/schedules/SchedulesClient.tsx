@@ -22,8 +22,8 @@ import SchedulesLoading from './loading';
 interface EnhancedSchedule {
   id: string;
   companyName: string;
-  busNumber: string;
-  busType: string;
+  busNumber?: string | null;
+  busType?: string | null;
   origin: string;
   destination: string;
   departureTime: string;
@@ -38,6 +38,11 @@ interface EnhancedSchedule {
   routeId: string;
   departureLocation?: string;
   arrivalLocation?: string;
+  stopsCount?: number;
+  amenities?: string[];
+  status?: string;
+  bookingEnabled?: boolean;
+  isPartner?: boolean;
 }
 
 export default function SchedulesClient({ initialSchedules, initialCompanies }: { initialSchedules: EnhancedSchedule[]; initialCompanies: { id: string, name: string }[]; }) {

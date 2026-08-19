@@ -147,14 +147,15 @@ export default async function SchedulesPage({
         ...activeReservations.flatMap((r: any) => parseSeatArray(r.seatNumbers)),
       ]);
 
-      const totalSeats = bus.capacity || 40;
-      const actualAvailableSeats = Math.max(0, totalSeats - allOccupiedSeatsSet.size);
+      const isUnpartnered = company.isPartner === false || company.bookingEnabled === false;
+      const totalSeats = isUnpartnered ? 0 : (bus.capacity || 40);
+      const actualAvailableSeats = isUnpartnered ? 0 : Math.max(0, totalSeats - allOccupiedSeatsSet.size);
 
       return {
         id: sch.id,
         companyName: company.name || 'Unknown',
-        busNumber: bus.licensePlate || 'N/A',
-        busType: bus.busType || 'Standard',
+        busNumber: isUnpartnered ? null : (bus.licensePlate || null),
+        busType: isUnpartnered ? null : (bus.busType || null),
         origin: route.origin,
         destination: route.destination,
         departureTime: formatTime24(sch.departureDateTime),
@@ -171,7 +172,7 @@ export default async function SchedulesPage({
         departureLocation: sch.departureLocation || company.address || `${route.origin} Main Terminal`,
         arrivalLocation: sch.arrivalLocation || `${route.destination} Main Terminal`,
         stopsCount: Array.isArray(route.stops) ? route.stops.length : 0,
-        amenities: (bus.amenities as string[]) || [],
+        amenities: isUnpartnered ? [] : ((bus.amenities as string[]) || []),
         status: sch.status,
         bookingEnabled: company.bookingEnabled ?? true,
         isPartner: company.isPartner ?? true,

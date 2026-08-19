@@ -149,14 +149,15 @@ export async function GET(request: NextRequest) {
       const bookable = isSegmentBookable(sch, originStopId);
       if (!bookable) return null;
 
+      const isUnpartnered = company?.isPartner === false || company?.bookingEnabled === false;
       return {
         id: sch.id,
         companyId: sch.companyId,
         busId: sch.busId,
         routeId: sch.routeId,
         price: sch.price,
-        availableSeats,
-        totalSeats,
+        availableSeats: isUnpartnered ? 0 : availableSeats,
+        totalSeats: isUnpartnered ? 0 : totalSeats,
         status: sch.status,
         tripStatus: sch.tripStatus, // Return raw tripStatus for UI
         date: dep.toISOString().split('T')[0],
@@ -169,9 +170,9 @@ export async function GET(request: NextRequest) {
         companyRating: (company?.contactSettings as any)?.rating || 4.5,
         origin: route.origin,
         destination: route.destination,
-        busNumber: bus?.licensePlate || 'N/A',
-        busType: bus?.busType || 'Standard',
-        amenities: (bus?.amenities as string[]) || [],
+        busNumber: isUnpartnered ? null : (bus?.licensePlate || null),
+        busType: isUnpartnered ? null : (bus?.busType || null),
+        amenities: isUnpartnered ? [] : ((bus?.amenities as string[]) || []),
         bookingEnabled: company?.bookingEnabled ?? true,
         isPartner: company?.isPartner ?? true,
       };

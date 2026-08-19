@@ -582,10 +582,10 @@ export async function seedUnpartneredSchedules() {
       bus = await prisma.bus.create({
         data: {
           companyId,
-          licensePlate: busPlate,
-          busType: entry.category.includes("Luxury") || entry.category.includes("Executive") ? "Executive Coach" : "Standard Coach",
-          capacity: 45,
-          amenities: ["AC", "Reclining Seats", "Charging", "Luggage Storage"],
+          licensePlate: "Unassigned",
+          busType: "Standard",
+          capacity: 0,
+          amenities: [],
           status: "active",
         },
       });

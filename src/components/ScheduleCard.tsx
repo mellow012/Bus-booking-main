@@ -41,7 +41,9 @@ export const ScheduleCard = React.memo(({ s, onBook, userCity }: {
                 title={s.companyName}
               >{s.companyName}</Link>
               <div className="flex items-center gap-1 sm:gap-1.5 mt-0.5">
-                <span className="text-[10px] sm:text-[11px] text-gray-500 bg-gray-100 px-1.5 sm:px-2 py-0.5 rounded-full truncate max-w-[90px]">{s.busType}</span>
+                {s.busType && s.isPartner !== false && (
+                  <span className="text-[10px] sm:text-[11px] text-gray-500 bg-gray-100 px-1.5 sm:px-2 py-0.5 rounded-full truncate max-w-[90px]">{s.busType}</span>
+                )}
                 <span className="flex items-center gap-0.5 text-[10px] sm:text-[11px] text-gray-500 font-medium shrink-0">
                   <Star className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-yellow-400 fill-yellow-400" />
                   {(s as any).companyRating ?? (s as any).company?.contactSettings?.rating ?? '4.5'}
@@ -96,9 +98,18 @@ export const ScheduleCard = React.memo(({ s, onBook, userCity }: {
         <div className="grid grid-cols-2 gap-1 sm:gap-1.5 mb-3">
           {[
             { icon: Calendar, label: new Date(s.date).toLocaleDateString("en-GB", { day: "numeric", month: "short" }), cls: "text-brand-700" },
-            { icon: Users, label: `${s.availableSeats} seats`, cls: seatCls, labelCls: seatCls },
+            { 
+              icon: Users, 
+              label: s.isPartner === false ? "Schedule Info" : `${s.availableSeats} seats`, 
+              cls: s.isPartner === false ? "text-slate-600" : seatCls, 
+              labelCls: s.isPartner === false ? "text-slate-600" : seatCls 
+            },
             { icon: MapPin, label: `${s.distance || 0} km`, cls: "text-brand-700" },
-            { icon: BusIcon, label: s.busNumber, cls: "text-brand-700" },
+            { 
+              icon: BusIcon, 
+              label: s.isPartner === false ? "Timetable" : (s.busNumber && s.busNumber !== 'N/A' && s.busNumber !== 'Unassigned' ? s.busNumber : "Standard Bus"), 
+              cls: "text-brand-700" 
+            },
           ].map(({ icon: Icon, label, cls, labelCls }, i) => (
             <div key={i} className="flex items-center gap-1 sm:gap-1.5 bg-gray-50 rounded-lg px-2 sm:px-2.5 py-1 sm:py-1.5">
               <Icon className={`w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0 ${cls}`} />
@@ -107,18 +118,20 @@ export const ScheduleCard = React.memo(({ s, onBook, userCity }: {
           ))}
         </div>
 
-        <div className="flex items-start justify-between gap-2 mb-3">
-          <div className="flex flex-wrap gap-1 flex-1">
-            {s.amenities?.slice(0, 3).map((a, i) => {
-              const Icon = AMENITY_ICONS[a] || Shield; return (
-                <span key={i} className="flex items-center gap-0.5 sm:gap-1 text-[10px] sm:text-[11px] px-1.5 sm:px-2 py-0.5 sm:py-1 bg-brand-50 text-brand-700 rounded-full">
-                  <Icon className="w-2.5 h-2.5 sm:w-3 sm:h-3" />{a}
-                </span>
-              );
-            })}
-            {s.amenities?.length > 3 && <span className="text-[10px] sm:text-[11px] px-1.5 sm:px-2 py-0.5 sm:py-1 bg-gray-100 text-gray-500 rounded-full">+{s.amenities.length - 3}</span>}
+        {s.amenities && s.amenities.length > 0 && (
+          <div className="flex items-start justify-between gap-2 mb-3">
+            <div className="flex flex-wrap gap-1 flex-1">
+              {s.amenities.slice(0, 3).map((a, i) => {
+                const Icon = AMENITY_ICONS[a] || Shield; return (
+                  <span key={i} className="flex items-center gap-0.5 sm:gap-1 text-[10px] sm:text-[11px] px-1.5 sm:px-2 py-0.5 sm:py-1 bg-brand-50 text-brand-700 rounded-full">
+                    <Icon className="w-2.5 h-2.5 sm:w-3 sm:h-3" />{a}
+                  </span>
+                );
+              })}
+              {s.amenities.length > 3 && <span className="text-[10px] sm:text-[11px] px-1.5 sm:px-2 py-0.5 sm:py-1 bg-gray-100 text-gray-500 rounded-full">+{s.amenities.length - 3}</span>}
+            </div>
           </div>
-        </div>
+        )}
 
         <div className="flex flex-wrap gap-1 mb-3 min-h-[18px]">
           {category && (

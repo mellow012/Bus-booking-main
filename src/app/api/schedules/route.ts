@@ -270,13 +270,14 @@ async function querySchedules(params: {
         logger.logError('api', `Error checking bookable status for schedule ${sch.id}`, err);
       }
 
+      const isUnpartnered = company.isPartner === false || company.bookingEnabled === false;
       return {
         id: sch.id,
         companyId: sch.companyId,
         busId: sch.busId,
         routeId: sch.routeId,
         price: sch.price,
-        availableSeats,
+        availableSeats: isUnpartnered ? 0 : availableSeats,
         status: sch.status,
         date: formatDateISO(sch.departureDateTime),
         departureDateTime: sch.departureDateTime,
@@ -289,10 +290,10 @@ async function querySchedules(params: {
         companyLogo: company?.logo,
         origin: route.origin,
         destination: route.destination,
-        busNumber: bus?.licensePlate || 'N/A',
-        busType: bus?.busType || 'Standard',
-        amenities: (bus?.amenities as string[]) || [],
-        totalSeats,
+        busNumber: isUnpartnered ? null : (bus?.licensePlate || null),
+        busType: isUnpartnered ? null : (bus?.busType || null),
+        amenities: isUnpartnered ? [] : ((bus?.amenities as string[]) || []),
+        totalSeats: isUnpartnered ? 0 : totalSeats,
         departureLocation: sch.departureLocation || company.address || `${route.origin} Main Terminal`,
         arrivalLocation: sch.arrivalLocation || `${route.destination} Main Terminal`,
         stopsCount: Array.isArray(route.stops) ? route.stops.length : 0,
