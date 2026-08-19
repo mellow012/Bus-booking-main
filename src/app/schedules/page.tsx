@@ -188,6 +188,14 @@ export default async function SchedulesPage({
     deduplicatedSchedules.push(item);
   }
 
+  // Partnered operators first, then departure time
+  deduplicatedSchedules.sort((a, b) => {
+    const aP = (a.bookingEnabled !== false && a.isPartner !== false) ? 0 : 1;
+    const bP = (b.bookingEnabled !== false && b.isPartner !== false) ? 0 : 1;
+    if (aP !== bP) return aP - bP;
+    return (a.date + ' ' + a.departureTime).localeCompare(b.date + ' ' + b.departureTime);
+  });
+
   return (
     <SchedulesClient 
       initialSchedules={deduplicatedSchedules} 

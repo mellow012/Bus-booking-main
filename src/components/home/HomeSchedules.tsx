@@ -205,6 +205,13 @@ export default function HomeSchedules() {
       results = results.filter(s => getScheduleCategory(s) === selectedCategory);
     }
 
+    const parseTime = (dateStr: string, timeStr: string) => {
+      if (!dateStr || !timeStr) return 0;
+      const normalizedTime = timeStr.length === 5 ? `${timeStr}:00` : timeStr;
+      const ts = new Date(`${dateStr}T${normalizedTime}`).getTime();
+      return isNaN(ts) ? 0 : ts;
+    };
+
     return [...results].sort((a, b) => {
       // 1. Prioritize active trips (In Transit, Boarding, Arrived)
       const aActive = (a.status === 'en_route' || a.status === 'boarding' || a.status === 'arrived');
@@ -212,16 +219,30 @@ export default function HomeSchedules() {
       if (aActive && !bActive) return -1;
       if (!aActive && bActive) return 1;
 
-      // 2. Prioritize Partnered (bookingEnabled) operators over unpartnered timetable-only
       const aPartner = (a.bookingEnabled !== false && a.isPartner !== false) ? 0 : 1;
       const bPartner = (b.bookingEnabled !== false && b.isPartner !== false) ? 0 : 1;
+
+      // 2. Explicit sort options
+      if (sortKey === "price_asc") {
+        if (a.price !== b.price) return a.price - b.price;
+        return aPartner - bPartner;
+      }
+      if (sortKey === "price_desc") {
+        if (a.price !== b.price) return b.price - a.price;
+        return aPartner - bPartner;
+      }
+      if (sortKey === "seats") {
+        if (a.availableSeats !== b.availableSeats) return b.availableSeats - a.availableSeats;
+        return aPartner - bPartner;
+      }
+
+      // 3. Default "time" (Earliest Departure): Partnered operators first, then departure time
       if (aPartner !== bPartner) return aPartner - bPartner;
 
-      // 3. User-selected sort options within each group
-      if (sortKey === "price_asc") return a.price - b.price;
-      if (sortKey === "price_desc") return b.price - a.price;
-      if (sortKey === "seats") return b.availableSeats - a.availableSeats;
-      return new Date(`${a.date}T${a.departureTime}`).getTime() - new Date(`${b.date}T${b.departureTime}`).getTime();
+      const timeA = parseTime(a.date, a.departureTime);
+      const timeB = parseTime(b.date, b.departureTime);
+      if (timeA && timeB && timeA !== timeB) return timeA - timeB;
+      return (a.date + ' ' + a.departureTime).localeCompare(b.date + ' ' + b.departureTime);
     });
   }, [schedules, sortKey, userCity, selectedCategory]);
 

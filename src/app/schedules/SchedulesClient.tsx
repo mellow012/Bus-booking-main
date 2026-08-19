@@ -221,10 +221,12 @@ export default function SchedulesClient({ initialSchedules, initialCompanies }: 
               )}
             </div>
             <div className="flex items-center gap-2 text-sm">
-              <span className="text-gray-500">Sort by:</span>
-              <select value={sortBy} onChange={e => setSortBy(e.target.value as any)} className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-700 font-medium">
-                <option value="price">Cheapest</option>
-                <option value="time">Earliest</option>
+              <span className="text-gray-500 font-medium">Sort by:</span>
+              <select value={sortBy} onChange={e => setSortBy(e.target.value as any)} className="bg-gray-50 border border-gray-200 rounded-xl px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-700 font-medium text-gray-800 text-sm">
+                <option value="time">Earliest Departure</option>
+                <option value="price">Lowest Price</option>
+                <option value="price_desc">Highest Price</option>
+                <option value="seats">Most Seats</option>
                 <option value="company">Company</option>
               </select>
             </div>
@@ -277,7 +279,7 @@ export default function SchedulesClient({ initialSchedules, initialCompanies }: 
             <div className="space-y-12">
               <RecommendedSchedules recommendedSchedules={recommendedSchedules} userCity={userCity} handleBooking={handleBooking} />
 
-              <SchedulesGrid regularSchedules={regularSchedules} selectedCategory={selectedCategory} setSelectedCategory={setSelectedCategory} handleBooking={handleBooking} userCity={userCity} />
+              <SchedulesGrid regularSchedules={regularSchedules} selectedCategory={selectedCategory} setSelectedCategory={setSelectedCategory} handleBooking={handleBooking} userCity={userCity} sortBy={sortBy} />
 
               <Pagination currentPage={currentPage} totalPages={totalPages} setCurrentPage={setCurrentPage} itemsPerPage={itemsPerPage} filteredCount={filteredSchedules.length} />
             </div>

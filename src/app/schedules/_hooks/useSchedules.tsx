@@ -31,7 +31,7 @@ export default function useSchedules(initialSchedules: any[], initialCompanies: 
   const [passengers, setPassengers] = useState(parseInt(searchParams?.get('passengers') || "1"));
 
   const [activeFilter, setActiveFilter] = useState("all");
-  const [sortBy, setSortBy] = useState<'price' | 'time' | 'company'>('price');
+  const [sortBy, setSortBy] = useState<'time' | 'price' | 'price_desc' | 'seats' | 'company'>('time');
 
   const [selectedCompany, setSelectedCompany] = useState("");
   const [selectedTimeSlot, setSelectedTimeSlot] = useState("");
@@ -206,8 +206,51 @@ export default function useSchedules(initialSchedules: any[], initialCompanies: 
     }
     if (selectedTerminal) filtered = filtered.filter(s => s.departureLocation === selectedTerminal);
     if (selectedCategory) filtered = filtered.filter(s => getScheduleCategory(s as any) === selectedCategory);
-    filtered.sort((a, b) => { switch (sortBy) { case 'price': return a.price - b.price; case 'time': return a.departureTime.localeCompare(b.departureTime); case 'company': return a.companyName.localeCompare(b.companyName); default: return 0; } });
-    return filtered;
+
+    const parseTime = (dateStr: string, timeStr: string) => {
+      if (!dateStr || !timeStr) return 0;
+      const normalizedTime = timeStr.length === 5 ? `${timeStr}:00` : timeStr;
+      const ts = new Date(`${dateStr}T${normalizedTime}`).getTime();
+      return isNaN(ts) ? 0 : ts;
+    };
+
+    return [...filtered].sort((a, b) => {
+      // 1. Prioritize active trips (In Transit, Boarding, Arrived)
+      const aActive = (a.status === 'en_route' || a.status === 'boarding' || a.status === 'arrived');
+      const bActive = (b.status === 'en_route' || b.status === 'boarding' || b.status === 'arrived');
+      if (aActive && !bActive) return -1;
+      if (!aActive && bActive) return 1;
+
+      const aPartner = (a.bookingEnabled !== false && a.isPartner !== false) ? 0 : 1;
+      const bPartner = (b.bookingEnabled !== false && b.isPartner !== false) ? 0 : 1;
+
+      // 2. Explicit sort options
+      if (sortBy === 'price') {
+        if (a.price !== b.price) return a.price - b.price;
+        return aPartner - bPartner;
+      }
+      if (sortBy === 'price_desc') {
+        if (a.price !== b.price) return b.price - a.price;
+        return aPartner - bPartner;
+      }
+      if (sortBy === 'seats') {
+        if (a.availableSeats !== b.availableSeats) return b.availableSeats - a.availableSeats;
+        return aPartner - bPartner;
+      }
+      if (sortBy === 'company') {
+        const cmp = (a.companyName || '').localeCompare(b.companyName || '');
+        if (cmp !== 0) return cmp;
+        return aPartner - bPartner;
+      }
+
+      // 3. Default "time" (Earliest Departure): Partnered operators first, then departure time
+      if (aPartner !== bPartner) return aPartner - bPartner;
+
+      const timeA = parseTime(a.date, a.departureTime);
+      const timeB = parseTime(b.date, b.departureTime);
+      if (timeA && timeB && timeA !== timeB) return timeA - timeB;
+      return (a.date + ' ' + a.departureTime).localeCompare(b.date + ' ' + b.departureTime);
+    });
   }, [schedules, searchFrom, searchTo, searchDate, activeFilter, sortBy, selectedCompany, selectedTimeSlot, selectedTerminal, selectedCategory]);
 
   const paginatedSchedules = useMemo(() => { const startIndex = (currentPage - 1) * itemsPerPage; return filteredSchedules.slice(startIndex, startIndex + itemsPerPage); }, [filteredSchedules, currentPage]);
