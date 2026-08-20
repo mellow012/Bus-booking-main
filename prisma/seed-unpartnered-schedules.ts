@@ -584,7 +584,7 @@ export async function seedUnpartneredSchedules() {
           companyId,
           licensePlate: "Unassigned",
           busType: "Standard",
-          capacity: 0,
+          capacity: 56,
           amenities: [],
           status: "active",
         },

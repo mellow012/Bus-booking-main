@@ -148,8 +148,8 @@ export default async function SchedulesPage({
       ]);
 
       const isUnpartnered = company.isPartner === false || company.bookingEnabled === false;
-      const totalSeats = isUnpartnered ? 0 : (bus.capacity || 40);
-      const actualAvailableSeats = isUnpartnered ? 0 : Math.max(0, totalSeats - allOccupiedSeatsSet.size);
+      const totalSeats = isUnpartnered ? 56 : (bus.capacity || 40);
+      const actualAvailableSeats = isUnpartnered ? 56 : Math.max(0, totalSeats - allOccupiedSeatsSet.size);
 
       return {
         id: sch.id,

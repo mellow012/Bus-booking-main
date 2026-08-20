@@ -100,7 +100,7 @@ export const ScheduleCard = React.memo(({ s, onBook, userCity }: {
             { icon: Calendar, label: new Date(s.date).toLocaleDateString("en-GB", { day: "numeric", month: "short" }), cls: "text-brand-700" },
             { 
               icon: Users, 
-              label: s.isPartner === false ? "Schedule Info" : `${s.availableSeats} seats`, 
+              label: `${s.availableSeats ?? 56} seats`, 
               cls: s.isPartner === false ? "text-slate-600" : seatCls, 
               labelCls: s.isPartner === false ? "text-slate-600" : seatCls 
             },
@@ -161,7 +161,7 @@ export const ScheduleCard = React.memo(({ s, onBook, userCity }: {
               disabled
               className="w-full h-10 rounded-xl bg-slate-100 text-slate-500 text-xs sm:text-sm font-medium flex items-center justify-center cursor-not-allowed border border-slate-200 select-none"
             >
-              Schedule only — booking unavailable
+              Booking unavailable
             </button>
           ) : (
             <button

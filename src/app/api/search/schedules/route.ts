@@ -156,8 +156,8 @@ export async function GET(request: NextRequest) {
         busId: sch.busId,
         routeId: sch.routeId,
         price: sch.price,
-        availableSeats: isUnpartnered ? 0 : availableSeats,
-        totalSeats: isUnpartnered ? 0 : totalSeats,
+        availableSeats: isUnpartnered ? 56 : availableSeats,
+        totalSeats: isUnpartnered ? 56 : totalSeats,
         status: sch.status,
         tripStatus: sch.tripStatus, // Return raw tripStatus for UI
         date: dep.toISOString().split('T')[0],
