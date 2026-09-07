@@ -1,10 +1,11 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { supabase } from "@/lib/supabase";
+import { createClient } from "@/utils/supabase/client";
+const supabase = createClient();
 import * as dbActions from "@/lib/actions/db.actions";
 import { useAuth } from "@/contexts/AuthContext";
-import { Conversation, ChatMessage, UserProfile } from "@/types";
+import { Conversation, UserProfile } from "@/types";
 import {
   Send,
   Paperclip,
@@ -29,11 +30,28 @@ interface TeamMessagingTabProps {
   setSuccess: (msg: string) => void;
 }
 
+type MessagingMessage = {
+  id: string;
+  conversationId: string;
+  senderId: string;
+  content: string | null;
+  createdAt: string | Date;
+  mediaPath: string | null;
+  mediaUrl: string | null;
+  mediaType: string | null;
+  sender: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    role: string;
+  };
+};
+
 export default function TeamMessagingTab({ companyId, setError, setSuccess }: TeamMessagingTabProps) {
   const { user: currentUser, userProfile } = useAuth();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConversation, setActiveConversation] = useState<Conversation | null>(null);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [messages, setMessages] = useState<MessagingMessage[]>([]);
   const [staff, setStaff] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [messagesLoading, setMessagesLoading] = useState(false);
@@ -42,6 +60,7 @@ export default function TeamMessagingTab({ companyId, setError, setSuccess }: Te
   const [showPeopleList, setShowPeopleList] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [uploading, setUploading] = useState(false);
+  const [mediaUrls, setMediaUrls] = useState<Record<string, string>>({});
   
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -99,7 +118,29 @@ export default function TeamMessagingTab({ companyId, setError, setSuccess }: Te
     try {
       const res = await dbActions.getMessages(convId);
       if (res.success) {
-        setMessages(res.data as ChatMessage[]);
+        const loadedMessages = res.data as MessagingMessage[];
+        setMessages(loadedMessages);
+
+        const paths = loadedMessages
+          .filter(message => message.mediaPath)
+          .map(message => [message.id, message.mediaPath!] as const);
+        if (paths.length > 0) {
+          const signedEntries = await Promise.all(paths.map(async ([messageId, path]) => {
+            const { data, error } = await supabase.storage
+              .from("messaging-media")
+              .createSignedUrl(path, 60 * 60);
+            if (error || !data?.signedUrl) {
+              console.error("[TeamMessagingTab] Failed to refresh media URL", { messageId, error });
+              return null;
+            }
+            return [messageId, data.signedUrl] as const;
+          }));
+          setMediaUrls(Object.fromEntries(signedEntries.filter(
+            (entry): entry is readonly [string, string] => entry !== null
+          )));
+        } else {
+          setMediaUrls({});
+        }
       }
     } catch (err) {
       setError("Failed to load history");
@@ -124,7 +165,7 @@ export default function TeamMessagingTab({ companyId, setError, setSuccess }: Te
             filter: `conversationId=eq.${activeConversation.id}` 
           },
           (payload) => {
-            const newMsg = payload.new as ChatMessage;
+            const newMsg = payload.new as MessagingMessage;
             // If we are the sender, we might already have it in state (pessimistic update handled below)
             // But for others, we need to fetch sender info or just append if payload is complete
             // For simplicity, we re-fetch the latest batch or just the single message if we can
@@ -141,10 +182,7 @@ export default function TeamMessagingTab({ companyId, setError, setSuccess }: Te
 
   const refreshActiveMessages = async () => {
     if (!activeConversation) return;
-    const res = await dbActions.getMessages(activeConversation.id);
-    if (res.success) {
-      setMessages(res.data as ChatMessage[]);
-    }
+    await fetchMessages(activeConversation.id);
   };
 
   // ─── Auto-scroll ───────────────────────────────────────────────────────────
