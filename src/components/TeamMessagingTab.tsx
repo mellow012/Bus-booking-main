@@ -393,8 +393,8 @@ export default function TeamMessagingTab({ companyId, setError, setSuccess }: Te
                 </div>
               ) : messages.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full space-y-4 opacity-20">
-                   <div className="w-20 h-20 bg-indigo-50 rounded-2xl flex items-center justify-center border border-indigo-100">
-                      <Send className="w-10 h-10 text-indigo-200" />
+                   <div className="w-20 h-20 bg-brand-50 rounded-2xl flex items-center justify-center border border-brand-100">
+                      <Send className="w-10 h-10 text-brand-200" />
                    </div>
                    <p className="text-[11px] font-bold uppercase tracking-widest">No signals identified in this corridor</p>
                 </div>
