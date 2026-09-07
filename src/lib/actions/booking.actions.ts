@@ -1,7 +1,7 @@
 'use server'
 
 import prisma from '../prisma';
-import type { Prisma } from '@prisma/client';
+import { Prisma, type Prisma as PrismaTypes } from '@prisma/client';
 import { revalidatePath } from 'next/cache';
 import { Booking, BookingStatus } from '@/types';
 import { createClient } from '@/utils/supabase/server';
@@ -359,10 +359,41 @@ export async function createBookingFull(body: CreateBookingPayload): Promise<{
   let result;
   try {
     result = await prisma.$transaction(
-      async (tx: Prisma.TransactionClient) => {
-        const txSchedule = await tx.schedule.findUnique({ where: { id: finalSegments[0].scheduleId } });
-        if (!txSchedule || txSchedule.availableSeats < passengerCount)
-          throw new Error('Not enough seats remaining');
+      async (tx: PrismaTypes.TransactionClient) => {
+        // Lock requested seats in one consistent order before reading or writing,
+        // preventing conflicts and multi-segment deadlocks without serializing
+        // independent seats on the same schedule.
+        const lockKeys = pricedSegments
+          .flatMap((segment) => {
+            const seatArray = Array.isArray(segment.seatNumbers) ? (segment.seatNumbers as string[]) : [];
+            return seatArray.map((seat) => `${segment.scheduleId}:${seat}`);
+          })
+          .filter((lockKey, index, keys) => keys.indexOf(lockKey) === index)
+          .sort();
+        for (const lockKey of lockKeys) {
+          await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
+        }
+
+        const freshSchedules = new Map<string, Awaited<ReturnType<typeof tx.schedule.findUnique>>>();
+        for (const segment of pricedSegments) {
+          if (!freshSchedules.has(segment.scheduleId)) {
+            const freshSchedule = await tx.schedule.findUnique({ where: { id: segment.scheduleId } });
+            if (!freshSchedule) throw new Error('Schedule not found during booking update');
+            freshSchedules.set(segment.scheduleId, freshSchedule);
+          }
+        }
+
+        for (const [sid, requestedSeats] of requestedSeatsBySchedule.entries()) {
+          const freshSchedule = freshSchedules.get(sid);
+          if (!freshSchedule || freshSchedule.availableSeats < requestedSeats.length)
+            throw new Error('Not enough seats remaining');
+
+          const existingBooked = Array.isArray(freshSchedule.bookedSeats)
+            ? freshSchedule.bookedSeats.filter((s): s is string => typeof s === 'string') : [];
+          const conflicts = requestedSeats.filter((seat) => existingBooked.includes(seat));
+          if (conflicts.length > 0)
+            throw new Error(`Seat(s) already booked: ${conflicts.join(', ')}`);
+        }
 
         const booking = await tx.booking.create({
           data: {
@@ -412,40 +443,39 @@ export async function createBookingFull(body: CreateBookingPayload): Promise<{
             },
           });
 
-          // Acquire transactional advisory locks for each confirmed seat
           const seatArray = Array.isArray(segment.seatNumbers) ? (segment.seatNumbers as string[]) : [];
-          const sortedSeats = [...seatArray].sort();
-          for (const seat of sortedSeats) {
-            const lockKey = `${segment.scheduleId}:${seat}`;
-            await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
+          const updatedSchedules = await tx.$queryRaw<Array<{ availableSeats: number; bookedSeats: unknown }>>(Prisma.sql`
+            UPDATE "Schedule"
+            SET
+              "availableSeats" = "availableSeats" - ${passengerCount},
+              "bookedSeats" = COALESCE("bookedSeats", '[]'::jsonb) || ${JSON.stringify(seatArray)}::jsonb
+            WHERE "id" = ${segment.scheduleId}
+              AND "availableSeats" >= ${passengerCount}
+              AND NOT EXISTS (
+                SELECT 1
+                FROM jsonb_array_elements_text(COALESCE("bookedSeats", '[]'::jsonb)) AS booked(seat)
+                WHERE booked.seat IN (${Prisma.join(seatArray)})
+              )
+            RETURNING "availableSeats", "bookedSeats"
+          `);
+          if (updatedSchedules.length === 0) {
+            throw new Error('Not enough seats remaining');
           }
-
-          const txRow = await tx.schedule.findUnique({ where: { id: segment.scheduleId } });
-          if (!txRow) throw new Error('Schedule not found during booking update');
-
-          const existingBooked = Array.isArray(txRow.bookedSeats)
-            ? txRow.bookedSeats.filter((s): s is string => typeof s === 'string') : [];
-          const updatedBooked = Array.from(new Set([
-            ...existingBooked,
-            ...seatArray,
-          ]));
-
-          await tx.schedule.update({
-            where: { id: segment.scheduleId },
-            data: { availableSeats: { decrement: passengerCount }, bookedSeats: updatedBooked as any },
-          });
         }
 
         return booking;
       },
       {
-        timeout: 20000,
-        maxWait: 30000,
+        timeout: 25000,
+        maxWait: 5000,
       }
     );
   } catch (error: any) {
     const message = error?.message || '';
-    if (/expired transaction|timeout/i.test(message)) {
+    if (/^Not enough seats remaining$|^Seat\(s\) already booked:/i.test(message)) {
+      return { error: message };
+    }
+    if (/expired transaction|timeout|unable to start a transaction in the given time/i.test(message)) {
       return { error: 'Booking creation timed out while saving your trip. Please try again in a moment.' };
     }
     throw error;
@@ -648,7 +678,7 @@ export async function updateBooking(id: string, data: Partial<Booking>) {
 
 export async function cancelBooking(bookingId: string, scheduleId?: string, seatNumbers?: string[]) {
   try {
-    const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    const result = await prisma.$transaction(async (tx: PrismaTypes.TransactionClient) => {
       // 1. Fetch booking with segments and schedule to release seats and enforce 2-hour refund policy
       const existingBooking = await tx.booking.findUnique({
         where: { id: bookingId },

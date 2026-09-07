@@ -63,6 +63,10 @@ export async function POST(req: NextRequest) {
         ? 401
         : message.includes('not found') || message.includes('schedule') || message.includes('route')
           ? 404
+          : message.includes('already booked')
+            ? 409
+          : message.includes('timed out while saving')
+            ? 409
           : message.includes('required') || message.includes('must') || message.includes('invalid') || message.includes('remaining')
             ? 400
             : 500;
