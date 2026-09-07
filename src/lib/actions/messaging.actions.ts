@@ -1,6 +1,7 @@
 'use server'
 
 import prisma from '../prisma';
+import { getCurrentUserFromServer } from '@/lib/auth-utils';
 
 /**
  * --- Team Messaging ---
@@ -30,6 +31,14 @@ export async function getStaffMembers(companyId: string, excludeUserId: string) 
 }
 
 export async function getConversations(userId: string) {
+  const authUser = await getCurrentUserFromServer();
+  if (!authUser) {
+    return { success: false, error: 'Unauthorized' };
+  }
+  if (userId !== authUser.id) {
+    return { success: false, error: 'Forbidden' };
+  }
+
   try {
     const conversations = await prisma.conversation.findMany({
       where: {
@@ -67,7 +76,26 @@ export async function createConversation(data: {
   name?: string;
   isBroadcast?: boolean;
 }) {
+  const authUser = await getCurrentUserFromServer();
+  if (!authUser) {
+    return { success: false, error: 'Unauthorized' };
+  }
+  if (!data.participantIds.includes(authUser.id)) {
+    return { success: false, error: 'Forbidden' };
+  }
+
   try {
+    const participants = await prisma.user.findMany({
+      where: { id: { in: data.participantIds } },
+      select: { id: true, companyId: true },
+    });
+    if (
+      participants.length !== data.participantIds.length ||
+      participants.some((participant) => participant.companyId !== data.companyId)
+    ) {
+      return { success: false, error: 'Forbidden' };
+    }
+
     // If it's a 1-to-1, check if it already exists
     if (!data.isBroadcast && data.participantIds.length === 2) {
       const existing = await prisma.conversation.findFirst({
@@ -109,16 +137,32 @@ export async function sendMessage(data: {
   conversationId: string;
   senderId: string;
   content?: string;
-  mediaUrl?: string;
+  mediaPath?: string;
   mediaType?: string;
 }) {
+  const authUser = await getCurrentUserFromServer();
+  if (!authUser) {
+    return { success: false, error: 'Unauthorized' };
+  }
+
   try {
+    const conversation = await prisma.conversation.findFirst({
+      where: {
+        id: data.conversationId,
+        participants: { some: { id: authUser.id } },
+      },
+      select: { id: true },
+    });
+    if (!conversation) {
+      return { success: false, error: 'Forbidden' };
+    }
+
     const message = await prisma.chatMessage.create({
       data: {
         conversationId: data.conversationId,
-        senderId: data.senderId,
+        senderId: authUser.id,
         content: data.content,
-        mediaUrl: data.mediaUrl,
+        mediaPath: data.mediaPath,
         mediaType: data.mediaType,
       },
       include: {
@@ -146,7 +190,23 @@ export async function sendMessage(data: {
 }
 
 export async function getMessages(conversationId: string, limit = 50) {
+  const authUser = await getCurrentUserFromServer();
+  if (!authUser) {
+    return { success: false, error: 'Unauthorized' };
+  }
+
   try {
+    const conversation = await prisma.conversation.findFirst({
+      where: {
+        id: conversationId,
+        participants: { some: { id: authUser.id } },
+      },
+      select: { id: true },
+    });
+    if (!conversation) {
+      return { success: false, error: 'Forbidden' };
+    }
+
     const messages = await prisma.chatMessage.findMany({
       where: { conversationId },
       orderBy: { createdAt: 'desc' },

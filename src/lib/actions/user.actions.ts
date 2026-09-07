@@ -4,6 +4,7 @@ import prisma from '../prisma';
 import { revalidatePath } from 'next/cache';
 import { UserProfile as User } from '@/types';
 import { createClient } from '@/utils/supabase/server';
+import { getCurrentUserFromServer } from '@/lib/auth-utils';
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -289,8 +290,31 @@ export async function updateUser(id: string, data: any) {
 }
 
 export async function deleteUser(id: string) {
+  const authUser = await getCurrentUserFromServer();
+  if (!authUser) {
+    return { success: false, error: 'Unauthorized' };
+  }
+  if (!['super_admin', 'superadmin'].includes(authUser.role ?? '')) {
+    return { success: false, error: 'Forbidden' };
+  }
+  if (id === authUser.id) {
+    return { success: false, error: 'Cannot delete your own account' };
+  }
+
   try {
-    await prisma.user.delete({ where: { id } });
+    const existingUser = await prisma.user.findUnique({ where: { id }, select: { id: true } });
+    if (!existingUser) {
+      return { success: false, error: 'User not found' };
+    }
+
+    await prisma.user.update({
+      where: { id },
+      data: {
+        isActive: false,
+        sessionVersion: { increment: 1 },
+        updatedAt: new Date(),
+      },
+    });
     revalidatePath('/company/admin');
     return { success: true };
   } catch (error: unknown) {
@@ -299,97 +323,9 @@ export async function deleteUser(id: string) {
   }
 }
 
-/**
- * Set a user to `super_admin` role. Atomically updates role and sessionVersion
- * and creates an ActivityLog entry recording the change.
- */
-export async function setUserSuperAdmin(targetId: string, actor: { id: string; name?: string; role?: string; companyId?: string }) {
-  try {
-    const targetUser = await prisma.user.findFirst({
-      where: {
-        OR: [
-          { id: targetId },
-          { uid: targetId }
-        ]
-      }
-    });
-    if (!targetUser) {
-      return { success: false, error: 'User not found' };
-    }
 
-    const [user, log] = await prisma.$transaction([
-      prisma.user.update({
-        where: { id: targetUser.id },
-        data: ( { role: 'superadmin', sessionVersion: { increment: 1 }, updatedAt: new Date() } as any ),
-      }),
-      prisma.activityLog.create({
-        data: {
-          userId: actor.id,
-          action: 'update_user_role',
-          description: `Set user ${targetUser.id} role to superadmin`,
-          companyId: actor.companyId || null,
-          metadata: {
-            targetUserId: targetUser.id,
-            targetRole: 'superadmin',
-            actorName: actor.name || '',
-            actorRole: actor.role || '',
-          },
-        },
-      }),
-    ]);
-    revalidatePath('/company/admin');
-    return { success: true, data: user };
-  } catch (error: unknown) {
-    console.error('Error setting user super admin:', error);
-    return { success: false, error: (error as Error).message };
-  }
-}
 
-/**
- * Set a user to `chief_of_growth` role. Atomically updates role and sessionVersion
- * and creates an ActivityLog entry recording the change.
- */
-export async function setUserChiefOfGrowth(targetId: string, actor: { id: string; name?: string; role?: string; companyId?: string }) {
-  try {
-    const targetUser = await prisma.user.findFirst({
-      where: {
-        OR: [
-          { id: targetId },
-          { uid: targetId }
-        ]
-      }
-    });
-    if (!targetUser) {
-      return { success: false, error: 'User not found' };
-    }
 
-    const [user, log] = await prisma.$transaction([
-      prisma.user.update({
-        where: { id: targetUser.id },
-        data: ( { role: 'chief_of_growth', sessionVersion: { increment: 1 }, updatedAt: new Date() } as any ),
-      }),
-      prisma.activityLog.create({
-        data: {
-          userId: actor.id,
-          action: 'update_user_role',
-          description: `Set user ${targetUser.id} role to chief_of_growth`,
-          companyId: actor.companyId || null,
-          metadata: {
-            targetUserId: targetUser.id,
-            targetRole: 'chief_of_growth',
-            actorName: actor.name || '',
-            actorRole: actor.role || '',
-          },
-        },
-      }),
-    ]);
-    revalidatePath('/company/admin');
-    return { success: true, data: user };
-  } catch (error: unknown) {
-    console.error('Error setting user chief of growth:', error);
-    return { success: false, error: (error as Error).message };
-  }
-}
 
 /**
  * Notify all Superadmins and Chief of Growth users of a new user registration.
@@ -430,102 +366,36 @@ async function notifyAdminsOfNewRegistration(newUser: any) {
   }
 }
 
-/**
- * Set a user to `company_admin` role. Atomically updates role and sessionVersion
- * and creates an ActivityLog entry recording the change.
- */
-export async function setUserCompanyAdmin(targetId: string, actor: { id: string; name?: string; role?: string; companyId?: string }) {
-  try {
-    const targetUser = await prisma.user.findFirst({
-      where: {
-        OR: [
-          { id: targetId },
-          { uid: targetId }
-        ]
-      }
-    });
-    if (!targetUser) {
-      return { success: false, error: 'User not found' };
-    }
 
-    const [user, log] = await prisma.$transaction([
-      prisma.user.update({
-        where: { id: targetUser.id },
-        data: ( { role: 'company_admin', sessionVersion: { increment: 1 }, updatedAt: new Date() } as any ),
-      }),
-      prisma.activityLog.create({
-        data: {
-          userId: actor.id,
-          action: 'update_user_role',
-          description: `Set user ${targetUser.id} role to company_admin`,
-          companyId: actor.companyId || null,
-          metadata: {
-            targetUserId: targetUser.id,
-            targetRole: 'company_admin',
-            actorName: actor.name || '',
-            actorRole: actor.role || '',
-          },
-        },
-      }),
-    ]);
-    revalidatePath('/company/admin');
-    return { success: true, data: user };
-  } catch (error: unknown) {
-    console.error('Error setting user company admin:', error);
-    return { success: false, error: (error as Error).message };
-  }
-}
 
-/**
- * Set a user to `operator` role. Atomically updates role and sessionVersion
- * and creates an ActivityLog entry recording the change.
- */
-export async function setUserOperator(targetId: string, actor: { id: string; name?: string; role?: string; companyId?: string }) {
-  try {
-    const targetUser = await prisma.user.findFirst({
-      where: {
-        OR: [
-          { id: targetId },
-          { uid: targetId }
-        ]
-      }
-    });
-    if (!targetUser) {
-      return { success: false, error: 'User not found' };
-    }
 
-    const [user, log] = await prisma.$transaction([
-      prisma.user.update({
-        where: { id: targetUser.id },
-        data: ( { role: 'operator', sessionVersion: { increment: 1 }, updatedAt: new Date() } as any ),
-      }),
-      prisma.activityLog.create({
-        data: {
-          userId: actor.id,
-          action: 'update_user_role',
-          description: `Set user ${targetUser.id} role to operator`,
-          companyId: actor.companyId || null,
-          metadata: {
-            targetUserId: targetUser.id,
-            targetRole: 'operator',
-            actorName: actor.name || '',
-            actorRole: actor.role || '',
-          },
-        },
-      }),
-    ]);
-    revalidatePath('/company/admin');
-    return { success: true, data: user };
-  } catch (error: unknown) {
-    console.error('Error setting user operator:', error);
-    return { success: false, error: (error as Error).message };
-  }
-}
 
 /**
  * Update operator assignments (region, status, and routes) in both User and Operator tables.
  */
 export async function updateOperatorAssignments(id: string, data: { regionId?: string | null; routeIds?: string[]; status?: string }) {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    return { success: false, error: 'Invalid operator assignment data' };
+  }
+
+  const allowedFields = new Set(['regionId', 'status', 'routeIds']);
+  const unknownFields = Object.keys(data).filter((field) => !allowedFields.has(field));
+  if (unknownFields.length > 0) {
+    return { success: false, error: `Unsupported operator assignment field(s): ${unknownFields.join(', ')}` };
+  }
+
+  if (data.regionId !== undefined && data.regionId !== null && typeof data.regionId !== 'string') {
+    return { success: false, error: 'regionId must be a string or null' };
+  }
+
+  if (data.status !== undefined && (!['active', 'inactive'].includes(data.status) || typeof data.status !== 'string')) {
+    return { success: false, error: 'status must be active or inactive' };
+  }
+
+  if (data.routeIds !== undefined && (!Array.isArray(data.routeIds) || !data.routeIds.every((routeId) => typeof routeId === 'string'))) {
+    return { success: false, error: 'routeIds must be an array of strings' };
+  }
+
   try {
     // 1. Resolve operator user
     const existingUser = await prisma.user.findUnique({
