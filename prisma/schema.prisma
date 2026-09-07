@@ -375,6 +375,7 @@ model ChatMessage {
   conversationId String
   senderId       String
   content        String?
+  mediaPath      String?
   mediaUrl       String?
   mediaType      String?
   createdAt      DateTime     @default(now())
@@ -615,4 +616,3 @@ model NewsletterSubscriber {
 
   @@index([email])
 }
-
