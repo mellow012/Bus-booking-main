@@ -222,15 +222,11 @@ export default function TeamMessagingTab({ companyId, setError, setSuccess }: Te
 
       if (uploadError) throw uploadError;
 
-      const { data: { publicUrl } } = supabase.storage
-        .from('messaging-media')
-        .getPublicUrl(filePath);
-
       await dbActions.sendMessage({
         conversationId: activeConversation.id,
         senderId: currentUser.id,
         content: file.name,
-        mediaUrl: publicUrl,
+        mediaPath: filePath,
         mediaType: file.type.startsWith('image/') ? 'image' : 'file'
       });
 
