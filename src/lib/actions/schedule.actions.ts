@@ -85,7 +85,7 @@ export async function createSchedule(data: Omit<Partial<Schedule>, 'departureDat
         tripStatus: (data.tripStatus as TripStatus) || 'scheduled',
       },
     });
-    serverCache.invalidate('schedules');
+    invalidateScheduleCaches();
     revalidatePath('/company/operator/dashboard');
     return { success: true, data: (schedule as any) as Schedule };
   } catch (error: unknown) {
@@ -159,7 +159,7 @@ export async function createRoundTripSchedule(outboundData: any, inboundData: an
       })
     ]);
 
-    serverCache.invalidate('schedules');
+    invalidateScheduleCaches();
     revalidatePath('/company/operator/dashboard');
     return { success: true, data: transactionResult };
   } catch (error: unknown) {
@@ -196,7 +196,7 @@ export async function updateSchedule(id: string, data: Partial<Schedule>) {
         updatedAt: new Date(),
       }
     });
-    serverCache.invalidate('schedules');
+    invalidateScheduleCaches();
     revalidatePath('/company/conductor/dashboard');
     revalidatePath('/company/operator/dashboard');
     return { success: true, data: (schedule as any) as Schedule };
@@ -213,7 +213,7 @@ export async function deleteSchedule(id: string) {
       return { success: false, error: 'Cannot delete schedule because it has associated bookings. Please mark the schedule as cancelled or archived instead.' };
     }
     await prisma.schedule.delete({ where: { id } });
-    serverCache.invalidate('schedules');
+    invalidateScheduleCaches();
     revalidatePath('/company/conductor/dashboard');
     revalidatePath('/company/operator/dashboard');
     revalidatePath('/company/admin');
