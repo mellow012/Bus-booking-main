@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
+import { invalidateScheduleCaches } from '@/lib/cache';
 
 export const dynamic = 'force-dynamic';
 
@@ -116,6 +117,8 @@ export async function POST(request: NextRequest) {
         errors.push({ id: booking.id, error: err.message });
       }
     }
+
+    if (expiredCount > 0) invalidateScheduleCaches();
 
     return NextResponse.json({
       success: true,

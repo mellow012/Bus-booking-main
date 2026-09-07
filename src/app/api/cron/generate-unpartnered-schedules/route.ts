@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { invalidateScheduleCaches } from '@/lib/cache';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300; // 5 minutes – Vercel max for Pro plan
@@ -60,6 +61,7 @@ export async function POST(request: NextRequest) {
       },
       data: { isArchived: true },
     });
+    if (archivedCount > 0) invalidateScheduleCaches();
 
     // ──────────────────────────────────────────────────────────────────────────
     // PHASE 2 – Fetch all unpartnered companies with their buses & routes
@@ -226,6 +228,7 @@ export async function POST(request: NextRequest) {
           data: toCreate,
           skipDuplicates: true,
         });
+        if (count > 0) invalidateScheduleCaches();
         totalCreated += count;
         companyResults.push({ name: company.name, created: count });
       }

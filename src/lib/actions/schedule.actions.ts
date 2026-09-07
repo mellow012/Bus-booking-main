@@ -3,7 +3,7 @@
 import prisma from '../prisma';
 import { revalidatePath } from 'next/cache';
 import { Schedule, ScheduleStatus, TripStatus } from '@/types';
-import { serverCache } from '../cache';
+import { invalidateScheduleCaches } from '../cache';
 import { Prisma } from '@prisma/client';
 
 async function assertBusNotOverlapping(

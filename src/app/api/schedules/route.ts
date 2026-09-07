@@ -22,6 +22,7 @@ import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { isSegmentBookable } from '@/lib/schedule-utils';
 import { serverCache, createScheduleCacheKey } from '@/lib/cache';
+import { unstable_cache } from 'next/cache';
 import { getRouteDistanceAndDuration } from '@/lib/route-utils';
 import { formatTime24, formatDateISO } from '@/lib/timezone';
 
@@ -399,7 +400,11 @@ export async function GET(request: NextRequest) {
     }
 
     // 2. Cache MISS — query the database
-    const result = await querySchedules(params);
+    const result = await unstable_cache(
+      () => querySchedules(params),
+      ['schedules-api', cacheKey],
+      { revalidate: 45, tags: ['schedules'] }
+    )();
     serverCache.set(cacheKey, result, CACHE_FRESH_MS, CACHE_STALE_MS);
 
     return NextResponse.json(

@@ -3,6 +3,7 @@ import { getCurrentUser } from '@/lib/auth-utils';
 import { parseUtcDate } from '@/lib/timezone';
 import prisma from '@/lib/prisma';
 import { logger } from '@/lib/logger';
+import { invalidateScheduleCaches } from '@/lib/cache';
 
 /**
  * POST /api/bookings/[id]/cancel
@@ -113,6 +114,7 @@ export async function POST(
     }
 
     const result = await prisma.$transaction(txOps);
+    invalidateScheduleCaches();
 
     return NextResponse.json({
       message: 'Booking cancelled successfully',

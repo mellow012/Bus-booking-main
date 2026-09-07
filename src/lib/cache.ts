@@ -1,3 +1,5 @@
+import { revalidateTag } from 'next/cache';
+
 /**
  * Lightweight in-memory cache for server-side API routes.
  * 
@@ -119,6 +121,11 @@ class MemoryCache {
 
 // Singleton instance shared across all API route invocations in the same process
 export const serverCache = new MemoryCache();
+
+export function invalidateScheduleCaches(): void {
+  serverCache.invalidate('schedules');
+  revalidateTag('schedules');
+}
 
 /**
  * Helper to create a normalized cache key from query parameters.

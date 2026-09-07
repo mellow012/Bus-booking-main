@@ -8,7 +8,7 @@ import { createClient } from '@/utils/supabase/server';
 import { parseUtcDate } from '@/lib/timezone';
 import { getCurrentUserFromServer } from '@/lib/auth-utils';
 import { logger } from '@/lib/logger';
-import { serverCache } from '@/lib/cache';
+import { invalidateScheduleCaches } from '@/lib/cache';
 import { sendNotificationToUser, notifyCompanyStaff } from '@/lib/notificationService';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -452,7 +452,7 @@ export async function createBookingFull(body: CreateBookingPayload): Promise<{
   }
 
   // ── Post-transaction side effects (non-blocking) ───────────────────────────
-  serverCache.invalidate('schedules');
+  invalidateScheduleCaches();
 
   // Dispatch notifications in background so booking response is instant (< 100ms)
   Promise.allSettled([
@@ -575,6 +575,9 @@ export async function createBooking(data: Partial<Booking> & {
       },
       include: { payments: true }
     });
+
+    invalidateScheduleCaches();
+
     try { revalidatePath('/bookings'); } catch (_) {}
     try { revalidatePath('/company/conductor/dashboard'); } catch (_) {}
     try { revalidatePath('/company/admin'); } catch (_) {}

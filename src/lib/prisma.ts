@@ -4,6 +4,10 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 
 const connectionString = process.env.DATABASE_URL || process.env.DIRECT_URL;
+const configuredPoolMax = Number.parseInt(process.env.DATABASE_POOL_MAX ?? '2', 10);
+const poolMax = Number.isInteger(configuredPoolMax)
+  ? Math.min(Math.max(configuredPoolMax, 1), 4)
+  : 2;
 const globalForPrisma = globalThis as unknown as {
   prisma?: PrismaClient;
   pool?: Pool;
@@ -17,9 +21,13 @@ const pool =
   new Pool({
     connectionString,
     ssl: { rejectUnauthorized: false },
-    max: 50,
-    idleTimeoutMillis: 60000,
-    connectionTimeoutMillis: 30000,
+    // With Supabase's 60-connection budget and about 8 connections consumed by
+    // platform services, a 2-4 connection footprint lets more serverless
+    // instances coexist. PgBouncer transaction mode multiplexes these small
+    // app-side pools over fewer backend connections.
+    max: poolMax,
+    idleTimeoutMillis: 10000,
+    connectionTimeoutMillis: 10000,
     keepAlive: true,
   });
 

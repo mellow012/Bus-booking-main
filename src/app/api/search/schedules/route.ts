@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { isSegmentBookable } from '@/lib/schedule-utils';
 import { getRouteDistanceAndDuration } from '@/lib/route-utils';
+import { unstable_cache } from 'next/cache';
 
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 100;
@@ -75,25 +76,37 @@ export async function GET(request: NextRequest) {
     else if (sortBy === 'price_desc') orderBy = { price: 'desc' };
     else if (sortBy === 'seats') orderBy = { availableSeats: 'desc' };
 
-    // Execute search
-    const schedules = await prisma.schedule.findMany({
-      where,
-      include: {
-        route: true,
-        bus: { include: { company: true } },
-        company: true,
-        bookings: true,
-        bookingSegments: true,
-        reservations: {
-          where: { expiresAt: { gt: new Date() } },
-        },
-      },
-      orderBy,
-      skip: pageOffset,
-      take: limit,
-    });
+    const cacheKey = Array.from(searchParams.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, value]) => `${key}=${value}`)
+      .join('&');
 
-    const total = await prisma.schedule.count({ where });
+    // Cache the public read query across serverless instances. The key contains
+    // every request parameter, and schedule writes invalidate the shared tag.
+    const { schedules, total } = await unstable_cache(
+      async () => {
+        const schedules = await prisma.schedule.findMany({
+          where,
+          include: {
+            route: true,
+            bus: { include: { company: true } },
+            company: true,
+            bookings: true,
+            bookingSegments: true,
+            reservations: {
+              where: { expiresAt: { gt: new Date() } },
+            },
+          },
+          orderBy,
+          skip: pageOffset,
+          take: limit,
+        });
+        const total = await prisma.schedule.count({ where });
+        return { schedules, total };
+      },
+      ['search-schedules-api', cacheKey],
+      { revalidate: 45, tags: ['schedules'] }
+    )();
 
     const parseSeatArray = (val: unknown): string[] => {
       if (Array.isArray(val)) return val.filter((s): s is string => typeof s === 'string');
@@ -210,4 +223,3 @@ export async function GET(request: NextRequest) {
     );
   }
 }
-

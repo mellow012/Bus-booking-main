@@ -4,6 +4,7 @@ import { getCurrentUser } from '@/lib/auth-utils';
 import prisma from '@/lib/prisma';
 import { apiRateLimiter, getClientIp } from '@/lib/rateLimit';
 import { Prisma } from '@prisma/client';
+import { invalidateScheduleCaches } from '@/lib/cache';
 
 const SEAT_HOLD_DURATION = 5 * 60 * 1000; // 5 minutes
 
@@ -299,6 +300,8 @@ export async function POST(req: NextRequest) {
         throw error;
       }
     }
+
+    invalidateScheduleCaches();
 
     return NextResponse.json(
       {
