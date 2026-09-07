@@ -366,6 +366,71 @@ async function notifyAdminsOfNewRegistration(newUser: any) {
   }
 }
 
+type RoleChangeActor = {
+  id: string;
+  name?: string;
+  role?: string;
+  companyId?: string;
+};
+
+async function setUserRole(
+  targetId: string,
+  actor: RoleChangeActor,
+  role: string,
+) {
+  try {
+    const targetUser = await prisma.user.findFirst({
+      where: { OR: [{ id: targetId }, { uid: targetId }] },
+    });
+    if (!targetUser) {
+      return { success: false, error: 'User not found' };
+    }
+
+    const [user] = await prisma.$transaction([
+      prisma.user.update({
+        where: { id: targetUser.id },
+        data: { role, sessionVersion: { increment: 1 }, updatedAt: new Date() },
+      }),
+      prisma.activityLog.create({
+        data: {
+          userId: actor.id,
+          action: 'update_user_role',
+          description: `Set user ${targetUser.id} role to ${role}`,
+          companyId: actor.companyId || null,
+          metadata: {
+            targetUserId: targetUser.id,
+            targetRole: role,
+            actorName: actor.name || '',
+            actorRole: actor.role || '',
+          },
+        },
+      }),
+    ]);
+
+    revalidatePath('/company/admin');
+    return { success: true, data: user };
+  } catch (error: unknown) {
+    console.error(`Error setting user role to ${role}:`, error);
+    return { success: false, error: (error as Error).message };
+  }
+}
+
+export async function setUserSuperAdmin(targetId: string, actor: RoleChangeActor) {
+  return setUserRole(targetId, actor, 'superadmin');
+}
+
+export async function setUserChiefOfGrowth(targetId: string, actor: RoleChangeActor) {
+  return setUserRole(targetId, actor, 'chief_of_growth');
+}
+
+export async function setUserCompanyAdmin(targetId: string, actor: RoleChangeActor) {
+  return setUserRole(targetId, actor, 'company_admin');
+}
+
+export async function setUserOperator(targetId: string, actor: RoleChangeActor) {
+  return setUserRole(targetId, actor, 'operator');
+}
+
 
 
 
