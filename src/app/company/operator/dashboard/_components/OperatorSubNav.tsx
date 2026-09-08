@@ -23,11 +23,11 @@ export default function OperatorSubNav({ tabs, activeTab, onTabChange }: Operato
               onClick={() => onTabChange(tab.id)}
               className={`flex-1 py-4 px-4 flex items-center justify-center gap-2 text-sm font-medium transition-colors ${
                 isActive 
-                  ? 'bg-indigo-50 text-indigo-700' 
-                  : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
+                  ? 'bg-brand-50 text-brand-700'
+                  : 'text-gray-500 hover:text-brand-800 hover:bg-brand-50'
               }`}
             >
-              <Icon className={`w-4 h-4 ${isActive ? 'text-indigo-600' : 'text-gray-400'}`} />
+              <Icon className={`w-4 h-4 ${isActive ? 'text-brand-700' : 'text-gray-400'}`} />
               {tab.label}
             </button>
           );

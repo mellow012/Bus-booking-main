@@ -100,7 +100,7 @@ export default function OperatorLayout({
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 lg:flex">
+    <div className="min-h-screen bg-brand-50/40 lg:flex">
       <OperatorSidebar
         tabs={sidebarTabs}
         activeTab={activeTab}

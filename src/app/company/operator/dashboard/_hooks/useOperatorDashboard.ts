@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@/utils/supabase/client';
+const supabase = createClient();
 import { useAuth } from '@/contexts/AuthContext';
 import { Company, Schedule, Route, Bus, Booking, Operator } from '@/types';
 import { parseUtcDate } from '@/lib/timezone';
@@ -86,17 +87,29 @@ export function useOperatorDashboard() {
 
         if (operatorRoutesError) throw operatorRoutesError;
 
-        routeIds = (operatorRoutes || []).map((row: any) => row.B);
+        const explicitlyAssignedRouteIds = (operatorRoutes || [])
+          .map((row: any) => row.B)
+          .filter(Boolean);
 
-        if (routeIds.length > 0) {
-          const { data: routesData, error: routesError } = await supabase
-            .from('Route')
-            .select('*')
-            .in('id', routeIds);
+        // Operators can work within a branch without having every route
+        // individually connected through _OperatorRoutes. Include both scopes.
+        const routeQueries = [
+          explicitlyAssignedRouteIds.length > 0
+            ? supabase.from('Route').select('*').in('id', explicitlyAssignedRouteIds)
+            : Promise.resolve({ data: [], error: null }),
+          opData.regionId
+            ? supabase.from('Route').select('*').eq('companyId', companyId).eq('regionId', opData.regionId)
+            : Promise.resolve({ data: [], error: null }),
+        ];
+        const [assignedRoutesResult, regionalRoutesResult] = await Promise.all(routeQueries);
+        const routeError = assignedRoutesResult.error || regionalRoutesResult.error;
+        if (routeError) throw routeError;
 
-          if (routesError) throw routesError;
-          routesList = (routesData || []) as Route[];
-        }
+        const routesById = new Map<string, Route>();
+        [...(assignedRoutesResult.data || []), ...(regionalRoutesResult.data || [])]
+          .forEach((route: Route) => routesById.set(route.id, route));
+        routesList = Array.from(routesById.values());
+        routeIds = routesList.map(route => route.id);
 
         setAssignedRoutes(routesList);
       } else {

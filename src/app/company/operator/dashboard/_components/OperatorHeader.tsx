@@ -93,7 +93,7 @@ export default function OperatorHeader({
             <input
               ref={searchInputRef}
               type="text"
-              className="block w-full pl-10 pr-3 py-2 border border-gray-200 rounded-lg leading-5 bg-gray-50 placeholder-gray-400 focus:outline-none focus:bg-white focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-colors"
+              className="block w-full pl-10 pr-3 py-2 border border-gray-200 rounded-lg leading-5 bg-gray-50 placeholder-gray-400 focus:outline-none focus:bg-white focus:ring-1 focus:ring-brand-700 focus:border-brand-700 sm:text-sm transition-colors"
               placeholder="Search dashboard... (Ctrl+K)"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -120,7 +120,7 @@ export default function OperatorHeader({
           <button
             type="button"
             onClick={() => router.push('/profile')}
-            className="ml-1 flex h-10 w-10 items-center justify-center rounded-full border border-indigo-100 bg-indigo-50 font-bold uppercase text-indigo-700 shadow-sm transition hover:bg-indigo-100"
+            className="ml-1 flex h-10 w-10 items-center justify-center rounded-full border border-brand-100 bg-brand-50 font-bold uppercase text-brand-700 shadow-sm transition hover:bg-brand-100"
             aria-label="View profile"
           >
               {profileInitial}

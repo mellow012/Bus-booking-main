@@ -107,12 +107,12 @@ export default function OperatorDashboardClient() {
       NotificationBellComponent={NotificationBell}
     >
       {dashboard.operatorInfo && dashboard.userProfile?.role === 'company_admin' && (
-        <div className="mb-6 rounded-2xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-900 flex items-center justify-between">
+        <div className="mb-6 rounded-2xl border border-brand-200 bg-brand-50 px-4 py-3 text-sm text-brand-900 flex items-center justify-between">
           <span>Viewing operator dashboard for <span className="font-semibold">{dashboard.operatorInfo.name || dashboard.operatorInfo.email}</span>.</span>
           <button
             type="button"
             onClick={() => router.back()}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-indigo-200 bg-white px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 transition"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-brand-200 bg-white px-3 py-1.5 text-xs font-semibold text-brand-700 hover:bg-brand-100 transition"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
             Back

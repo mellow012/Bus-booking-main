@@ -231,7 +231,7 @@ export default function HomeTab({ dashboard }: HomeTabProps) {
   const selectedBookingSeatLabel = selectedBooking?.seatNumbers?.length ? selectedBooking.seatNumbers.join(', ') : 'Auto-assigned';
 
   const tripStatusConfig: Record<string, { label: string; color: string; dot: string }> = {
-    scheduled: { label: 'Scheduled', color: 'bg-indigo-50 text-indigo-700', dot: 'bg-indigo-500' },
+    scheduled: { label: 'Scheduled', color: 'bg-brand-50 text-brand-700', dot: 'bg-brand-600' },
     boarding: { label: 'Boarding', color: 'bg-amber-50 text-amber-700', dot: 'bg-amber-500 animate-pulse' },
     in_transit: { label: 'In Transit', color: 'bg-emerald-50 text-emerald-700', dot: 'bg-emerald-500 animate-pulse' },
     arrived: { label: 'Arrived', color: 'bg-gray-100 text-gray-600', dot: 'bg-gray-400' },
@@ -261,7 +261,7 @@ export default function HomeTab({ dashboard }: HomeTabProps) {
       {/* Stats Row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: "Today's Trips", value: todaysSchedules.length, icon: Calendar, bg: 'bg-indigo-50', color: 'text-indigo-600' },
+          { label: "Today's Trips", value: todaysSchedules.length, icon: Calendar, bg: 'bg-brand-50', color: 'text-brand-700' },
           { label: "Bookings Today", value: todaysBookings.length, icon: Users, bg: 'bg-violet-50', color: 'text-violet-600' },
           { label: "Pending Actions", value: pendingBookings.length, icon: Loader2, bg: 'bg-amber-50', color: 'text-amber-600' },
           { label: "Revenue Today", value: `MWK ${paidRevenue.toLocaleString()}`, icon: TrendingUp, bg: 'bg-emerald-50', color: 'text-emerald-600', wide: true },
@@ -290,7 +290,7 @@ export default function HomeTab({ dashboard }: HomeTabProps) {
             </div>
             <button
               onClick={() => navigateToBookings?.()}
-              className="text-xs font-semibold text-indigo-600 hover:text-indigo-500 flex items-center gap-1"
+              className="text-xs font-semibold text-brand-700 hover:text-brand-600 flex items-center gap-1"
             >
               All bookings <ArrowRight className="w-3.5 h-3.5" />
             </button>
@@ -322,10 +322,10 @@ export default function HomeTab({ dashboard }: HomeTabProps) {
                   <button
                     key={booking.id}
                     onClick={() => handleOpenBooking(booking)}
-                    className="w-full px-6 py-4 text-left flex items-start gap-4 hover:bg-indigo-50/30 transition-colors group"
+                    className="w-full px-6 py-4 text-left flex items-start gap-4 hover:bg-brand-50/50 transition-colors group"
                   >
                     {/* Avatar */}
-                    <div className="w-9 h-9 rounded-xl bg-gray-100 group-hover:bg-indigo-100 flex items-center justify-center shrink-0 transition-colors font-bold text-sm text-gray-500 group-hover:text-indigo-600 uppercase">
+                    <div className="w-9 h-9 rounded-xl bg-gray-100 group-hover:bg-brand-100 flex items-center justify-center shrink-0 transition-colors font-bold text-sm text-gray-500 group-hover:text-brand-700 uppercase">
                       {booking.passengerDetails?.[0]?.name?.[0] || '?'}
                     </div>
 
@@ -376,7 +376,7 @@ export default function HomeTab({ dashboard }: HomeTabProps) {
                 <h3 className="text-sm font-bold text-gray-900">Today's Trips</h3>
                 <p className="text-xs text-gray-400 mt-0.5">{todaysSchedules.length} scheduled</p>
               </div>
-              <button onClick={() => navigateTo?.('routes')} className="text-xs font-semibold text-indigo-600 hover:text-indigo-500">
+              <button onClick={() => navigateTo?.('routes')} className="text-xs font-semibold text-brand-700 hover:text-brand-600">
                 Routes
               </button>
             </div>
@@ -401,7 +401,7 @@ export default function HomeTab({ dashboard }: HomeTabProps) {
                       key={schedule.id}
                       onClick={() => !isPast && navigateToBookings?.(schedule.id)}
                       className={`w-full px-5 py-3.5 text-left flex items-center gap-3 transition-colors ${
-                        isPast ? 'opacity-40 cursor-default' : 'hover:bg-indigo-50/50 cursor-pointer'
+                        isPast ? 'opacity-40 cursor-default' : 'hover:bg-brand-50/50 cursor-pointer'
                       }`}
                     >
                       <div className="text-center shrink-0 w-12">

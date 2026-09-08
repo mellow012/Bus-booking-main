@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { Users, FileText, Bus as BusIcon, Calendar, Download, Clock, Bell } from 'lucide-react';
 import { Booking, Schedule, Route, Bus } from '@/types';
 import { bookingMatchesSchedule } from '@/lib/booking-utils';
@@ -22,6 +22,7 @@ export default function BookingsTab({ dashboard, defaultScheduleId }: BookingsTa
   const toast = useAppToast();
   const [selectedDate, setSelectedDate] = useState(todayStr);
   const [paymentFilter, setPaymentFilter] = useState('all');
+  const hasAutoSelectedBookingDate = useRef(false);
 
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -188,6 +189,28 @@ export default function BookingsTab({ dashboard, defaultScheduleId }: BookingsTa
       .filter((item) => item.count > 0)
       .sort((a, b) => a.dateStr.localeCompare(b.dateStr));
   }, [bookings, schedules, selectedDate]);
+
+  useEffect(() => {
+    if (hasAutoSelectedBookingDate.current || selectedDate !== todayStr || futureBookingsSummary.length === 0) {
+      return;
+    }
+
+    // Keep today's view when it contains a booking; otherwise surface the
+    // nearest active booking instead of opening on an empty trip.
+    const hasBookingToday = schedules.some((schedule: Schedule) =>
+      scheduleMatchesDate(schedule) &&
+      bookings.some((booking: Booking) =>
+        bookingMatchesSchedule(booking, schedule.id) && booking.bookingStatus !== 'cancelled'
+      )
+    );
+
+    if (!hasBookingToday) {
+      const nextBookingDate = futureBookingsSummary[0];
+      hasAutoSelectedBookingDate.current = true;
+      setSelectedDate(nextBookingDate.dateStr);
+      setSelectedScheduleId(nextBookingDate.scheduleId);
+    }
+  }, [bookings, schedules, selectedDate, todayStr, futureBookingsSummary]);
 
   const scheduleMatchesDate = (schedule: Schedule) => {
     if (!selectedDate) return true;
@@ -417,7 +440,7 @@ export default function BookingsTab({ dashboard, defaultScheduleId }: BookingsTa
                 type="date"
                 value={selectedDate}
                 onChange={(e) => setSelectedDate(e.target.value)}
-                className="rounded-2xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                className="rounded-2xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-200"
               />
               {selectedDate !== todayStr && (
                 <button
@@ -453,7 +476,7 @@ export default function BookingsTab({ dashboard, defaultScheduleId }: BookingsTa
                       key={schedule.id}
                       onClick={() => setSelectedScheduleId(schedule.id)}
                       className={`p-4 rounded-xl border cursor-pointer transition-all duration-200 ${
-                        isSelected ? 'bg-indigo-50 border-indigo-200 shadow-sm ring-1 ring-indigo-500' : 'bg-white border-gray-200 hover:border-indigo-300 hover:shadow-md hover:bg-indigo-50/50'
+                        isSelected ? 'bg-brand-50 border-brand-200 shadow-sm ring-1 ring-brand-600' : 'bg-white border-gray-200 hover:border-brand-300 hover:shadow-md hover:bg-brand-50/50'
                       }`}
                     >
                       <div className="flex justify-between items-start mb-2">
@@ -465,7 +488,7 @@ export default function BookingsTab({ dashboard, defaultScheduleId }: BookingsTa
                         </div>
                         <div className="flex gap-1.5 shrink-0">
                           {isToday && (
-                            <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide bg-indigo-100 text-indigo-700">
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide bg-brand-100 text-brand-700">
                               Today
                             </span>
                           )}
@@ -562,7 +585,7 @@ export default function BookingsTab({ dashboard, defaultScheduleId }: BookingsTa
                   <button 
                     onClick={() => handleGenerateManifest(selectedScheduleId)}
                     disabled={tripBookings.length === 0}
-                    className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="inline-flex items-center gap-2 rounded-lg bg-brand-700 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-800 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <Download className="w-4 h-4" /> Manifest PDF
                   </button>
@@ -574,7 +597,7 @@ export default function BookingsTab({ dashboard, defaultScheduleId }: BookingsTa
                     <select
                       value={paymentFilter}
                       onChange={(e) => setPaymentFilter(e.target.value)}
-                      className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-brand-700"
                     >
                       <option value="all">All Payments</option>
                       <option value="paid">Paid</option>
@@ -592,10 +615,10 @@ export default function BookingsTab({ dashboard, defaultScheduleId }: BookingsTa
                         <div 
                           key={booking.id} 
                           onClick={() => handleOpenBooking(booking)}
-                          className="p-4 rounded-xl border border-gray-100 bg-white flex justify-between items-center transition-all duration-200 hover:border-indigo-200 hover:shadow-md hover:bg-indigo-50/50 cursor-pointer group"
+                          className="p-4 rounded-xl border border-gray-100 bg-white flex justify-between items-center transition-all duration-200 hover:border-brand-200 hover:shadow-md hover:bg-brand-50/50 cursor-pointer group"
                         >
                           <div className="flex gap-4 items-center">
-                            <div className="w-8 h-8 rounded-full bg-gray-50 group-hover:bg-indigo-100 group-hover:text-indigo-700 transition-colors flex items-center justify-center text-sm font-bold text-gray-600">{idx + 1}</div>
+                            <div className="w-8 h-8 rounded-full bg-gray-50 group-hover:bg-brand-100 group-hover:text-brand-700 transition-colors flex items-center justify-center text-sm font-bold text-gray-600">{idx + 1}</div>
                             <div>
                               <div className="font-bold text-gray-900">{booking.passengerDetails?.[0]?.name || 'Unknown'}</div>
                               <div className="text-xs text-gray-500 mt-1">Ref: {booking.bookingReference} • Seats: {booking.seatNumbers?.join(', ')}</div>

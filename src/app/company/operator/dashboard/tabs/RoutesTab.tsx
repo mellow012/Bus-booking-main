@@ -79,7 +79,7 @@ export default function RoutesTab({ dashboard }: RoutesTabProps) {
   };
 
   const tripStatusConfig: Record<string, { label: string; color: string }> = {
-    scheduled:  { label: 'Scheduled',  color: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
+    scheduled:  { label: 'Scheduled',  color: 'bg-brand-50 text-brand-700 border-brand-200' },
     boarding:   { label: 'Boarding',   color: 'bg-amber-50 text-amber-700 border-amber-200' },
     in_transit: { label: 'In Transit', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
     arrived:    { label: 'Arrived',    color: 'bg-gray-100 text-gray-600 border-gray-200' },
@@ -94,14 +94,14 @@ export default function RoutesTab({ dashboard }: RoutesTabProps) {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
         <div>
           <h2 className="text-xl font-bold text-gray-900 tracking-tight flex items-center gap-2">
-            <Map className="w-6 h-6 text-indigo-600" />
+            <Map className="w-6 h-6 text-brand-700" />
             My Assigned Routes
           </h2>
           <p className="text-xs text-gray-500 mt-1">Routes and schedules within your operational jurisdiction.</p>
         </div>
         <button
           onClick={() => openCreateSchedule()}
-          className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-xl text-xs font-bold transition-all shadow-md shadow-indigo-100"
+          className="inline-flex items-center gap-2 bg-brand-700 hover:bg-brand-800 text-white px-4 py-2.5 rounded-xl text-xs font-bold transition-all shadow-md shadow-brand-100"
         >
           <Plus className="w-4 h-4" />
           Create Schedule
@@ -136,13 +136,13 @@ export default function RoutesTab({ dashboard }: RoutesTabProps) {
                     onClick={() => setSelectedRouteId(route.id)}
                     className={`text-left bg-white rounded-xl border p-4 transition-all shadow-sm active:scale-[0.98] ${
                       isSelected
-                        ? 'border-indigo-600 ring-2 ring-indigo-600 ring-opacity-20'
-                        : 'border-gray-200 hover:border-indigo-200 hover:shadow-md'
+                        ? 'border-brand-700 ring-2 ring-brand-600 ring-opacity-20'
+                        : 'border-gray-200 hover:border-brand-200 hover:shadow-md'
                     }`}
                   >
                     {/* Top Row Icon and Badge */}
                     <div className="flex items-center justify-between mb-3">
-                      <div className="w-10 h-10 bg-indigo-50 rounded-lg flex items-center justify-center text-indigo-600">
+                      <div className="w-10 h-10 bg-brand-50 rounded-lg flex items-center justify-center text-brand-700">
                         <Map className="w-5 h-5" />
                       </div>
                       {route.isActive ? (
@@ -162,7 +162,7 @@ export default function RoutesTab({ dashboard }: RoutesTabProps) {
                     <p className="text-xs text-gray-500 mt-1 truncate">
                       {route.origin} → {route.destination}
                     </p>
-                    <p className="text-xs text-indigo-600 font-semibold mt-1">
+                    <p className="text-xs text-brand-700 font-semibold mt-1">
                       MWK {route.baseFare?.toLocaleString() ?? '—'} • {routeTemplates.length} blueprint{routeTemplates.length === 1 ? '' : 's'}
                     </p>
 
@@ -171,7 +171,7 @@ export default function RoutesTab({ dashboard }: RoutesTabProps) {
                       <span className="font-semibold text-slate-900 capitalize">
                         {routeScheduleCount} upcoming trip{routeScheduleCount === 1 ? '' : 's'}
                       </span>
-                      <span className="text-[10px] font-bold uppercase tracking-widest rounded-full px-2.5 py-1 bg-indigo-100 text-indigo-700">
+                      <span className="text-[10px] font-bold uppercase tracking-widest rounded-full px-2.5 py-1 bg-brand-100 text-brand-700">
                         Schedules
                       </span>
                     </div>

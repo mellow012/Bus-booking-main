@@ -44,13 +44,13 @@ export default function OperatorSidebar({
           {companyLogo ? (
             <img src={companyLogo} alt={companyName} className="w-10 h-10 rounded-xl object-contain shadow-sm border border-gray-100" />
           ) : (
-            <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-100 text-white font-bold text-lg shrink-0">
+            <div className="w-10 h-10 bg-brand-700 rounded-xl flex items-center justify-center shadow-lg shadow-brand-100 text-white font-bold text-lg shrink-0">
               {companyName?.[0] || 'O'}
             </div>
           )}
           <div className="flex-1 min-w-0">
             <h1 className="font-bold tracking-tight uppercase text-sm truncate">{companyName || 'Platform'}</h1>
-            <p className="text-[10px] text-indigo-500 font-bold tracking-widest uppercase">Operator Console</p>
+            <p className="text-[10px] text-brand-700 font-bold tracking-widest uppercase">Operator Console</p>
           </div>
           <button onClick={() => setIsMobileOpen(false)} className="lg:hidden p-2 text-gray-400 hover:bg-gray-50 rounded-lg">
             <X className="w-5 h-5" />
@@ -74,11 +74,11 @@ export default function OperatorSidebar({
                   }}
                   className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all font-semibold text-sm ${
                     isSelected
-                      ? 'bg-indigo-50 text-indigo-700 shadow-sm'
-                      : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'
+                      ? 'bg-brand-50 text-brand-700 shadow-sm'
+                      : 'text-gray-500 hover:bg-brand-50 hover:text-brand-800'
                   }`}
                 >
-                  <Icon className={`w-5 h-5 ${isSelected ? 'text-indigo-600' : 'text-gray-400'}`} />
+                  <Icon className={`w-5 h-5 ${isSelected ? 'text-brand-700' : 'text-gray-400'}`} />
                   {tab.label}
                 </button>
               );
@@ -89,9 +89,9 @@ export default function OperatorSidebar({
             {/* Back to Client Site */}
             <a
               href="/"
-              className="w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all font-semibold text-sm text-indigo-600 hover:bg-indigo-50 border border-indigo-100/50 bg-indigo-50/20"
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all font-semibold text-sm text-brand-700 hover:bg-brand-50 border border-brand-100/50 bg-brand-50/50"
             >
-              <ExternalLink className="w-5 h-5 text-indigo-500" />
+              <ExternalLink className="w-5 h-5 text-brand-600" />
               Booking Portal
             </a>
 

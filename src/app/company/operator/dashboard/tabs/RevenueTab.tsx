@@ -85,7 +85,7 @@ export default function RevenueTab({ dashboard }: RevenueTabProps) {
           <select
             value={dateRange}
             onChange={(e) => setDateRange(e.target.value as any)}
-            className="block w-full rounded-lg border-gray-300 py-2 pl-3 pr-10 text-base focus:border-indigo-500 focus:outline-none focus:ring-indigo-500 sm:text-sm shadow-sm"
+            className="block w-full rounded-lg border-gray-300 py-2 pl-3 pr-10 text-base focus:border-brand-700 focus:outline-none focus:ring-brand-700 sm:text-sm shadow-sm"
           >
             <option value="today">Today</option>
             <option value="week">Last 7 Days</option>
@@ -121,7 +121,7 @@ export default function RevenueTab({ dashboard }: RevenueTabProps) {
 
         <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm">
           <div className="flex items-center gap-2 text-sm font-medium text-gray-500 mb-2">
-            <Calendar className="w-4 h-4 text-indigo-500" />
+            <Calendar className="w-4 h-4 text-brand-700" />
             My Bookings
           </div>
           <div className="text-4xl font-black text-gray-900">{totalBookingsCount}</div>
@@ -130,7 +130,7 @@ export default function RevenueTab({ dashboard }: RevenueTabProps) {
         
         <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm">
           <div className="flex items-center gap-2 text-sm font-medium text-gray-500 mb-2">
-            <PieChart className="w-4 h-4 text-indigo-500" />
+            <PieChart className="w-4 h-4 text-brand-700" />
             Avg per Booking
           </div>
           <div className="text-4xl font-black text-gray-900">

@@ -101,7 +101,7 @@ export default function ProfileTab({ dashboard }: ProfileTabProps) {
     <div className="space-y-6 animate-in fade-in duration-500">
       <div>
         <h2 className="text-xl font-bold tracking-tight text-gray-900 flex items-center gap-2">
-          <User className="w-6 h-6 text-indigo-600" />
+          <User className="w-6 h-6 text-brand-700" />
           {profileHeading}
         </h2>
         <p className="mt-1 text-sm text-gray-500">
@@ -120,7 +120,7 @@ export default function ProfileTab({ dashboard }: ProfileTabProps) {
                 name="firstName"
                 value={formData.firstName}
                 onChange={handleChange}
-                className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border"
+                className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-brand-700 focus:ring-brand-700 sm:text-sm px-3 py-2 border"
                 required
               />
             </div>
@@ -132,7 +132,7 @@ export default function ProfileTab({ dashboard }: ProfileTabProps) {
                 name="lastName"
                 value={formData.lastName}
                 onChange={handleChange}
-                className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border"
+                className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-brand-700 focus:ring-brand-700 sm:text-sm px-3 py-2 border"
                 required
               />
             </div>
@@ -155,13 +155,13 @@ export default function ProfileTab({ dashboard }: ProfileTabProps) {
                 name="phone"
                 value={formData.phone}
                 onChange={handleChange}
-                className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border"
+                className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-brand-700 focus:ring-brand-700 sm:text-sm px-3 py-2 border"
               />
             </div>
             
             <div className="md:col-span-2">
               <label className="block text-sm font-medium text-gray-700 mb-1">Assigned Branch / Region</label>
-              <div className="flex items-center gap-2 p-3 bg-indigo-50 rounded-lg text-indigo-700 border border-indigo-100">
+              <div className="flex items-center gap-2 p-3 bg-brand-50 rounded-lg text-brand-700 border border-brand-100">
                 <MapPin className="w-5 h-5" />
                 <span className="font-semibold">{profile?.branch?.join(', ') || profile?.region || 'Not assigned'}</span>
               </div>
@@ -178,7 +178,7 @@ export default function ProfileTab({ dashboard }: ProfileTabProps) {
             <button
               type="submit"
               disabled={isSaving}
-              className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-6 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 transition-all disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-lg bg-brand-700 px-6 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-800 transition-all disabled:opacity-50"
             >
               {isSaving ? (
                 <>
