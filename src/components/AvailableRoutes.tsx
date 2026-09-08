@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase';
+import { anonSupabase as supabase } from '@/lib/supabase';
 import { Schedule, Route, Bus, Company } from '@/types';
 import AlertMessage from './AlertMessage';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
@@ -50,7 +50,7 @@ export default function AvailableRoutes({ limit }: AvailableRoutesProps) {
 
         const { data, error: fetchError } = await (supabase as any)
           .from('Schedule')
-          .select('*, route:Route(*), bus:Bus(*), company:Company(*)')
+          .select('*, route:Route(*), bus:Bus(id, companyId, licensePlate, busType, capacity, amenities, images, isActive), company:Company(*)')
           .eq('status', 'active')
           .gte('departureDateTime', today.toISOString())
           .lte('departureDateTime', nextWeek.toISOString())

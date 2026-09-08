@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
+import { anonSupabase as supabase } from '@/lib/supabase';
 import { Route } from '@/types';
 import { Loader2, AlertCircle, MapPin, Calendar, Users, ArrowRightLeft } from 'lucide-react';
 import AlertMessage from './AlertMessage';

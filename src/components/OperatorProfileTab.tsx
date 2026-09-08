@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
+import React, { useState, useEffect, useRef } from 'react';
+import { createClient } from '@/utils/supabase/client';
+const supabase = createClient();
 import * as dbActions from '@/lib/actions/db.actions';
 import { Button } from '@/components/ui/button';
 import {
@@ -9,6 +10,8 @@ import {
   CheckCircle, Phone, Lock, Sparkles
 } from 'lucide-react';
 import { UserProfile } from '@/types/core';
+import { uploadProfilePicture } from '@/utils/supabase/storage-utils';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface OperatorProfileTabProps {
   userProfile: UserProfile | null;
@@ -26,9 +29,9 @@ const ROLE_META: Record<string, { label: string; color: string; bg: string; grad
   superadmin:           { label: 'Super Admin',           color: 'text-purple-700', bg: 'bg-purple-100',  gradient: 'from-purple-600 to-indigo-600' },
   chief_of_growth:      { label: 'Chief of Growth',       color: 'text-emerald-700', bg: 'bg-emerald-100', gradient: 'from-emerald-500 to-teal-600' },
   chief_of_operations:  { label: 'Chief of Operations',   color: 'text-blue-700',   bg: 'bg-blue-100',    gradient: 'from-blue-600 to-cyan-600' },
-  company_admin:        { label: 'Company Admin',          color: 'text-indigo-700', bg: 'bg-indigo-100',  gradient: 'from-indigo-600 to-blue-600' },
-  operator:             { label: 'Operator',               color: 'text-blue-700',   bg: 'bg-blue-100',    gradient: 'from-blue-500 to-indigo-600' },
-  conductor:            { label: 'Conductor',              color: 'text-sky-700',    bg: 'bg-sky-100',     gradient: 'from-sky-500 to-blue-600' },
+  company_admin:        { label: 'Company Admin',          color: 'text-brand-700', bg: 'bg-brand-100',  gradient: 'from-brand-700 to-brand-800' },
+  operator:             { label: 'Operator',               color: 'text-brand-700', bg: 'bg-brand-100',  gradient: 'from-brand-600 to-brand-800' },
+  conductor:            { label: 'Conductor',              color: 'text-brand-700', bg: 'bg-brand-100',  gradient: 'from-brand-500 to-brand-700' },
   finance:              { label: 'Finance Manager',        color: 'text-green-700',  bg: 'bg-green-100',   gradient: 'from-green-600 to-emerald-600' },
 };
 
@@ -85,13 +88,21 @@ const OperatorProfileTab: React.FC<OperatorProfileTabProps> = ({
   setError,
   setSuccess,
 }) => {
+  const { refreshUserProfile } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [operatorRegion, setOperatorRegion] = useState<string>('Loading...');
   const [loading, setLoading] = useState(true);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [profilePicture, setProfilePicture] = useState(userProfile?.profilePicture || (userProfile as any)?.avatar || '');
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [editData, setEditData] = useState<EditData>({
     phoneNumber: userProfile?.phone || '',
   });
+
+  useEffect(() => {
+    setProfilePicture(userProfile?.profilePicture || (userProfile as any)?.avatar || '');
+  }, [userProfile?.profilePicture, (userProfile as any)?.avatar]);
 
   const activeRole = (userProfile?.role as string) || 'staff';
   const meta = ROLE_META[activeRole] || DEFAULT_META;
@@ -141,6 +152,30 @@ const OperatorProfileTab: React.FC<OperatorProfileTabProps> = ({
       setError(`Failed to update profile: ${error.message}`);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !userProfile?.id) return;
+
+    setUploadingImage(true);
+    setError('');
+    try {
+      const url = await uploadProfilePicture(file, userProfile.id);
+      const result = await dbActions.updateUser(userProfile.id, {
+        profilePicture: url,
+        updatedAt: new Date(),
+      });
+      if (!result.success) throw new Error(result.error);
+      await refreshUserProfile(userProfile.id);
+      setProfilePicture(url);
+      setSuccess('Profile picture updated successfully!');
+    } catch (error: any) {
+      setError(`Failed to upload profile picture: ${error.message}`);
+    } finally {
+      setUploadingImage(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
@@ -201,17 +236,33 @@ const OperatorProfileTab: React.FC<OperatorProfileTabProps> = ({
 
           {/* Avatar row — pulls up to overlap the banner */}
           <div className="flex flex-col sm:flex-row sm:items-end gap-4 -mt-10 mb-6">
-            <div className={`w-20 h-20 rounded-2xl bg-gradient-to-br ${meta.gradient} flex items-center justify-center text-white font-bold text-3xl shadow-lg ring-4 ring-white flex-shrink-0 overflow-hidden`}>
+            <div className={`relative w-20 h-20 rounded-2xl bg-gradient-to-br ${meta.gradient} flex items-center justify-center text-white font-bold text-3xl shadow-lg ring-4 ring-white flex-shrink-0 overflow-hidden group`}>
               {(() => {
-                const avatarUrl = userProfile?.profilePicture || (userProfile as any)?.avatar;
+                const avatarUrl = profilePicture;
                 if (avatarUrl) {
                   return <img src={avatarUrl} alt="Profile" className="w-full h-full object-cover" />;
                 }
                 return initial;
               })()}
+              <label
+                htmlFor="staff-profile-picture"
+                className="absolute inset-0 flex items-center justify-center bg-black/45 text-white opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                title="Upload profile picture"
+              >
+                {uploadingImage ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <User className="w-5 h-5" />}
+                <input
+                  id="staff-profile-picture"
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="sr-only"
+                  onChange={handleImageUpload}
+                  disabled={uploadingImage}
+                />
+              </label>
             </div>
             <div className="sm:pb-2">
-              <h2 className="text-2xl font-bold text-white leading-tight drop-shadow-sm">{operatorName}</h2>
+              <h2 className="text-2xl font-bold text-gray-900 leading-tight">{operatorName}</h2>
               <div className="flex items-center gap-2 mt-1">
                 <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold ${meta.bg} ${meta.color}`}>
                   <Shield className="w-3 h-3" />
@@ -252,7 +303,7 @@ const OperatorProfileTab: React.FC<OperatorProfileTabProps> = ({
                   value={editData.phoneNumber}
                   onChange={(e) => setEditData({ ...editData, phoneNumber: e.target.value })}
                   placeholder="+265 999 123 456"
-                  className="w-full px-4 py-3 text-sm border-2 border-indigo-400 bg-white rounded-xl outline-none focus:ring-2 focus:ring-indigo-300 transition-all"
+                  className="w-full px-4 py-3 text-sm border-2 border-brand-400 bg-white rounded-xl outline-none focus:ring-2 focus:ring-brand-300 transition-all"
                   autoFocus
                 />
               ) : (
@@ -284,7 +335,7 @@ const OperatorProfileTab: React.FC<OperatorProfileTabProps> = ({
                 <div className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-3">
                   {loading ? (
                     <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 border-2 border-indigo-300 border-t-transparent rounded-full animate-spin" />
+                      <div className="w-3 h-3 border-2 border-brand-300 border-t-transparent rounded-full animate-spin" />
                       <span className="text-sm text-gray-400 italic">Loading…</span>
                     </div>
                   ) : (
@@ -326,7 +377,7 @@ const OperatorProfileTab: React.FC<OperatorProfileTabProps> = ({
               key={index}
               className={`flex items-start gap-3 p-4 rounded-2xl border transition-all ${
                 permission.allowed
-                  ? 'bg-gray-50 border-gray-200 hover:border-indigo-200 hover:bg-indigo-50/40'
+                  ? 'bg-gray-50 border-gray-200 hover:border-brand-200 hover:bg-brand-50/40'
                   : 'bg-gray-50/50 border-dashed border-gray-200 opacity-60'
               }`}
             >

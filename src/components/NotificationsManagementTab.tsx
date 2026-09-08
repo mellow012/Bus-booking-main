@@ -12,7 +12,8 @@ import {
   CheckCircle2,
   Filter,
 } from "lucide-react";
-import { supabase } from "@/lib/supabase";
+import { createClient } from "@/utils/supabase/client";
+const supabase = createClient();
 import { toast } from "react-hot-toast";
 
 interface NotificationResponse {

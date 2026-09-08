@@ -21,7 +21,8 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@/utils/supabase/client';
+const supabase = createClient();
 import { Info, ChevronDown, ChevronUp, Tag } from 'lucide-react';
 
 interface RouteStop { id: string; name: string; }

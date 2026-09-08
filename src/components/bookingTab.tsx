@@ -1,7 +1,7 @@
 "use client";
 
 import React, { FC, useState, useMemo, useCallback, useEffect } from "react";
-import { supabase } from "@/lib/supabase";
+import { createClient } from "@/utils/supabase/client";
 import * as dbActions from "@/lib/actions/db.actions";
 import { useAppToast } from "@/contexts/ToastContext";
 import { Booking, Schedule, Bus, Route } from "@/types";
@@ -12,6 +12,8 @@ import {
   ChevronRight, User, RotateCcw, Wallet, CreditCard,
   ArrowRight, Bell, Info, Download, CheckSquare, Activity,
 } from "lucide-react";
+
+const supabase = createClient();
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

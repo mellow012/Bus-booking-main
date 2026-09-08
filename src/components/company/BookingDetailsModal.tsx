@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Booking } from '@/types';
 import { X, Check, Loader2, Bell, MapPin, Calendar, Clock, ArrowRight } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@/utils/supabase/client';
+const supabase = createClient();
 
 const toDate = (v: any): Date => {
   if (!v) return new Date();
@@ -250,4 +251,3 @@ export default function BookingDetailsModal({
     </div>
   );
 }
-
