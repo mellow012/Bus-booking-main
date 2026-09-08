@@ -197,6 +197,11 @@ export async function syncUser(id: string, data: Partial<User>) {
       role: updatableData.role || 'customer',
     };
 
+    const companyScopedRoles = ['company_admin', 'operator', 'conductor'];
+    if (companyScopedRoles.includes(createData.role) && !createData.companyId) {
+      throw new Error(`companyId is required for role ${createData.role}`);
+    }
+
     const user = await prisma.user.create({
       data: createData,
     });

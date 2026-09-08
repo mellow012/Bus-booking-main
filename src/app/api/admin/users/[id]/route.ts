@@ -16,6 +16,10 @@ export async function PATCH(req: NextRequest, context: any) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
+    if (user.role === 'company_admin' && !user.companyId) {
+      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+    }
+
     const body = await req.json();
     const newRole = body.role;
     if (!newRole) return NextResponse.json({ error: 'Missing role' }, { status: 400 });
