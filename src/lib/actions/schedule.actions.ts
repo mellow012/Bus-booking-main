@@ -5,6 +5,70 @@ import { revalidatePath } from 'next/cache';
 import { Schedule, ScheduleStatus, TripStatus } from '@/types';
 import { invalidateScheduleCaches } from '../cache';
 import { Prisma } from '@prisma/client';
+import { getCurrentUserFromServer } from '@/lib/auth-utils';
+import type { AuthUser } from '@/lib/auth-utils';
+
+const SCHEDULE_MANAGEMENT_ROLES = [
+  'super_admin',
+  'superadmin',
+  'chief_of_operations',
+  'company_admin',
+  'operator',
+];
+
+const PLATFORM_WIDE_ROLES = ['super_admin', 'superadmin', 'chief_of_operations'];
+
+async function authorizeScheduleRoute(
+  authUser: AuthUser,
+  routeId: string,
+  effectiveCompanyId: string,
+) {
+  const route = await prisma.route.findUnique({
+    where: { id: routeId },
+    select: { id: true, companyId: true, regionId: true },
+  });
+
+  if (!route) {
+    return { allowed: false as const, error: 'Route not found' };
+  }
+
+  if (route.companyId !== effectiveCompanyId) {
+    return { allowed: false as const, error: 'Forbidden: route does not belong to the target company' };
+  }
+
+  if (authUser.role !== 'operator') {
+    return { allowed: true as const, route };
+  }
+
+  const operator = await prisma.operator.findUnique({
+    where: { uid: authUser.id },
+    select: {
+      companyId: true,
+      regionId: true,
+      routes: {
+        where: { id: routeId },
+        select: { id: true },
+      },
+    },
+  });
+
+  if (!operator) {
+    return { allowed: false as const, error: 'Forbidden: operator record not found' };
+  }
+
+  if (operator.companyId !== authUser.companyId) {
+    return { allowed: false as const, error: 'Forbidden: operator company does not match the authenticated user' };
+  }
+
+  const hasExplicitAssignment = operator.routes.length > 0;
+  const hasRegionAccess = Boolean(operator.regionId && route.regionId === operator.regionId);
+
+  if (!hasExplicitAssignment && !hasRegionAccess) {
+    return { allowed: false as const, error: 'Forbidden: route is outside the operator route scope' };
+  }
+
+  return { allowed: true as const, route };
+}
 
 async function assertBusNotOverlapping(
   tx: Prisma.TransactionClient | any,
@@ -67,13 +131,33 @@ export async function createSchedule(data: Omit<Partial<Schedule>, 'departureDat
     return { success: false, error: 'Available seats must be greater than 0.' };
   }
   // ──────────────────────────────────────────────────────────────────────────
+
+  const authUser = await getCurrentUserFromServer();
+  if (!authUser) {
+    return { success: false, error: 'Unauthorized' };
+  }
+  if (!SCHEDULE_MANAGEMENT_ROLES.includes(authUser.role ?? '')) {
+    return { success: false, error: 'Forbidden' };
+  }
+
+  const platformWide = PLATFORM_WIDE_ROLES.includes(authUser.role ?? '');
+  const effectiveCompanyId = platformWide ? data.companyId : authUser.companyId;
+  if (!effectiveCompanyId) {
+    return { success: false, error: 'companyId is required' };
+  }
+
   try {
+    const routeAuthorization = await authorizeScheduleRoute(authUser, data.routeId, effectiveCompanyId);
+    if (!routeAuthorization.allowed) {
+      return { success: false, error: routeAuthorization.error };
+    }
+
     await assertBusNotOverlapping(prisma, data.busId, dep, arr);
 
     const schedule = await prisma.schedule.create({
       data: {
         id: data.id,
-        companyId: data.companyId,
+        companyId: effectiveCompanyId,
         busId: data.busId,
         routeId: data.routeId,
         departureDateTime: dep,
@@ -96,13 +180,37 @@ export async function createSchedule(data: Omit<Partial<Schedule>, 'departureDat
 
 export async function createRoundTripSchedule(outboundData: any, inboundData: any) {
   try {
-    // Look up the return route
+    const authUser = await getCurrentUserFromServer();
+    if (!authUser) {
+      return { success: false, error: 'Unauthorized' };
+    }
+    if (!SCHEDULE_MANAGEMENT_ROLES.includes(authUser.role ?? '')) {
+      return { success: false, error: 'Forbidden' };
+    }
+
+    const platformWide = PLATFORM_WIDE_ROLES.includes(authUser.role ?? '');
+    const effectiveCompanyId = platformWide ? outboundData.companyId : authUser.companyId;
+    if (!effectiveCompanyId) {
+      return { success: false, error: 'companyId is required' };
+    }
+
+    const outboundRouteAuthorization = await authorizeScheduleRoute(
+      authUser,
+      outboundData.routeId,
+      effectiveCompanyId,
+    );
+    if (!outboundRouteAuthorization.allowed) {
+      return { success: false, error: outboundRouteAuthorization.error };
+    }
+
     const outboundRoute = await prisma.route.findUnique({ where: { id: outboundData.routeId } });
-    if (!outboundRoute) throw new Error("Outbound route not found");
+    if (!outboundRoute) {
+      return { success: false, error: 'Outbound route not found' };
+    }
 
     const returnRoute = await prisma.route.findFirst({
       where: {
-        companyId: outboundData.companyId,
+        companyId: effectiveCompanyId,
         origin: outboundRoute.destination,
         destination: outboundRoute.origin,
         isActive: true,
@@ -111,6 +219,15 @@ export async function createRoundTripSchedule(outboundData: any, inboundData: an
 
     if (!returnRoute) {
       throw new Error(`Return route (${outboundRoute.destination} to ${outboundRoute.origin}) not found. Please create this route first.`);
+    }
+
+    const returnRouteAuthorization = await authorizeScheduleRoute(
+      authUser,
+      returnRoute.id,
+      effectiveCompanyId,
+    );
+    if (!returnRouteAuthorization.allowed) {
+      return { success: false, error: returnRouteAuthorization.error };
     }
 
     const outDep = new Date(outboundData.departureDateTime);
@@ -131,7 +248,7 @@ export async function createRoundTripSchedule(outboundData: any, inboundData: an
     const transactionResult = await prisma.$transaction([
       prisma.schedule.create({
         data: {
-          companyId: outboundData.companyId,
+          companyId: effectiveCompanyId,
           busId: outboundData.busId,
           routeId: outboundData.routeId,
           departureDateTime: new Date(outboundData.departureDateTime),
@@ -145,7 +262,7 @@ export async function createRoundTripSchedule(outboundData: any, inboundData: an
       }),
       prisma.schedule.create({
         data: {
-          companyId: inboundData.companyId,
+          companyId: effectiveCompanyId,
           busId: inboundData.busId,
           routeId: returnRoute.id,
           departureDateTime: new Date(inboundData.departureDateTime),
@@ -169,6 +286,37 @@ export async function createRoundTripSchedule(outboundData: any, inboundData: an
 }
 
 export async function updateSchedule(id: string, data: Partial<Schedule>) {
+  const authUser = await getCurrentUserFromServer();
+  if (!authUser) {
+    return { success: false, error: 'Unauthorized' };
+  }
+  if (!SCHEDULE_MANAGEMENT_ROLES.includes(authUser.role ?? '')) {
+    return { success: false, error: 'Forbidden' };
+  }
+
+  const existingSchedule = await prisma.schedule.findUnique({
+    where: { id },
+    select: { companyId: true, routeId: true },
+  });
+  if (!existingSchedule) {
+    return { success: false, error: 'Schedule not found' };
+  }
+
+  const effectiveCompanyId = PLATFORM_WIDE_ROLES.includes(authUser.role ?? '')
+    ? existingSchedule.companyId
+    : authUser.companyId;
+  if (!effectiveCompanyId) {
+    return { success: false, error: 'companyId is required' };
+  }
+
+  const routeAuthorization = await authorizeScheduleRoute(
+    authUser,
+    data.routeId ?? existingSchedule.routeId,
+    effectiveCompanyId,
+  );
+  if (!routeAuthorization.allowed) {
+    return { success: false, error: routeAuthorization.error };
+  }
   try {
     const currentSchedule = await prisma.schedule.findUnique({ where: { id } });
     if (!currentSchedule) {
@@ -207,6 +355,38 @@ export async function updateSchedule(id: string, data: Partial<Schedule>) {
 }
 
 export async function deleteSchedule(id: string) {
+  const authUser = await getCurrentUserFromServer();
+  if (!authUser) {
+    return { success: false, error: 'Unauthorized' };
+  }
+  if (!SCHEDULE_MANAGEMENT_ROLES.includes(authUser.role ?? '')) {
+    return { success: false, error: 'Forbidden' };
+  }
+
+  const existingSchedule = await prisma.schedule.findUnique({
+    where: { id },
+    select: { companyId: true, routeId: true },
+  });
+  if (!existingSchedule) {
+    return { success: false, error: 'Schedule not found' };
+  }
+
+  const effectiveCompanyId = PLATFORM_WIDE_ROLES.includes(authUser.role ?? '')
+    ? existingSchedule.companyId
+    : authUser.companyId;
+  if (!effectiveCompanyId) {
+    return { success: false, error: 'companyId is required' };
+  }
+
+  const routeAuthorization = await authorizeScheduleRoute(
+    authUser,
+    existingSchedule.routeId,
+    effectiveCompanyId,
+  );
+  if (!routeAuthorization.allowed) {
+    return { success: false, error: routeAuthorization.error };
+  }
+
   try {
     const [bookingCount, bookingSegmentCount] = await prisma.$transaction([
       prisma.booking.count({ where: { scheduleId: id } }),
@@ -233,9 +413,28 @@ export async function deleteSchedule(id: string) {
  */
 export async function createScheduleTemplate(data: any) {
   try {
+    const authUser = await getCurrentUserFromServer();
+    if (!authUser) {
+      return { success: false, error: 'Unauthorized' };
+    }
+    if (!SCHEDULE_MANAGEMENT_ROLES.includes(authUser.role ?? '')) {
+      return { success: false, error: 'Forbidden' };
+    }
+
+    const platformWide = PLATFORM_WIDE_ROLES.includes(authUser.role ?? '');
+    const effectiveCompanyId = platformWide ? data.companyId : authUser.companyId;
+    if (!effectiveCompanyId) {
+      return { success: false, error: 'companyId is required' };
+    }
+
+    const routeAuthorization = await authorizeScheduleRoute(authUser, data.routeId, effectiveCompanyId);
+    if (!routeAuthorization.allowed) {
+      return { success: false, error: routeAuthorization.error };
+    }
+
     const template = await prisma.scheduleTemplate.create({
       data: {
-        companyId: data.companyId,
+        companyId: effectiveCompanyId,
         routeId: data.routeId,
         busId: data.busId,
         departureTime: data.departureTime,
@@ -255,13 +454,37 @@ export async function createScheduleTemplate(data: any) {
 
 export async function createRoundTripScheduleTemplate(outboundData: any, inboundData: any) {
   try {
-    // Look up the return route
+    const authUser = await getCurrentUserFromServer();
+    if (!authUser) {
+      return { success: false, error: 'Unauthorized' };
+    }
+    if (!SCHEDULE_MANAGEMENT_ROLES.includes(authUser.role ?? '')) {
+      return { success: false, error: 'Forbidden' };
+    }
+
+    const platformWide = PLATFORM_WIDE_ROLES.includes(authUser.role ?? '');
+    const effectiveCompanyId = platformWide ? outboundData.companyId : authUser.companyId;
+    if (!effectiveCompanyId) {
+      return { success: false, error: 'companyId is required' };
+    }
+
+    const outboundRouteAuthorization = await authorizeScheduleRoute(
+      authUser,
+      outboundData.routeId,
+      effectiveCompanyId,
+    );
+    if (!outboundRouteAuthorization.allowed) {
+      return { success: false, error: outboundRouteAuthorization.error };
+    }
+
     const outboundRoute = await prisma.route.findUnique({ where: { id: outboundData.routeId } });
-    if (!outboundRoute) throw new Error("Outbound route not found");
+    if (!outboundRoute) {
+      return { success: false, error: 'Outbound route not found' };
+    }
 
     const returnRoute = await prisma.route.findFirst({
       where: {
-        companyId: outboundData.companyId,
+        companyId: effectiveCompanyId,
         origin: outboundRoute.destination,
         destination: outboundRoute.origin,
         isActive: true,
@@ -272,10 +495,19 @@ export async function createRoundTripScheduleTemplate(outboundData: any, inbound
       throw new Error(`Return route (${outboundRoute.destination} to ${outboundRoute.origin}) not found. Please create this route first.`);
     }
 
+    const returnRouteAuthorization = await authorizeScheduleRoute(
+      authUser,
+      returnRoute.id,
+      effectiveCompanyId,
+    );
+    if (!returnRouteAuthorization.allowed) {
+      return { success: false, error: returnRouteAuthorization.error };
+    }
+
     const transactionResult = await prisma.$transaction([
       prisma.scheduleTemplate.create({
         data: {
-          companyId: outboundData.companyId,
+          companyId: effectiveCompanyId,
           routeId: outboundData.routeId,
           busId: outboundData.busId,
           departureTime: outboundData.departureTime,
@@ -287,7 +519,7 @@ export async function createRoundTripScheduleTemplate(outboundData: any, inbound
       }),
       prisma.scheduleTemplate.create({
         data: {
-          companyId: inboundData.companyId,
+          companyId: effectiveCompanyId,
           routeId: returnRoute.id,
           busId: inboundData.busId,
           departureTime: inboundData.departureTime,
@@ -343,6 +575,34 @@ export async function updateScheduleTemplate(id: string, data: any) {
 
 export async function deleteScheduleTemplate(id: string) {
   try {
+    const authUser = await getCurrentUserFromServer();
+    if (!authUser) {
+      return { success: false, error: 'Unauthorized' };
+    }
+    if (!SCHEDULE_MANAGEMENT_ROLES.includes(authUser.role ?? '')) {
+      return { success: false, error: 'Forbidden' };
+    }
+
+    const template = await prisma.scheduleTemplate.findUnique({
+      where: { id },
+      select: { companyId: true, routeId: true },
+    });
+    if (!template) {
+      return { success: false, error: 'Schedule template not found' };
+    }
+
+    const effectiveCompanyId = PLATFORM_WIDE_ROLES.includes(authUser.role ?? '')
+      ? template.companyId
+      : authUser.companyId;
+    if (!effectiveCompanyId) {
+      return { success: false, error: 'companyId is required' };
+    }
+
+    const routeAuthorization = await authorizeScheduleRoute(authUser, template.routeId, effectiveCompanyId);
+    if (!routeAuthorization.allowed) {
+      return { success: false, error: routeAuthorization.error };
+    }
+
     await prisma.scheduleTemplate.delete({ where: { id } });
     revalidatePath('/company/operator/dashboard');
     return { success: true };
@@ -354,9 +614,29 @@ export async function deleteScheduleTemplate(id: string) {
 
 export async function materializeSchedules(companyId: string, routeId: string, daysAhead: number) {
   try {
+    const authUser = await getCurrentUserFromServer();
+    if (!authUser) {
+      return { success: false, error: 'Unauthorized' };
+    }
+    if (!SCHEDULE_MANAGEMENT_ROLES.includes(authUser.role ?? '')) {
+      return { success: false, error: 'Forbidden' };
+    }
+
+    const effectiveCompanyId = PLATFORM_WIDE_ROLES.includes(authUser.role ?? '')
+      ? companyId
+      : authUser.companyId;
+    if (!effectiveCompanyId) {
+      return { success: false, error: 'companyId is required' };
+    }
+
+    const routeAuthorization = await authorizeScheduleRoute(authUser, routeId, effectiveCompanyId);
+    if (!routeAuthorization.allowed) {
+      return { success: false, error: routeAuthorization.error };
+    }
+
     const templates = await prisma.scheduleTemplate.findMany({
       where: { 
-        companyId, 
+        companyId: effectiveCompanyId, 
         isActive: true,
         ...(routeId ? { routeId } : {})
       },
@@ -442,7 +722,7 @@ export async function materializeSchedules(companyId: string, routeId: string, d
 
         if (!existingSet.has(uniqueKey)) {
           const newSched = {
-            companyId: template.companyId,
+            companyId: effectiveCompanyId,
             busId: template.busId,
             routeId: template.routeId,
             departureDateTime,
