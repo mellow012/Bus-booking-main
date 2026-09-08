@@ -156,7 +156,7 @@ export default function RouteScheduleSection({
             <button
               type="button"
               onClick={onAddSchedule}
-              className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 ml-2"
+              className="inline-flex items-center gap-2 rounded-lg               bg-brand-700 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-800 ml-2"
             >
               <PlusCircle className="w-4 h-4" /> Create Schedule
             </button>
@@ -180,7 +180,7 @@ export default function RouteScheduleSection({
                 type="date"
                 value={filterDate}
                 onChange={(event) => onFilterDateChange(event.target.value)}
-                className="rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                className="rounded-md border-gray-300 text-sm shadow-sm                 focus:border-brand-500 focus:ring-brand-500"
               />
             </div>
           </div>
@@ -214,7 +214,7 @@ export default function RouteScheduleSection({
                   <div className="flex gap-4">
                     <div className="text-right">
                       <p className="text-xs text-gray-500 uppercase tracking-wider">Boarding</p>
-                      <p className="font-semibold text-sm text-indigo-600">{stop.boardingPassengers}</p>
+                      <p className="font-semibold text-sm                       text-brand-700">{stop.boardingPassengers}</p>
                     </div>
                     <div className="text-right">
                       <p className="text-xs text-gray-500 uppercase tracking-wider">Alighting</p>
@@ -239,7 +239,7 @@ export default function RouteScheduleSection({
               <button
                 type="button"
                 onClick={() => setShowGenerateModal(true)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-indigo-600 rounded-lg hover:bg-indigo-500 transition-colors shadow-sm"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white                 bg-brand-700 rounded-lg hover:bg-brand-800 transition-colors shadow-sm"
               >
                 <Sparkles className="w-3.5 h-3.5" /> Generate Trips
               </button>
@@ -258,11 +258,11 @@ export default function RouteScheduleSection({
                   <div key={template.id} className="p-4 bg-gray-50 rounded-xl border border-gray-200 shadow-sm">
                     <div className="flex justify-between items-start mb-3">
                       <div className="flex items-center gap-2">
-                        <LayoutTemplate className="w-5 h-5 text-indigo-500" />
+                        <LayoutTemplate className="w-5 h-5 text-brand-500" />
                         <span className="text-sm font-bold text-gray-900">{shortDays || 'No days set'}</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-widest bg-indigo-100 text-indigo-700">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-widest                         bg-brand-100 text-brand-700">
                           Active
                         </span>
                         <button

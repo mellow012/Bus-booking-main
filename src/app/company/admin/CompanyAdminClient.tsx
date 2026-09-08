@@ -121,7 +121,7 @@ export default function CompanyAdminClient() {
     <QueryClientProvider client={queryClient}>
       <Suspense fallback={
         <div className="flex items-center justify-center min-h-screen bg-gray-50">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-700"></div>
         </div>
       }>
         <AdminDashboardInner />

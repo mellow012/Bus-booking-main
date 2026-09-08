@@ -138,7 +138,7 @@ export default function RevenueTab({ dashboard }: RevenueTabProps) {
                 key={r}
                 onClick={() => setDateRange(r)}
                 className={`px-3 py-1.5 rounded-lg capitalize font-semibold transition-all ${
-                  dateRange === r ? 'bg-indigo-600 text-white shadow-sm' : 'text-gray-600 hover:text-gray-900'
+                  dateRange === r ? '                  bg-brand-700 text-white shadow-sm' : 'text-gray-600 hover:text-gray-900'
                 }`}
               >
                 {r === '60_days' ? '60 Days' : r}
@@ -148,7 +148,7 @@ export default function RevenueTab({ dashboard }: RevenueTabProps) {
 
           <button
             onClick={handleGenerateCSV}
-            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-xs font-bold rounded-xl hover:bg-indigo-700 transition-all shadow-sm"
+            className="flex items-center gap-2 px-4 py-2                         bg-brand-700 text-white text-xs font-bold rounded-xl hover:bg-brand-800 transition-all shadow-sm"
           >
             <Download className="w-4 h-4" />
             Export CSV
@@ -161,12 +161,12 @@ export default function RevenueTab({ dashboard }: RevenueTabProps) {
         <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between">
           <div>
             <p className="text-xs text-gray-400 font-semibold uppercase tracking-wider">Net Revenue</p>
-            <p className="text-2xl font-black text-indigo-600 mt-1">MWK {totalRevenue.toLocaleString()}</p>
+            <p className="text-2xl font-black             text-brand-700 mt-1">MWK {totalRevenue.toLocaleString()}</p>
             <p className="text-xs text-emerald-600 font-semibold mt-1 flex items-center gap-1">
               <TrendingUp className="w-3 h-3" /> Paid bookings: {paidBookingsCount}
             </p>
           </div>
-          <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center shrink-0">
+          <div className="w-12 h-12           bg-brand-50 text-brand-700 rounded-xl flex items-center justify-center shrink-0">
             <DollarSign className="w-6 h-6" />
           </div>
         </div>
@@ -199,7 +199,7 @@ export default function RevenueTab({ dashboard }: RevenueTabProps) {
             <p className="text-2xl font-black text-gray-900 mt-1">{totalBookingsCount}</p>
             <p className="text-xs text-gray-500 mt-1">{paidBookingsCount} paid, {totalBookingsCount - paidBookingsCount} unpaid</p>
           </div>
-          <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center shrink-0">
+          <div className="w-12 h-12 bg-brand-50 text-brand-700 rounded-xl flex items-center justify-center shrink-0">
             <PieChart className="w-6 h-6" />
           </div>
         </div>
@@ -208,7 +208,7 @@ export default function RevenueTab({ dashboard }: RevenueTabProps) {
       {/* Revenue by Branch */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
         <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-          <PieChart className="w-4 h-4 text-indigo-500" />
+          <PieChart className="w-4 h-4           text-brand-500" />
           Revenue by Branch
         </h3>
         {revenueByBranch.length === 0 ? (
@@ -231,7 +231,7 @@ export default function RevenueTab({ dashboard }: RevenueTabProps) {
                   </div>
                   <div className="w-full bg-gray-100 rounded-full h-2">
                     <div 
-                      className="bg-indigo-600 h-2 rounded-full transition-all duration-500" 
+                      className="                      bg-brand-700 h-2 rounded-full transition-all duration-500"
                       style={{ width: `${percentage}%` }}
                     />
                   </div>

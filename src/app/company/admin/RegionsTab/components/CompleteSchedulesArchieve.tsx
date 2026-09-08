@@ -47,7 +47,7 @@ export default function CompletedSchedulesArchive({ schedules, buses, bookings, 
               <div 
                 key={schedule.id} 
                 onClick={() => router.push(`${baseUrl}?tab=bookings&scheduleId=${encodeURIComponent(schedule.id)}`)}
-                className="rounded-2xl border border-gray-100 bg-gray-50 p-4 cursor-pointer hover:border-indigo-300 hover:shadow-sm transition-all"
+                className="rounded-2xl border border-gray-100 bg-gray-50 p-4 cursor-pointer                 hover:border-brand-300 hover:shadow-sm transition-all"
               >
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <div className="text-sm text-gray-900">

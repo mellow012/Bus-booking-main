@@ -17,11 +17,11 @@ export default function BranchCard({ branch, routeCount, operatorCount, tripSumm
     <button
       onClick={onSelect}
       className={`text-left bg-white rounded-xl border p-4 transition-all shadow-sm ${
-        isSelected ? 'border-indigo-600 ring-2 ring-indigo-600 ring-opacity-20' : 'border-gray-200 hover:border-indigo-200 hover:shadow-md'
+        isSelected ? 'border-brand-700 ring-2 ring-brand-700 ring-opacity-20' : 'border-gray-200 hover:border-brand-200 hover:shadow-md'
       }`}
     >
       <div className="flex items-center justify-between mb-3">
-        <div className="w-10 h-10 bg-indigo-50 rounded-lg flex items-center justify-center text-indigo-600">
+        <div className="w-10 h-10         bg-brand-50 rounded-lg flex items-center justify-center text-brand-700">
           <MapPin className="w-5 h-5" />
         </div>
         {branch.isActive !== false ? (

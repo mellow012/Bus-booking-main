@@ -235,13 +235,13 @@ export default function OverviewTab({ dashboard }: OverviewTabProps) {
           className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm hover:shadow-md transition-all cursor-pointer group relative overflow-hidden"
         >
           <div className="absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-10 transition-opacity">
-            <Building2 className="w-16 h-16 text-indigo-600" />
+            <Building2 className="w-16 h-16 text-brand-700" />
           </div>
           <div className="flex items-center justify-between mb-4">
-            <div className="w-12 h-12 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600">
+            <div className="w-12 h-12 bg-brand-50 rounded-xl flex items-center justify-center text-brand-700">
               <Building2 className="w-6 h-6" />
             </div>
-            <ChevronRight className="w-5 h-5 text-gray-300 group-hover:text-indigo-600 transition-colors" />
+            <ChevronRight className="w-5 h-5 text-gray-300 group-hover:text-brand-700 transition-colors" />
           </div>
           <h3 className="text-gray-500 font-medium mb-1">Branches</h3>
           <div className="text-3xl font-bold text-gray-900">{branches.length}</div>
@@ -270,10 +270,10 @@ export default function OverviewTab({ dashboard }: OverviewTabProps) {
         {/* Revenue Card */}
         <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm transition-all relative overflow-hidden">
           <div className="absolute top-0 right-0 p-6 opacity-10">
-            <DollarSign className="w-16 h-16 text-blue-600" />
+            <DollarSign className="w-16 h-16 text-brand-700" />
           </div>
           <div className="flex items-center justify-between mb-4">
-            <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600">
+            <div className="w-12 h-12 bg-brand-50 rounded-xl flex items-center justify-center text-brand-700">
               <DollarSign className="w-6 h-6" />
             </div>
             <ChevronRight className="w-5 h-5 text-gray-300" />
@@ -310,7 +310,7 @@ export default function OverviewTab({ dashboard }: OverviewTabProps) {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div 
           onClick={() => router.push('/company/admin?tab=regions')}
-          className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm cursor-pointer hover:border-indigo-300 hover:shadow-sm transition-all"
+          className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm cursor-pointer hover:border-brand-300 hover:shadow-sm transition-all"
         >
           <div className="flex items-center gap-2 text-sm text-gray-500 mb-1">
             <BusIcon className="w-4 h-4" /> Buses
@@ -319,7 +319,7 @@ export default function OverviewTab({ dashboard }: OverviewTabProps) {
         </div>
         <div 
           onClick={() => router.push('/company/admin?tab=bookings')}
-          className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm cursor-pointer hover:border-indigo-300 hover:shadow-sm transition-all"
+          className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm cursor-pointer hover:border-brand-300 hover:shadow-sm transition-all"
         >
           <div className="flex items-center gap-2 text-sm text-gray-500 mb-1">
             <CalendarDays className="w-4 h-4" /> Schedules Today
@@ -333,7 +333,7 @@ export default function OverviewTab({ dashboard }: OverviewTabProps) {
         </div>
         <div 
           onClick={() => router.push('/company/admin?tab=operators')}
-          className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm cursor-pointer hover:border-indigo-300 hover:shadow-sm transition-all"
+          className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm cursor-pointer hover:border-brand-300 hover:shadow-sm transition-all"
         >
           <div className="flex items-center gap-2 text-sm text-gray-500 mb-1">
             <Users className="w-4 h-4" /> Operators
@@ -365,7 +365,7 @@ export default function OverviewTab({ dashboard }: OverviewTabProps) {
               type="date"
               value={bookingFilterDate}
               onChange={(event) => setBookingFilterDate(event.target.value)}
-              className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+              className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 shadow-sm focus:border-brand-700 focus:outline-none focus:ring-2 focus:ring-brand-100"
             />
             {bookingFilterDate && (
               <button
@@ -454,7 +454,7 @@ export default function OverviewTab({ dashboard }: OverviewTabProps) {
                                 type="button"
                                 onClick={() => handleSendReminder(b)}
                                 disabled={reminderLoading === b.id}
-                                className="inline-flex items-center rounded-full border border-indigo-200 bg-white px-2.5 py-1 text-xs font-semibold text-indigo-700 hover:bg-indigo-50 disabled:opacity-50"
+                                className="inline-flex items-center rounded-full border border-brand-200 bg-white px-2.5 py-1 text-xs font-semibold text-brand-700 hover:bg-brand-50 disabled:opacity-50"
                               >
                                 {reminderLoading === b.id ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <Bell className="mr-1 h-3.5 w-3.5" />}
                                 Reminder
@@ -501,11 +501,11 @@ export default function OverviewTab({ dashboard }: OverviewTabProps) {
                             closeModal();
                             router.push(`/company/admin?tab=regions&branchId=${branch.id}`);
                           }}
-                          className="p-4 rounded-xl border border-gray-100 bg-gray-50 cursor-pointer hover:bg-indigo-50/50 hover:border-indigo-100 transition-all"
+                          className="p-4 rounded-xl border border-gray-100 bg-gray-50 cursor-pointer hover:bg-brand-50/50 hover:border-brand-100 transition-all"
                         >
                           <div className="flex justify-between items-center mb-2">
                             <span className="font-bold text-gray-800 text-lg">{branch.name}</span>
-                            {branch.code && <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full font-semibold">{branch.code}</span>}
+                            {branch.code && <span className="text-xs bg-brand-100 text-brand-700 px-2 py-0.5 rounded-full font-semibold">{branch.code}</span>}
                           </div>
                           <div className="flex gap-4 text-sm text-gray-500">
                             <span>{branchOps.length} Operators</span>
@@ -535,7 +535,7 @@ export default function OverviewTab({ dashboard }: OverviewTabProps) {
                             closeModal();
                             router.push(`/company/admin?tab=regions&branchId=${route.regionId}&routeId=${route.id}`);
                           }}
-                          className="p-4 rounded-xl border border-gray-100 bg-gray-50 cursor-pointer hover:bg-indigo-50/50 hover:border-indigo-100 transition-all"
+                          className="p-4 rounded-xl border border-gray-100 bg-gray-50 cursor-pointer hover:bg-brand-50/50 hover:border-brand-100 transition-all"
                         >
                           <div className="font-bold text-gray-800">{route.name}</div>
                           <div className="text-xs text-gray-500 mt-0.5">{route.origin} → {route.destination}</div>
@@ -570,7 +570,7 @@ export default function OverviewTab({ dashboard }: OverviewTabProps) {
                             closeModal();
                             router.push(`/company/admin?tab=revenue`);
                           }}
-                          className="p-4 rounded-xl border border-gray-100 bg-gray-50 flex justify-between items-center cursor-pointer hover:bg-indigo-50/50 hover:border-indigo-100 transition-all"
+                          className="p-4 rounded-xl border border-gray-100 bg-gray-50 flex justify-between items-center cursor-pointer hover:bg-brand-50/50 hover:border-brand-100 transition-all"
                         >
                           <span className="font-medium text-gray-800">{branch.name}</span>
                           <span className="font-bold text-green-600">MWK {branchRevenue.toLocaleString()}</span>
@@ -583,9 +583,9 @@ export default function OverviewTab({ dashboard }: OverviewTabProps) {
               {activeModal === 'bookings' && (
                 <div className="space-y-4">
                   <div className="grid grid-cols-2 gap-4">
-                    <div className="p-4 bg-indigo-50 rounded-xl text-center">
-                      <div className="text-2xl font-bold text-indigo-600">{todayBookings.length}</div>
-                      <div className="text-sm font-medium text-indigo-900 mt-1">Total Today</div>
+                    <div className="p-4 bg-brand-50 rounded-xl text-center">
+                      <div className="text-2xl font-bold text-brand-700">{todayBookings.length}</div>
+                      <div className="text-sm font-medium text-brand-900 mt-1">Total Today</div>
                     </div>
                     <div className="p-4 bg-green-50 rounded-xl text-center">
                       <div className="text-2xl font-bold text-green-600">
@@ -607,7 +607,7 @@ export default function OverviewTab({ dashboard }: OverviewTabProps) {
                             closeModal();
                             handleOpenBooking(b);
                           }}
-                          className="flex justify-between items-center p-3 bg-gray-50 rounded-lg border border-gray-100 text-sm cursor-pointer hover:bg-indigo-50/50 hover:border-indigo-100 transition-all"
+                          className="flex justify-between items-center p-3 bg-gray-50 rounded-lg border border-gray-100 text-sm cursor-pointer hover:bg-brand-50/50 hover:border-brand-100 transition-all"
                         >
                           <div>
                             <span className="font-medium text-gray-900">{b.passengerDetails?.[0]?.name || b.bookingReference}</span>
@@ -640,7 +640,7 @@ export default function OverviewTab({ dashboard }: OverviewTabProps) {
           <div className="w-full max-w-3xl rounded-3xl bg-white border border-gray-200 shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between p-5 border-b border-gray-100">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-indigo-600">Booking Details</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-brand-700">Booking Details</p>
                 <h3 className="mt-2 text-xl font-bold text-gray-900">{selectedBooking.bookingReference}</h3>
                 <p className="text-sm text-gray-500 mt-1">Passenger: {selectedBooking.passengerDetails?.[0]?.name || 'Unknown'}</p>
               </div>
@@ -676,7 +676,7 @@ export default function OverviewTab({ dashboard }: OverviewTabProps) {
                 <div className="rounded-3xl border border-gray-100 bg-gray-50 p-4">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-gray-500">Booking status</p>
                   <div className="mt-3 flex flex-wrap gap-2">
-                    <span className="rounded-full bg-indigo-100 px-3 py-1 text-xs font-semibold text-indigo-700">{selectedBooking.bookingStatus}</span>
+                    <span className="rounded-full bg-brand-100 px-3 py-1 text-xs font-semibold text-brand-700">{selectedBooking.bookingStatus}</span>
                     <span className={`rounded-full px-3 py-1 text-xs font-semibold ${selectedBooking.paymentStatus === 'paid' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
                       {selectedBooking.paymentStatus}
                     </span>
@@ -731,7 +731,7 @@ export default function OverviewTab({ dashboard }: OverviewTabProps) {
                     type="button"
                     onClick={() => handleSendReminder(selectedBooking)}
                     disabled={reminderLoading === selectedBooking.id}
-                    className="inline-flex items-center justify-center rounded-2xl border border-indigo-200 bg-white px-5 py-3 text-sm font-semibold text-indigo-700 hover:bg-indigo-50 disabled:opacity-50"
+                    className="inline-flex items-center justify-center rounded-2xl border border-brand-200 bg-white px-5 py-3 text-sm font-semibold text-brand-700 hover:bg-brand-50 disabled:opacity-50"
                   >
                     {reminderLoading === selectedBooking.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Bell className="mr-2 h-4 w-4" />}
                     Send Reminder

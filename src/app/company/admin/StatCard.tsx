@@ -14,7 +14,7 @@ const StatCard: React.FC<StatCardProps> = ({ title, value, icon: Icon, descripti
   return (
     <div className="bg-white shadow-sm rounded-lg p-5 border border-gray-200/50">
       <div className="flex items-center">
-        <div className="flex-shrink-0 bg-indigo-500 rounded-md p-3">
+        <div className="flex-shrink-0 bg-brand-700 rounded-md p-3">
           <Icon className="h-6 w-6 text-white" aria-hidden="true" />
         </div>
         <div className="ml-5 w-0 flex-1">

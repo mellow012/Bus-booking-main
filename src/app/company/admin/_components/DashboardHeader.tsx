@@ -61,7 +61,7 @@ export default function DashboardHeader({
               className="w-10 h-10 rounded-full object-cover border border-gray-200"
             />
           ) : (
-            <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold border border-gray-200">
+            <div className="w-10 h-10 rounded-full bg-brand-100 flex items-center justify-center text-brand-700 font-bold border border-gray-200">
               {company?.name?.[0] || 'C'}
             </div>
           )}
@@ -79,7 +79,7 @@ export default function DashboardHeader({
           </div>
           <input
             type="text"
-            className="block w-full pl-10 pr-3 py-2 border border-gray-200 rounded-lg leading-5 bg-gray-50 placeholder-gray-400 focus:outline-none focus:bg-white focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-colors"
+            className="block w-full pl-10 pr-3 py-2 border border-gray-200 rounded-lg leading-5 bg-gray-50 placeholder-gray-400 focus:outline-none focus:bg-white focus:ring-1 focus:ring-brand-700 focus:border-brand-700 sm:text-sm transition-colors"
             placeholder="Search dashboards..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -102,8 +102,8 @@ export default function DashboardHeader({
         </button>
 
         {isBusy && (
-          <div className="flex items-center gap-2 rounded-full bg-indigo-50 border border-indigo-100 px-3 py-1 text-xs font-semibold text-indigo-700">
-            <span className="h-2.5 w-2.5 rounded-full animate-pulse bg-indigo-600" />
+          <div className="flex items-center gap-2 rounded-full bg-brand-50 border border-brand-100 px-3 py-1 text-xs font-semibold text-brand-700">
+            <span className="h-2.5 w-2.5 rounded-full animate-pulse bg-brand-700" />
             Saving...
           </div>
         )}
@@ -113,10 +113,10 @@ export default function DashboardHeader({
         <button
           type="button"
           onClick={() => router.push('/profile')}
-          className="h-8 w-8 bg-indigo-100 rounded-full flex items-center justify-center border border-indigo-200 ml-2 shadow-sm transition hover:bg-indigo-200"
+          className="h-8 w-8 bg-brand-100 rounded-full flex items-center justify-center border border-brand-200 ml-2 shadow-sm transition hover:bg-brand-200"
           aria-label="View profile"
         >
-          <span className="text-sm font-bold text-indigo-700 uppercase">
+          <span className="text-sm font-bold text-brand-700 uppercase">
             {userProfile?.firstName?.[0] || user?.email?.[0] || 'A'}
           </span>
         </button>

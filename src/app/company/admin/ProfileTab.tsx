@@ -158,7 +158,7 @@ export default function ProfileTab({ dashboard }: ProfileTabProps) {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-xl font-bold tracking-tight text-gray-900 flex items-center gap-2">
-            <Settings className="w-6 h-6 text-indigo-600" />
+            <Settings className="w-6 h-6 text-brand-700" />
             Company Profile
           </h2>
           <p className="mt-1 text-sm text-gray-500">
@@ -169,7 +169,7 @@ export default function ProfileTab({ dashboard }: ProfileTabProps) {
           <button
             type="button"
             onClick={() => setIsEditing(true)}
-            className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500"
+            className="inline-flex items-center gap-2 rounded-lg bg-brand-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-800"
           >
             <Save className="w-4 h-4" />
             Edit Profile
@@ -188,7 +188,7 @@ export default function ProfileTab({ dashboard }: ProfileTabProps) {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Company Name</label>
                 <input
                   type="text" name="name" value={formData.name} onChange={handleChange} required
-                  className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border"
+                  className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-brand-500 focus:ring-brand-500 sm:text-sm px-3 py-2 border"
                 />
               </div>
               <div>
@@ -222,7 +222,7 @@ export default function ProfileTab({ dashboard }: ProfileTabProps) {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Headquarters Address</label>
                 <input
                   type="text" name="address" value={formData.address} onChange={handleChange}
-                  className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border"
+                  className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-brand-500 focus:ring-brand-500 sm:text-sm px-3 py-2 border"
                   placeholder="e.g., Area 3, Lilongwe"
                 />
               </div>
@@ -230,7 +230,7 @@ export default function ProfileTab({ dashboard }: ProfileTabProps) {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
                 <textarea
                   name="description" value={formData.description} onChange={handleChange} rows={3}
-                  className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border"
+                  className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-brand-500 focus:ring-brand-500 sm:text-sm px-3 py-2 border"
                   placeholder="A brief description of your bus company..."
                 />
               </div>
@@ -253,7 +253,7 @@ export default function ProfileTab({ dashboard }: ProfileTabProps) {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
                 <input
                   type="tel" name="contactPhone" value={formData.contactPhone} onChange={handleChange}
-                  className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border"
+                  className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-brand-500 focus:ring-brand-500 sm:text-sm px-3 py-2 border"
                 />
               </div>
               <div>
@@ -262,14 +262,14 @@ export default function ProfileTab({ dashboard }: ProfileTabProps) {
                 </label>
                 <input
                   type="url" name="website" value={formData.website} onChange={handleChange} placeholder="https://example.com"
-                  className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border"
+                  className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-brand-500 focus:ring-brand-500 sm:text-sm px-3 py-2 border"
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">WhatsApp Business</label>
                 <input
                   type="tel" name="whatsapp" value={formData.whatsapp} onChange={handleChange} placeholder="+265..."
-                  className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border"
+                  className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-brand-500 focus:ring-brand-500 sm:text-sm px-3 py-2 border"
                 />
               </div>
             </div>
@@ -278,7 +278,7 @@ export default function ProfileTab({ dashboard }: ProfileTabProps) {
           {/* Pricing & Discounts */}
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
             <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider border-b pb-2 mb-4 flex items-center gap-2">
-              <Settings className="w-4 h-4 text-indigo-600" /> Pricing & Discounts
+              <Settings className="w-4 h-4 text-brand-700" /> Pricing & Discounts
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
@@ -294,7 +294,7 @@ export default function ProfileTab({ dashboard }: ProfileTabProps) {
                     step="0.5"
                     value={formData.returnTripDiscountPercent}
                     onChange={handleChange}
-                    className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border pr-8"
+                    className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-brand-500 focus:ring-brand-500 sm:text-sm px-3 py-2 border pr-8"
                     placeholder="0"
                   />
                   <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-gray-400 font-bold text-sm">
@@ -322,7 +322,7 @@ export default function ProfileTab({ dashboard }: ProfileTabProps) {
                       type="checkbox"
                       checked={!operatingHours[day]?.closed}
                       onChange={(e) => handleDayClosed(day, !e.target.checked)}
-                      className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                      className="rounded border-gray-300 text-brand-700 focus:ring-brand-500"
                     />
                     <span className="text-xs text-gray-500">{operatingHours[day]?.closed ? 'Closed' : 'Open'}</span>
                   </label>
@@ -331,13 +331,13 @@ export default function ProfileTab({ dashboard }: ProfileTabProps) {
                       <input
                         type="time" value={operatingHours[day]?.open || '06:00'}
                         onChange={(e) => handleHoursChange(day, 'open', e.target.value)}
-                        className="rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm px-2 py-1 border"
+                        className="rounded-lg border-gray-300 shadow-sm focus:border-brand-500 focus:ring-brand-500 text-sm px-2 py-1 border"
                       />
                       <span className="text-gray-400 text-sm">to</span>
                       <input
                         type="time" value={operatingHours[day]?.close || '18:00'}
                         onChange={(e) => handleHoursChange(day, 'close', e.target.value)}
-                        className="rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm px-2 py-1 border"
+                        className="rounded-lg border-gray-300 shadow-sm focus:border-brand-500 focus:ring-brand-500 text-sm px-2 py-1 border"
                       />
                     </div>
                   )}
@@ -362,7 +362,7 @@ export default function ProfileTab({ dashboard }: ProfileTabProps) {
                   <div key={branch.id} className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg border border-gray-100">
                     <CheckCircle2 className="w-4 h-4 text-green-500 flex-shrink-0" />
                     <span className="text-sm font-medium text-gray-700">{branch.name}</span>
-                    {branch.code && <span className="text-xs bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded font-semibold ml-auto">{branch.code}</span>}
+                    {branch.code && <span className="text-xs bg-brand-100 text-brand-700 px-1.5 py-0.5 rounded font-semibold ml-auto">{branch.code}</span>}
                   </div>
                 ))}
               </div>
@@ -381,7 +381,7 @@ export default function ProfileTab({ dashboard }: ProfileTabProps) {
             <button
               type="submit"
               disabled={isSaving}
-              className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 transition-all disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-lg bg-brand-700 px-6 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-brand-800 transition-all disabled:opacity-50"
             >
               {isSaving ? (
                 <>
@@ -454,12 +454,12 @@ export default function ProfileTab({ dashboard }: ProfileTabProps) {
 
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
             <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider border-b pb-2 mb-4 flex items-center gap-2">
-              <Settings className="w-4 h-4 text-indigo-600" /> Pricing & Discounts
+              <Settings className="w-4 h-4 text-brand-700" /> Pricing & Discounts
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <div className="text-xs text-gray-500">Return Trip Discount</div>
-                <div className="text-sm font-bold text-indigo-600">
+                <div className="text-sm font-bold text-brand-700">
                   {company.returnTripDiscountPercent ? `${company.returnTripDiscountPercent}%` : '0% (No discount)'}
                 </div>
                 <p className="text-xs text-gray-500 mt-1">
@@ -500,7 +500,7 @@ export default function ProfileTab({ dashboard }: ProfileTabProps) {
                   <div key={branch.id} className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg border border-gray-100">
                     <CheckCircle2 className="w-4 h-4 text-green-500 flex-shrink-0" />
                     <span className="text-sm font-medium text-gray-700">{branch.name}</span>
-                    {branch.code && <span className="text-xs bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded font-semibold ml-auto">{branch.code}</span>}
+                    {branch.code && <span className="text-xs bg-brand-100 text-brand-700 px-1.5 py-0.5 rounded font-semibold ml-auto">{branch.code}</span>}
                   </div>
                 ))}
               </div>

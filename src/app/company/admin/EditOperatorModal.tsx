@@ -129,7 +129,7 @@ export default function EditOperatorModal({ isOpen, onClose, operator, companyId
               <Dialog.Panel className="relative transform overflow-hidden rounded-2xl bg-white text-left shadow-xl transition-all w-full max-w-md border border-gray-100">
                 <div className="px-6 py-4 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
                   <Dialog.Title as="h3" className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                    <Users className="w-5 h-5 text-indigo-600" />
+                    <Users className="w-5 h-5 text-brand-700" />
                     Edit Operator: {operator?.name}
                   </Dialog.Title>
                   <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-600 text-lg font-semibold">×</button>
@@ -138,7 +138,7 @@ export default function EditOperatorModal({ isOpen, onClose, operator, companyId
                 <form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-4">
                   <div>
                     <label htmlFor="role" className="block text-sm font-medium text-gray-700">Role</label>
-                    <select id="role" {...register('role')} className="h-10 mt-1 block w-full rounded-xl border border-gray-200 px-3 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white">
+                    <select id="role" {...register('role')} className="h-10 mt-1 block w-full rounded-xl border border-gray-200 px-3 text-sm focus:outline-none focus:ring-1 focus:ring-brand-500 bg-white">
                       <option value="operator">Operator</option>
                       <option value="conductor">Conductor</option>
                     </select>
@@ -146,7 +146,7 @@ export default function EditOperatorModal({ isOpen, onClose, operator, companyId
                   </div>
                   <div>
                     <label htmlFor="status" className="block text-sm font-medium text-gray-700">Status</label>
-                    <select id="status" {...register('status')} className="h-10 mt-1 block w-full rounded-xl border border-gray-200 px-3 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white">
+                    <select id="status" {...register('status')} className="h-10 mt-1 block w-full rounded-xl border border-gray-200 px-3 text-sm focus:outline-none focus:ring-1 focus:ring-brand-500 bg-white">
                       <option value="invited">Invited</option>
                       <option value="active">Active</option>
                       <option value="inactive">Inactive</option>
@@ -156,7 +156,7 @@ export default function EditOperatorModal({ isOpen, onClose, operator, companyId
                   </div>
                   <div>
                     <label htmlFor="regionId" className="block text-sm font-medium text-gray-700">Region</label>
-                    <select id="regionId" {...register('regionId')} className="h-10 mt-1 block w-full rounded-xl border border-gray-200 px-3 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white" disabled={isLoadingRegions}>
+                    <select id="regionId" {...register('regionId')} className="h-10 mt-1 block w-full rounded-xl border border-gray-200 px-3 text-sm focus:outline-none focus:ring-1 focus:ring-brand-500 bg-white" disabled={isLoadingRegions}>
                       <option value="">No Region</option>
                       {regions?.map(region => <option key={region.id} value={region.id}>{region.name}</option>)}
                     </select>
@@ -175,7 +175,7 @@ export default function EditOperatorModal({ isOpen, onClose, operator, companyId
                     <Button type="button" variant="outline" onClick={onClose} className="rounded-xl h-10">
                       Cancel
                     </Button>
-                    <Button type="submit" disabled={mutation.isPending} className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl h-10 min-w-[100px]">
+                    <Button type="submit" disabled={mutation.isPending} className="bg-brand-700 hover:bg-brand-800 text-white rounded-xl h-10 min-w-[100px]">
                       {mutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save Changes'}
                     </Button>
                   </div>

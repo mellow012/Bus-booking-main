@@ -29,8 +29,8 @@ export default function RouteTabStrip({ routes, selectedRouteId, onSelectRoute }
               key={route.id}
               type="button"
               onClick={() => onSelectRoute(route.id)}
-              className={`flex items-center gap-2 pb-3 whitespace-nowrap border-b-2 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 rounded-t-sm ${
-                isSelected ? 'border-indigo-600' : 'border-transparent'
+              className={`flex items-center gap-2 pb-3 whitespace-nowrap border-b-2 transition-colors focus:outline-none focus-visible:ring-2               focus-visible:ring-brand-500 focus-visible:ring-offset-2 rounded-t-sm ${
+                isSelected ? 'border-brand-700' : 'border-transparent'
               }`}
             >
               <span className={`w-2 h-2 rounded-full shrink-0 ${dotColor} ${activeCount > 0 ? 'ring-4 ring-emerald-100' : ''}`} />

@@ -97,7 +97,7 @@ export default function AddScheduleForm({ form, onChange, modalContext, routes, 
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Price per Seat *</label>
-          <div className="relative rounded-lg border border-gray-300 bg-white shadow-sm focus-within:ring-2 focus-within:ring-indigo-500 focus-within:border-transparent transition-all">
+          <div className="relative rounded-lg border border-gray-300 bg-white shadow-sm           focus-within:ring-2 focus-within:ring-brand-500 focus-within:border-transparent transition-all">
             <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
               <span className="text-[10px] font-bold text-gray-400">MWK</span>
             </div>
@@ -112,7 +112,7 @@ export default function AddScheduleForm({ form, onChange, modalContext, routes, 
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Available Seats</label>
-          <div className="relative rounded-lg border border-gray-300 bg-white shadow-sm focus-within:ring-2 focus-within:ring-indigo-500 focus-within:border-transparent transition-all">
+          <div className="relative rounded-lg border border-gray-300 bg-white shadow-sm           focus-within:ring-2 focus-within:ring-brand-500 focus-within:border-transparent transition-all">
             <input
               type="number"
               value={form.availableSeats}

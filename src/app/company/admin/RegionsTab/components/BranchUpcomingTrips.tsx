@@ -18,7 +18,7 @@ export default function BranchUpcomingTrips({ branchName, schedules, routes, bus
   return (
     <div className="p-5 border-t border-gray-100 bg-gray-50/30">
       <h4 className="text-sm font-bold text-gray-900 mb-3 flex items-center gap-2">
-        <Calendar className="w-4 h-4 text-indigo-500" /> Upcoming Trips in {branchName}
+        <Calendar className="w-4 h-4 text-brand-500" /> Upcoming Trips in {branchName}
       </h4>
       {schedules.length === 0 ? (
         <p className="text-sm text-gray-500">No upcoming trips scheduled in this branch.</p>
@@ -31,7 +31,7 @@ export default function BranchUpcomingTrips({ branchName, schedules, routes, bus
               <div 
                 key={schedule.id} 
                 onClick={() => onScheduleClick && onScheduleClick(schedule.id)}
-                className={`flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-white px-4 py-2.5 rounded-lg border border-gray-100 ${onScheduleClick ? 'cursor-pointer hover:border-indigo-300 hover:shadow-sm transition-all' : ''}`}
+                className={`flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-white px-4 py-2.5 rounded-lg border border-gray-100 ${onScheduleClick ? 'cursor-pointer                 hover:border-brand-300 hover:shadow-sm transition-all' : ''}`}
               >
                 <div className="flex items-center gap-3">
                   <RouteIcon className="w-3.5 h-3.5 text-emerald-500 shrink-0" />

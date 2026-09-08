@@ -4,7 +4,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { MapPin, Calendar } from 'lucide-react';
 import { Route, Bus, Schedule, Booking } from '@/types';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@/utils/supabase/client';
+const supabase = createClient();
 
 import BranchesGrid from './components/BranchesGrid';
 import AllBranchesOverview from './components/BranchesOverview';
@@ -326,7 +327,7 @@ export default function RegionsTab({ dashboard }: RegionsTabProps) {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h2 className="text-xl font-bold tracking-tight text-gray-900 flex items-center gap-2">
-            <MapPin className="w-6 h-6 text-indigo-600" />
+            <MapPin className="w-6 h-6 text-brand-700" />
             Branches &amp; Routes
           </h2>
           <p className="mt-1 text-sm text-gray-500">Select a branch to manage its routes, buses, and schedules.</p>
@@ -341,7 +342,7 @@ export default function RegionsTab({ dashboard }: RegionsTabProps) {
             }}
             disabled={!selectedBranchId}
             title={!selectedBranchId ? 'Select a branch first' : undefined}
-            className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 shadow-sm disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-indigo-600"
+            className="inline-flex items-center gap-2 rounded-lg bg-brand-700 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-800 shadow-sm disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-brand-800"
           >
             <Calendar className="h-4 w-4" /> Create Schedule
           </button>

@@ -85,7 +85,7 @@ export default function AddBusForm({ form, onChange }: AddBusFormProps) {
       </div>
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">Capacity</label>
-        <div className="relative rounded-lg border border-gray-300 bg-white shadow-sm focus-within:ring-2 focus-within:ring-indigo-500 focus-within:border-transparent transition-all">
+        <div className="relative rounded-lg border border-gray-300 bg-white shadow-sm         focus-within:ring-2 focus-within:ring-brand-500 focus-within:border-transparent transition-all">
           <input
             type="number"
             value={form.capacity}

@@ -128,14 +128,14 @@ export default function RoutesTab({ dashboard }: RoutesTabProps) {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
         <div>
           <h2 className="text-xl font-bold text-gray-900 tracking-tight flex items-center gap-2">
-            <Map className="w-6 h-6 text-indigo-600" />
+            <Map className="w-6 h-6 text-brand-700" />
             Route Manager
           </h2>
           <p className="text-xs text-gray-500 mt-1">Configure company routes, intermediate pick-up stops, and base fares.</p>
         </div>
         <button
           onClick={handleOpenCreate}
-          className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-xl text-xs font-bold transition-all shadow-md shadow-indigo-100"
+          className="inline-flex items-center gap-2 bg-brand-700 hover:bg-brand-800 text-white px-4 py-2.5 rounded-xl text-xs font-bold transition-all shadow-md shadow-brand-100"
         >
           <Plus className="w-4 h-4" />
           <span>Add New Route</span>
@@ -158,7 +158,7 @@ export default function RoutesTab({ dashboard }: RoutesTabProps) {
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder="Search routes by name, origin, or destination…"
-          className="w-full pl-10 pr-4 py-2 bg-white border border-gray-200 rounded-xl text-xs font-medium text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm"
+          className="w-full pl-10 pr-4 py-2 bg-white border border-gray-200 rounded-xl text-xs font-medium text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500 shadow-sm"
         />
       </div>
 
@@ -174,7 +174,7 @@ export default function RoutesTab({ dashboard }: RoutesTabProps) {
           {filteredRoutes.map((route) => {
             const stopsList = (Array.isArray(route.stops) ? route.stops : []) as RouteStop[];
             return (
-              <div key={route.id} className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-4 hover:border-indigo-200 transition-all">
+              <div key={route.id} className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-4 hover:border-brand-200 transition-all">
                 <div className="flex justify-between items-start">
                   <div>
                     <h3 className="font-bold text-gray-900 text-base">{route.name}</h3>
@@ -194,7 +194,7 @@ export default function RoutesTab({ dashboard }: RoutesTabProps) {
                   </div>
                   <div>
                     <p className="text-[10px] text-gray-400 font-bold uppercase">Stops</p>
-                    <p className="font-bold text-indigo-600">{stopsList.length} stops</p>
+                    <p className="font-bold text-brand-700">{stopsList.length} stops</p>
                   </div>
                   <div>
                     <p className="text-[10px] text-gray-400 font-bold uppercase">Base Fare</p>
@@ -204,8 +204,8 @@ export default function RoutesTab({ dashboard }: RoutesTabProps) {
 
                 {/* Stops Summary */}
                 {stopsList.length > 0 && (
-                  <div className="text-[11px] text-gray-600 bg-indigo-50/50 p-2.5 rounded-xl border border-indigo-100">
-                    <p className="font-bold text-indigo-900 mb-1">Pick-up Points:</p>
+                  <div className="text-[11px] text-gray-600 bg-brand-50/50 p-2.5 rounded-xl border border-brand-100">
+                    <p className="font-bold text-brand-900 mb-1">Pick-up Points:</p>
                     <p className="truncate font-medium">{stopsList.map((s) => s.name).join(' → ')}</p>
                   </div>
                 )}
@@ -213,7 +213,7 @@ export default function RoutesTab({ dashboard }: RoutesTabProps) {
                 <div className="pt-2 border-t border-gray-100 flex justify-end gap-2">
                   <button
                     onClick={() => handleOpenEdit(route)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-brand-700 bg-brand-50 hover:bg-brand-100 rounded-lg transition-colors"
                   >
                     <Edit3 className="w-3.5 h-3.5" />
                     <span>Edit Stops & Details</span>
@@ -261,7 +261,7 @@ export default function RoutesTab({ dashboard }: RoutesTabProps) {
                 <Dialog.Panel className="relative transform overflow-hidden rounded-2xl bg-white text-left shadow-xl transition-all w-full max-w-2xl border border-gray-100">
                   <div className="px-6 py-4 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
                     <Dialog.Title as="h3" className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                      <Map className="w-5 h-5 text-indigo-600" />
+                      <Map className="w-5 h-5 text-brand-700" />
                       {editingRoute?.id ? 'Edit Route & Intermediate Stops' : 'Create New Route'}
                     </Dialog.Title>
                     <button
@@ -290,7 +290,7 @@ export default function RoutesTab({ dashboard }: RoutesTabProps) {
                             value={editingRoute.name || ''}
                             onChange={(e) => setEditingRoute({ ...editingRoute, name: e.target.value })}
                             placeholder="e.g. Lilongwe - Blantyre Express"
-                            className="h-10 mt-1 block w-full rounded-xl border border-gray-200 px-3 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
+                            className="h-10 mt-1 block w-full rounded-xl border border-gray-200 px-3 text-sm focus:outline-none focus:ring-1 focus:ring-brand-500 bg-white"
                             required
                           />
                         </div>
@@ -303,7 +303,7 @@ export default function RoutesTab({ dashboard }: RoutesTabProps) {
                               value={editingRoute.origin || ''}
                               onChange={(e) => setEditingRoute({ ...editingRoute, origin: e.target.value })}
                               placeholder="Lilongwe"
-                              className="h-10 mt-1 block w-full rounded-xl border border-gray-200 px-3 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
+                              className="h-10 mt-1 block w-full rounded-xl border border-gray-200 px-3 text-sm focus:outline-none focus:ring-1 focus:ring-brand-500 bg-white"
                               required
                             />
                           </div>
@@ -315,7 +315,7 @@ export default function RoutesTab({ dashboard }: RoutesTabProps) {
                               value={editingRoute.destination || ''}
                               onChange={(e) => setEditingRoute({ ...editingRoute, destination: e.target.value })}
                               placeholder="Blantyre"
-                              className="h-10 mt-1 block w-full rounded-xl border border-gray-200 px-3 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
+                              className="h-10 mt-1 block w-full rounded-xl border border-gray-200 px-3 text-sm focus:outline-none focus:ring-1 focus:ring-brand-500 bg-white"
                               required
                             />
                           </div>
@@ -332,7 +332,7 @@ export default function RoutesTab({ dashboard }: RoutesTabProps) {
                                 const v = e.target.value;
                                 if (v === '' || /^\d*\.?\d*$/.test(v)) setEditingRoute({ ...editingRoute, distance: v === '' ? undefined : (parseFloat(v) as any) });
                               }}
-                              className="h-10 mt-1 block w-full rounded-xl border border-gray-200 px-3 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
+                              className="h-10 mt-1 block w-full rounded-xl border border-gray-200 px-3 text-sm focus:outline-none focus:ring-1 focus:ring-brand-500 bg-white"
                               placeholder="310"
                             />
                           </div>
@@ -347,7 +347,7 @@ export default function RoutesTab({ dashboard }: RoutesTabProps) {
                                 const v = e.target.value;
                                 if (v === '' || /^\d*\.?\d*$/.test(v)) setEditingRoute({ ...editingRoute, baseFare: v === '' ? undefined : (parseFloat(v) as any) });
                               }}
-                              className="h-10 mt-1 block w-full rounded-xl border border-gray-200 px-3 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
+                              className="h-10 mt-1 block w-full rounded-xl border border-gray-200 px-3 text-sm focus:outline-none focus:ring-1 focus:ring-brand-500 bg-white"
                               placeholder="5000"
                             />
                           </div>
@@ -375,7 +375,7 @@ export default function RoutesTab({ dashboard }: RoutesTabProps) {
                         <Button
                           type="submit"
                           disabled={isSubmitting}
-                          className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl h-10 min-w-[100px]"
+                          className="bg-brand-700 hover:bg-brand-800 text-white rounded-xl h-10 min-w-[100px]"
                         >
                           {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save Route & Stops'}
                         </Button>

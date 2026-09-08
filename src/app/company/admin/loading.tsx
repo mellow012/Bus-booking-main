@@ -49,7 +49,7 @@ export default function CompanyAdminLoading() {
           <div className="max-w-7xl mx-auto space-y-6">
             <div className="flex justify-between items-center">
                <div className="h-8 w-48 bg-gray-200 rounded-lg animate-pulse" />
-               <div className="h-10 w-32 bg-indigo-100 rounded-lg animate-pulse" />
+               <div className="h-10 w-32 bg-brand-100 rounded-lg animate-pulse" />
             </div>
 
             {/* Dashboard Cards Skeleton Grid */}

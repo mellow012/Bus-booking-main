@@ -57,7 +57,7 @@ export default function AllBranchesOverview({ trips, buses, bookings, onDeleteSu
           <h3 className="text-lg font-bold text-gray-900">Upcoming trips across all branches</h3>
           <p className="mt-1 text-sm text-gray-500">See the nearest active and future trips across every branch.</p>
         </div>
-        <span className="inline-flex items-center rounded-full bg-indigo-50 px-3 py-1 text-sm font-semibold text-indigo-700 shrink-0">
+        <span className="inline-flex items-center rounded-full         bg-brand-50 px-3 py-1 text-sm font-semibold text-brand-700 shrink-0">
           {trips.length} trip{trips.length === 1 ? '' : 's'}
         </span>
       </div>
@@ -77,11 +77,11 @@ export default function AllBranchesOverview({ trips, buses, bookings, onDeleteSu
               <div
                 key={schedule.id}
                 onClick={() => handleOpenSchedule(schedule.id)}
-                className="w-full text-left rounded-xl border border-gray-200 bg-white p-3 hover:border-indigo-300 hover:bg-indigo-50/20 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm active:scale-[0.99] cursor-pointer"
+                className="w-full text-left rounded-xl border border-gray-200 bg-white p-3                 hover:border-brand-300 hover:bg-brand-50/20 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm active:scale-[0.99] cursor-pointer"
               >
                 <div className="flex flex-wrap items-center gap-3 sm:gap-4">
                   <div className="flex items-center gap-2 text-xs font-semibold text-gray-900 shrink-0">
-                    <Calendar className="w-4 h-4 text-indigo-500 shrink-0" />
+                    <Calendar className="w-4 h-4 text-brand-500 shrink-0" />
                     <span>{formatDateTime(new Date(departure).toISOString())}</span>
                   </div>
                   

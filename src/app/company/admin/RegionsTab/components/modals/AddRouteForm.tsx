@@ -24,7 +24,7 @@ function Field({ label, required, children }: { label: string; required?: boolea
 
 const inputCls =
   'block w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-900 ' +
-  'placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm';
+  'placeholder:text-gray-400 focus:outline-none   focus:ring-2 focus:ring-brand-500 shadow-sm';
 
 export default function AddRouteForm({ form, onChange }: AddRouteFormProps) {
   const set = (patch: Partial<RouteFormState>) => onChange({ ...form, ...patch });
@@ -67,7 +67,7 @@ export default function AddRouteForm({ form, onChange }: AddRouteFormProps) {
       {/* Numeric fields — use inputMode="decimal" so users can clear and retype freely */}
       <div className="grid grid-cols-3 gap-3">
         <Field label="Distance">
-          <div className="relative rounded-xl border border-gray-200 bg-white shadow-sm focus-within:ring-2 focus-within:ring-indigo-500 focus-within:border-transparent transition-all">
+          <div className="relative rounded-xl border border-gray-200 bg-white shadow-sm           focus-within:ring-2 focus-within:ring-brand-500 focus-within:border-transparent transition-all">
             <input
               type="text"
               inputMode="decimal"
@@ -85,7 +85,7 @@ export default function AddRouteForm({ form, onChange }: AddRouteFormProps) {
           </div>
         </Field>
         <Field label="Duration">
-          <div className="relative rounded-xl border border-gray-200 bg-white shadow-sm focus-within:ring-2 focus-within:ring-indigo-500 focus-within:border-transparent transition-all">
+          <div className="relative rounded-xl border border-gray-200 bg-white shadow-sm           focus-within:ring-2 focus-within:ring-brand-500 focus-within:border-transparent transition-all">
             <input
               type="text"
               inputMode="decimal"
@@ -103,7 +103,7 @@ export default function AddRouteForm({ form, onChange }: AddRouteFormProps) {
           </div>
         </Field>
         <Field label="Base Fare">
-          <div className="relative rounded-xl border border-gray-200 bg-white shadow-sm focus-within:ring-2 focus-within:ring-indigo-500 focus-within:border-transparent transition-all">
+          <div className="relative rounded-xl border border-gray-200 bg-white shadow-sm           focus-within:ring-2 focus-within:ring-brand-500 focus-within:border-transparent transition-all">
             <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
               <span className="text-[10px] font-bold text-gray-400">MWK</span>
             </div>

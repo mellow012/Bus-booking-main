@@ -76,7 +76,7 @@ export default function InviteOperatorModal({ isOpen, onClose, branches = [], co
               <Dialog.Panel className="relative transform overflow-hidden rounded-2xl bg-white text-left shadow-xl transition-all w-full max-w-md border border-gray-100">
                 <div className="px-6 py-4 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
                   <Dialog.Title as="h3" className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                    <Users className="w-5 h-5 text-indigo-600" />
+                    <Users className="w-5 h-5 text-brand-700" />
                     Invite New Operator
                   </Dialog.Title>
                   <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-600 text-lg font-semibold">×</button>
@@ -85,17 +85,17 @@ export default function InviteOperatorModal({ isOpen, onClose, branches = [], co
                 <form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-4">
                   <div>
                     <label htmlFor="name" className="block text-sm font-medium text-gray-700">Full Name</label>
-                    <input type="text" id="name" {...register('name')} className="h-10 mt-1 block w-full rounded-xl border border-gray-200 px-3 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white" placeholder="Enter full name" />
+                    <input type="text" id="name" {...register('name')} className="h-10 mt-1 block w-full rounded-xl border border-gray-200 px-3 text-sm focus:outline-none                     focus:ring-1 focus:ring-brand-500 bg-white" placeholder="Enter full name" />
                     {errors.name && <p className="mt-1 text-xs text-red-600">{errors.name.message}</p>}
                   </div>
                   <div>
                     <label htmlFor="email" className="block text-sm font-medium text-gray-700">Email Address</label>
-                    <input type="email" id="email" {...register('email')} className="h-10 mt-1 block w-full rounded-xl border border-gray-200 px-3 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white" placeholder="operator@example.com" />
+                    <input type="email" id="email" {...register('email')} className="h-10 mt-1 block w-full rounded-xl border border-gray-200 px-3 text-sm focus:outline-none                     focus:ring-1 focus:ring-brand-500 bg-white" placeholder="operator@example.com" />
                     {errors.email && <p className="mt-1 text-xs text-red-600">{errors.email.message}</p>}
                   </div>
                   <div>
                     <label htmlFor="role" className="block text-sm font-medium text-gray-700">Role</label>
-                    <select id="role" {...register('role')} className="h-10 mt-1 block w-full rounded-xl border border-gray-200 px-3 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white">
+                    <select id="role" {...register('role')} className="h-10 mt-1 block w-full rounded-xl border border-gray-200 px-3 text-sm focus:outline-none                     focus:ring-1 focus:ring-brand-500 bg-white">
                       <option value="">Select a role</option>
                       <option value="operator">Operator</option>
                       <option value="conductor">Conductor</option>
@@ -104,7 +104,7 @@ export default function InviteOperatorModal({ isOpen, onClose, branches = [], co
                   </div>
                   <div>
                     <label htmlFor="regionId" className="block text-sm font-medium text-gray-700">Assign to Branch (Optional)</label>
-                    <select id="regionId" {...register('regionId')} className="h-10 mt-1 block w-full rounded-xl border border-gray-200 px-3 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white">
+                    <select id="regionId" {...register('regionId')} className="h-10 mt-1 block w-full rounded-xl border border-gray-200 px-3 text-sm focus:outline-none                     focus:ring-1 focus:ring-brand-500 bg-white">
                       <option value="">No branch assigned</option>
                       {branches.map((b) => (
                         <option key={b.id} value={b.id}>{b.name}</option>
@@ -125,7 +125,7 @@ export default function InviteOperatorModal({ isOpen, onClose, branches = [], co
                     <Button type="button" variant="outline" onClick={onClose} className="rounded-xl h-10">
                       Cancel
                     </Button>
-                    <Button type="submit" disabled={mutation.isPending} className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl h-10 min-w-[100px]">
+                    <Button type="submit" disabled={mutation.isPending} className="                    bg-brand-700 hover:bg-brand-800 text-white rounded-xl h-10 min-w-[100px]">
                       {mutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Send Invitation'}
                     </Button>
                   </div>

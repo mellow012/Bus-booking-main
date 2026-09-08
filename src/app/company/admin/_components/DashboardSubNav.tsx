@@ -32,9 +32,8 @@ export default function DashboardSubNav({
               onClick={() => setActiveTab(tab.id)}
               className={`py-3 text-[13px] font-bold border-b-2 transition-all relative
                 ${isActive
-                  ? 'border-brand-primary text-brand-primary'
-                  : 'border-transparent text-gray-400 hover:text-gray-600 hover:border-gray-200'}`}
-              style={isActive ? { borderColor: 'var(--brand-primary)', color: 'var(--brand-primary)' } : {}}
+                  ? 'border-brand-700 text-brand-700'
+                  : 'border-transparent text-gray-400 hover:text-brand-800 hover:border-brand-200'}`}
             >
               <div className="flex items-center gap-1.5">
                 {tab.label}
@@ -54,13 +53,12 @@ export default function DashboardSubNav({
                   </span>
                 )}
                 {tab.id === 'reports' && statistics.pendingReports > 0 && (
-                  <span className="w-2 h-2 bg-indigo-400 rounded-full" />
+                  <span className="w-2 h-2 bg-coral-400 rounded-full" />
                 )}
               </div>
               {isActive && (
                 <span
-                  className="absolute -bottom-[2px] left-0 right-0 h-[2px] bg-brand-primary rounded-full"
-                  style={{ backgroundColor: 'var(--brand-primary)' }}
+                  className="absolute -bottom-[2px] left-0 right-0 h-[2px] bg-brand-700 rounded-full"
                 />
               )}
             </button>

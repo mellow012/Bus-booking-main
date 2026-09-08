@@ -238,12 +238,12 @@ export default function BusesTab({ dashboard }: BusesTabProps) {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 tracking-tight flex items-center gap-2.5">
-            <BusIcon className="w-7 h-7 text-indigo-600" />
+            <BusIcon className="w-7 h-7 text-brand-700" />
             Fleet Manager
           </h1>
           <p className="text-sm text-gray-500 mt-1">Manage company vehicles, seating capacities, and maintenance schedules.</p>
         </div>
-        <Button onClick={openAddModal} className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-lg shadow-indigo-100 flex items-center gap-2">
+        <Button onClick={openAddModal} className="bg-brand-700 hover:bg-brand-800 text-white rounded-xl shadow-lg shadow-brand-100 flex items-center gap-2">
           <Plus className="w-4 h-4" /> Add Vehicle
         </Button>
       </div>
@@ -251,7 +251,7 @@ export default function BusesTab({ dashboard }: BusesTabProps) {
       {/* Stats Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-4">
-          <div className="w-12 h-12 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600 shrink-0">
+          <div className="w-12 h-12 bg-brand-50 rounded-xl flex items-center justify-center text-brand-700 shrink-0">
             <BusIcon className="w-6 h-6" />
           </div>
           <div>
@@ -299,7 +299,7 @@ export default function BusesTab({ dashboard }: BusesTabProps) {
             placeholder="Search by license plate..." 
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10 h-10 rounded-xl text-sm border-gray-200 focus:ring-indigo-500 focus:border-indigo-500"
+            className="pl-10 h-10 rounded-xl text-sm border-gray-200             focus:ring-brand-500 focus:border-brand-500"
           />
         </div>
         
@@ -308,7 +308,7 @@ export default function BusesTab({ dashboard }: BusesTabProps) {
           <select
             value={selectedType}
             onChange={(e) => setSelectedType(e.target.value)}
-            className="h-10 text-xs px-3 border border-gray-200 rounded-xl bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            className="h-10 text-xs px-3 border border-gray-200 rounded-xl bg-white             focus:outline-none focus:ring-1 focus:ring-brand-500"
           >
             <option value="all">All Bus Types</option>
             {BUS_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
@@ -318,7 +318,7 @@ export default function BusesTab({ dashboard }: BusesTabProps) {
           <select
             value={selectedStatus}
             onChange={(e) => setSelectedStatus(e.target.value)}
-            className="h-10 text-xs px-3 border border-gray-200 rounded-xl bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            className="h-10 text-xs px-3 border border-gray-200 rounded-xl bg-white             focus:outline-none focus:ring-1 focus:ring-brand-500"
           >
             <option value="all">All Statuses</option>
             <option value="active">Active</option>
@@ -344,7 +344,7 @@ export default function BusesTab({ dashboard }: BusesTabProps) {
                   {/* Card Header */}
                   <div className="flex items-start justify-between">
                     <div>
-                      <span className="text-xs font-semibold px-2.5 py-1 bg-indigo-50 text-indigo-700 rounded-full">
+                      <span className="text-xs font-semibold px-2.5 py-1                       bg-brand-50 text-brand-700 rounded-full">
                         {bus.busType}
                       </span>
                       <h4 className="text-lg font-black text-gray-900 mt-2.5 uppercase tracking-wide">
@@ -438,7 +438,7 @@ export default function BusesTab({ dashboard }: BusesTabProps) {
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden border border-gray-100 animate-in zoom-in-95 duration-200">
             <div className="px-6 py-4 bg-gray-50 border-b border-gray-100">
               <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                <BusIcon className="w-5 h-5 text-indigo-600" />
+                <BusIcon className="w-5 h-5 text-brand-700" />
                 {editingBus ? 'Edit Vehicle Info' : 'Add Vehicle to Fleet'}
               </h3>
               <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600 text-lg absolute right-4 top-4">×</button>
@@ -475,7 +475,7 @@ export default function BusesTab({ dashboard }: BusesTabProps) {
                       id="busType"
                       value={formValues.busType}
                       onChange={(e) => setFormValues({ ...formValues, busType: e.target.value })}
-                      className="w-full h-10 mt-1 px-3 border border-gray-200 rounded-xl bg-white text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      className="w-full h-10 mt-1 px-3 border border-gray-200 rounded-xl bg-white text-sm                       focus:outline-none focus:ring-1 focus:ring-brand-500"
                     >
                       {BUS_TYPES.map(type => <option key={type} value={type}>{type}</option>)}
                     </select>
@@ -483,7 +483,7 @@ export default function BusesTab({ dashboard }: BusesTabProps) {
 
                   <div>
                     <Label htmlFor="capacity">Capacity *</Label>
-                    <div className="relative rounded-xl border border-gray-200 bg-white shadow-sm focus-within:ring-2 focus-within:ring-indigo-500 focus-within:border-transparent transition-all mt-1">
+                    <div className="relative rounded-xl border border-gray-200 bg-white shadow-sm                     focus-within:ring-2 focus-within:ring-brand-500 focus-within:border-transparent transition-all mt-1">
                       <input
                         id="capacity"
                         type="number"
@@ -506,7 +506,7 @@ export default function BusesTab({ dashboard }: BusesTabProps) {
                       id="status"
                       value={formValues.status}
                       onChange={(e) => setFormValues({ ...formValues, status: e.target.value })}
-                      className="w-full h-10 mt-1 px-3 border border-gray-200 rounded-xl bg-white text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      className="w-full h-10 mt-1 px-3 border border-gray-200 rounded-xl bg-white text-sm                       focus:outline-none focus:ring-1 focus:ring-brand-500"
                     >
                       <option value="active">Active (On road)</option>
                       <option value="inactive">Inactive (Stored)</option>
@@ -520,7 +520,7 @@ export default function BusesTab({ dashboard }: BusesTabProps) {
                       id="fuelType"
                       value={formValues.fuelType}
                       onChange={(e) => setFormValues({ ...formValues, fuelType: e.target.value })}
-                      className="w-full h-10 mt-1 px-3 border border-gray-200 rounded-xl bg-white text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      className="w-full h-10 mt-1 px-3 border border-gray-200 rounded-xl bg-white text-sm                       focus:outline-none focus:ring-1 focus:ring-brand-500"
                     >
                       <option value="Diesel">Diesel</option>
                       <option value="Petrol">Petrol</option>
@@ -593,7 +593,7 @@ export default function BusesTab({ dashboard }: BusesTabProps) {
                           </div>
                         </div>
                       ))}
-                      <label className="w-24 h-24 rounded-lg border-2 border-dashed border-gray-300 bg-white flex flex-col items-center justify-center text-gray-500 hover:bg-indigo-50 hover:border-indigo-300 hover:text-indigo-600 cursor-pointer transition-colors shrink-0 shadow-sm">
+                      <label className="w-24 h-24 rounded-lg border-2 border-dashed border-gray-300 bg-white flex flex-col items-center justify-center text-gray-500                       hover:bg-brand-50 hover:border-brand-300 hover:text-brand-700 cursor-pointer transition-colors shrink-0 shadow-sm">
                         <Plus className="w-5 h-5 mb-1" />
                         <span className="text-[10px] font-semibold tracking-wide uppercase">Add Photo</span>
                         <input 
@@ -622,7 +622,7 @@ export default function BusesTab({ dashboard }: BusesTabProps) {
                 <Button 
                   type="submit"
                   disabled={submitting}
-                  className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl h-10 min-w-[100px]"
+                  className="bg-brand-700 hover:bg-brand-800 text-white rounded-xl h-10 min-w-[100px]"
                 >
                   {submitting ? (
                      <>

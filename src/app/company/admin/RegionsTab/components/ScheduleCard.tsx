@@ -62,11 +62,11 @@ export default function ScheduleCard({ schedule, bus, seatsBooked, totalSeats, r
   return (
     <div 
       onClick={() => router.push(`${baseUrl}?tab=bookings&scheduleId=${encodeURIComponent(schedule.id)}`)}
-      className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4 group hover:border-indigo-200 cursor-pointer transition-colors"
+      className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4 group       hover:border-brand-200 cursor-pointer transition-colors"
     >
       <div className="flex-1">
         <div className="flex items-center gap-2 mb-1">
-          <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-500 shrink-0">
+          <div className="w-8 h-8 rounded-lg           bg-brand-50 flex items-center justify-center text-brand-500 shrink-0">
             <Calendar className="w-4 h-4" />
           </div>
           <p className="font-bold text-sm text-gray-900">
@@ -95,7 +95,7 @@ export default function ScheduleCard({ schedule, bus, seatsBooked, totalSeats, r
         <button
           onClick={handleShare}
           title="Share Schedule Link"
-          className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-colors self-center"
+          className="p-2 text-gray-400           hover:text-brand-700 hover:bg-brand-50 rounded-xl transition-colors self-center"
         >
           <Share2 className="w-5 h-5" />
         </button>

@@ -30,7 +30,7 @@ export default function ModalShell({ title, saving, onClose, onSave, children }:
             onClick={onSave}
             isLoading={saving}
             loadingText="Saving..."
-            className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl h-10 min-w-[100px]"
+            className="            bg-brand-700 hover:bg-brand-800 text-white rounded-xl h-10 min-w-[100px]"
           >
             Save
           </Button>

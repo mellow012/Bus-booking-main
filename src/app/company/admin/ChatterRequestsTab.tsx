@@ -136,7 +136,7 @@ export default function ChatterRequestsTab({ dashboard }: ChatterRequestsTabProp
   if (loading && requests.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-20">
-        <Loader2 className="w-10 h-10 text-indigo-600 animate-spin mb-4" />
+        <Loader2 className="w-10 h-10 text-brand-700 animate-spin mb-4" />
         <p className="text-gray-500 font-medium">Loading chatter requests...</p>
       </div>
     );
@@ -147,7 +147,7 @@ export default function ChatterRequestsTab({ dashboard }: ChatterRequestsTabProp
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-gray-900 tracking-tight flex items-center gap-2">
-            <Megaphone className="w-6 h-6 text-indigo-600" />
+            <Megaphone className="w-6 h-6 text-brand-700" />
             Chatter Requests
           </h2>
           <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-1">
@@ -166,13 +166,13 @@ export default function ChatterRequestsTab({ dashboard }: ChatterRequestsTabProp
             <div className="p-6">
               <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
                 <div className="flex items-center gap-4">
-                  <div className="w-14 h-14 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600 group-hover:scale-110 transition-transform">
+                  <div className="w-14 h-14 bg-brand-50 rounded-2xl flex items-center justify-center text-brand-700 group-hover:scale-110 transition-transform">
                     <Users className="w-7 h-7" />
                   </div>
                   <div>
                     <h3 className="font-bold text-gray-900 text-lg">{req.organizerName}</h3>
                     <div className="flex items-center gap-2 mt-1">
-                      <span className="text-[10px] font-bold text-indigo-500 bg-indigo-50 px-2 py-0.5 rounded-full uppercase tracking-widest">
+                      <span className="text-[10px] font-bold text-brand-500 bg-brand-50 px-2 py-0.5 rounded-full uppercase tracking-widest">
                         {req.seatsRequested || req.estimatedPax} Seats
                       </span>
                       <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
@@ -197,16 +197,16 @@ export default function ChatterRequestsTab({ dashboard }: ChatterRequestsTabProp
               <div className="grid md:grid-cols-2 gap-8 mb-6">
                 <div className="space-y-4">
                   <div className="flex items-start gap-3">
-                    <MapPin className="w-5 h-5 text-indigo-400 mt-0.5" />
+                    <MapPin className="w-5 h-5 text-brand-400 mt-0.5" />
                     <div>
                       <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Route</p>
                       <p className="font-bold text-gray-800 flex items-center gap-2">
-                        {req.origin} <ArrowRight className="w-4 h-4 text-indigo-600" /> {req.destination}
+                        {req.origin} <ArrowRight className="w-4 h-4 text-brand-700" /> {req.destination}
                       </p>
                     </div>
                   </div>
                   <div className="flex items-start gap-3">
-                    <Calendar className="w-5 h-5 text-indigo-400 mt-0.5" />
+                    <Calendar className="w-5 h-5 text-brand-400 mt-0.5" />
                     <div>
                       <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Departure</p>
                       <p className="font-bold text-gray-800">{format(new Date(req.departureDate), 'EEEE, MMM do yyyy')}</p>
@@ -214,7 +214,7 @@ export default function ChatterRequestsTab({ dashboard }: ChatterRequestsTabProp
                   </div>
                   {req.contactPhone && (
                     <div className="flex items-start gap-3">
-                      <Phone className="w-5 h-5 text-indigo-400 mt-0.5" />
+                      <Phone className="w-5 h-5 text-brand-400 mt-0.5" />
                       <div>
                         <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Contact</p>
                         <p className="font-bold text-gray-800">{req.contactPhone}</p>

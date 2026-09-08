@@ -107,7 +107,7 @@ export default function BranchDetailPanel({
     <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden animate-in fade-in slide-in-from-top-2 duration-300">
       <div className="p-5 border-b border-gray-100 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between bg-gray-50/50">
         <div className="flex items-start gap-3">
-          <div className="w-9 h-9 bg-indigo-600 rounded-lg flex items-center justify-center text-white">
+          <div className="w-9 h-9           bg-brand-700 rounded-lg flex items-center justify-center text-white">
             <MapPin className="w-4 h-4" />
           </div>
           <div>

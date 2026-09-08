@@ -53,12 +53,12 @@ export default function DashboardSidebar({
                   className="w-10 h-10 rounded-xl object-cover border border-gray-200 shadow-sm"
                 />
               ) : (
-                <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg shadow-indigo-100">
+                <div className="w-10 h-10 bg-brand-700 rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg shadow-brand-100">
                   <BusIcon className="w-5 h-5 text-white" />
                 </div>
               )}
               <div className="min-w-0">
-                <h1 className="font-bold text-indigo-900 text-[15px] leading-tight truncate">
+                <h1 className="font-bold text-brand-800 text-[15px] leading-tight truncate">
                   {company?.name || 'Kinetic Admin'}
                 </h1>
                 <p className="text-[10px] text-gray-400 font-bold tracking-wider uppercase">Platform</p>
@@ -71,7 +71,7 @@ export default function DashboardSidebar({
               className="w-10 h-10 rounded-xl object-cover border border-gray-200 shadow-sm animate-in zoom-in duration-300"
             />
           ) : (
-            <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg shadow-indigo-100 animate-in zoom-in duration-300">
+            <div className="w-10 h-10 bg-brand-700 rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg shadow-brand-100 animate-in zoom-in duration-300">
               <BusIcon className="w-5 h-5 text-white" />
             </div>
           )}
@@ -103,10 +103,10 @@ export default function DashboardSidebar({
                 id={`tour-${cat.id}`}
                 onClick={() => { setActiveCategory(cat.id); setIsMobileOpen(false); }}
                 className={`w-full flex items-center group transition-all duration-200 relative rounded-2xl h-12
-                  ${isActive ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200 scale-[1.02]' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'}
+                  ${isActive ? 'bg-brand-700 text-white shadow-lg shadow-brand-200 scale-[1.02]' : 'text-gray-500 hover:bg-brand-50 hover:text-brand-800'}
                   ${isCollapsed && !isMobileOpen ? 'justify-center px-0' : 'px-4 space-x-3'}`}
               >
-                <Icon className={`w-5 h-5 flex-shrink-0 ${isActive ? 'text-white' : 'group-hover:text-indigo-600 text-gray-400'}`} />
+                <Icon className={`w-5 h-5 flex-shrink-0 ${isActive ? 'text-white' : 'group-hover:text-brand-700 text-gray-400'}`} />
 
                 {showLabel && (
                   <span className="text-[13px] font-bold flex-1 text-left truncate animate-in slide-in-from-left-2 duration-300">
@@ -127,7 +127,7 @@ export default function DashboardSidebar({
                 )}
 
                 {showLabel && cat.id === 'sales' && statistics.pendingReports > 0 && (
-                  <span className="absolute -right-1 -top-1 w-2 h-2 bg-indigo-400 rounded-full border border-white" />
+                  <span className="absolute -right-1 -top-1 w-2 h-2 bg-coral-400 rounded-full border border-white" />
                 )}
 
                 {/* Tooltip for collapsed state */}
@@ -145,11 +145,11 @@ export default function DashboardSidebar({
           <div className="pt-4 mt-4 border-t border-gray-100 flex flex-col gap-1">
             <a
               href="/"
-              className={`w-full flex items-center group transition-all duration-200 relative rounded-2xl h-11 border border-indigo-100 bg-indigo-50/25 hover:bg-indigo-50 text-indigo-600 mb-1
+              className={`w-full flex items-center group transition-all duration-200 relative rounded-2xl h-11 border border-brand-100 bg-brand-50/50 hover:bg-brand-100 text-brand-700 mb-1
                 ${isCollapsed && !isMobileOpen ? 'justify-center px-0' : 'px-4 space-x-3'}`}
               title={isCollapsed && !isMobileOpen ? 'Booking Portal' : undefined}
             >
-              <ExternalLink className="w-5 h-5 flex-shrink-0 text-indigo-500" />
+              <ExternalLink className="w-5 h-5 flex-shrink-0 text-brand-600" />
               {(!isCollapsed || isMobileOpen) && (
                 <span className="text-[13px] font-bold flex-1 text-left truncate animate-in slide-in-from-left-2 duration-300">
                   Booking Portal
