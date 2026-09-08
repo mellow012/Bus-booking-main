@@ -43,6 +43,26 @@ export async function PATCH(req: NextRequest, context: any) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
+    const VALID_ROLES = [
+      'superadmin', 'super_admin', 'chief_of_growth', 'chief_of_operations',
+      'finance', 'company_admin', 'operator', 'conductor', 'customer'
+    ];
+
+    if (!VALID_ROLES.includes(newRole)) {
+      return NextResponse.json({ error: 'Invalid role value' }, { status: 400 });
+    }
+
+    const ALLOWED_TARGET_ROLES: Record<string, string[]> = {
+      superadmin: VALID_ROLES,
+      super_admin: VALID_ROLES,
+      company_admin: ['operator', 'conductor'],
+    };
+
+    const callerAllowedRoles = ALLOWED_TARGET_ROLES[user.role ?? ''] ?? [];
+    if (!callerAllowedRoles.includes(newRole)) {
+      return NextResponse.json({ error: 'Access denied: cannot assign this role' }, { status: 403 });
+    }
+
     // Update role and increment sessionVersion to invalidate cached sessions
     const updated = await prisma.user.update({
       where: { id: target.id },
