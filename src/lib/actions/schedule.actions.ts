@@ -208,8 +208,11 @@ export async function updateSchedule(id: string, data: Partial<Schedule>) {
 
 export async function deleteSchedule(id: string) {
   try {
-    const bookingCount = await prisma.booking.count({ where: { scheduleId: id } });
-    if (bookingCount > 0) {
+    const [bookingCount, bookingSegmentCount] = await prisma.$transaction([
+      prisma.booking.count({ where: { scheduleId: id } }),
+      prisma.bookingSegment.count({ where: { scheduleId: id } }),
+    ]);
+    if (bookingCount > 0 || bookingSegmentCount > 0) {
       return { success: false, error: 'Cannot delete schedule because it has associated bookings. Please mark the schedule as cancelled or archived instead.' };
     }
     await prisma.schedule.delete({ where: { id } });
