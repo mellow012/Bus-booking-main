@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@/utils/supabase/client';
+const supabase = createClient();
 import { Schedule, Route, Bus } from '@/types';
 
 import { parseUtcDate } from '@/lib/timezone';
@@ -111,4 +112,3 @@ export function useCompanyOperators(companyId: string) {
     staleTime: 5 * 60 * 1000,
   });
 }
-

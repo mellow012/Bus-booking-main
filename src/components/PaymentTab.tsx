@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useRef } from "react";
-import { supabase } from "@/lib/supabase";
+import { createClient } from "@/utils/supabase/client";
 import { Button } from "@/components/ui/button";
 import { format } from 'date-fns';
 import { parseUtcDate } from '@/lib/timezone';
@@ -19,6 +19,8 @@ import {
 } from "lucide-react";
 
 import { Company, Booking, Bus } from "@/types";
+
+const supabase = createClient();
 
 interface PaymentsTabProps {
   company: Company;

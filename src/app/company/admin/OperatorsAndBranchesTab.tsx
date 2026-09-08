@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation';
 import { MapPin, PlusCircle, Users, Pencil, Trash2, Building2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAppToast } from '@/contexts/ToastContext';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@/utils/supabase/client';
+const supabase = createClient();
 import InviteOperatorModal from './InviteOperatorModal';
 import EditOperatorModal from './EditOperatorModal';
 import { 
@@ -196,8 +197,16 @@ export default function OperatorsAndBranchesTab({ dashboard }: OperatorsAndBranc
 
       if (error) throw error;
 
-      const routeIds = (data || []).map((row: any) => row.B).filter(Boolean);
-      setSelectedRouteIds(routeIds);
+      const explicitRouteIds = (data || []).map((row: any) => row.B).filter(Boolean);
+      const branchRouteIds = operator.regionId
+        ? availableRoutes
+            .filter((route: any) => route.regionId === operator.regionId)
+            .map((route: any) => route.id)
+        : [];
+
+      // Branch membership grants access to every route in that branch. Keep
+      // explicit assignments too so unassigned-branch exceptions remain visible.
+      setSelectedRouteIds(Array.from(new Set([...explicitRouteIds, ...branchRouteIds])));
     } catch (err) {
       console.error('Error loading assigned routes:', err);
       setSelectedRouteIds(operator.routeIds || []);
@@ -338,7 +347,7 @@ export default function OperatorsAndBranchesTab({ dashboard }: OperatorsAndBranc
           <button
             type="button"
             onClick={() => setInviteModalOpen(true)}
-            className="inline-flex items-center gap-2 rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500"
+            className="inline-flex items-center gap-2 rounded-md bg-brand-700 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-800"
           >
             <PlusCircle className="h-5 w-5" />
             Invite Operator
@@ -349,7 +358,7 @@ export default function OperatorsAndBranchesTab({ dashboard }: OperatorsAndBranc
       <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
         <div className="border-b border-gray-100 bg-gray-50/70 px-4 py-3 sm:px-6">
           <div className="flex items-center gap-2 text-sm font-semibold text-gray-900">
-            <MapPin className="h-4 w-4 text-indigo-600" />
+            <MapPin className="h-4 w-4 text-brand-700" />
             Available branches
           </div>
         </div>
@@ -371,17 +380,17 @@ export default function OperatorsAndBranchesTab({ dashboard }: OperatorsAndBranc
                       handleBranchSelect(branch.id);
                     }
                   }}
-                  className={`group text-left rounded-xl border px-4 py-3 transition ${isSelected ? 'border-indigo-600 bg-indigo-50 shadow-sm' : 'border-gray-200 bg-gray-50 hover:border-indigo-300 hover:bg-white'}`}
+                  className={`group text-left rounded-xl border px-4 py-3 transition ${isSelected ? 'border-brand-700 bg-brand-50 shadow-sm' : 'border-gray-200 bg-gray-50 hover:border-brand-300 hover:bg-white'}`}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <div className={`font-medium ${isSelected ? 'text-indigo-900' : 'text-gray-900'}`}>{branch.name}</div>
+                      <div className={`font-medium ${isSelected ? 'text-brand-900' : 'text-gray-900'}`}>{branch.name}</div>
                       <div className="mt-1 text-xs text-gray-500">{branch.code || 'Branch'}</div>
                     </div>
                     <button
                       type="button"
                       onClick={(event) => { event.stopPropagation(); openEditBranchModal(branch); }}
-                      className="text-sm font-semibold text-indigo-600 hover:text-indigo-700"
+                      className="text-sm font-semibold text-brand-700 hover:text-brand-800"
                     >
                       Edit
                     </button>
@@ -396,7 +405,7 @@ export default function OperatorsAndBranchesTab({ dashboard }: OperatorsAndBranc
       <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
         <div className="border-b border-gray-100 bg-gray-50/70 px-4 py-3 sm:px-6">
           <div className="flex items-center gap-2 text-sm font-semibold text-gray-900">
-            <Users className="h-4 w-4 text-indigo-600" />
+            <Users className="h-4 w-4 text-brand-700" />
             Company operators
           </div>
         </div>
@@ -450,7 +459,7 @@ export default function OperatorsAndBranchesTab({ dashboard }: OperatorsAndBranc
                         disabled={isActionLoading}
                         variant="secondary"
                         size="sm"
-                        className="h-8 rounded-lg bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100 text-xs"
+                        className="h-8 rounded-lg bg-brand-50 border border-brand-200 text-brand-700 hover:bg-brand-100 text-xs"
                       >
                         Routes
                       </Button>
@@ -501,18 +510,23 @@ export default function OperatorsAndBranchesTab({ dashboard }: OperatorsAndBranc
               ) : (
                 <div className="max-h-72 space-y-2 overflow-y-auto rounded-xl border border-gray-200 p-3">
                   {availableRoutes.map((route: any) => {
-                    const isChecked = selectedRouteIds.includes(route.id);
+                    const isBranchRoute = routeAssignmentOperator.regionId === route.regionId;
+                    const isChecked = selectedRouteIds.includes(route.id) || isBranchRoute;
                     return (
                       <label key={route.id} className="flex cursor-pointer items-start gap-3 rounded-lg border border-transparent px-2 py-2 hover:border-gray-200 hover:bg-gray-50">
                         <input
                           type="checkbox"
                           checked={isChecked}
+                          disabled={isBranchRoute}
                           onChange={() => toggleRouteSelection(route.id)}
-                          className="mt-1 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                          className="mt-1 h-4 w-4 rounded border-gray-300 text-brand-700 focus:ring-brand-500"
                         />
                         <div>
                           <div className="text-sm font-medium text-gray-900">{route.name || `${route.origin} → ${route.destination}`}</div>
-                          <div className="text-xs text-gray-500">{route.origin} → {route.destination}</div>
+                          <div className="text-xs text-gray-500">
+                            {route.origin} → {route.destination}
+                            {isBranchRoute && <span className="ml-2 font-medium text-brand-700">Branch route</span>}
+                          </div>
                         </div>
                       </label>
                     );
@@ -522,7 +536,7 @@ export default function OperatorsAndBranchesTab({ dashboard }: OperatorsAndBranc
             </div>
             <div className="mt-6 flex justify-end gap-2">
               <button type="button" onClick={closeAssignRoutesModal} className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">Cancel</button>
-              <button type="button" onClick={handleSaveRouteAssignment} disabled={isSavingRouteAssignment} className="rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60">
+              <button type="button" onClick={handleSaveRouteAssignment} disabled={isSavingRouteAssignment} className="rounded-lg bg-brand-700 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-800 disabled:cursor-not-allowed disabled:opacity-60">
                 {isSavingRouteAssignment ? 'Saving...' : 'Save routes'}
               </button>
             </div>
@@ -535,7 +549,7 @@ export default function OperatorsAndBranchesTab({ dashboard }: OperatorsAndBranc
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden border border-gray-100 animate-in zoom-in-95 duration-200">
             <div className="px-6 py-4 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
               <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                <Building2 className="w-5 h-5 text-indigo-600" />
+                <Building2 className="w-5 h-5 text-brand-700" />
                 {editingBranch ? 'Edit Branch' : 'Add Branch'}
               </h3>
               <button type="button" onClick={resetBranchModal} className="text-gray-400 hover:text-gray-600 text-lg font-semibold">×</button>
@@ -547,7 +561,7 @@ export default function OperatorsAndBranchesTab({ dashboard }: OperatorsAndBranc
                   <input
                     value={branchName}
                     onChange={(event) => setBranchName(event.target.value)}
-                    className="h-10 mt-1 w-full border border-gray-200 rounded-xl bg-white px-3 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    className="h-10 mt-1 w-full border border-gray-200 rounded-xl bg-white px-3 text-sm focus:outline-none focus:ring-1 focus:ring-brand-500"
                     placeholder="e.g. CBD"
                   />
                 </label>
@@ -566,7 +580,7 @@ export default function OperatorsAndBranchesTab({ dashboard }: OperatorsAndBranc
                   type="button" 
                   onClick={handleSaveBranch} 
                   disabled={isSavingBranch || !branchName.trim()} 
-                  className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl h-10 min-w-[100px]"
+                  className="bg-brand-700 hover:bg-brand-800 text-white rounded-xl h-10 min-w-[100px]"
                 >
                   {isSavingBranch ? 'Saving...' : editingBranch ? 'Save Changes' : 'Create Branch'}
                 </Button>

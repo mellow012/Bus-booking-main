@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@/utils/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -28,6 +28,8 @@ interface GroupBookingFormProps {
   onSuccess: () => void;
   onCancel: () => void;
 }
+
+const supabase = createClient();
 
 const GroupBookingForm: React.FC<GroupBookingFormProps> = ({
   scheduleId,

@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@/utils/supabase/client';
+const supabase = createClient();
 import * as dbActions from '@/lib/actions/db.actions';
 import { useAuth } from '@/contexts/AuthContext';
 import { QueryClient } from '@tanstack/react-query';
