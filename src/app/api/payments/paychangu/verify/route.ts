@@ -6,11 +6,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sendNotificationToUser } from "@/lib/notificationService";
+import { getCurrentUserFromServer } from "@/lib/auth-utils";
 
 const PAYCHANGU_API    = "https://api.paychangu.com";
 const SUCCESS_STATUSES = ["success", "successful", "completed"];
 
 export async function GET(req: NextRequest) {
+  const user = await getCurrentUserFromServer();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000").replace(/\/$/, "");
   const { searchParams } = new URL(req.url);
   const txRef  = searchParams.get("tx_ref");
@@ -46,6 +52,9 @@ export async function GET(req: NextRequest) {
     }
 
     const booking = payment.booking;
+    if (booking.userId !== user.id) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
 
     // Idempotency
     if (booking.paymentStatus === "paid") {

@@ -10,7 +10,8 @@ export async function GET(req: NextRequest) {
     }
     const result = await getChatterRequestsForCompany(companyId);
     if (!result.success) {
-      return NextResponse.json({ error: result.error }, { status: 500 });
+      const status = result.error === 'Unauthorized' ? 401 : result.error === 'Forbidden' ? 403 : 500;
+      return NextResponse.json({ error: result.error }, { status });
     }
     return NextResponse.json(result);
   } catch (error: any) {

@@ -9,7 +9,8 @@ export async function GET(
     const { id } = await params;
     const result = await getBookingsForChatterSchedule(id);
     if (!result.success) {
-      return NextResponse.json({ error: result.error }, { status: 400 });
+      const status = result.error === 'Unauthorized' ? 401 : result.error === 'Forbidden' ? 403 : 404;
+      return NextResponse.json({ error: result.error }, { status });
     }
     return NextResponse.json(result);
   } catch (error: any) {

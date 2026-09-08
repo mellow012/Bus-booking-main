@@ -19,17 +19,22 @@ export async function GET(req: NextRequest) {
     const companyId = searchParams.get("companyId");
     const limit = Math.max(1, parseInt(searchParams.get("limit") || "10", 10));
 
-    if (!companyId) {
+    const platformRoles = ["super_admin", "superadmin"];
+    if (!platformRoles.includes(user.role ?? "") && user.role !== "company_admin") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const scopedCompanyId = user.role === "company_admin" ? user.companyId : companyId;
+    if (!scopedCompanyId) {
       return NextResponse.json({ error: "companyId is required" }, { status: 400 });
     }
 
-    // Ensure authorization (admin or matching company ID)
-    if (user.role !== "admin" && user.companyId !== companyId) {
+    if (user.role === "company_admin" && !user.companyId) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     const reports = await prisma.dailyReport.findMany({
-      where: { companyId },
+      where: { companyId: scopedCompanyId },
       orderBy: { date: "desc" },
       take: Math.min(limit, 50),
     });

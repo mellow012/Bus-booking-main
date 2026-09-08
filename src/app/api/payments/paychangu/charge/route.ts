@@ -4,9 +4,15 @@ import { prisma } from "@/lib/prisma";
 import { paymentRateLimiter, getClientIp } from "@/lib/rateLimit";
 import { isChatterScheduleExpired } from "@/lib/chatterHelpers";
 import { parseUtcDate } from "@/lib/timezone";
+import { getCurrentUserFromServer } from "@/lib/auth-utils";
 
 export async function POST(req: NextRequest) {
   try {
+    const user = await getCurrentUserFromServer();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const ip = getClientIp(req);
     const { success, reset } = await paymentRateLimiter.limit(ip);
     if (!success) {
@@ -44,6 +50,9 @@ export async function POST(req: NextRequest) {
     
     if (!booking) {
       return NextResponse.json({ error: "Booking not found" }, { status: 404 });
+    }
+    if (booking.userId !== user.id) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     const isChatter = !!booking.chatterScheduleId || !!booking.chatterSchedule;

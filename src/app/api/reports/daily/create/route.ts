@@ -15,8 +15,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Role check: Only superadmin or company_admin can generate reports
-    if (user.role !== "superadmin" && user.role !== "company_admin") {
+    const platformRoles = ["super_admin", "superadmin"];
+    if (!platformRoles.includes(user.role ?? "") && user.role !== "company_admin") {
       return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 });
     }
 
@@ -24,7 +24,6 @@ export async function POST(req: NextRequest) {
 
     const {
       date,
-      companyId,
       totalSchedules,
       completedSchedules,
       totalBookings,
@@ -36,18 +35,38 @@ export async function POST(req: NextRequest) {
       scheduleDetails,
     } = reportData;
 
+    const companyId = user.role === "company_admin" ? user.companyId : reportData.companyId;
     if (!companyId || !date) {
       return NextResponse.json({ error: "companyId and date are required" }, { status: 400 });
     }
 
-    // Security check: Ensure company_admin can only create reports for their own company
-    if (user.role === "company_admin" && user.companyId !== companyId) {
-      return NextResponse.json({ error: "Access denied" }, { status: 403 });
+    const parsedDate = new Date(date);
+    if (Number.isNaN(parsedDate.getTime())) {
+      return NextResponse.json({ error: "date must be a valid date" }, { status: 400 });
+    }
+
+    const numericFields = {
+      totalSchedules,
+      completedSchedules,
+      totalBookings,
+      paidBookings,
+      boardedPassengers,
+      noShowPassengers,
+      totalRevenue,
+      avgOccupancyRate,
+    };
+    if (Object.values(numericFields).some((value) => value !== undefined && (!Number.isFinite(Number(value)) || Number(value) < 0))) {
+      return NextResponse.json({ error: "Report metrics must be non-negative numbers" }, { status: 400 });
+    }
+
+    const company = await prisma.company.findUnique({ where: { id: companyId }, select: { id: true } });
+    if (!company) {
+      return NextResponse.json({ error: "Company not found" }, { status: 404 });
     }
 
     const result = await prisma.dailyReport.create({
       data: {
-        date:                new Date(date),
+        date:                parsedDate,
         companyId,
         createdBy:           user.id,
         createdByName:       `${user.firstName || ""} ${user.lastName || ""}`.trim(),

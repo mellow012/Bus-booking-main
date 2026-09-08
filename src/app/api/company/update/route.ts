@@ -25,6 +25,31 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "companyId is required" }, { status: 400 });
     }
 
+    if (!updates || typeof updates !== "object" || Array.isArray(updates)) {
+      return NextResponse.json({ error: "updates must be an object" }, { status: 400 });
+    }
+
+    const allowedUpdateFields = new Set([
+      "name",
+      "logo",
+      "description",
+      "phone",
+      "address",
+      "operatingHours",
+      "paymentSettings",
+      "notificationSettings",
+      "contactSettings",
+      "returnTripDiscountPercent",
+      "branches",
+    ]);
+    const unknownFields = Object.keys(updates).filter((field) => !allowedUpdateFields.has(field));
+    if (unknownFields.length > 0) {
+      return NextResponse.json(
+        { error: `Unsupported company update field(s): ${unknownFields.join(", ")}` },
+        { status: 400 }
+      );
+    }
+
     // Security check: Ensure company_admin can only update their own company
     if (user.role === "company_admin" && user.companyId !== companyId) {
       return NextResponse.json({ error: "Access denied" }, { status: 403 });
@@ -82,7 +107,6 @@ export async function POST(req: NextRequest) {
         notificationSettings: finalNotificationSettings      ?? undefined,
         contactSettings:      finalContactSettings         ?? undefined,
         returnTripDiscountPercent: updates.returnTripDiscountPercent !== undefined ? parseFloat(String(updates.returnTripDiscountPercent)) : undefined,
-        status:               updates.status               ?? undefined,
         updatedAt:            new Date(),
       } as any,
     });

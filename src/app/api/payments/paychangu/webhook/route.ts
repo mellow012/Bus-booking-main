@@ -55,6 +55,11 @@ export async function POST(req: NextRequest) {
 
     if (!secretKey) {
       console.error('[paychangu/webhook] PAYCHANGU_SECRET_KEY not set');
+      await logger.logSecurityEvent(
+        '[paychangu/webhook] Missing PAYCHANGU_SECRET_KEY; webhook not processed',
+        undefined,
+        { action: 'webhook_secret_missing' }
+      );
       return NextResponse.json({ received: true });
     }
 

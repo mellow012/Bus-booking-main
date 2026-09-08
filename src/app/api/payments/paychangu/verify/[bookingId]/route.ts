@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
 import { sendNotificationToUser } from "@/lib/notificationService";
+import { getCurrentUserFromServer } from "@/lib/auth-utils";
 
 const PAYCHANGU_API     = "https://api.paychangu.com";
 const SUCCESS_STATUSES  = ["success", "successful", "completed"];
@@ -15,6 +16,11 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ bookingId: string }> }
 ) {
+  const user = await getCurrentUserFromServer();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const appUrl    = (process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000").replace(/\/$/, "");
   const { bookingId } = await params;
   const { searchParams } = new URL(req.url);
@@ -47,6 +53,9 @@ export async function GET(
     if (!booking) {
       console.error("[paychangu/verify] Booking not found:", bookingId);
       return NextResponse.redirect(`${appUrl}/bookings?error=booking_not_found`);
+    }
+    if (booking.userId !== user.id) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     // ── Idempotency ───────────────────────────────────────────────────────────

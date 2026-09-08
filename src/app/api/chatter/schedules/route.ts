@@ -11,6 +11,7 @@ export async function GET(req: NextRequest) {
 
     const where: any = {
       status: 'active',
+      isArchived: false,
     };
 
     if (origin) where.origin = { contains: origin, mode: 'insensitive' };
@@ -28,6 +29,27 @@ export async function GET(req: NextRequest) {
 
     const schedules = await prisma.chatterSchedule.findMany({
       where,
+      select: {
+        id: true,
+        busName: true,
+        origin: true,
+        destination: true,
+        travelDate: true,
+        departureTime: true,
+        arrivalTime: true,
+        fare: true,
+        totalSeats: true,
+        contactPhone: true,
+        pickupPoint: true,
+        dropoffPoint: true,
+        notes: true,
+        images: true,
+        status: true,
+        isArchived: true,
+        archivedAt: true,
+        createdAt: true,
+        updatedAt: true,
+      },
       orderBy: { travelDate: 'asc' },
     });
 
