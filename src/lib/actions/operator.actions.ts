@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import type { Prisma } from '@prisma/client';
 import { sendOperatorInviteEmail } from '@/lib/email-service';
 import { logger } from '@/lib/logger';
+import { getCurrentUserFromServer } from '@/lib/auth-utils';
 
 type TeamRole = 'operator' | 'conductor';
 
@@ -33,15 +34,29 @@ const VALID_ROLES: TeamRole[] = ['operator', 'conductor'];
 
 export async function inviteOperator(body: InviteTeamMemberRequest): Promise<ApiResponse> {
   try {
-    const { name, email, companyId, companyName, invitedBy, region, regionId, routeIds } = body;
+    const authUser = await getCurrentUserFromServer();
+    if (!authUser) {
+      return { success: false, error: 'Unauthorized', message: '' };
+    }
+    if (!['super_admin', 'superadmin', 'chief_of_operations', 'company_admin'].includes(authUser.role ?? '')) {
+      return { success: false, error: 'Forbidden', message: '' };
+    }
+
+    const { name, email, companyName, region, regionId, routeIds } = body;
     const role: TeamRole = VALID_ROLES.includes(body.role as TeamRole) ? (body.role as TeamRole) : 'operator';
+
+    const platformWide = ['super_admin', 'superadmin', 'chief_of_operations'].includes(authUser.role ?? '');
+    const companyId = platformWide ? body.companyId : authUser.companyId;
+    if (!companyId) {
+      return { success: false, error: 'companyId is required', message: '' };
+    }
+    const invitedBy = authUser.id;
 
     // 1. Validation
     const missing: string[] = [];
     if (!name?.trim()) missing.push('name');
     if (!email?.trim()) missing.push('email');
     if (!companyId?.trim()) missing.push('companyId');
-    if (!invitedBy?.trim()) missing.push('invitedBy');
 
     if (missing.length > 0) {
       return { success: false, error: `Missing fields: ${missing.join(', ')}`, message: '' };
@@ -78,6 +93,19 @@ export async function inviteOperator(body: InviteTeamMemberRequest): Promise<Api
     let operatorId: string;
     try {
       const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+        if (regionId) {
+          const region = await tx.region.findUnique({ where: { id: regionId } });
+          if (!region || region.companyId !== companyId) {
+            throw new Error('Invalid regionId for this company');
+          }
+        }
+        if (routeIds && routeIds.length > 0) {
+          const validRoutes = await tx.route.findMany({ where: { id: { in: routeIds }, companyId } });
+          if (validRoutes.length !== routeIds.length) {
+            throw new Error('One or more routeIds do not belong to this company');
+          }
+        }
+
         let finalRegionId = regionId;
         let finalRegionName = region?.trim() || null;
 

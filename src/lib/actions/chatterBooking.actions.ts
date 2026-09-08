@@ -180,6 +180,30 @@ export async function createChatterBooking(payload: {
 
 export async function getBookingsForChatterSchedule(chatterScheduleId: string) {
   try {
+    const user = await getCurrentUserFromServer();
+    if (!user) {
+      return { success: false, error: 'Unauthorized' };
+    }
+
+    const schedule = await prisma.chatterSchedule.findUnique({
+      where: { id: chatterScheduleId },
+      select: {
+        repUserId: true,
+        rep: { select: { companyId: true } },
+      },
+    });
+    if (!schedule) {
+      return { success: false, error: 'Chatter schedule not found' };
+    }
+
+    const isPlatformAdmin = ['admin', 'super_admin', 'superadmin', 'chief_of_growth'].includes(user.role ?? '');
+    const canView = isPlatformAdmin
+      || schedule.repUserId === user.id
+      || (user.role === 'company_admin' && user.companyId && user.companyId === schedule.rep.companyId);
+    if (!canView) {
+      return { success: false, error: 'Forbidden' };
+    }
+
     const bookings = await prisma.booking.findMany({
       where: {
         chatterScheduleId,

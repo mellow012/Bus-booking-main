@@ -61,19 +61,13 @@ export async function getChatterSchedule(id: string) {
   try {
     const schedule = await prisma.chatterSchedule.findUnique({
       where: { id },
-      include: {
-        rep: {
-          select: {
-            firstName: true,
-            lastName: true,
-            email: true,
-          },
-        },
-      },
     });
 
     if (!schedule) {
       return { success: false, error: 'Chatter schedule not found' };
+    }
+    if (schedule.status !== 'active' || schedule.isArchived) {
+      return { success: false, error: 'Chatter schedule is not available' };
     }
 
     // Calculate available seats: totalSeats - booked count
@@ -163,9 +157,21 @@ export async function getChatterSchedule(id: string) {
     return {
       success: true,
       data: {
-        ...schedule,
+        id: schedule.id,
+        busName: schedule.busName,
+        origin: schedule.origin,
+        destination: schedule.destination,
+        travelDate: schedule.travelDate,
+        departureTime: schedule.departureTime,
+        arrivalTime: schedule.arrivalTime,
+        fare: schedule.fare,
+        totalSeats: schedule.totalSeats,
+        contactPhone: schedule.contactPhone,
+        images: schedule.images,
+        status: schedule.status,
         pickupPoint,
         dropoffPoint,
+        notes: schedule.notes,
         availableSeats,
         bookedSeatsCount,
         bookedSeats,
@@ -320,6 +326,15 @@ export async function createChatterRequest(payload: {
 
 export async function getChatterRequestsForCompany(companyId: string) {
   try {
+    const user = await getCurrentUserFromServer();
+    if (!user) {
+      return { success: false, error: 'Unauthorized' };
+    }
+    const isPlatformAdmin = ['super_admin', 'superadmin', 'chief_of_growth'].includes(user.role ?? '');
+    if (!isPlatformAdmin && (user.role !== 'company_admin' || user.companyId !== companyId)) {
+      return { success: false, error: 'Forbidden' };
+    }
+
     const requests = await prisma.groupCharterRequest.findMany({
       where: {
         companyId,
@@ -369,6 +384,18 @@ export async function confirmChatterRequest(payload: {
     if (!companyId) {
       return { success: false, error: 'Request has no associated company' };
     }
+    const isPlatformAdmin = ['admin', 'super_admin', 'superadmin', 'chief_of_growth'].includes(user.role ?? '');
+    if (!isPlatformAdmin && (user.role !== 'company_admin' || user.companyId !== companyId)) {
+      return { success: false, error: 'Forbidden' };
+    }
+
+    const [bus, route] = await Promise.all([
+      prisma.bus.findUnique({ where: { id: payload.busId }, select: { companyId: true } }),
+      prisma.route.findUnique({ where: { id: payload.routeId }, select: { companyId: true } }),
+    ]);
+    if (!bus || !route || bus.companyId !== companyId || route.companyId !== companyId) {
+      return { success: false, error: 'Bus or route is not available for this company' };
+    }
 
     // 1. Create a real Schedule row
     const depObj = toDate(payload.departureDateTime);
@@ -412,6 +439,18 @@ export async function declineChatterRequest(requestId: string) {
     const user = await getCurrentUserFromServer();
     if (!user) {
       return { success: false, error: 'Unauthorized' };
+    }
+
+    const request = await prisma.groupCharterRequest.findUnique({
+      where: { id: requestId },
+      select: { companyId: true },
+    });
+    if (!request) {
+      return { success: false, error: 'Request not found' };
+    }
+    const isPlatformAdmin = ['admin', 'super_admin', 'superadmin', 'chief_of_growth'].includes(user.role ?? '');
+    if (!isPlatformAdmin && (user.role !== 'company_admin' || user.companyId !== request.companyId)) {
+      return { success: false, error: 'Forbidden' };
     }
 
     const updatedRequest = await prisma.groupCharterRequest.update({

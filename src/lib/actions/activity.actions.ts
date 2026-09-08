@@ -2,6 +2,7 @@
 
 import prisma from '../prisma';
 import { revalidatePath } from 'next/cache';
+import { getCurrentUserFromServer } from '@/lib/auth-utils';
 
 /**
  * --- Activity Logs ---
@@ -40,9 +41,22 @@ export async function getActivityLogs(params: {
   limit?: number;
 }) {
   try {
+    const user = await getCurrentUserFromServer();
+    if (!user) {
+      return { success: false, error: 'Unauthorized' };
+    }
+
+    const platformWideRoles = ['super_admin', 'superadmin', 'chief_of_growth'];
+    const isPlatformAdmin = platformWideRoles.includes(user.role ?? '');
+    const companyId = isPlatformAdmin ? params.companyId : user.companyId ?? undefined;
+
+    if (!isPlatformAdmin && !companyId) {
+      return { success: false, error: 'Forbidden' };
+    }
+
     const logs = await prisma.activityLog.findMany({
       where: {
-        companyId: params.companyId,
+        companyId,
         scheduleId: params.scheduleId,
       },
       orderBy: { createdAt: 'desc' },

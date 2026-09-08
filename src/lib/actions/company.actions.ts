@@ -5,7 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { Company } from '@/types';
 import { createClient } from '@/utils/supabase/server';
 import { getUserById } from './user.actions';
-
+import { getCurrentUserFromServer } from '@/lib/auth-utils';
 // ─────────────────────────────────────────────────────────────────────────────
 // Auth-related company actions (replaces /api/auth/login)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -46,6 +46,13 @@ export async function activateCompanyOnLogin(companyId: string) {
  * --- Companies ---
  */
 export async function updateCompany(id: string, data: Partial<Company> | Record<string, any>) {
+  const authUser = await getCurrentUserFromServer();
+  if (!authUser) {
+    return { success: false, error: 'Unauthorized' };
+  }
+  if (!['super_admin', 'superadmin'].includes(authUser.role ?? '')) {
+    return { success: false, error: 'Forbidden: super admin access required' };
+  }
   try {
     const { id: _, createdAt, updatedAt, contact, adminFirstName, adminLastName, adminPhone, ...rest } = data as any;
     const updatableData: any = { ...rest };
@@ -71,6 +78,14 @@ export async function updateCompany(id: string, data: Partial<Company> | Record<
 }
 
 export async function deleteCompany(id: string) {
+  const authUser = await getCurrentUserFromServer();
+  if (!authUser) {
+    return { success: false, error: 'Unauthorized' };
+  }
+  if (!['super_admin', 'superadmin'].includes(authUser.role ?? '')) {
+    return { success: false, error: 'Forbidden: super admin access required' };
+  }
+
   try {
     await prisma.company.delete({ where: { id } });
     revalidatePath('/admin');

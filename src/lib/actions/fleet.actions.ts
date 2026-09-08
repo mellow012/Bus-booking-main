@@ -3,14 +3,28 @@
 import prisma from '../prisma';
 import { revalidatePath } from 'next/cache';
 import { Bus, Route } from '@/types';
-
+import { getCurrentUserFromServer } from '@/lib/auth-utils';
 /**
  * --- Buses ---
  */
 export async function createBus(data: Partial<Bus>) {
   try {
+    const authUser = await getCurrentUserFromServer();
+    if (!authUser) {
+      return { success: false, error: 'Unauthorized' };
+    }
+    if (!['super_admin', 'superadmin', 'chief_of_operations', 'company_admin'].includes(authUser.role ?? '')) {
+      return { success: false, error: 'Forbidden' };
+    }
+
+    const platformWide = ['super_admin', 'superadmin', 'chief_of_operations'].includes(authUser.role ?? '');
+    const effectiveCompanyId = platformWide ? data.companyId : authUser.companyId;
+    if (!effectiveCompanyId) {
+      return { success: false, error: 'companyId is required' };
+    }
+
     const {
-      id, companyId, licensePlate, busType, capacity, amenities,
+      id, licensePlate, busType, capacity, amenities,
       status, yearOfManufacture, registrationDetails, isActive,
       fuelType, insuranceDetails, lastMaintenanceDate, nextMaintenanceDate,
       conductorIds, images
@@ -19,7 +33,7 @@ export async function createBus(data: Partial<Bus>) {
     const bus = await prisma.bus.create({
       data: {
         id,
-        companyId: companyId!,
+        companyId: effectiveCompanyId,
         licensePlate: licensePlate!,
         busType: busType!,
         capacity: capacity!,
@@ -45,6 +59,21 @@ export async function createBus(data: Partial<Bus>) {
 }
 
 export async function updateBus(id: string, data: Partial<Bus>) {
+  const authUser = await getCurrentUserFromServer();
+  if (!authUser) {
+    return { success: false, error: 'Unauthorized' };
+  }
+  if (!['super_admin', 'superadmin', 'chief_of_operations', 'company_admin'].includes(authUser.role ?? '')) {
+    return { success: false, error: 'Forbidden' };
+  }
+
+  const existingBus = await prisma.bus.findUnique({ where: { id }, select: { companyId: true } });
+  if (!existingBus) {
+    return { success: false, error: 'Bus not found' };
+  }
+  if (authUser.role === 'company_admin' && existingBus.companyId !== authUser.companyId) {
+    return { success: false, error: 'Forbidden: bus does not belong to your company' };
+  }
   try {
     const {
       id: _, createdAt, updatedAt, companyId, metadata, ...updatableData
@@ -68,7 +97,23 @@ export async function updateBus(id: string, data: Partial<Bus>) {
 }
 
 export async function deleteBus(id: string) {
+  const authUser = await getCurrentUserFromServer();
+  if (!authUser) {
+    return { success: false, error: 'Unauthorized' };
+  }
+  if (!['super_admin', 'superadmin', 'chief_of_operations', 'company_admin'].includes(authUser.role ?? '')) {
+    return { success: false, error: 'Forbidden' };
+  }
+
   try {
+    const existingBus = await prisma.bus.findUnique({ where: { id }, select: { companyId: true } });
+    if (!existingBus) {
+      return { success: false, error: 'Bus not found' };
+    }
+    if (authUser.role === 'company_admin' && existingBus.companyId !== authUser.companyId) {
+      return { success: false, error: 'Forbidden: bus does not belong to your company' };
+    }
+
     await prisma.bus.delete({ where: { id } });
     revalidatePath('/company/operator/dashboard');
     return { success: true };
@@ -83,15 +128,29 @@ export async function deleteBus(id: string) {
  */
 export async function createRoute(data: Partial<Route>) {
   try {
+    const authUser = await getCurrentUserFromServer();
+    if (!authUser) {
+      return { success: false, error: 'Unauthorized' };
+    }
+    if (!['super_admin', 'superadmin', 'chief_of_operations', 'company_admin'].includes(authUser.role ?? '')) {
+      return { success: false, error: 'Forbidden' };
+    }
+
+    const platformWide = ['super_admin', 'superadmin', 'chief_of_operations'].includes(authUser.role ?? '');
+    const effectiveCompanyId = platformWide ? data.companyId : authUser.companyId;
+    if (!effectiveCompanyId) {
+      return { success: false, error: 'companyId is required' };
+    }
+
     const {
-      id, companyId, regionId, name, origin, destination, distance, duration,
+      id, regionId, name, origin, destination, distance, duration,
       baseFare, pricePerKm, stops, isActive, status
     } = data;
 
     const route = await prisma.route.create({
       data: {
         id,
-        companyId: companyId!,
+        companyId: effectiveCompanyId,
         regionId,
         name: name!,
         origin: origin!,
@@ -114,6 +173,21 @@ export async function createRoute(data: Partial<Route>) {
 }
 
 export async function updateRoute(id: string, data: Partial<Route>) {
+  const authUser = await getCurrentUserFromServer();
+  if (!authUser) {
+    return { success: false, error: 'Unauthorized' };
+  }
+  if (!['super_admin', 'superadmin', 'chief_of_operations', 'company_admin'].includes(authUser.role ?? '')) {
+    return { success: false, error: 'Forbidden' };
+  }
+
+  const existingRoute = await prisma.route.findUnique({ where: { id }, select: { companyId: true } });
+  if (!existingRoute) {
+    return { success: false, error: 'Route not found' };
+  }
+  if (authUser.role === 'company_admin' && existingRoute.companyId !== authUser.companyId) {
+    return { success: false, error: 'Forbidden: route does not belong to your company' };
+  }
   try {
     const {
       id: _, createdAt, updatedAt, companyId,
@@ -138,6 +212,22 @@ export async function updateRoute(id: string, data: Partial<Route>) {
 }
 
 export async function deleteRoute(id: string) {
+  const authUser = await getCurrentUserFromServer();
+  if (!authUser) {
+    return { success: false, error: 'Unauthorized' };
+  }
+  if (!['super_admin', 'superadmin', 'chief_of_operations', 'company_admin'].includes(authUser.role ?? '')) {
+    return { success: false, error: 'Forbidden' };
+  }
+
+  const existingRoute = await prisma.route.findUnique({ where: { id }, select: { companyId: true } });
+  if (!existingRoute) {
+    return { success: false, error: 'Route not found' };
+  }
+  if (authUser.role === 'company_admin' && existingRoute.companyId !== authUser.companyId) {
+    return { success: false, error: 'Forbidden: route does not belong to your company' };
+  }
+
   try {
     await prisma.$transaction(
       async (tx) => {
