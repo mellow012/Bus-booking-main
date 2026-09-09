@@ -50,6 +50,7 @@ interface UnifiedScheduleModalProps {
   onSuccess: () => void;
   preSelectedRouteId?: string;
   preSelectedBranchId?: string; // If we want to scope it
+  regions?: Array<{ id: string; name: string }>;
 }
 
 export default function UnifiedScheduleModal({
@@ -61,10 +62,16 @@ export default function UnifiedScheduleModal({
   onSuccess,
   preSelectedRouteId,
   preSelectedBranchId,
+  regions = [],
 }: UnifiedScheduleModalProps) {
   const toast = useAppToast();
   const [scheduleType, setScheduleType] = useState<ScheduleType>('single');
   const [actionLoading, setActionLoading] = useState(false);
+  const defaultManagingRegionId = preSelectedBranchId || routes.find((route) => route.id === preSelectedRouteId)?.regionId || '';
+  const regionOptions = regions.length > 0
+    ? regions
+    : routes.filter((route) => route.regionId).map((route) => ({ id: route.regionId as string, name: route.regionId as string }))
+      .filter((region, index, options) => options.findIndex((candidate) => candidate.id === region.id) === index);
 
   // Form states
   const initialFormState = {
@@ -74,6 +81,8 @@ export default function UnifiedScheduleModal({
     arrivalDateTime: fmtDateTimeInput(new Date(Date.now() + 14400000)),
     price: 0,
     availableSeats: 0,
+    outboundManagingRegionId: defaultManagingRegionId,
+    returnManagingRegionId: defaultManagingRegionId,
     // Round trip specific
     returnBusId: '',
     returnDepartureDateTime: fmtDateTimeInput(new Date(Date.now() + 86400000)),
@@ -90,6 +99,7 @@ export default function UnifiedScheduleModal({
     daysOfWeek: [] as DayOfWeek[],
     price: 0,
     availableSeats: 0,
+    defaultManagingRegionId,
     // Return template specific
     returnBusId: '',
     returnDepartureTime: '14:00',
@@ -107,7 +117,7 @@ export default function UnifiedScheduleModal({
       setTemplateFormData({ ...initialTemplateState, routeId: preSelectedRouteId || '' });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, preSelectedRouteId]);
+  }, [isOpen, preSelectedRouteId, preSelectedBranchId]);
 
   // Handle auto-populating fields
   useEffect(() => {
@@ -118,6 +128,8 @@ export default function UnifiedScheduleModal({
         setFormData(prev => ({ 
           ...prev, 
           price: route.baseFare,
+          outboundManagingRegionId: prev.outboundManagingRegionId || route.regionId || '',
+          returnManagingRegionId: prev.returnManagingRegionId || route.regionId || '',
           returnPrice: prev.returnPrice || returnRoute?.baseFare || route.baseFare 
         }));
       }
@@ -139,6 +151,7 @@ export default function UnifiedScheduleModal({
         setTemplateFormData(prev => ({ 
           ...prev, 
           price: route.baseFare,
+          defaultManagingRegionId: prev.defaultManagingRegionId || route.regionId || '',
           returnPrice: prev.returnPrice || returnRoute?.baseFare || route.baseFare 
         }));
       }
@@ -269,6 +282,7 @@ export default function UnifiedScheduleModal({
           arrivalDateTime: arrTz,
           departureLocation: route?.origin,
           arrivalLocation: route?.destination,
+          managingRegionId: formData.outboundManagingRegionId,
           companyId,
           status: 'active' as const,
           tripStatus: 'scheduled' as const
@@ -288,11 +302,17 @@ export default function UnifiedScheduleModal({
 
         const returnDepTz = `${formData.returnDepartureDateTime}+02:00`;
         const returnArrTz = `${formData.returnArrivalDateTime}+02:00`;
+        const returnRoute = routes.find(
+          r => r.origin === route?.destination && r.destination === route?.origin,
+        );
 
         const outboundData = {
           ...formData,
           departureDateTime: depTz,
           arrivalDateTime: arrTz,
+          departureLocation: route?.origin,
+          arrivalLocation: route?.destination,
+          managingRegionId: formData.outboundManagingRegionId,
           companyId,
           status: 'active' as const,
           tripStatus: 'scheduled' as const
@@ -302,6 +322,9 @@ export default function UnifiedScheduleModal({
           busId: formData.returnBusId,
           departureDateTime: returnDepTz,
           arrivalDateTime: returnArrTz,
+          departureLocation: returnRoute?.origin ?? route?.destination,
+          arrivalLocation: returnRoute?.destination ?? route?.origin,
+          managingRegionId: formData.returnManagingRegionId,
           price: formData.returnPrice,
           companyId,
           status: 'active' as const,
@@ -388,6 +411,59 @@ export default function UnifiedScheduleModal({
                   ))}
                 </select>
               </div>
+              {scheduleType === 'return' ? (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Outbound Managing Region *</label>
+                    <select
+                      value={formData.outboundManagingRegionId}
+                      onChange={e => setFormData({ ...formData, outboundManagingRegionId: e.target.value })}
+                      className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border"
+                      required
+                    >
+                      <option value="">Select managing region</option>
+                      {regionOptions.map((region) => (
+                        <option key={region.id} value={region.id}>{region.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Return Managing Region *</label>
+                    <select
+                      value={formData.returnManagingRegionId}
+                      onChange={e => setFormData({ ...formData, returnManagingRegionId: e.target.value })}
+                      className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border"
+                      required
+                    >
+                      <option value="">Select managing region</option>
+                      {regionOptions.map((region) => (
+                        <option key={region.id} value={region.id}>{region.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </>
+              ) : (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Managing Region {scheduleType === 'recurring' ? '' : '*'}
+                  </label>
+                  <select
+                    value={scheduleType === 'recurring' ? templateFormData.defaultManagingRegionId : formData.outboundManagingRegionId}
+                    onChange={e => {
+                      const value = e.target.value;
+                      if (scheduleType === 'recurring') setTemplateFormData({ ...templateFormData, defaultManagingRegionId: value });
+                      else setFormData({ ...formData, outboundManagingRegionId: value });
+                    }}
+                    className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border"
+                    required={scheduleType !== 'recurring'}
+                  >
+                    <option value="">Select managing region</option>
+                    {regionOptions.map((region) => (
+                      <option key={region.id} value={region.id}>{region.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Assigned Vessel *
