@@ -92,7 +92,7 @@ export default function ChartersTab({ companyId, setError, setSuccess }: Charter
   if (loading && requests.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-20">
-        <Loader2 className="w-10 h-10 text-indigo-600 animate-spin mb-4" />
+        <Loader2 className="w-10 h-10 text-brand-700 animate-spin mb-4" />
         <p className="text-gray-500 font-medium">Syncing charter requests...</p>
       </div>
     );
@@ -117,14 +117,14 @@ export default function ChartersTab({ companyId, setError, setSuccess }: Charter
             <div className="p-6">
               <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
                 <div className="flex items-center gap-4">
-                  <div className="w-14 h-14 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600 group-hover:scale-110 transition-transform">
+                  <div className="w-14 h-14 bg-brand-50 rounded-2xl flex items-center justify-center text-brand-700 group-hover:scale-110 transition-transform">
                     <Users className="w-7 h-7" />
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
                       <h3 className="font-bold text-gray-900 text-lg">{req.organizerName}</h3>
                       {req.charterType === 'student' ? (
-                        <span className="text-[10px] font-bold text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded-full uppercase tracking-widest flex items-center gap-1">
+                        <span className="text-[10px] font-bold text-brand-800 bg-brand-100 px-2 py-0.5 rounded-full uppercase tracking-widest flex items-center gap-1">
                           <School className="w-3 h-3" /> Student
                         </span>
                       ) : (
@@ -134,7 +134,7 @@ export default function ChartersTab({ companyId, setError, setSuccess }: Charter
                       )}
                     </div>
                     <div className="flex items-center gap-2 mt-1">
-                       <span className="text-[10px] font-bold text-indigo-500 bg-indigo-50 px-2 py-0.5 rounded-full uppercase tracking-widest">
+                       <span className="text-[10px] font-bold text-brand-700 bg-brand-50 px-2 py-0.5 rounded-full uppercase tracking-widest">
                           {req.estimatedPax} Pax
                        </span>
                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
@@ -153,16 +153,16 @@ export default function ChartersTab({ companyId, setError, setSuccess }: Charter
               <div className="grid md:grid-cols-2 gap-8 mb-8">
                 <div className="space-y-4">
                   <div className="flex items-start gap-3">
-                    <MapPin className="w-5 h-5 text-indigo-400 mt-0.5" />
+                    <MapPin className="w-5 h-5 text-brand-400 mt-0.5" />
                     <div>
                       <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Route</p>
                       <p className="font-bold text-gray-800 flex items-center gap-2">
-                        {req.origin} <ArrowRight className="w-4 h-4 text-indigo-600" /> {req.destination}
+                        {req.origin} <ArrowRight className="w-4 h-4 text-brand-700" /> {req.destination}
                       </p>
                     </div>
                   </div>
                   <div className="flex items-start gap-3">
-                    <Calendar className="w-5 h-5 text-indigo-400 mt-0.5" />
+                    <Calendar className="w-5 h-5 text-brand-400 mt-0.5" />
                     <div>
                       <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Departure</p>
                       <p className="font-bold text-gray-800">{format(new Date(req.departureDate), 'EEEE, MMM do yyyy')}</p>
@@ -180,15 +180,15 @@ export default function ChartersTab({ companyId, setError, setSuccess }: Charter
               </div>
 
               {quotingId === req.id ? (
-                <div className="p-6 bg-indigo-50/50 rounded-2xl border border-indigo-100 animate-in slide-in-from-top-2 duration-300">
+                <div className="p-6 bg-brand-50/50 rounded-2xl border border-brand-100 animate-in slide-in-from-top-2 duration-300">
                    <div className="grid md:grid-cols-2 gap-4 mb-4">
                       <div className="space-y-2">
-                        <label className="text-xs font-bold text-indigo-900 uppercase tracking-widest ml-1">Your Quote (MWK)</label>
+                        <label className="text-xs font-bold text-brand-900 uppercase tracking-widest ml-1">Your Quote (MWK)</label>
                         <div className="relative">
-                          <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-indigo-400" />
+                          <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-400" />
                           <input 
                             type="number"
-                            className="w-full pl-10 pr-4 h-12 bg-white border-transparent rounded-xl focus:border-indigo-500 focus:ring-0 transition-all text-sm font-bold"
+                            className="w-full pl-10 pr-4 h-12 bg-white border-transparent rounded-xl focus:border-brand-700 focus:ring-0 transition-all text-sm font-bold"
                             placeholder="Total amount"
                             value={quotePrice}
                             onChange={(e) => setQuotePrice(e.target.value)}
@@ -196,9 +196,9 @@ export default function ChartersTab({ companyId, setError, setSuccess }: Charter
                         </div>
                       </div>
                       <div className="space-y-2">
-                        <label className="text-xs font-bold text-indigo-900 uppercase tracking-widest ml-1">Notes to Organizer</label>
+                        <label className="text-xs font-bold text-brand-900 uppercase tracking-widest ml-1">Notes to Organizer</label>
                         <input 
-                          className="w-full px-4 h-12 bg-white border-transparent rounded-xl focus:border-indigo-500 focus:ring-0 transition-all text-sm font-medium"
+                          className="w-full px-4 h-12 bg-white border-transparent rounded-xl focus:border-brand-700 focus:ring-0 transition-all text-sm font-medium"
                           placeholder="e.g. Include AC, WiFi, 2 Drivers..."
                           value={quoteNotes}
                           onChange={(e) => setQuoteNotes(e.target.value)}
@@ -206,7 +206,7 @@ export default function ChartersTab({ companyId, setError, setSuccess }: Charter
                       </div>
                    </div>
                    <div className="flex gap-3">
-                      <Button className="flex-1 bg-indigo-600 hover:bg-black text-white font-bold h-12 rounded-xl shadow-lg shadow-indigo-100" onClick={() => handleQuote(req.id)} disabled={!quotePrice}>
+                      <Button className="flex-1 bg-coral-500 hover:bg-coral-600 text-white font-bold h-12 rounded-xl shadow-lg shadow-coral-100" onClick={() => handleQuote(req.id)} disabled={!quotePrice}>
                         Submit Quote
                       </Button>
                       <Button variant="outline" className="h-12 rounded-xl font-bold" onClick={() => setQuotingId(null)}>
@@ -223,7 +223,7 @@ export default function ChartersTab({ companyId, setError, setSuccess }: Charter
                     </div>
                   )}
                   <Button 
-                    className="ml-auto bg-white border-2 border-indigo-600 text-indigo-600 hover:bg-indigo-600 hover:text-white font-bold px-8 rounded-xl transition-all"
+                    className="ml-auto bg-white border-2 border-brand-700 text-brand-700 hover:bg-brand-700 hover:text-white font-bold px-8 rounded-xl transition-all"
                     onClick={() => setQuotingId(req.id)}
                   >
                     Provide Quote
