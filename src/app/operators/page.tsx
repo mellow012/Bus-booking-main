@@ -62,7 +62,7 @@ export default async function OperatorsPage() {
       email: c.email,
       phone: c.phone || "",
       address: c.address || "",
-      regions: (c.regions || []).map((r: any) => r.name),
+      regions: (c.regions || []).map((r: any) => r.name.trim()),
       activeRoutesCount: (c.routes || []).length,
       averageRating: rating.averageRating,
       totalReviews: rating.totalReviews,

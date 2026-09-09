@@ -5,6 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { Star, Search, MapPin, ArrowRight, Bus, Compass } from "lucide-react";
 import BackButton from "@/components/BackButton";
+import Fuse from "fuse.js";
 
 interface CompanyCardData {
   id: string;
@@ -32,11 +33,17 @@ export default function OperatorsClient({ initialCompanies }: OperatorsClientPro
 
   // Get all unique regions across all companies for the filter dropdown
   const allRegions = useMemo(() => {
-    const regionsSet = new Set<string>();
+    const regionsSet = new Map<string, string>();
     initialCompanies.forEach((company) => {
-      company.regions.forEach((r) => regionsSet.add(r));
+      company.regions.forEach((region) => {
+        const displayLabel = region.trim();
+        const normalizedRegion = displayLabel.toLowerCase();
+        if (!regionsSet.has(normalizedRegion)) {
+          regionsSet.set(normalizedRegion, displayLabel);
+        }
+      });
     });
-    return Array.from(regionsSet).sort();
+    return Array.from(regionsSet.values()).sort();
   }, [initialCompanies]);
 
   // Filter companies based on search term and selected region
@@ -46,8 +53,17 @@ export default function OperatorsClient({ initialCompanies }: OperatorsClientPro
         company.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         company.description.toLowerCase().includes(searchTerm.toLowerCase());
 
-      const matchesRegion =
-        selectedRegion === "all" || company.regions.includes(selectedRegion);
+      let matchesRegion = selectedRegion === "all";
+      if (!matchesRegion) {
+        const normalizedSelectedRegion = selectedRegion.trim().toLowerCase();
+        const hasExactMatch = company.regions.some(
+          (region) => region.trim().toLowerCase() === normalizedSelectedRegion
+        );
+        const normalizedRegions = company.regions.map((region) => region.trim().toLowerCase());
+        matchesRegion =
+          hasExactMatch ||
+          new Fuse(normalizedRegions, { threshold: 0.4 }).search(normalizedSelectedRegion).length > 0;
+      }
 
       return matchesSearch && matchesRegion;
     }).sort((a, b) => {
