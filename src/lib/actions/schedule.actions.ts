@@ -70,6 +70,40 @@ async function authorizeScheduleRoute(
   return { allowed: true as const, route };
 }
 
+async function resolveManagingRegionId(
+  authUser: AuthUser,
+  requestedRegionId: string | null | undefined,
+  companyId: string,
+  fallbackRegionId?: string | null,
+) {
+  let regionId = requestedRegionId || fallbackRegionId || null;
+
+  if (!regionId && authUser.role === 'operator') {
+    const operator = await prisma.operator.findUnique({
+      where: { uid: authUser.id },
+      select: { regionId: true },
+    });
+    regionId = operator?.regionId || null;
+  }
+
+  if (!regionId) return null;
+
+  const region = await prisma.region.findFirst({
+    where: {
+      id: regionId,
+      OR: [{ companyId }, { companyId: null }],
+      isActive: true,
+    },
+    select: { id: true },
+  });
+
+  if (!region) {
+    throw new Error('Managing region does not belong to the target company.');
+  }
+
+  return region.id;
+}
+
 async function assertBusNotOverlapping(
   tx: Prisma.TransactionClient | any,
   busId: string,
@@ -152,6 +186,13 @@ export async function createSchedule(data: Omit<Partial<Schedule>, 'departureDat
       return { success: false, error: routeAuthorization.error };
     }
 
+    const managingRegionId = await resolveManagingRegionId(
+      authUser,
+      data.managingRegionId,
+      effectiveCompanyId,
+      routeAuthorization.route.regionId,
+    );
+
     await assertBusNotOverlapping(prisma, data.busId, dep, arr);
 
     const schedule = await prisma.schedule.create({
@@ -160,6 +201,7 @@ export async function createSchedule(data: Omit<Partial<Schedule>, 'departureDat
         companyId: effectiveCompanyId,
         busId: data.busId,
         routeId: data.routeId,
+        managingRegionId,
         departureDateTime: dep,
         arrivalDateTime: arr,
         availableSeats: data.availableSeats,
@@ -230,6 +272,19 @@ export async function createRoundTripSchedule(outboundData: any, inboundData: an
       return { success: false, error: returnRouteAuthorization.error };
     }
 
+    const outboundManagingRegionId = await resolveManagingRegionId(
+      authUser,
+      outboundData.managingRegionId,
+      effectiveCompanyId,
+      outboundRoute.regionId,
+    );
+    const inboundManagingRegionId = await resolveManagingRegionId(
+      authUser,
+      inboundData.managingRegionId ?? outboundData.managingRegionId,
+      effectiveCompanyId,
+      returnRoute.regionId,
+    );
+
     const outDep = new Date(outboundData.departureDateTime);
     const outArr = new Date(outboundData.arrivalDateTime);
     const inDep = new Date(inboundData.departureDateTime);
@@ -251,6 +306,7 @@ export async function createRoundTripSchedule(outboundData: any, inboundData: an
           companyId: effectiveCompanyId,
           busId: outboundData.busId,
           routeId: outboundData.routeId,
+          managingRegionId: outboundManagingRegionId,
           departureDateTime: new Date(outboundData.departureDateTime),
           arrivalDateTime: new Date(outboundData.arrivalDateTime),
           availableSeats: outboundData.availableSeats,
@@ -265,6 +321,7 @@ export async function createRoundTripSchedule(outboundData: any, inboundData: an
           companyId: effectiveCompanyId,
           busId: inboundData.busId,
           routeId: returnRoute.id,
+          managingRegionId: inboundManagingRegionId,
           departureDateTime: new Date(inboundData.departureDateTime),
           arrivalDateTime: new Date(inboundData.arrivalDateTime),
           availableSeats: inboundData.availableSeats,
@@ -432,10 +489,18 @@ export async function createScheduleTemplate(data: any) {
       return { success: false, error: routeAuthorization.error };
     }
 
+    const defaultManagingRegionId = await resolveManagingRegionId(
+      authUser,
+      data.defaultManagingRegionId,
+      effectiveCompanyId,
+      routeAuthorization.route.regionId,
+    );
+
     const template = await prisma.scheduleTemplate.create({
       data: {
         companyId: effectiveCompanyId,
         routeId: data.routeId,
+        defaultManagingRegionId,
         busId: data.busId,
         departureTime: data.departureTime,
         arrivalTime: data.arrivalTime,
@@ -504,11 +569,25 @@ export async function createRoundTripScheduleTemplate(outboundData: any, inbound
       return { success: false, error: returnRouteAuthorization.error };
     }
 
+    const outboundDefaultManagingRegionId = await resolveManagingRegionId(
+      authUser,
+      outboundData.defaultManagingRegionId,
+      effectiveCompanyId,
+      outboundRoute.regionId,
+    );
+    const inboundDefaultManagingRegionId = await resolveManagingRegionId(
+      authUser,
+      inboundData.defaultManagingRegionId ?? outboundData.defaultManagingRegionId,
+      effectiveCompanyId,
+      returnRoute.regionId,
+    );
+
     const transactionResult = await prisma.$transaction([
       prisma.scheduleTemplate.create({
         data: {
           companyId: effectiveCompanyId,
           routeId: outboundData.routeId,
+          defaultManagingRegionId: outboundDefaultManagingRegionId,
           busId: outboundData.busId,
           departureTime: outboundData.departureTime,
           arrivalTime: outboundData.arrivalTime,
@@ -521,6 +600,7 @@ export async function createRoundTripScheduleTemplate(outboundData: any, inbound
         data: {
           companyId: effectiveCompanyId,
           routeId: returnRoute.id,
+          defaultManagingRegionId: inboundDefaultManagingRegionId,
           busId: inboundData.busId,
           departureTime: inboundData.departureTime,
           arrivalTime: inboundData.arrivalTime,
@@ -725,6 +805,7 @@ export async function materializeSchedules(companyId: string, routeId: string, d
             companyId: effectiveCompanyId,
             busId: template.busId,
             routeId: template.routeId,
+            managingRegionId: template.defaultManagingRegionId,
             departureDateTime,
             arrivalDateTime,
             departureLocation: template.route.origin,
@@ -773,6 +854,7 @@ export async function materializeSchedules(companyId: string, routeId: string, d
 
     if (newSchedules.length > 0) {
       await prisma.schedule.createMany({ data: newSchedules });
+      invalidateScheduleCaches();
       revalidatePath('/company/operator/dashboard');
       revalidatePath('/company/admin');
       revalidatePath('/schedules');
@@ -786,3 +868,43 @@ export async function materializeSchedules(companyId: string, routeId: string, d
   }
 }
 
+export async function decrementScheduleSeats(id: string) {
+  const authUser = await getCurrentUserFromServer();
+  if (!authUser) {
+    return { success: false, error: 'Unauthorized' };
+  }
+  if (!['super_admin', 'superadmin', 'chief_of_operations', 'company_admin', 'conductor'].includes(authUser.role ?? '')) {
+    return { success: false, error: 'Forbidden' };
+  }
+
+  const schedule = await prisma.schedule.findUnique({ where: { id }, select: { companyId: true, busId: true, availableSeats: true } });
+  if (!schedule) {
+    return { success: false, error: 'Schedule not found' };
+  }
+  if (authUser.role === 'company_admin' && schedule.companyId !== authUser.companyId) {
+    return { success: false, error: 'Forbidden: schedule does not belong to your company' };
+  }
+  if (authUser.role === 'conductor') {
+    const bus = await prisma.bus.findUnique({ where: { id: schedule.busId }, select: { conductorIds: true, companyId: true } });
+    if (!bus || !bus.conductorIds.includes(authUser.id) || bus.companyId !== authUser.companyId) {
+      return { success: false, error: 'Forbidden: not assigned to this schedule\'s bus' };
+    }
+  }
+  if (schedule.availableSeats <= 0) {
+    return { success: false, error: 'No seats available' };
+  }
+
+  try {
+    const updated = await prisma.schedule.update({
+      where: { id },
+      data: { availableSeats: { decrement: 1 }, updatedAt: new Date() },
+      select: { id: true, availableSeats: true },
+    });
+    invalidateScheduleCaches();
+    revalidatePath('/company/conductor/dashboard');
+    return { success: true, data: updated };
+  } catch (error: unknown) {
+    console.error('Error decrementing schedule seats:', error);
+    return { success: false, error: (error as Error).message };
+  }
+}

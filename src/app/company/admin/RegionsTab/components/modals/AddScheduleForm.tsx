@@ -9,12 +9,17 @@ interface AddScheduleFormProps {
   modalContext: ModalContext;
   routes: Route[];
   buses: Bus[];
+  regions?: Array<{ id: string; name: string }>;
 }
 
-export default function AddScheduleForm({ form, onChange, modalContext, routes, buses }: AddScheduleFormProps) {
+export default function AddScheduleForm({ form, onChange, modalContext, routes, buses, regions = [] }: AddScheduleFormProps) {
   const set = (patch: Partial<ScheduleFormState>) => onChange({ ...form, ...patch });
   const activeBuses = buses.filter((b: Bus) => b.status === 'active');
   const routeOptions = modalContext.branchId ? routes.filter((r: Route) => r.regionId === modalContext.branchId) : routes;
+  const regionOptions = regions.length > 0
+    ? regions
+    : routes.filter((route) => route.regionId).map((route) => ({ id: route.regionId as string, name: route.regionId as string }))
+      .filter((region, index, options) => options.findIndex((candidate) => candidate.id === region.id) === index);
 
   return (
     <>
@@ -30,7 +35,23 @@ export default function AddScheduleForm({ form, onChange, modalContext, routes, 
             ))}
           </select>
         </div>
+
       )}
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">Managing Region *</label>
+        <select
+          value={form.managingRegionId}
+          onChange={(e) => set({ managingRegionId: e.target.value })}
+          className="block w-full rounded-lg border-gray-300 shadow-sm sm:text-sm px-3 py-2 border"
+          required
+        >
+          <option value="">Select a managing region</option>
+          {regionOptions.map((region) => (
+            <option key={region.id} value={region.id}>{region.name}</option>
+          ))}
+        </select>
+      </div>
 
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">Bus *</label>

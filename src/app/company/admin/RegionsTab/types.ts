@@ -41,6 +41,7 @@ export interface BusFormState {
 export interface ScheduleFormState {
   routeId: string;
   busId: string;
+  managingRegionId: string;
   departureDate: string;
   departureTime: string;
   arrivalDate: string;

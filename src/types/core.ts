@@ -330,6 +330,7 @@
     companyId: string;
     busId: string;
     routeId: string;
+    managingRegionId?: string | null;
 
     departureLocation: string;
     arrivalLocation: string;
@@ -381,6 +382,7 @@
     companyId: string;
 
     routeId: string;
+    defaultManagingRegionId?: string | null;
     busId: string;
 
     departureTime: string;
@@ -638,6 +640,7 @@
     conversationId: string;
     senderId: string;
     content?: string | null;
+    mediaPath?: string | null;
     mediaUrl?: string | null;
     mediaType?: string | null; // 'image' | 'video' | 'file'
     sender?: UserProfile;

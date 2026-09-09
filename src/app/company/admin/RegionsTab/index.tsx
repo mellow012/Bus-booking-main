@@ -444,6 +444,7 @@ export default function RegionsTab({ dashboard }: RegionsTabProps) {
         onSuccess={() => dashboard.fetchInitialData?.()}
         preSelectedRouteId={unifiedModalContext.routeId}
         preSelectedBranchId={unifiedModalContext.branchId}
+        regions={allBranches.map((branch: any) => ({ id: branch.id, name: branch.name }))}
       />
     </div>
   );
