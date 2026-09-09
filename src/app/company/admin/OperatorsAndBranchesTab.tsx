@@ -40,6 +40,7 @@ export default function OperatorsAndBranchesTab({ dashboard }: OperatorsAndBranc
   const [isActionLoading, setIsActionLoading] = useState(false);
   const [branchName, setBranchName] = useState('');
   const [isSavingBranch, setIsSavingBranch] = useState(false);
+  const [branchTerminal, setBranchTerminal] = useState('');
   const [isRouteAssignmentModalOpen, setRouteAssignmentModalOpen] = useState(false);
   const [routeAssignmentOperator, setRouteAssignmentOperator] = useState<OperatorRow | null>(null);
   const [selectedRouteIds, setSelectedRouteIds] = useState<string[]>([]);
@@ -165,17 +166,20 @@ export default function OperatorsAndBranchesTab({ dashboard }: OperatorsAndBranc
     setBranchModalOpen(false);
     setEditingBranch(null);
     setBranchName('');
+    setBranchTerminal('');
   };
 
   const openAddBranchModal = () => {
     setEditingBranch(null);
     setBranchName('');
+    setBranchTerminal('');
     setBranchModalOpen(true);
   };
 
   const openEditBranchModal = (branch: any) => {
     setEditingBranch(branch);
     setBranchName(branch.name || '');
+    setBranchTerminal(branch.terminal || '');
     setBranchModalOpen(true);
   };
 
@@ -270,6 +274,7 @@ export default function OperatorsAndBranchesTab({ dashboard }: OperatorsAndBranc
       const currentBranches = (rawBranches || []).map((branch: any) => ({
         id: branch.id,
         name: branch.name?.trim() || '',
+        terminal: branch.terminal?.trim() || '',
       })).filter((branch: any) => branch.name);
 
       const duplicateExists = currentBranches.some((branch: any) =>
@@ -282,9 +287,27 @@ export default function OperatorsAndBranchesTab({ dashboard }: OperatorsAndBranc
         return;
       }
 
+      const trimmedTerminal = branchTerminal.trim();
+      const duplicateTerminal = trimmedTerminal
+        ? currentBranches.find((branch: any) =>
+          branch.id !== editingBranch?.id &&
+          branch.terminal?.toLowerCase() === trimmedTerminal.toLowerCase()
+        )
+        : null;
+
+      if (duplicateTerminal) {
+        dashboard?.showAlert?.('error', `Terminal already assigned to ${duplicateTerminal.name}.`);
+        setIsSavingBranch(false);
+        return;
+      }
+
       const nextBranches = editingBranch
-        ? currentBranches.map((branch: any) => (branch.id === editingBranch.id ? { ...branch, name: trimmedName } : branch))
-        : [...currentBranches, { id: undefined, name: trimmedName }];
+        ? currentBranches.map((branch: any) => (
+          branch.id === editingBranch.id
+            ? { ...branch, name: trimmedName, terminal: trimmedTerminal }
+            : branch
+        ))
+        : [...currentBranches, { id: undefined, name: trimmedName, terminal: trimmedTerminal }];
 
       const response = await fetch('/api/company/update', {
         method: 'POST',
@@ -292,7 +315,11 @@ export default function OperatorsAndBranchesTab({ dashboard }: OperatorsAndBranc
         body: JSON.stringify({
           companyId,
           updates: {
-            branches: nextBranches.map((branch: any) => ({ id: branch.id || undefined, name: branch.name })),
+            branches: nextBranches.map((branch: any) => ({
+              id: branch.id || undefined,
+              name: branch.name,
+              terminal: branch.terminal || undefined,
+            })),
           },
         }),
       });
@@ -563,6 +590,17 @@ export default function OperatorsAndBranchesTab({ dashboard }: OperatorsAndBranc
                     onChange={(event) => setBranchName(event.target.value)}
                     className="h-10 mt-1 w-full border border-gray-200 rounded-xl bg-white px-3 text-sm focus:outline-none focus:ring-1 focus:ring-brand-500"
                     placeholder="e.g. CBD"
+                  />
+                </label>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  Terminal
+                  <input
+                    value={branchTerminal}
+                    onChange={(event) => setBranchTerminal(event.target.value)}
+                    className="h-10 mt-1 w-full border border-gray-200 rounded-xl bg-white px-3 text-sm focus:outline-none focus:ring-1 focus:ring-brand-500"
+                    placeholder="e.g. Wenela Terminal"
                   />
                 </label>
               </div>

@@ -113,8 +113,36 @@ export async function POST(req: NextRequest) {
 
     if (updates.branches && Array.isArray(updates.branches)) {
       const existingRegions = await prisma.region.findMany({ where: { companyId } });
-      const desiredBranches = updates.branches as Array<string | { id?: string; name: string }>;
+      const desiredBranches = updates.branches as Array<string | { id?: string; name: string; terminal?: string }>;
       const desiredNames = desiredBranches.map((branch) => (typeof branch === 'string' ? branch : branch.name)?.trim()).filter(Boolean);
+      const normalizedTerminals = new Map<string, string>();
+
+      for (const branch of desiredBranches) {
+        if (typeof branch !== 'object') continue;
+        const terminal = branch.terminal?.trim();
+        if (!terminal) continue;
+
+        const normalizedTerminal = terminal.toLowerCase();
+        const existingRegion = existingRegions.find((region) =>
+          region.id !== branch.id &&
+          region.terminal?.trim().toLowerCase() === normalizedTerminal
+        );
+        if (existingRegion) {
+          return NextResponse.json(
+            { error: `Terminal already assigned to ${existingRegion.name}.` },
+            { status: 400 }
+          );
+        }
+
+        const previousBranchName = normalizedTerminals.get(normalizedTerminal);
+        if (previousBranchName) {
+          return NextResponse.json(
+            { error: `Terminal already assigned to ${previousBranchName}.` },
+            { status: 400 }
+          );
+        }
+        normalizedTerminals.set(normalizedTerminal, branch.name?.trim() || 'another branch');
+      }
 
       for (const region of existingRegions) {
         const shouldKeep = desiredBranches.some((branch) => {
@@ -138,23 +166,41 @@ export async function POST(req: NextRequest) {
         const existing = existingById || existingByName;
 
         if (!existing) {
-          await prisma.region.create({
+          const terminal = typeof branch === 'object' ? branch.terminal?.trim() : '';
+          const createdRegion = await prisma.region.create({
             data: {
               name: branchName,
               companyId,
               isActive: true,
+              terminal: terminal || null,
             },
           });
+          if (terminal) {
+            await prisma.locationRegionMap.upsert({
+              where: { companyId_locationString: { companyId, locationString: terminal } },
+              update: { regionId: createdRegion.id, status: 'confirmed', source: 'admin' },
+              create: { companyId, locationString: terminal, regionId: createdRegion.id, status: 'confirmed', source: 'admin' },
+            });
+          }
           continue;
         }
 
-        if (existing.name !== branchName || !existing.isActive) {
+        const terminal = typeof branch === 'object' ? branch.terminal?.trim() : '';
+        if (existing.name !== branchName || !existing.isActive || existing.terminal !== (terminal || null)) {
           await prisma.region.update({
             where: { id: existing.id },
             data: {
               name: branchName,
               isActive: true,
+              terminal: terminal || null,
             },
+          });
+        }
+        if (terminal) {
+          await prisma.locationRegionMap.upsert({
+            where: { companyId_locationString: { companyId, locationString: terminal } },
+            update: { regionId: existing.id, status: 'confirmed', source: 'admin' },
+            create: { companyId, locationString: terminal, regionId: existing.id, status: 'confirmed', source: 'admin' },
           });
         }
       }
@@ -176,4 +222,3 @@ export async function POST(req: NextRequest) {
     );
   }
 }
-
