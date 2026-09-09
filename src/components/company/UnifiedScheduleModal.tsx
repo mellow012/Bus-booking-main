@@ -174,7 +174,9 @@ export default function UnifiedScheduleModal({
   useEffect(() => {
     if (formData.busId) {
       const bus = buses.find(b => b.id === formData.busId);
-      if (bus) setFormData(prev => ({ ...prev, availableSeats: bus.capacity }));
+      if (bus && !formTouched.current.availableSeats) {
+        setFormData(prev => ({ ...prev, availableSeats: bus.capacity }));
+      }
     }
   }, [formData.busId, buses]);
 
@@ -203,7 +205,9 @@ export default function UnifiedScheduleModal({
   useEffect(() => {
     if (templateFormData.busId) {
       const bus = buses.find(b => b.id === templateFormData.busId);
-      if (bus) setTemplateFormData(prev => ({ ...prev, availableSeats: bus.capacity }));
+      if (bus && !templateTouched.current.availableSeats) {
+        setTemplateFormData(prev => ({ ...prev, availableSeats: bus.capacity }));
+      }
     }
   }, [templateFormData.busId, buses]);
 
@@ -789,8 +793,13 @@ export default function UnifiedScheduleModal({
                     value={scheduleType === 'recurring' ? templateFormData.price : formData.price}
                     onChange={e => {
                       const val = parseInt(e.target.value) || 0;
-                      if (scheduleType === 'recurring') setTemplateFormData({ ...templateFormData, price: val });
-                      else setFormData({ ...formData, price: val });
+                      if (scheduleType === 'recurring') {
+                        templateTouched.current.price = true;
+                        setTemplateFormData({ ...templateFormData, price: val });
+                      } else {
+                        formTouched.current.price = true;
+                        setFormData({ ...formData, price: val });
+                      }
                     }}
                     className="block w-full bg-transparent pl-11 pr-3 py-2 text-sm text-gray-900 focus:outline-none border-none rounded-lg"
                     required
@@ -812,8 +821,13 @@ export default function UnifiedScheduleModal({
                       value={scheduleType === 'recurring' ? templateFormData.returnPrice : formData.returnPrice}
                       onChange={e => {
                         const val = parseInt(e.target.value) || 0;
-                        if (scheduleType === 'recurring') setTemplateFormData({ ...templateFormData, returnPrice: val });
-                        else setFormData({ ...formData, returnPrice: val });
+                        if (scheduleType === 'recurring') {
+                          templateTouched.current.returnPrice = true;
+                          setTemplateFormData({ ...templateFormData, returnPrice: val });
+                        } else {
+                          formTouched.current.returnPrice = true;
+                          setFormData({ ...formData, returnPrice: val });
+                        }
                       }}
                       className="block w-full bg-transparent pl-11 pr-3 py-2 text-sm text-gray-900 focus:outline-none border-none rounded-lg"
                       required
@@ -825,14 +839,19 @@ export default function UnifiedScheduleModal({
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Available Capacity *
                 </label>
-                <div className="relative rounded-lg border border-gray-300 bg-white shadow-sm focus-within:ring-2 focus-within:ring-indigo-500 focus-within:border-transparent transition-all">
+                <div className="relative rounded-lg border border-gray-300 bg-white shadow-sm focus-within:ring-2 focus-within:ring-brand-700 focus-within:border-transparent transition-all">
                   <input
                     type="number"
                     value={scheduleType === 'recurring' ? templateFormData.availableSeats : formData.availableSeats}
                     onChange={e => {
                       const val = parseInt(e.target.value) || 0;
-                      if (scheduleType === 'recurring') setTemplateFormData({ ...templateFormData, availableSeats: val });
-                      else setFormData({ ...formData, availableSeats: val });
+                      if (scheduleType === 'recurring') {
+                        templateTouched.current.availableSeats = true;
+                        setTemplateFormData({ ...templateFormData, availableSeats: val });
+                      } else {
+                        formTouched.current.availableSeats = true;
+                        setFormData({ ...formData, availableSeats: val });
+                      }
                     }}
                     className="block w-full bg-transparent px-3 py-2 pr-16 text-sm text-gray-900 focus:outline-none border-none rounded-lg"
                     required
