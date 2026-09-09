@@ -81,8 +81,8 @@ export default function UnifiedScheduleModal({
     arrivalDateTime: fmtDateTimeInput(new Date(Date.now() + 14400000)),
     price: 0,
     availableSeats: 0,
-    outboundManagingRegionId: defaultManagingRegionId,
-    returnManagingRegionId: defaultManagingRegionId,
+    outboundManagingRegionId: '',
+    returnManagingRegionId: '',
     // Round trip specific
     returnBusId: '',
     returnDepartureDateTime: fmtDateTimeInput(new Date(Date.now() + 86400000)),
@@ -108,6 +108,20 @@ export default function UnifiedScheduleModal({
   };
   const [templateFormData, setTemplateFormData] = useState(initialTemplateState);
   const [includeReturnTemplate, setIncludeReturnTemplate] = useState(false);
+  const formTouched = useRef({
+    outboundManagingRegionId: false,
+    returnManagingRegionId: false,
+    price: false,
+    returnPrice: false,
+    availableSeats: false,
+  });
+  const templateTouched = useRef({
+    defaultManagingRegionId: false,
+    returnDefaultManagingRegionId: false,
+    price: false,
+    returnPrice: false,
+    availableSeats: false,
+  });
 
   // Reset state when opened
   useEffect(() => {
@@ -115,6 +129,20 @@ export default function UnifiedScheduleModal({
       setScheduleType('single');
       setFormData({ ...initialFormState, routeId: preSelectedRouteId || '' });
       setTemplateFormData({ ...initialTemplateState, routeId: preSelectedRouteId || '' });
+      formTouched.current = {
+        outboundManagingRegionId: false,
+        returnManagingRegionId: false,
+        price: false,
+        returnPrice: false,
+        availableSeats: false,
+      };
+      templateTouched.current = {
+        defaultManagingRegionId: false,
+        returnDefaultManagingRegionId: false,
+        price: false,
+        returnPrice: false,
+        availableSeats: false,
+      };
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, preSelectedRouteId, preSelectedBranchId]);
@@ -127,10 +155,16 @@ export default function UnifiedScheduleModal({
       if (route) {
         setFormData(prev => ({ 
           ...prev, 
-          price: route.baseFare,
-          outboundManagingRegionId: prev.outboundManagingRegionId || route.regionId || '',
-          returnManagingRegionId: prev.returnManagingRegionId || route.regionId || '',
-          returnPrice: prev.returnPrice || returnRoute?.baseFare || route.baseFare 
+          price: formTouched.current.price ? prev.price : route.baseFare,
+          outboundManagingRegionId: formTouched.current.outboundManagingRegionId
+            ? prev.outboundManagingRegionId
+            : route.regionId || '',
+          returnManagingRegionId: formTouched.current.returnManagingRegionId
+            ? prev.returnManagingRegionId
+            : returnRoute?.regionId || route.regionId || '',
+          returnPrice: formTouched.current.returnPrice
+            ? prev.returnPrice
+            : returnRoute?.baseFare || route.baseFare
         }));
       }
     }
@@ -411,38 +445,7 @@ export default function UnifiedScheduleModal({
                   ))}
                 </select>
               </div>
-              {scheduleType === 'return' ? (
-                <>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Outbound Managing Region *</label>
-                    <select
-                      value={formData.outboundManagingRegionId}
-                      onChange={e => setFormData({ ...formData, outboundManagingRegionId: e.target.value })}
-                      className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border"
-                      required
-                    >
-                      <option value="">Select managing region</option>
-                      {regionOptions.map((region) => (
-                        <option key={region.id} value={region.id}>{region.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Return Managing Region *</label>
-                    <select
-                      value={formData.returnManagingRegionId}
-                      onChange={e => setFormData({ ...formData, returnManagingRegionId: e.target.value })}
-                      className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border"
-                      required
-                    >
-                      <option value="">Select managing region</option>
-                      {regionOptions.map((region) => (
-                        <option key={region.id} value={region.id}>{region.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                </>
-              ) : (
+              {scheduleType !== 'return' && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Managing Region {scheduleType === 'recurring' ? '' : '*'}
@@ -451,10 +454,15 @@ export default function UnifiedScheduleModal({
                     value={scheduleType === 'recurring' ? templateFormData.defaultManagingRegionId : formData.outboundManagingRegionId}
                     onChange={e => {
                       const value = e.target.value;
-                      if (scheduleType === 'recurring') setTemplateFormData({ ...templateFormData, defaultManagingRegionId: value });
-                      else setFormData({ ...formData, outboundManagingRegionId: value });
+                      if (scheduleType === 'recurring') {
+                        templateTouched.current.defaultManagingRegionId = true;
+                        setTemplateFormData({ ...templateFormData, defaultManagingRegionId: value });
+                      } else {
+                        formTouched.current.outboundManagingRegionId = true;
+                        setFormData({ ...formData, outboundManagingRegionId: value });
+                      }
                     }}
-                    className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border"
+                    className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-brand-700 focus:ring-brand-700 sm:text-sm px-3 py-2 border"
                     required={scheduleType !== 'recurring'}
                   >
                     <option value="">Select managing region</option>
@@ -620,7 +628,26 @@ export default function UnifiedScheduleModal({
             {(scheduleType === 'single' || scheduleType === 'return') && (
               <>
                 {scheduleType === 'return' && (
-                  <h4 className="text-sm font-semibold text-gray-900 border-b border-gray-100 pb-2 mt-4">Outbound Trip</h4>
+                  <>
+                    <h4 className="text-sm font-semibold text-gray-900 border-b border-gray-100 pb-2 mt-4">Outbound Trip</h4>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Outbound Managing Region *</label>
+                      <select
+                        value={formData.outboundManagingRegionId}
+                        onChange={e => {
+                          formTouched.current.outboundManagingRegionId = true;
+                          setFormData({ ...formData, outboundManagingRegionId: e.target.value });
+                        }}
+                        className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-brand-700 focus:ring-brand-700 sm:text-sm px-3 py-2 border"
+                        required
+                      >
+                        <option value="">Select managing region</option>
+                        {regionOptions.map((region) => (
+                          <option key={region.id} value={region.id}>{region.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </>
                 )}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
@@ -653,6 +680,23 @@ export default function UnifiedScheduleModal({
                 {scheduleType === 'return' && (
                   <>
                     <h4 className="text-sm font-semibold text-gray-900 border-b border-gray-100 pb-2 mt-6">Return Trip (Inbound)</h4>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Return Managing Region *</label>
+                      <select
+                        value={formData.returnManagingRegionId}
+                        onChange={e => {
+                          formTouched.current.returnManagingRegionId = true;
+                          setFormData({ ...formData, returnManagingRegionId: e.target.value });
+                        }}
+                        className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-brand-700 focus:ring-brand-700 sm:text-sm px-3 py-2 border"
+                        required
+                      >
+                        <option value="">Select managing region</option>
+                        {regionOptions.map((region) => (
+                          <option key={region.id} value={region.id}>{region.name}</option>
+                        ))}
+                      </select>
+                    </div>
                     <div className="grid grid-cols-1 gap-4">
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
