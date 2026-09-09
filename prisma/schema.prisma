@@ -112,6 +112,7 @@ model Company {
   routes                    Route[]
   schedules                 Schedule[]
   scheduleTemplates         ScheduleTemplate[]
+  locationRegionMaps        LocationRegionMap[]
   staff                     User[]              @relation("CompanyStaff")
   charterRequests           GroupCharterRequest[]
 
@@ -129,9 +130,34 @@ model Region {
   operators Operator[]
   company   Company?   @relation(fields: [companyId], references: [id], onDelete: Restrict, onUpdate: NoAction)
   routes    Route[]
+  managingSchedules Schedule[] @relation("ScheduleManagingRegion")
+  defaultScheduleTemplates ScheduleTemplate[] @relation("ScheduleTemplateDefaultManagingRegion")
+  locationRegionMaps LocationRegionMap[]
 
   @@index([companyId])
   @@index([isActive])
+}
+
+model LocationRegionMap {
+  id             String    @id @default(uuid())
+  companyId      String
+  locationString String
+  regionId       String
+  status         String    @default("unconfirmed")
+  confidence     String?
+  source         String?
+  reviewedBy     String?
+  reviewedAt     DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id])
+  region  Region  @relation(fields: [regionId], references: [id])
+
+  @@unique([companyId, locationString])
+  @@index([companyId])
+  @@index([regionId])
+  @@index([status])
 }
 
 model Bus {
@@ -195,6 +221,7 @@ model Schedule {
   companyId            String
   busId                String
   routeId              String
+  managingRegionId     String?
   operatorId           String?
   departureDateTime    DateTime
   arrivalDateTime      DateTime
@@ -232,6 +259,7 @@ model Schedule {
   company              Company              @relation(fields: [companyId], references: [id], onDelete: Restrict, onUpdate: NoAction)
   operator             Operator?            @relation("OperatorSchedules", fields: [operatorId], references: [id], onDelete: Restrict, onUpdate: NoAction)
   route                Route                @relation(fields: [routeId], references: [id])
+  managingRegion       Region?              @relation("ScheduleManagingRegion", fields: [managingRegionId], references: [id])
   reservations         SeatReservation[]
   positionSamples      TripPositionSample[]
   charterRequests      GroupCharterRequest[] @relation("ChatterResultSchedule")
@@ -239,6 +267,7 @@ model Schedule {
   @@index([companyId])
   @@index([busId])
   @@index([routeId])
+  @@index([managingRegionId])
   @@index([operatorId])
   @@index([departureDateTime])
   @@index([status])
@@ -411,6 +440,7 @@ model ScheduleTemplate {
   id            String   @id @default(uuid())
   companyId     String
   routeId       String
+  defaultManagingRegionId String?
   busId         String
   departureTime String
   arrivalTime   String
@@ -422,8 +452,10 @@ model ScheduleTemplate {
   bus           Bus      @relation(fields: [busId], references: [id])
   company       Company  @relation(fields: [companyId], references: [id], onDelete: Restrict, onUpdate: NoAction)
   route         Route    @relation(fields: [routeId], references: [id])
+  defaultManagingRegion Region? @relation("ScheduleTemplateDefaultManagingRegion", fields: [defaultManagingRegionId], references: [id])
 
   @@index([routeId])
+  @@index([defaultManagingRegionId])
   @@index([companyId])
   @@index([busId])
 }
