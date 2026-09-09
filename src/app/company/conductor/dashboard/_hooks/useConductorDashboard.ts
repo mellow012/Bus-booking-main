@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@/utils/supabase/client';
+const supabase = createClient();
 import { useAuth } from '@/contexts/AuthContext';
 import { Company, Schedule, Route, Bus, Booking, TripStatus } from '@/types';
 import * as dbActions from '@/lib/actions/db.actions';
@@ -33,7 +34,10 @@ export function useConductorDashboard() {
       if (!isSilent) setLoading(true);
       const uid = userProfile?.uid || user.id;
 
-      const { data: allBuses } = await supabase.from('Bus').select('*').eq('companyId', companyId);
+      const [{ data: allBuses }, { data: conductorRecord }] = await Promise.all([
+        supabase.from('Bus').select('*').eq('companyId', companyId),
+        supabase.from('Operator').select('id').eq('companyId', companyId).eq('uid', uid).eq('role', 'conductor').maybeSingle(),
+      ]);
       const myBuses = (allBuses || []).filter(b => {
         const cIds = b.conductorIds as string[] | undefined;
         return cIds && Array.isArray(cIds) && cIds.includes(uid);
@@ -42,7 +46,7 @@ export function useConductorDashboard() {
 
       const myBusIds = myBuses.map(b => b.id);
 
-      if (myBusIds.length > 0) {
+      {
         const startOfToday = new Date();
         startOfToday.setHours(0,0,0,0);
 
@@ -50,13 +54,15 @@ export function useConductorDashboard() {
           supabase.from('Schedule')
             .select('*')
             .eq('companyId', companyId)
-            .in('busId', myBusIds)
             .or(`departureDateTime.gte.${startOfToday.toISOString()},tripStatus.in.(boarding,in_transit,arrived)`),
           supabase.from('Route').select('*').eq('companyId', companyId),
-          supabase.from('Company').select('*').eq('id', companyId).single()
+          supabase.from('Company').select('name').eq('id', companyId).single()
         ]);
-        
-        const activeTrips = (sData as any[] || []).filter(t => t.status === 'active' && !t.isArchived)
+
+        const activeTrips = (sData as any[] || []).filter(t => {
+          if (t.conductorId) return t.conductorId === conductorRecord?.id;
+          return myBusIds.includes(t.busId);
+        }).filter(t => t.status === 'active' && !t.isArchived)
           .map(t => ({...t, departureDateTime: parseUtcDate(t.departureDateTime), arrivalDateTime: parseUtcDate(t.arrivalDateTime)}));
         
         setTrips(activeTrips as Schedule[]);
@@ -80,9 +86,6 @@ export function useConductorDashboard() {
              else setSelectedTrip(activeTrips[0]);
            }
         }
-      } else {
-        setTrips([]);
-        setRoutes([]);
       }
     } catch (err) {
       if (!isSilent) setGlobalError('Failed to load trips.');
@@ -269,9 +272,7 @@ export function useConductorDashboard() {
 
       if (!res.success) throw new Error(res.error);
 
-      await dbActions.updateSchedule(selectedTrip.id, {
-        availableSeats: Math.max(0, (selectedTrip.availableSeats || 0) - 1)
-      });
+      await dbActions.decrementScheduleSeats(selectedTrip.id);
 
       setSuccessMessage('Walk-on passenger successfully boarded!');
       setTimeout(() => setSuccessMessage(''), 5000);

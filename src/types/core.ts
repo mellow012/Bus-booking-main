@@ -331,6 +331,7 @@
     busId: string;
     routeId: string;
     managingRegionId?: string | null;
+    conductorId?: string | null;
 
     departureLocation: string;
     arrivalLocation: string;
@@ -362,13 +363,10 @@
     tripCompletedAt?: Date;
     currentStopId?: string;
     tripNotes?: string;
-    conductorUid?: string;
-
     reservedSeats?: string[];
 
     createdBy?: string;
     assignedOperatorIds?: string[];
-    assignedConductorIds?: string[];
 
     metadata?: Record<string, unknown>;
   }

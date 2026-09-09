@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
+import { createClient } from '@/utils/supabase/client';
 import { Calendar as CalendarIcon, Repeat, LayoutTemplate, Sparkles, Loader2 } from 'lucide-react';
 import { createSchedule, createRoundTripSchedule, createScheduleTemplate, createRoundTripScheduleTemplate } from '@/lib/actions/schedule.actions';
 import { Route, Bus } from '@/types';
@@ -39,6 +40,8 @@ const localTimeToUtc = (localTimeStr: string): string => {
   d.setHours(h, m, 0, 0); // interpret as local time
   return `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;
 };
+
+const supabase = createClient();
 
 
 interface UnifiedScheduleModalProps {
@@ -83,6 +86,8 @@ export default function UnifiedScheduleModal({
     availableSeats: 0,
     outboundManagingRegionId: '',
     returnManagingRegionId: '',
+    outboundConductorId: '',
+    returnConductorId: '',
     // Round trip specific
     returnBusId: '',
     returnDepartureDateTime: fmtDateTimeInput(new Date(Date.now() + 86400000)),
@@ -109,6 +114,8 @@ export default function UnifiedScheduleModal({
   };
   const [templateFormData, setTemplateFormData] = useState(initialTemplateState);
   const [includeReturnTemplate, setIncludeReturnTemplate] = useState(false);
+  const [conductors, setConductors] = useState<Array<{ id: string; name: string; regionId: string | null }>>([]);
+  const [conductorLoadError, setConductorLoadError] = useState('');
   const formTouched = useRef({
     outboundManagingRegionId: false,
     returnManagingRegionId: false,
@@ -147,6 +154,32 @@ export default function UnifiedScheduleModal({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, preSelectedRouteId, preSelectedBranchId]);
+
+  useEffect(() => {
+    if (!isOpen || !companyId) return;
+    let cancelled = false;
+    const loadConductors = async () => {
+      const { data, error } = await supabase
+        .from('Operator')
+        .select('id, name, regionId')
+        .eq('companyId', companyId)
+        .eq('role', 'conductor')
+        .eq('status', 'active')
+        .order('name');
+      if (cancelled) return;
+      if (error) {
+        setConductorLoadError(error.message);
+        setConductors([]);
+        return;
+      }
+      setConductorLoadError('');
+      setConductors((data || []) as Array<{ id: string; name: string; regionId: string | null }>);
+    };
+    loadConductors();
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, companyId]);
 
   // Handle auto-populating fields
   useEffect(() => {
@@ -330,6 +363,7 @@ export default function UnifiedScheduleModal({
           departureLocation: route?.origin,
           arrivalLocation: route?.destination,
           managingRegionId: formData.outboundManagingRegionId,
+          conductorId: formData.outboundConductorId || null,
           companyId,
           status: 'active' as const,
           tripStatus: 'scheduled' as const
@@ -372,6 +406,7 @@ export default function UnifiedScheduleModal({
           departureLocation: returnRoute?.origin ?? route?.destination,
           arrivalLocation: returnRoute?.destination ?? route?.origin,
           managingRegionId: formData.returnManagingRegionId,
+          conductorId: formData.returnConductorId || null,
           price: formData.returnPrice,
           companyId,
           status: 'active' as const,
@@ -398,6 +433,8 @@ export default function UnifiedScheduleModal({
   const availableRoutes = preSelectedBranchId 
     ? routes.filter(r => r.regionId === preSelectedBranchId)
     : routes;
+  const conductorsForRegion = (regionId: string) =>
+    conductors.filter((conductor) => conductor.regionId === regionId);
 
   if (!isOpen) return null;
 
@@ -483,6 +520,24 @@ export default function UnifiedScheduleModal({
                       <option key={region.id} value={region.id}>{region.name}</option>
                     ))}
                   </select>
+                </div>
+              )}
+              {scheduleType === 'single' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Conductor (optional)
+                  </label>
+                  <select
+                    value={formData.outboundConductorId}
+                    onChange={e => setFormData({ ...formData, outboundConductorId: e.target.value })}
+                    className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-brand-700 focus:ring-brand-700 sm:text-sm px-3 py-2 border"
+                  >
+                    <option value="">Leave unassigned</option>
+                    {conductorsForRegion(formData.outboundManagingRegionId).map((conductor) => (
+                      <option key={conductor.id} value={conductor.id}>{conductor.name}</option>
+                    ))}
+                  </select>
+                  {conductorLoadError && <p className="mt-1 text-xs text-red-600">{conductorLoadError}</p>}
                 </div>
               )}
               <div>
@@ -677,6 +732,19 @@ export default function UnifiedScheduleModal({
                         ))}
                       </select>
                     </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Outbound Conductor (optional)</label>
+                      <select
+                        value={formData.outboundConductorId}
+                        onChange={e => setFormData({ ...formData, outboundConductorId: e.target.value })}
+                        className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-brand-700 focus:ring-brand-700 sm:text-sm px-3 py-2 border"
+                      >
+                        <option value="">Leave unassigned</option>
+                        {conductorsForRegion(formData.outboundManagingRegionId).map((conductor) => (
+                          <option key={conductor.id} value={conductor.id}>{conductor.name}</option>
+                        ))}
+                      </select>
+                    </div>
                   </>
                 )}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -772,6 +840,19 @@ export default function UnifiedScheduleModal({
                           required
                         />
                       </div>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Return Conductor (optional)</label>
+                      <select
+                        value={formData.returnConductorId}
+                        onChange={e => setFormData({ ...formData, returnConductorId: e.target.value })}
+                        className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-brand-700 focus:ring-brand-700 sm:text-sm px-3 py-2 border"
+                      >
+                        <option value="">Leave unassigned</option>
+                        {conductorsForRegion(formData.returnManagingRegionId).map((conductor) => (
+                          <option key={conductor.id} value={conductor.id}>{conductor.name}</option>
+                        ))}
+                      </select>
                     </div>
                   </>
                 )}

@@ -104,6 +104,34 @@ async function resolveManagingRegionId(
   return region.id;
 }
 
+async function resolveConductorId(
+  requestedConductorId: string | null | undefined,
+  companyId: string,
+  managingRegionId: string | null,
+) {
+  if (!requestedConductorId) return null;
+  if (!managingRegionId) {
+    throw new Error('A conductor can only be assigned when the schedule has a managing region.');
+  }
+
+  const conductor = await prisma.operator.findFirst({
+    where: {
+      id: requestedConductorId,
+      companyId,
+      regionId: managingRegionId,
+      role: 'conductor',
+      status: 'active',
+    },
+    select: { id: true },
+  });
+
+  if (!conductor) {
+    throw new Error('Selected conductor does not belong to the schedule company and branch.');
+  }
+
+  return conductor.id;
+}
+
 async function assertBusNotOverlapping(
   tx: Prisma.TransactionClient | any,
   busId: string,
@@ -192,6 +220,7 @@ export async function createSchedule(data: Omit<Partial<Schedule>, 'departureDat
       effectiveCompanyId,
       routeAuthorization.route.regionId,
     );
+    const conductorId = await resolveConductorId(data.conductorId, effectiveCompanyId, managingRegionId);
 
     await assertBusNotOverlapping(prisma, data.busId, dep, arr);
 
@@ -202,6 +231,7 @@ export async function createSchedule(data: Omit<Partial<Schedule>, 'departureDat
         busId: data.busId,
         routeId: data.routeId,
         managingRegionId,
+        conductorId,
         departureDateTime: dep,
         arrivalDateTime: arr,
         availableSeats: data.availableSeats,
@@ -284,6 +314,16 @@ export async function createRoundTripSchedule(outboundData: any, inboundData: an
       effectiveCompanyId,
       returnRoute.regionId,
     );
+    const outboundConductorId = await resolveConductorId(
+      outboundData.conductorId,
+      effectiveCompanyId,
+      outboundManagingRegionId,
+    );
+    const inboundConductorId = await resolveConductorId(
+      inboundData.conductorId,
+      effectiveCompanyId,
+      inboundManagingRegionId,
+    );
 
     const outDep = new Date(outboundData.departureDateTime);
     const outArr = new Date(outboundData.arrivalDateTime);
@@ -307,6 +347,7 @@ export async function createRoundTripSchedule(outboundData: any, inboundData: an
           busId: outboundData.busId,
           routeId: outboundData.routeId,
           managingRegionId: outboundManagingRegionId,
+          conductorId: outboundConductorId,
           departureDateTime: new Date(outboundData.departureDateTime),
           arrivalDateTime: new Date(outboundData.arrivalDateTime),
           availableSeats: outboundData.availableSeats,
@@ -322,6 +363,7 @@ export async function createRoundTripSchedule(outboundData: any, inboundData: an
           busId: inboundData.busId,
           routeId: returnRoute.id,
           managingRegionId: inboundManagingRegionId,
+          conductorId: inboundConductorId,
           departureDateTime: new Date(inboundData.departureDateTime),
           arrivalDateTime: new Date(inboundData.arrivalDateTime),
           availableSeats: inboundData.availableSeats,
@@ -353,7 +395,7 @@ export async function updateSchedule(id: string, data: Partial<Schedule>) {
 
   const existingSchedule = await prisma.schedule.findUnique({
     where: { id },
-    select: { companyId: true, routeId: true },
+    select: { companyId: true, routeId: true, managingRegionId: true, conductorId: true },
   });
   if (!existingSchedule) {
     return { success: false, error: 'Schedule not found' };
@@ -374,6 +416,12 @@ export async function updateSchedule(id: string, data: Partial<Schedule>) {
   if (!routeAuthorization.allowed) {
     return { success: false, error: routeAuthorization.error };
   }
+  const managingRegionId = data.managingRegionId !== undefined
+    ? await resolveManagingRegionId(authUser, data.managingRegionId, effectiveCompanyId, routeAuthorization.route.regionId)
+    : existingSchedule.managingRegionId;
+  const conductorId = data.conductorId !== undefined
+    ? await resolveConductorId(data.conductorId, effectiveCompanyId, managingRegionId)
+    : existingSchedule.conductorId;
   try {
     const currentSchedule = await prisma.schedule.findUnique({ where: { id } });
     if (!currentSchedule) {
@@ -396,6 +444,8 @@ export async function updateSchedule(id: string, data: Partial<Schedule>) {
       where: { id },
       data: {
         ...(updatableData as any),
+        managingRegionId,
+        conductorId,
         departureDateTime: updatableData.departureDateTime ? new Date(updatableData.departureDateTime) : undefined,
         arrivalDateTime: updatableData.arrivalDateTime ? new Date(updatableData.arrivalDateTime) : undefined,
         updatedAt: new Date(),
