@@ -99,7 +99,8 @@ export default function UnifiedScheduleModal({
     daysOfWeek: [] as DayOfWeek[],
     price: 0,
     availableSeats: 0,
-    defaultManagingRegionId,
+    defaultManagingRegionId: '',
+    returnDefaultManagingRegionId: '',
     // Return template specific
     returnBusId: '',
     returnDepartureTime: '14:00',
@@ -184,9 +185,16 @@ export default function UnifiedScheduleModal({
       if (route) {
         setTemplateFormData(prev => ({ 
           ...prev, 
-          price: route.baseFare,
-          defaultManagingRegionId: prev.defaultManagingRegionId || route.regionId || '',
-          returnPrice: prev.returnPrice || returnRoute?.baseFare || route.baseFare 
+          price: templateTouched.current.price ? prev.price : route.baseFare,
+          defaultManagingRegionId: templateTouched.current.defaultManagingRegionId
+            ? prev.defaultManagingRegionId
+            : route.regionId || '',
+          returnDefaultManagingRegionId: templateTouched.current.returnDefaultManagingRegionId
+            ? prev.returnDefaultManagingRegionId
+            : returnRoute?.regionId || route.regionId || '',
+          returnPrice: templateTouched.current.returnPrice
+            ? prev.returnPrice
+            : returnRoute?.baseFare || route.baseFare
         }));
       }
     }
@@ -235,6 +243,7 @@ export default function UnifiedScheduleModal({
             departureTime: localTimeToUtc(templateFormData.returnDepartureTime),
             arrivalTime: localTimeToUtc(templateFormData.returnArrivalTime),
             price: templateFormData.returnPrice,
+            defaultManagingRegionId: templateFormData.returnDefaultManagingRegionId,
             companyId,
           };
           const result = await createRoundTripScheduleTemplate(outboundData, inboundData);
@@ -573,7 +582,24 @@ export default function UnifiedScheduleModal({
 
                 {includeReturnTemplate && (
                   <div className="mt-4 space-y-4">
-                    <div className="grid grid-cols-1 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Return Managing Region *</label>
+                    <select
+                      value={templateFormData.returnDefaultManagingRegionId}
+                      onChange={e => {
+                        templateTouched.current.returnDefaultManagingRegionId = true;
+                        setTemplateFormData({ ...templateFormData, returnDefaultManagingRegionId: e.target.value });
+                      }}
+                      className="block w-full rounded-lg border-gray-300 shadow-sm sm:text-sm px-3 py-2 border"
+                      required
+                    >
+                      <option value="">Select managing region</option>
+                      {regionOptions.map((region) => (
+                        <option key={region.id} value={region.id}>{region.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="grid grid-cols-1 gap-4">
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
                           Return Vessel *
