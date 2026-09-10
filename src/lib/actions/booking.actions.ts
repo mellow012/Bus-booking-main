@@ -50,6 +50,7 @@ export interface CreateBookingPayload {
   destinationStopId?: string;
   promoCode?: string;
   returnDate?: string;
+  reservationIds?: string[];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -109,7 +110,7 @@ export async function createBookingFull(body: CreateBookingPayload): Promise<{
 
   const {
     routeId, companyId, scheduleId, seatNumbers, passengerDetails,
-    originStopId, destinationStopId, promoCode, returnDate, segments,
+    originStopId, destinationStopId, promoCode, returnDate, segments, reservationIds,
   } = body;
 
   // ── Validation ─────────────────────────────────────────────────────────────
@@ -293,6 +294,22 @@ export async function createBookingFull(body: CreateBookingPayload): Promise<{
   let result;
   try {
     result = await prisma.$transaction(async (tx: PrismaTypes.TransactionClient) => {
+      const requestedReservationIds = [...new Set(reservationIds ?? [])];
+      if (requestedReservationIds.length > 0) {
+        const ownedReservations = await tx.seatReservation.findMany({
+          where: {
+            id: { in: requestedReservationIds },
+            userId: userData.id,
+            status: 'reserved',
+            expiresAt: { gt: new Date() },
+          },
+          select: { id: true },
+        });
+        if (ownedReservations.length !== requestedReservationIds.length) {
+          throw new Error('One or more seat reservations are no longer active');
+        }
+      }
+
       const coreInput = {
         booking: {
           bookingReference,
@@ -325,6 +342,7 @@ export async function createBookingFull(body: CreateBookingPayload): Promise<{
         fareMode: 'segment' as const,
         totalAmount,
         payment: undefined,
+        reservationIds: requestedReservationIds,
       };
 
       return await createSegmentBookingCore(tx as any, coreInput as any);

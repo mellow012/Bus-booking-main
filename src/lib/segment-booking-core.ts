@@ -37,6 +37,7 @@ export interface SegmentBookingCoreInput {
   fareMode: 'segment' | 'full_trip';
   totalAmount?: number;
   payment?: SegmentBookingPaymentInput;
+  reservationIds?: string[];
 }
 
 interface OrderedStop {
@@ -141,6 +142,7 @@ async function loadScheduleIntervals(
   tx: SegmentBookingTransaction,
   scheduleId: string,
   now: Date,
+  excludedReservationIds: string[] = [],
 ): Promise<{ schedule: { id: string; availableSeats: number; bus: { capacity: number }; route: Parameters<typeof orderedStops>[0] }; intervals: OccupiedInterval[] }> {
   const schedule = await tx.schedule.findUnique({
     where: { id: scheduleId },
@@ -161,7 +163,12 @@ async function loadScheduleIntervals(
   });
 
   const reservationRows = await tx.seatReservation.findMany({
-    where: { scheduleId, status: 'reserved', expiresAt: { gt: now } },
+    where: {
+      scheduleId,
+      status: 'reserved',
+      expiresAt: { gt: now },
+      ...(excludedReservationIds.length > 0 ? { id: { notIn: excludedReservationIds } } : {}),
+    },
     select: { seatNumbers: true, originStopId: true, destinationStopId: true },
   });
 
@@ -233,7 +240,7 @@ export async function createSegmentBookingCore(
   const now = new Date();
   const existingBySchedule = new Map<string, OccupiedInterval[]>();
   for (const scheduleId of scheduleIds) {
-    const loaded = await loadScheduleIntervals(tx, scheduleId, now);
+    const loaded = await loadScheduleIntervals(tx, scheduleId, now, input.reservationIds ?? []);
     existingBySchedule.set(scheduleId, loaded.intervals);
   }
 
@@ -292,6 +299,16 @@ export async function createSegmentBookingCore(
         destinationStopId: segment.destinationStopId ?? null,
         metadata: { fareSource: segment.fare.fareSource },
       },
+    });
+  }
+
+  if (input.reservationIds?.length) {
+    await tx.seatReservation.updateMany({
+      where: {
+        id: { in: input.reservationIds },
+        status: 'reserved',
+      },
+      data: { status: 'released' },
     });
   }
 

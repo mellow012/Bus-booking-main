@@ -37,6 +37,7 @@ const createBookingSchema = z.object({
   destinationStopId: z.string().optional(),
   promoCode: z.string().optional(),
   returnDate: z.string().optional(),
+  reservationIds: z.array(z.string().uuid()).optional(),
 });
 
 export async function POST(req: NextRequest) {

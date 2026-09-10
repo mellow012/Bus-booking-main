@@ -157,7 +157,7 @@ export default function useBookBus() {
   const releaseReservation = useCallback(async (reservationIdToRelease: string | null) => {
     if (!reservationIdToRelease) return;
     try {
-      await fetch(`/api/bookings/reserve-seats/${reservationIdToRelease}/release`, {
+      await fetch(`/api/bookings/reserve-seats/${reservationIdToRelease}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
       });
@@ -933,6 +933,10 @@ export default function useBookBus() {
           })),
           promoCode: appliedPromo?.code,
           returnDate: wantsReturnTrip ? returnDate : undefined,
+          reservationIds: [
+            reservationId,
+            ...(wantsReturnTrip && returnReservationId ? [returnReservationId] : []),
+          ].filter((id): id is string => Boolean(id)),
         }),
       });
 
