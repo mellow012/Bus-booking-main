@@ -26,6 +26,7 @@ class MemoryCache {
     // Clean expired entries every 60 seconds
     if (typeof setInterval !== 'undefined') {
       this.cleanupInterval = setInterval(() => this.cleanup(), 60_000);
+      this.cleanupInterval.unref?.();
     }
   }
 
