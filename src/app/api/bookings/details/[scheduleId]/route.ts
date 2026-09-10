@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/auth-utils';
+import { intervalFor, intervalsOverlap } from '@/lib/segment-booking-core';
 
 /**
  * GET /api/bookings/details/[scheduleId]
@@ -119,8 +120,24 @@ export async function GET(
     }
 
     const user = await getCurrentUser(req);
+    const requestedOriginStopId = req.nextUrl.searchParams.get('originStopId') || '__origin__';
+    const requestedDestinationStopId = req.nextUrl.searchParams.get('destinationStopId') || '__destination__';
+    let requestedInterval;
+    try {
+      requestedInterval = intervalFor({
+        scheduleId,
+        seatNumbers: [],
+        originStopId: requestedOriginStopId,
+        destinationStopId: requestedDestinationStopId,
+      }, schedule.route);
+    } catch {
+      return NextResponse.json(
+        { error: 'Invalid booking segment' },
+        { status: 400 }
+      );
+    }
 
-    // Dynamically consolidate all active booked seats (direct + segment bookings)
+    // Consolidate only bookings and holds that overlap the requested segment.
     const [activeDirectBookings, activeSegmentBookings, activeReservations] = await Promise.all([
       prisma.booking.findMany({
         where: {
@@ -136,7 +153,7 @@ export async function GET(
             bookingStatus: { not: 'cancelled' },
           },
         },
-        select: { seatNumbers: true },
+        select: { seatNumbers: true, originStopId: true, destinationStopId: true },
       }),
       prisma.seatReservation.findMany({
         where: {
@@ -144,26 +161,57 @@ export async function GET(
           status: 'reserved',
           expiresAt: { gt: new Date() },
         },
+        select: { id: true, userId: true, seatNumbers: true, originStopId: true, destinationStopId: true, expiresAt: true },
       }),
     ]);
 
     const staticBookedSeats = parseSeatArray(schedule.bookedSeats);
+    const overlappingSegmentBookings = activeSegmentBookings.filter((booking) => {
+      try {
+        return intervalsOverlap(
+          requestedInterval,
+          intervalFor({
+            scheduleId,
+            seatNumbers: [],
+            originStopId: booking.originStopId ?? undefined,
+            destinationStopId: booking.destinationStopId ?? undefined,
+          }, schedule.route),
+        );
+      } catch {
+        return true;
+      }
+    });
     const allBookedSeatsSet = new Set<string>([
       ...staticBookedSeats,
       ...activeDirectBookings.flatMap((b) => parseSeatArray(b.seatNumbers)),
-      ...activeSegmentBookings.flatMap((s) => parseSeatArray(s.seatNumbers)),
+      ...overlappingSegmentBookings.flatMap((s) => parseSeatArray(s.seatNumbers)),
     ]);
     const consolidatedBookedSeats = Array.from(allBookedSeatsSet);
     const busCapacity = schedule.bus?.capacity || 40;
     const dynamicAvailableSeats = Math.max(busCapacity - consolidatedBookedSeats.length, 0);
 
+    const overlappingReservations = activeReservations.filter((reservation) => {
+      try {
+        return intervalsOverlap(
+          requestedInterval,
+          intervalFor({
+            scheduleId,
+            seatNumbers: [],
+            originStopId: reservation.originStopId ?? undefined,
+            destinationStopId: reservation.destinationStopId ?? undefined,
+          }, schedule.route),
+        );
+      } catch {
+        return true;
+      }
+    });
     const userReservation = user
-      ? activeReservations.find((r) => r.userId === user.id)
+      ? overlappingReservations.find((r) => r.userId === user.id)
       : null;
 
     const otherReservations = userReservation
-      ? activeReservations.filter((r) => r.id !== userReservation.id)
-      : activeReservations;
+      ? overlappingReservations.filter((r) => r.id !== userReservation.id)
+      : overlappingReservations;
 
     const reservedSeats = otherReservations.flatMap((reservation) =>
       parseSeatArray(reservation.seatNumbers)

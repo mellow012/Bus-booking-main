@@ -512,7 +512,11 @@ export default function useBookBus() {
       setError("");
     }
     try {
-      const response = await fetch(`/api/bookings/details/${scheduleId}`);
+      const availabilityParams = new URLSearchParams();
+      if (originStopId) availabilityParams.set("originStopId", originStopId);
+      if (destinationStopId) availabilityParams.set("destinationStopId", destinationStopId);
+      const availabilityQuery = availabilityParams.toString();
+      const response = await fetch(`/api/bookings/details/${scheduleId}${availabilityQuery ? `?${availabilityQuery}` : ""}`);
       if (!response.ok) {
         const result = await response.json();
         throw new Error(result.error || "Failed to load booking information");
@@ -661,7 +665,7 @@ export default function useBookBus() {
       if (!isBackground) setLoading(false);
       initialFetchCompletedRef.current = true;
     }
-  }, [scheduleId, passengers, bookingForSelf, userProfile, getProfileFullName]);
+  }, [scheduleId, passengers, bookingForSelf, userProfile, getProfileFullName, originStopId, destinationStopId]);
 
   // Safeguard 1: Ensure passenger forms are populated whenever step is passengers
   useEffect(() => {

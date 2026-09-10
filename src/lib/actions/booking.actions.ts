@@ -349,6 +349,20 @@ export async function createBookingFull(body: CreateBookingPayload): Promise<{
     }, { timeout: 25000, maxWait: 5000 });
   } catch (error: any) {
     const message = error?.message || '';
+    if (reservationIds?.length) {
+      try {
+        await prisma.seatReservation.updateMany({
+          where: {
+            id: { in: [...new Set(reservationIds)] },
+            userId: userData.id,
+            status: 'reserved',
+          },
+          data: { status: 'released' },
+        });
+      } catch (cleanupError) {
+        console.error('Failed to release seat reservations after booking failure:', cleanupError);
+      }
+    }
     if (/^Not enough seats remaining$|^Seat\(s\) already booked:|^Seat .+ is already occupied on an overlapping segment$/i.test(message)) {
       return { error: message };
     }

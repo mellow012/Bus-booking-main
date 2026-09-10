@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth-utils';
+import { invalidateScheduleCaches } from '@/lib/cache';
 import prisma from '@/lib/prisma';
 
 /**
@@ -42,6 +43,7 @@ export async function PATCH(
       where: { id: reservationId },
       data: { status: 'released' },
     });
+    invalidateScheduleCaches();
 
     return NextResponse.json({
       message: 'Reservation released',

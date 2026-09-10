@@ -88,7 +88,7 @@ function orderedStops(route: {
   ];
 }
 
-function intervalFor(
+export function intervalFor(
   segment: SegmentBookingInput,
   route: Parameters<typeof orderedStops>[0],
 ): { originIndex: number; destinationIndex: number } {
