@@ -3,7 +3,6 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Booking, Bus } from '@/types';
-import { bookingMatchesSchedule } from '@/lib/booking-utils';
 import { BranchUpcomingTrip } from '../types';
 import { formatDateTime } from '../utils/schedule';
 import { deleteSchedule } from '@/lib/actions/schedule.actions';
@@ -17,7 +16,7 @@ interface AllBranchesOverviewProps {
   onDeleteSuccess?: () => void;
 }
 
-export default function AllBranchesOverview({ trips, buses, bookings, onDeleteSuccess }: AllBranchesOverviewProps) {
+export default function AllBranchesOverview({ trips, buses, onDeleteSuccess }: AllBranchesOverviewProps) {
   const router = useRouter();
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 6;
@@ -69,9 +68,9 @@ export default function AllBranchesOverview({ trips, buses, bookings, onDeleteSu
           {pagedTrips.map(({ schedule, route, branch, departure, arrival }) => {
             const isCurrent = Date.now() >= departure && Date.now() <= arrival;
             const bus = buses.find((item: Bus) => item.id === schedule.busId);
-            const bookedSeats = bookings.filter((booking: Booking) => bookingMatchesSchedule(booking, schedule.id) && booking.bookingStatus !== 'cancelled').length;
+            const bookedSeats = schedule.bookedSeats.length;
             const capacity = typeof bus?.capacity === 'number' ? bus.capacity : null;
-            const seatsLeft = capacity !== null ? Math.max(capacity - bookedSeats, 0) : null;
+            const seatsLeft = schedule.availableSeats;
 
             return (
               <div

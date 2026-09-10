@@ -91,11 +91,6 @@ export async function GET(request: NextRequest) {
             route: true,
             bus: { include: { company: true } },
             company: true,
-            bookings: true,
-            bookingSegments: true,
-            reservations: {
-              where: { expiresAt: { gt: new Date() } },
-            },
           },
           orderBy,
           skip: pageOffset,
@@ -108,17 +103,6 @@ export async function GET(request: NextRequest) {
       { revalidate: 45, tags: ['schedules'] }
     )();
 
-    const parseSeatArray = (val: unknown): string[] => {
-      if (Array.isArray(val)) return val.filter((s): s is string => typeof s === 'string');
-      if (typeof val === 'string') {
-        try {
-          const p = JSON.parse(val);
-          if (Array.isArray(p)) return p.filter((s): s is string => typeof s === 'string');
-        } catch { return []; }
-      }
-      return [];
-    };
-
     // Transform to enhanced format
     const enhanced = schedules.map((sch: any) => {
       const route = sch.route;
@@ -127,21 +111,7 @@ export async function GET(request: NextRequest) {
       const dep = new Date(sch.departureDateTime);
       const arr = new Date(sch.arrivalDateTime);
 
-      // Calculate dynamic real-time seats remaining (including static, direct, segment & active holds)
-      const staticBookedSeats = parseSeatArray(sch.bookedSeats);
-      const activeBookings = (sch.bookings || []).filter((b: any) => b.bookingStatus !== 'cancelled');
-      const activeSegments = (sch.bookingSegments || []).filter((s: any) => s.bookingStatus !== 'cancelled');
-      const activeReservations = (sch.reservations || []).filter((r: any) => new Date(r.expiresAt) > new Date());
-
-      const allOccupiedSeatsSet = new Set<string>([
-        ...staticBookedSeats,
-        ...activeBookings.flatMap((b: any) => parseSeatArray(b.seatNumbers)),
-        ...activeSegments.flatMap((s: any) => parseSeatArray(s.seatNumbers)),
-        ...activeReservations.flatMap((r: any) => parseSeatArray(r.seatNumbers)),
-      ]);
-
       const totalSeats = bus?.capacity || 40;
-      const availableSeats = Math.max(totalSeats - allOccupiedSeatsSet.size, 0);
 
       // Estimate distance and duration if missing or 0
       const dbDistance = route.distance || 0;
@@ -169,7 +139,7 @@ export async function GET(request: NextRequest) {
         busId: sch.busId,
         routeId: sch.routeId,
         price: sch.price,
-        availableSeats: isUnpartnered ? 56 : availableSeats,
+        availableSeats: isUnpartnered ? 56 : sch.availableSeats,
         totalSeats: isUnpartnered ? 56 : totalSeats,
         status: sch.status,
         tripStatus: sch.tripStatus, // Return raw tripStatus for UI
