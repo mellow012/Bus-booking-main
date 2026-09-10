@@ -10,6 +10,8 @@ import { getCurrentUserFromServer } from '@/lib/auth-utils';
 import { logger } from '@/lib/logger';
 import { invalidateScheduleCaches } from '@/lib/cache';
 import { sendNotificationToUser, notifyCompanyStaff } from '@/lib/notificationService';
+import { calculateSegmentFare } from '@/lib/segment-fare';
+import { createSegmentBookingCore } from '@/lib/segment-booking-core';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -61,38 +63,6 @@ function generateBookingReference(): string {
   return ref;
 }
 
-interface RouteStop { id: string; name: string; price?: number; }
-
-function buildStopList(routeData: any): RouteStop[] {
-  const stops: RouteStop[] = [];
-  const baseFare = routeData?.baseFare ?? routeData?.price ?? routeData?.fare ?? 0;
-  if (routeData?.origin) stops.push({ id: '__origin__', name: routeData.origin, price: 0 });
-  if (Array.isArray(routeData?.stops)) {
-    for (const s of routeData.stops) {
-      if (s?.id && s?.name) {
-        stops.push({
-          id: s.id,
-          name: s.name,
-          price: typeof s.price === 'number' ? s.price : undefined
-        });
-      }
-    }
-  }
-  if (routeData?.destination) stops.push({ id: '__destination__', name: routeData.destination, price: baseFare });
-  return stops;
-}
-
-function proportionalFare(fullPrice: number, stopList: RouteStop[], originId: string, destId: string): number | null {
-  const originIdx = stopList.findIndex((s) => s.id === originId);
-  const destIdx = stopList.findIndex((s) => s.id === destId);
-  if (originIdx === -1 || destIdx === -1 || destIdx <= originIdx) return null;
-  const totalIntervals = stopList.length - 1;
-  const segmentIntervals = destIdx - originIdx;
-  if (totalIntervals <= 0) return null;
-  const raw = (segmentIntervals / totalIntervals) * fullPrice;
-  return Math.max(50, Math.round(raw / 50) * 50);
-}
-
 function parseSeatArray(value: unknown): string[] {
   if (Array.isArray(value)) return value.filter((s): s is string => typeof s === 'string');
   if (typeof value === 'string') {
@@ -102,47 +72,6 @@ function parseSeatArray(value: unknown): string[] {
     } catch { return []; }
   }
   return [];
-}
-
-function calculateSegmentFare(
-  scheduleData: any, routeData: any,
-  originStopId?: string, destinationStopId?: string,
-): { fare: number; fareSource: 'full_trip' | 'operator_set' | 'route_stop_pricing' | 'proportional_fallback' } {
-  const fullFare = scheduleData.baseFare ?? scheduleData.price ?? scheduleData.fare;
-  let baseFare = fullFare;
-  let fareSource: 'full_trip' | 'operator_set' | 'route_stop_pricing' | 'proportional_fallback' = 'full_trip';
-
-  const isSegment = !!(originStopId && destinationStopId &&
-    (originStopId !== '__origin__' || destinationStopId !== '__destination__'));
-
-  if (isSegment && originStopId && destinationStopId) {
-    const segmentKey = `${originStopId}:${destinationStopId}`;
-    const segmentPrices: Record<string, number> = scheduleData.segmentPrices ?? {};
-    const operatorPrice = segmentPrices[segmentKey];
-
-    if (typeof operatorPrice === 'number' && operatorPrice > 0) {
-      baseFare = operatorPrice;
-      fareSource = 'operator_set';
-    } else {
-      const stopList = buildStopList(routeData ?? scheduleData);
-      const originStop = stopList.find(s => s.id === originStopId);
-      const destStop = stopList.find(s => s.id === destinationStopId);
-
-      if (
-        originStop && destStop &&
-        typeof originStop.price === 'number' &&
-        typeof destStop.price === 'number' &&
-        destStop.price > originStop.price
-      ) {
-        baseFare = destStop.price - originStop.price;
-        fareSource = 'route_stop_pricing';
-      } else {
-        const calculated = proportionalFare(fullFare, stopList, originStopId, destinationStopId);
-        if (calculated !== null) { baseFare = calculated; fareSource = 'proportional_fallback'; }
-      }
-    }
-  }
-  return { fare: baseFare, fareSource };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -355,124 +284,54 @@ export async function createBookingFull(body: CreateBookingPayload): Promise<{
 
   const bookingReference = generateBookingReference();
 
-  // ── DB transaction ─────────────────────────────────────────────────────────
+  // Delegate transactional seat/segment persistence to the new core. The core performs
+  // interval-overlap checking, creates Booking + BookingSegment rows, recomputes occupancy,
+  // and may create a payment row when provided. We preserve all pre-transaction pricing,
+  // promo and discount logic above and pass totalAmount to the core so notifications and
+  // post-transaction side-effects remain identical.
+
   let result;
   try {
-    result = await prisma.$transaction(
-      async (tx: PrismaTypes.TransactionClient) => {
-        // Lock requested seats in one consistent order before reading or writing,
-        // preventing conflicts and multi-segment deadlocks without serializing
-        // independent seats on the same schedule.
-        const lockKeys = pricedSegments
-          .flatMap((segment) => {
-            const seatArray = Array.isArray(segment.seatNumbers) ? (segment.seatNumbers as string[]) : [];
-            return seatArray.map((seat) => `${segment.scheduleId}:${seat}`);
-          })
-          .filter((lockKey, index, keys) => keys.indexOf(lockKey) === index)
-          .sort();
-        for (const lockKey of lockKeys) {
-          await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
-        }
-
-        const freshSchedules = new Map<string, Awaited<ReturnType<typeof tx.schedule.findUnique>>>();
-        for (const segment of pricedSegments) {
-          if (!freshSchedules.has(segment.scheduleId)) {
-            const freshSchedule = await tx.schedule.findUnique({ where: { id: segment.scheduleId } });
-            if (!freshSchedule) throw new Error('Schedule not found during booking update');
-            freshSchedules.set(segment.scheduleId, freshSchedule);
-          }
-        }
-
-        for (const [sid, requestedSeats] of requestedSeatsBySchedule.entries()) {
-          const freshSchedule = freshSchedules.get(sid);
-          if (!freshSchedule || freshSchedule.availableSeats < requestedSeats.length)
-            throw new Error('Not enough seats remaining');
-
-          const existingBooked = Array.isArray(freshSchedule.bookedSeats)
-            ? freshSchedule.bookedSeats.filter((s): s is string => typeof s === 'string') : [];
-          const conflicts = requestedSeats.filter((seat) => existingBooked.includes(seat));
-          if (conflicts.length > 0)
-            throw new Error(`Seat(s) already booked: ${conflicts.join(', ')}`);
-        }
-
-        const booking = await tx.booking.create({
-          data: {
-            bookingReference,
-            userId: userData.id,
-            companyId,
-            scheduleId: finalSegments[0].scheduleId,
-            routeId,
-            totalAmount,
+    result = await prisma.$transaction(async (tx: PrismaTypes.TransactionClient) => {
+      const coreInput = {
+        booking: {
+          bookingReference,
+          userId: userData.id,
+          companyId,
+          scheduleId: finalSegments[0].scheduleId,
+          routeId,
+          discountPercent: returnTripDiscountPercent,
+          discountAmount: returnTripDiscountAmount,
+          currency: 'MWK',
+          contactEmail: userData?.email ?? '',
+          contactPhone: userData?.phone ?? '',
+          bookingStatus: 'pending',
+          paymentStatus: 'pending',
+          passengerDetails: normalisedPassengers as any,
+          originStopId: topOriginStopId ?? undefined,
+          destinationStopId: topDestinationStopId ?? undefined,
+          returnDate: returnDate ? new Date(returnDate) : undefined,
+          metadata: {
+            ...(returnDate ? { returnDate } : {}),
             discountPercent: returnTripDiscountPercent,
             discountAmount: returnTripDiscountAmount,
-            currency: 'MWK',
-            contactEmail: userData?.email ?? '',
-            contactPhone: userData?.phone ?? '',
-            bookingStatus: 'pending',
-            paymentStatus: 'pending',
-            passengerDetails: normalisedPassengers as any,
-            seatNumbers: Array.from(new Set(finalSegments.flatMap((s) => parseSeatArray(s.seatNumbers)))) as any,
-            originStopId: topOriginStopId ?? undefined,
-            destinationStopId: topDestinationStopId ?? undefined,
-            returnDate: returnDate ? new Date(returnDate) : undefined,
-            metadata: {
-              ...(returnDate ? { returnDate } : {}),
-              discountPercent: returnTripDiscountPercent,
-              discountAmount: returnTripDiscountAmount,
-              grossAmount: combinedGrossTotal,
-              segments: finalSegments.map((s) => ({
-                scheduleId: s.scheduleId, date: s.date,
-                originStopId: s.originStopId, destinationStopId: s.destinationStopId,
-              })),
-            },
-            bookingDate: new Date(),
-          } as any,
-        });
+            grossAmount: combinedGrossTotal,
+            segments: finalSegments.map((s) => ({ scheduleId: s.scheduleId, date: s.date, originStopId: s.originStopId, destinationStopId: s.destinationStopId })),
+          },
+          bookingDate: new Date(),
+        } as any,
+        segments: finalSegments.map((s, idx) => ({ ...s, segmentIndex: idx })),
+        passengerCount,
+        fareMode: 'segment' as const,
+        totalAmount,
+        payment: undefined,
+      };
 
-        for (const segment of pricedSegments) {
-          await tx.bookingSegment.create({
-            data: {
-              bookingId: booking.id, companyId,
-              scheduleId: segment.scheduleId, segmentIndex: segment.segmentIndex,
-              date: segment.date ? new Date(segment.date) : new Date(segment.schedule.departureDateTime),
-              seatNumbers: segment.seatNumbers as any, passengerCount,
-              price: segment.fare, currency: 'MWK',
-              originStopId: segment.originStopId ?? undefined,
-              destinationStopId: segment.destinationStopId ?? undefined,
-              metadata: { fareSource: segment.fareSource },
-            },
-          });
-
-          const seatArray = Array.isArray(segment.seatNumbers) ? (segment.seatNumbers as string[]) : [];
-          const updatedSchedules = await tx.$queryRaw<Array<{ availableSeats: number; bookedSeats: unknown }>>(Prisma.sql`
-            UPDATE "Schedule"
-            SET
-              "availableSeats" = "availableSeats" - ${passengerCount},
-              "bookedSeats" = COALESCE("bookedSeats", '[]'::jsonb) || ${JSON.stringify(seatArray)}::jsonb
-            WHERE "id" = ${segment.scheduleId}
-              AND "availableSeats" >= ${passengerCount}
-              AND NOT EXISTS (
-                SELECT 1
-                FROM jsonb_array_elements_text(COALESCE("bookedSeats", '[]'::jsonb)) AS booked(seat)
-                WHERE booked.seat IN (${Prisma.join(seatArray)})
-              )
-            RETURNING "availableSeats", "bookedSeats"
-          `);
-          if (updatedSchedules.length === 0) {
-            throw new Error('Not enough seats remaining');
-          }
-        }
-
-        return booking;
-      },
-      {
-        timeout: 25000,
-        maxWait: 5000,
-      }
-    );
+      return await createSegmentBookingCore(tx as any, coreInput as any);
+    }, { timeout: 25000, maxWait: 5000 });
   } catch (error: any) {
     const message = error?.message || '';
-    if (/^Not enough seats remaining$|^Seat\(s\) already booked:/i.test(message)) {
+    if (/^Not enough seats remaining$|^Seat\(s\) already booked:|^Seat .+ is already occupied on an overlapping segment$/i.test(message)) {
       return { error: message };
     }
     if (/expired transaction|timeout|unable to start a transaction in the given time/i.test(message)) {
@@ -490,26 +349,26 @@ export async function createBookingFull(body: CreateBookingPayload): Promise<{
       title: 'Booking created',
       body: `Your booking ${bookingReference} for ${routeData?.name ?? 'your trip'} is pending payment.`,
       type: 'booking', priority: 'high',
-      clickAction: `/bookings/${result.id}`,
-      data: { bookingId: result.id, scheduleId: finalSegments[0].scheduleId, companyId },
+      clickAction: `/bookings/${result.booking.id}`,
+      data: { bookingId: result.booking.id, scheduleId: finalSegments[0].scheduleId, companyId },
     }),
     notifyCompanyStaff(companyId, {
       title: 'New Booking Created 🚌',
       body: `A new booking (${bookingReference}) was created for ${routeData?.name ?? 'a route'}. Awaiting payment.`,
       type: 'system', priority: 'medium',
       clickAction: `/company/admin?tab=bookings`,
-      data: { bookingId: result.id }
+      data: { bookingId: result.booking.id }
     }),
   ]).catch((sendError) => {
     console.warn('[createBookingFull] Notification send failed:', sendError);
   });
 
-  const isSegmentRoute = pricedSegments.some((s) =>
+  const isSegmentRoute = finalSegments.some((s) =>
     !!s.originStopId && !!s.destinationStopId &&
     (s.originStopId !== '__origin__' || s.destinationStopId !== '__destination__'),
   );
 
-  await logger.logBooking('created', result.id, {
+  await logger.logBooking('created', result.booking.id, {
     userId: userData.id, companyId,
     scheduleId: finalSegments[0].scheduleId,
     metadata: { bookingReference, totalAmount, fareSource, isSegment: isSegmentRoute },
@@ -518,7 +377,7 @@ export async function createBookingFull(body: CreateBookingPayload): Promise<{
   revalidatePath('/bookings');
 
   return {
-    bookingId: result.id, bookingReference, totalAmount, discountAmount: returnTripDiscountAmount + promoDiscountAmount,
+    bookingId: result.booking.id, bookingReference, totalAmount, discountAmount: returnTripDiscountAmount + promoDiscountAmount,
     appliedPromo, baseFare: pricedSegments[0]?.fare ?? 0,
     fullTripFare, fareSource, currency: 'MWK', isSegment: isSegmentRoute,
   };
@@ -615,6 +474,107 @@ export async function createBooking(data: Partial<Booking> & {
   } catch (error: unknown) {
     console.error('Error creating booking:', error);
     return { success: false, error: (error as Error).message };
+  }
+}
+
+export async function createWalkOnBooking(data: Partial<Booking> & {
+  bookingReference?: string;
+  scheduleId: string;
+  companyId: string;
+  routeId: string;
+  totalAmount: number;
+  passengerDetails: any[];
+  seatNumbers: string[];
+  originStopId?: string;
+  destinationStopId?: string;
+  contactPhone?: string;
+  contactEmail?: string;
+}) {
+  const authUser = await getCurrentUserFromServer();
+  if (!authUser) return { success: false, error: 'Unauthorized' };
+  if (!['super_admin', 'superadmin', 'chief_of_operations', 'company_admin', 'conductor'].includes(authUser.role ?? '')) {
+    return { success: false, error: 'Forbidden' };
+  }
+
+  const schedule = await prisma.schedule.findUnique({ where: { id: data.scheduleId } });
+  if (!schedule) return { success: false, error: 'Schedule not found' };
+  if (authUser.role === 'company_admin' && schedule.companyId !== authUser.companyId) {
+    return { success: false, error: 'Forbidden: schedule does not belong to your company' };
+  }
+  if (authUser.role === 'conductor') {
+    const conductor = await prisma.operator.findUnique({
+      where: { uid: authUser.id },
+      select: { id: true, companyId: true },
+    });
+    if (!conductor || conductor.companyId !== authUser.companyId) {
+      return { success: false, error: 'Forbidden: conductor record does not belong to your company' };
+    }
+
+    if (schedule.conductorId) {
+      if (schedule.conductorId !== conductor.id) {
+        return { success: false, error: 'Forbidden: not assigned to this schedule' };
+      }
+    } else {
+      const bus = await prisma.bus.findUnique({
+        where: { id: schedule.busId },
+        select: { conductorIds: true, companyId: true },
+      });
+      if (!bus || bus.companyId !== authUser.companyId || !bus.conductorIds.includes(authUser.id)) {
+        return { success: false, error: 'Forbidden: not assigned to this schedule\'s bus' };
+      }
+    }
+  }
+
+  const passengerCount = data.passengerDetails.length;
+  try {
+    const result = await prisma.$transaction(async (tx: PrismaTypes.TransactionClient) => {
+      const bookingRef = data.bookingReference ?? generateBookingReference();
+      const coreInput = {
+        booking: {
+          bookingReference: bookingRef,
+          userId: authUser.id,
+          companyId: data.companyId,
+          routeId: data.routeId,
+          bookingStatus: 'confirmed',
+          paymentStatus: 'paid',
+          passengerDetails: data.passengerDetails as any,
+          originStopId: data.originStopId,
+          destinationStopId: data.destinationStopId,
+          bookingDate: new Date(),
+          isWalkOn: true,
+          bookedBy: authUser.id,
+          paidAt: new Date(),
+        } as any,
+        segments: [{ scheduleId: data.scheduleId, seatNumbers: data.seatNumbers, originStopId: data.originStopId, destinationStopId: data.destinationStopId }],
+        passengerCount,
+        fareMode: 'segment' as const,
+        totalAmount: data.totalAmount,
+        payment: {
+          paymentId: `PAY-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
+          amount: data.totalAmount || 0,
+          currency: 'MWK',
+          customerEmail: data.contactEmail,
+          customerPhone: data.contactPhone,
+          paymentType: 'cash',
+          provider: 'manual',
+          status: 'paid',
+          txRef: `TXN-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
+        },
+      } as any;
+
+      return await createSegmentBookingCore(tx as any, coreInput as any);
+    }, { timeout: 25000, maxWait: 5000 });
+
+    invalidateScheduleCaches();
+    try { revalidatePath('/company/conductor/dashboard'); } catch {};
+    return { success: true, data: result.booking };
+  } catch (error: unknown) {
+    console.error('Error creating walk-on booking:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    if (/^Seat .+ is already occupied on an overlapping segment$/i.test(message)) {
+      return { success: false, error: message };
+    }
+    return { success: false, error: message };
   }
 }
 

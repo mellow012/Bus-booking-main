@@ -245,7 +245,7 @@ export function useConductorDashboard() {
     try {
       const pnr = `WON-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
       
-      const res = await dbActions.createBooking({
+      const res = await dbActions.createWalkOnBooking({
         bookingReference: pnr,
         scheduleId: selectedTrip.id,
         companyId: companyId,
@@ -260,19 +260,12 @@ export function useConductorDashboard() {
         }],
         seatNumbers: [seatNumber],
         contactPhone: data.phone,
-        paymentStatus: 'paid',
-        paymentMethod: 'cash' as any,
-        bookingStatus: 'confirmed',
-        isWalkOn: true,
-        bookedBy: userProfile?.id || user?.id,
+        contactEmail: undefined,
         originStopId: data.originStopId,
         destinationStopId: data.destinationStopId,
-        paidAt: new Date()
       } as any);
 
       if (!res.success) throw new Error(res.error);
-
-      await dbActions.decrementScheduleSeats(selectedTrip.id);
 
       setSuccessMessage('Walk-on passenger successfully boarded!');
       setTimeout(() => setSuccessMessage(''), 5000);

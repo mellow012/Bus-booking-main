@@ -4,7 +4,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 
 const connectionString = process.env.DATABASE_URL || process.env.DIRECT_URL;
-const configuredPoolMax = Number.parseInt(process.env.DATABASE_POOL_MAX ?? '2', 10);
+const configuredPoolMax = Number.parseInt(process.env.DATABASE_POOL_MAX ?? '4', 10);
 const poolMax = Number.isInteger(configuredPoolMax)
   ? Math.min(Math.max(configuredPoolMax, 1), 4)
   : 2;
