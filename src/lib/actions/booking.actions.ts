@@ -11,7 +11,7 @@ import { logger } from '@/lib/logger';
 import { invalidateScheduleCaches } from '@/lib/cache';
 import { sendNotificationToUser, notifyCompanyStaff } from '@/lib/notificationService';
 import { calculateSegmentFare } from '@/lib/segment-fare';
-import { createSegmentBookingCore } from '@/lib/segment-booking-core';
+import { createSegmentBookingCore, intervalFor, recomputeScheduleOccupancy } from '@/lib/segment-booking-core';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -607,6 +607,103 @@ export async function createWalkOnBooking(data: Partial<Booking> & {
       return { success: false, error: message };
     }
     return { success: false, error: message };
+  }
+}
+
+export async function markPassengerAlighted(
+  bookingId: string,
+  scheduleId: string,
+  alightedAtStopId: string | null,
+) {
+  const authUser = await getCurrentUserFromServer();
+  if (!authUser) return { success: false, error: 'Unauthorized' };
+  if (!['super_admin', 'superadmin', 'chief_of_operations', 'company_admin', 'conductor'].includes(authUser.role ?? '')) {
+    return { success: false, error: 'Forbidden' };
+  }
+
+  const schedule = await prisma.schedule.findUnique({
+    where: { id: scheduleId },
+    include: { route: true },
+  });
+  if (!schedule) return { success: false, error: 'Schedule not found' };
+  if (authUser.role === 'company_admin' && schedule.companyId !== authUser.companyId) {
+    return { success: false, error: 'Forbidden: schedule does not belong to your company' };
+  }
+  if (authUser.role === 'conductor') {
+    const conductor = await prisma.operator.findUnique({
+      where: { uid: authUser.id },
+      select: { id: true, companyId: true },
+    });
+    if (!conductor || conductor.companyId !== authUser.companyId) {
+      return { success: false, error: 'Forbidden: conductor record does not belong to your company' };
+    }
+    if (schedule.conductorId) {
+      if (schedule.conductorId !== conductor.id) {
+        return { success: false, error: 'Forbidden: not assigned to this schedule' };
+      }
+    } else {
+      const bus = await prisma.bus.findUnique({
+        where: { id: schedule.busId },
+        select: { conductorIds: true, companyId: true },
+      });
+      if (!bus || bus.companyId !== authUser.companyId || !bus.conductorIds.includes(conductor.id)) {
+        return { success: false, error: 'Forbidden: not assigned to this schedule\'s bus' };
+      }
+    }
+  }
+
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      const booking = await tx.booking.findUnique({
+        where: { id: bookingId },
+        include: { segments: true },
+      });
+      if (!booking) return { success: false, error: 'Booking not found' };
+      if (booking.segments.length !== 1 || booking.segments[0].scheduleId !== scheduleId) {
+        return { success: false, error: 'Only single-segment bookings on this schedule can be marked Off' };
+      }
+
+      const segment = booking.segments[0];
+      const metadata = booking.metadata && typeof booking.metadata === 'object' && !Array.isArray(booking.metadata)
+        ? booking.metadata as Record<string, unknown>
+        : {};
+      if (alightedAtStopId) {
+        intervalFor({
+          scheduleId,
+          seatNumbers: [],
+          originStopId: segment.originStopId ?? undefined,
+          destinationStopId: alightedAtStopId,
+        }, schedule.route);
+      }
+
+      await tx.bookingSegment.update({
+        where: { id: segment.id },
+        data: { alightedAtStopId },
+      });
+      const previousStatus = typeof metadata.statusBeforeAlighted === 'string'
+        ? metadata.statusBeforeAlighted
+        : 'confirmed';
+      const nextMetadata = { ...metadata };
+      if (alightedAtStopId) nextMetadata.statusBeforeAlighted = booking.bookingStatus;
+      else delete nextMetadata.statusBeforeAlighted;
+      await tx.booking.update({
+        where: { id: bookingId },
+        data: {
+          bookingStatus: alightedAtStopId ? 'alighted' : previousStatus,
+          metadata: nextMetadata as Prisma.InputJsonObject,
+        },
+      });
+      await recomputeScheduleOccupancy(tx, scheduleId);
+      return { success: true };
+    });
+    invalidateScheduleCaches();
+    revalidatePath('/bookings');
+    revalidatePath('/company/conductor/dashboard');
+    revalidatePath('/company/admin');
+    return result;
+  } catch (error: unknown) {
+    console.error('Error updating passenger alighting status:', error);
+    return { success: false, error: error instanceof Error ? error.message : 'Failed to update alighting status' };
   }
 }
 

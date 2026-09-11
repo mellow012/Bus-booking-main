@@ -52,7 +52,7 @@ interface OccupiedInterval {
   destinationIndex: number;
 }
 
-const ACTIVE_BOOKING_STATUSES = ['pending', 'confirmed'];
+const ACTIVE_BOOKING_STATUSES = ['pending', 'confirmed', 'alighted'];
 
 function parseSeatArray(value: unknown): string[] {
   if (Array.isArray(value)) {
@@ -159,6 +159,7 @@ async function loadScheduleIntervals(
       seatNumbers: true,
       originStopId: true,
       destinationStopId: true,
+      alightedAtStopId: true,
     },
   });
 
@@ -174,13 +175,15 @@ async function loadScheduleIntervals(
 
   const intervals = [
     ...bookingSegments.map((segment) => ({ source: segment, })),
-    ...reservationRows.map((reservation) => ({ source: reservation })),
+    ...reservationRows.map((reservation) => ({
+      source: { ...reservation, alightedAtStopId: null },
+    })),
   ].flatMap(({ source }) => {
     const range = intervalFor({
       scheduleId,
       seatNumbers: [],
       originStopId: source.originStopId ?? undefined,
-      destinationStopId: source.destinationStopId ?? undefined,
+      destinationStopId: source.alightedAtStopId ?? source.destinationStopId ?? undefined,
     }, schedule.route);
     return parseSeatArray(source.seatNumbers).map((seat) => ({ seat, ...range }));
   });

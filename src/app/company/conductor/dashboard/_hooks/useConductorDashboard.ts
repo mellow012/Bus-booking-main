@@ -218,6 +218,26 @@ export function useConductorDashboard() {
     }
   };
 
+  const handleMarkAlighted = async (bookingId: string, isAlighted: boolean) => {
+    if (!selectedTrip?.currentStopId) {
+      setGlobalError('The current trip stop is not available.');
+      return;
+    }
+    setActionLoadingId(bookingId);
+    try {
+      const res = await dbActions.markPassengerAlighted(
+        bookingId,
+        selectedTrip.id,
+        isAlighted ? selectedTrip.currentStopId : null,
+      );
+      if (!res.success) throw new Error(res.error);
+    } catch (err: any) {
+      setGlobalError(err.message || 'Action failed');
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
   const handleUpdateTripStatus = async (newStatus: TripStatus, extra?: any) => {
     if (!selectedTrip || !user) return;
     try {
@@ -304,7 +324,7 @@ export function useConductorDashboard() {
     loading, trips, buses, routes, company,
     selectedTrip, setSelectedTrip, tripBookings,
     actionLoadingId, globalError, setGlobalError, successMessage, setSuccessMessage,
-    tripStats, handleMarkBoarded, handleMarkNoShow, handleUpdateTripStatus, handleWalkOnBooking, handleScan,
+    tripStats, handleMarkBoarded, handleMarkNoShow, handleMarkAlighted, handleUpdateTripStatus, handleWalkOnBooking, handleScan,
     fetchInitialData
   };
 }

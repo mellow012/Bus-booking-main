@@ -2,7 +2,7 @@
 
 import React, { FC, useState, useMemo } from 'react';
 import { Booking } from '@/types';
-import { Search, MapPin, Phone, Users, Bus as BusIcon, CheckCircle, XCircle, Banknote, RefreshCw } from 'lucide-react';
+import { Search, MapPin, Phone, Users, Bus as BusIcon, CheckCircle, XCircle, Banknote, RefreshCw, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 export type FilterTab = 'all' | 'needs_boarding' | 'cash_due' | 'boarded' | 'no_show';
@@ -13,6 +13,8 @@ interface PassengerManifestProps {
   onOpenCashModal: (b: Booking) => void;
   onMarkBoarded: (id: string, isBoarded: boolean) => Promise<void>;
   onMarkNoShow: (id: string, isNoShow: boolean) => Promise<void>;
+  onMarkAlighted: (id: string, isAlighted: boolean) => Promise<void>;
+  currentStopId?: string | null;
   loadingActionId: string | null;
 }
 
@@ -21,7 +23,7 @@ const vibrate = () => {
 };
 
 const PassengerManifest: FC<PassengerManifestProps> = ({
-  bookings, tripStatus, onOpenCashModal, onMarkBoarded, onMarkNoShow, loadingActionId,
+  bookings, tripStatus, onOpenCashModal, onMarkBoarded, onMarkNoShow, onMarkAlighted, currentStopId, loadingActionId,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [activeFilter, setActiveFilter] = useState<FilterTab>('all');
@@ -34,6 +36,7 @@ const PassengerManifest: FC<PassengerManifestProps> = ({
     validBookings.forEach(b => {
       const isPaid = b.paymentStatus === 'paid';
       const isBoarded = b.bookingStatus === 'confirmed' || b.bookingStatus === 'completed';
+      const isAlighted = b.bookingStatus === 'alighted';
       const isNoShow = b.bookingStatus === 'no-show';
 
       if (!isPaid) { cashList++; totalCashDue += (b.totalAmount || 0); }
@@ -112,7 +115,7 @@ const PassengerManifest: FC<PassengerManifestProps> = ({
             placeholder="Search name, phone, seat..." 
             value={searchTerm} 
             onChange={e => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm bg-gray-50 focus:bg-white transition-colors" 
+            className="w-full pl-10 pr-4 py-3 border rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-sm bg-gray-50 focus:bg-white transition-colors"
           />
         </div>
 
@@ -125,7 +128,7 @@ const PassengerManifest: FC<PassengerManifestProps> = ({
               if (tab === 'cash_due') actCls = 'bg-amber-100 text-amber-800 border-amber-300';
               else if (tab === 'boarded') actCls = 'bg-green-100 text-green-800 border-green-300';
               else if (tab === 'no_show') actCls = 'bg-red-100 text-red-800 border-red-300';
-              else actCls = 'bg-blue-100 text-blue-800 border-blue-300';
+              else actCls = 'bg-brand-100 text-brand-800 border-brand-300';
             }
 
             return (
@@ -152,6 +155,7 @@ const PassengerManifest: FC<PassengerManifestProps> = ({
           filteredBookings.map((b) => {
             const isBoarded = b.bookingStatus === 'confirmed' || b.bookingStatus === 'completed';
             const isNoShow = b.bookingStatus === 'no-show';
+            const isAlighted = b.bookingStatus === 'alighted';
             const isPaid = b.paymentStatus === 'paid';
             const isCashDue = !isPaid;
             const pax = b.passengerDetails?.[0];
@@ -161,12 +165,12 @@ const PassengerManifest: FC<PassengerManifestProps> = ({
               <div key={b.id} className={`bg-white rounded-2xl border p-4 shadow-sm transition-all
                 ${isBoarded ? 'border-l-4 border-l-green-500 opacity-80' :
                   isNoShow ? 'border-l-4 border-l-red-500 opacity-60' :
-                    isCashDue ? 'border-l-4 border-l-amber-500' : 'border-l-4 border-l-blue-500'
+                    isCashDue ? 'border-l-4 border-l-amber-500' : 'border-l-4 border-l-brand-500'
                 }`}>
                 {/* Passenger Info */}
                 <div className="flex items-start gap-3 mb-3">
                   <div className="w-12 h-12 rounded-xl flex items-center justify-center font-bold text-lg shrink-0
-                    bg-blue-50 text-blue-700 border border-blue-100">
+                    bg-brand-50 text-brand-700 border border-brand-100">
                     {b.seatNumbers?.[0] || '?'}
                   </div>
 
@@ -174,6 +178,7 @@ const PassengerManifest: FC<PassengerManifestProps> = ({
                     <div className="flex items-center gap-2 flex-wrap mb-1">
                       <p className="font-bold text-gray-900">{pax?.name || 'Passenger'}</p>
                       {isBoarded && <span className="bg-green-100 text-green-700 text-[10px] uppercase font-bold px-1.5 py-0.5 rounded">Boarded</span>}
+                      {isAlighted && <span className="bg-blue-100 text-blue-700 text-[10px] uppercase font-bold px-1.5 py-0.5 rounded">Off</span>}
                       {isNoShow && <span className="bg-red-100 text-red-700 text-[10px] uppercase font-bold px-1.5 py-0.5 rounded">No-Show</span>}
                       {isCashDue && (
                         <span className="bg-amber-100 text-amber-800 text-[10px] uppercase font-bold flex items-center gap-0.5 px-1.5 py-0.5 rounded">
@@ -193,6 +198,19 @@ const PassengerManifest: FC<PassengerManifestProps> = ({
                 {/* Action Buttons — full width on mobile */}
                 {isTripActive && (
                   <div className="flex gap-2 pt-3 border-t border-gray-100">
+                    {currentStopId && (isBoarded || isAlighted) && (
+                      <Button
+                        variant="outline"
+                        className={`flex-1 font-bold h-11 rounded-xl active:scale-[0.97] ${
+                          isAlighted ? 'text-blue-700 bg-blue-50 border-blue-200' : 'text-gray-600 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50'
+                        }`}
+                        onClick={() => { vibrate(); onMarkAlighted(b.id, !isAlighted); }}
+                        disabled={isWorking}
+                      >
+                        {isAlighted ? <RefreshCw className="w-4 h-4 mr-1" /> : <LogOut className="w-4 h-4 mr-1" />}
+                        {isAlighted ? 'Undo Off' : 'Off'}
+                      </Button>
+                    )}
                     {isCashDue ? (
                       <Button 
                         className="flex-1 bg-amber-600 hover:bg-amber-700 text-white font-bold h-11 rounded-xl active:scale-[0.97]"

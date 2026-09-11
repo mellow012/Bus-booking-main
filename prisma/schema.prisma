@@ -338,6 +338,7 @@ model BookingSegment {
   currency          String            @default("MWK")
   originStopId      String?
   destinationStopId String?
+  alightedAtStopId  String?
   metadata          Json?
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt

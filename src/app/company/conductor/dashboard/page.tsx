@@ -28,7 +28,7 @@ export default function ConductorDashboard() {
     loading, trips, buses, routes, company,
     selectedTrip, setSelectedTrip, tripBookings,
     actionLoadingId, globalError, setGlobalError, successMessage, setSuccessMessage,
-    tripStats, handleMarkBoarded, handleMarkNoShow, handleUpdateTripStatus, handleWalkOnBooking, handleScan,
+    tripStats, handleMarkBoarded, handleMarkNoShow, handleMarkAlighted, handleUpdateTripStatus, handleWalkOnBooking, handleScan,
     fetchInitialData
   } = useConductorDashboard();
   const { unreadCount } = useNotifications();
@@ -42,7 +42,7 @@ export default function ConductorDashboard() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   if (loading || authLoading) {
-    return <div className="min-h-screen bg-[#f8fafc]"><LoadingSpinner className="text-indigo-600" fullScreen /></div>;
+    return <div className="min-h-screen bg-brand-50/40"><LoadingSpinner className="text-brand-700" fullScreen /></div>;
   }
 
   const activeRoute = selectedTrip ? routes.find(r => r.id === selectedTrip.routeId) || null : null;
@@ -76,6 +76,8 @@ export default function ConductorDashboard() {
             onOpenCashModal={(b) => { setActiveBookingForCash(b); setCashModalOpen(true); }}
             onMarkBoarded={handleMarkBoarded}
             onMarkNoShow={handleMarkNoShow}
+            onMarkAlighted={handleMarkAlighted}
+            currentStopId={selectedTrip.currentStopId}
             loadingActionId={actionLoadingId}
           />
         </div>
@@ -111,7 +113,7 @@ export default function ConductorDashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] flex flex-col lg:flex-row relative selection:bg-indigo-100 selection:text-indigo-900">
+    <div className="min-h-screen bg-brand-50/40 flex flex-col lg:flex-row relative selection:bg-brand-100 selection:text-brand-900">
       {/* Mobile Overlay */}
       {isMobileMenuOpen && (
         <div
@@ -126,7 +128,7 @@ export default function ConductorDashboard() {
         ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
       `}>
         <div className="p-8 border-b border-gray-50 flex items-center gap-3">
-          <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-100 text-white font-bold text-xl">
+          <div className="w-12 h-12 bg-brand-700 rounded-2xl flex items-center justify-center shadow-lg shadow-brand-100 text-white font-bold text-xl">
             {company?.name?.[0] || 'T'}
           </div>
           <div>
@@ -143,9 +145,9 @@ export default function ConductorDashboard() {
                 key={tab.id}
                 onClick={() => { setActiveTab(tab.id); setIsMobileMenuOpen(false); }}
                 className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl transition-all duration-300 group text-[13px] font-bold
-                  ${activeTab === tab.id ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100 scale-[1.02]' : 'text-gray-500 hover:bg-gray-50 hover:text-indigo-600'}`}
+                  ${activeTab === tab.id ? 'bg-brand-700 text-white shadow-lg shadow-brand-100 scale-[1.02]' : 'text-gray-500 hover:bg-brand-50 hover:text-brand-700'}`}
               >
-                <Icon className={`w-5 h-5 ${activeTab === tab.id ? 'text-white' : 'text-gray-400 group-hover:text-indigo-600'}`} />
+                <Icon className={`w-5 h-5 ${activeTab === tab.id ? 'text-white' : 'text-gray-400 group-hover:text-brand-700'}`} />
                 <span>{tab.label}</span>
               </button>
             );
@@ -174,7 +176,7 @@ export default function ConductorDashboard() {
               <Menu className="w-6 h-6 text-gray-600" />
             </button>
             <div>
-              <h2 className="text-xl lg:text-2xl font-black text-indigo-950 capitalize">{activeTab.replace('-', ' ')}</h2>
+              <h2 className="text-xl lg:text-2xl font-black text-brand-900 capitalize">{activeTab.replace('-', ' ')}</h2>
               <p className="text-[10px] lg:text-xs text-gray-400 font-bold uppercase tracking-widest mt-0.5">Real-time Operations Control</p>
             </div>
           </div>
@@ -186,12 +188,12 @@ export default function ConductorDashboard() {
               </div>
             )}
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-indigo-50 border border-indigo-100 rounded-full flex items-center justify-center font-bold text-indigo-700 text-sm">
+              <div className="w-10 h-10 bg-brand-50 border border-brand-100 rounded-full flex items-center justify-center font-bold text-brand-700 text-sm">
                 {userProfile?.firstName?.[0] || 'C'}
               </div>
               <div className="hidden sm:block">
                 <p className="text-[11px] font-black text-gray-900 uppercase tracking-tight leading-none">{userProfile?.firstName} {userProfile?.lastName}</p>
-                <p className="text-[9px] text-indigo-600 font-bold uppercase tracking-widest mt-1">Conductor On Duty</p>
+                <p className="text-[9px] text-brand-700 font-bold uppercase tracking-widest mt-1">Conductor On Duty</p>
               </div>
             </div>
           </div>
