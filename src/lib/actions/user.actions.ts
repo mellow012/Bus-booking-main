@@ -266,7 +266,7 @@ export async function updateUser(id: string, data: any) {
       'nationalId', 'sex', 'currentAddress', 'isActive',
       'emailVerified', 'setupCompleted', 'passwordSet', 'fcmTokens',
       'lastTokenUpdated', 'companyId', 'region', 'invitationSent',
-      'invitationSentAt', 'createdBy'
+      'invitationSentAt', 'createdBy', 'profilePicture'
     ];
 
     const sanitizedData: any = {};

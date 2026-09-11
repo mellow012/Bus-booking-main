@@ -13,9 +13,8 @@ export async function uploadLogo(file: File, companyId: string): Promise<string>
     console.warn('[uploadLogo] Unable to read authenticated user:', authError);
   }
 
-  const ownerId = user?.id || companyId;
   const fileExt = file.name.split('.').pop() || 'jpg';
-  const filePath = `${ownerId}/${Date.now()}.${fileExt}`;
+  const filePath = `${companyId}/${Date.now()}.${fileExt}`;
 
   const { data, error } = await supabase.storage
     .from("logos")

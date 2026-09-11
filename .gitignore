@@ -44,3 +44,7 @@ next-env.d.ts
 
 # pwa build output
 public/worker-*.js
+# Local scratch/debug artifacts
+scratch/
+tmp_*.js
+BRANDING_GUIDE.md

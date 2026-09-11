@@ -299,7 +299,7 @@ export default function TeamMessagingTab({ companyId, setError, setSuccess }: Te
   if (loading && !activeConversation) {
     return (
       <div className="flex h-[calc(100vh-200px)] items-center justify-center">
-        <Loader2 className="w-12 h-12 animate-spin text-indigo-200" />
+        <Loader2 className="w-12 h-12 animate-spin text-brand-200" />
       </div>
     );
   }
@@ -313,7 +313,7 @@ export default function TeamMessagingTab({ companyId, setError, setSuccess }: Te
           <h2 className="text-xl font-bold text-gray-900 tracking-tight uppercase">Signals</h2>
           <button 
             onClick={() => setShowPeopleList(!showPeopleList)}
-            className="p-2.5 bg-white rounded-xl shadow-sm border border-gray-100 text-indigo-600 hover:scale-110 transition-transform active:scale-95"
+            className="p-2.5 bg-white rounded-xl shadow-sm border border-gray-100 text-brand-700 hover:scale-110 transition-transform active:scale-95"
           >
             {showPeopleList ? <ChevronLeft className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
           </button>
@@ -328,7 +328,7 @@ export default function TeamMessagingTab({ companyId, setError, setSuccess }: Te
                 placeholder="Search personnel..."
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-100 rounded-xl text-xs font-bold focus:ring-2 focus:ring-indigo-600 outline-none"
+                className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-100 rounded-xl text-xs font-bold focus:ring-2 focus:ring-brand-700 outline-none"
               />
             </div>
             {filteredStaff.map(member => (
@@ -337,7 +337,7 @@ export default function TeamMessagingTab({ companyId, setError, setSuccess }: Te
                 onClick={() => startPrivateChat(member)}
                 className="w-full flex items-center gap-3 p-3 rounded-2xl hover:bg-white hover:shadow-sm border border-transparent hover:border-gray-100 transition-all group"
               >
-                <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-xs font-bold text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
+                <div className="w-10 h-10 rounded-xl bg-brand-50 flex items-center justify-center text-xs font-bold text-brand-700 group-hover:bg-brand-700 group-hover:text-white transition-colors">
                   {getInitials(member)}
                 </div>
                 <div className="text-left">
@@ -360,12 +360,12 @@ export default function TeamMessagingTab({ companyId, setError, setSuccess }: Te
                   onClick={() => setActiveConversation(conv)}
                   className={`w-full flex items-center gap-4 p-4 rounded-2xl transition-all relative overflow-hidden group ${
                     isActive 
-                      ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-100' 
-                      : 'bg-white border border-gray-100 hover:border-indigo-100 hover:shadow-lg'
+                      ? 'bg-brand-700 text-white shadow-xl shadow-brand-100'
+                      : 'bg-white border border-gray-100 hover:border-brand-100 hover:shadow-lg'
                   }`}
                 >
                   <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-sm font-bold shrink-0 ${
-                    isActive ? 'bg-white/20 text-white' : 'bg-indigo-50 text-indigo-600'
+                    isActive ? 'bg-white/20 text-white' : 'bg-brand-50 text-brand-700'
                   }`}>
                     {conv.isBroadcast ? <Building2 className="w-6 h-6" /> : getInitials(partner)}
                   </div>
@@ -395,7 +395,7 @@ export default function TeamMessagingTab({ companyId, setError, setSuccess }: Te
                 <button onClick={() => setActiveConversation(null)} className="sm:hidden p-2 hover:bg-gray-50 rounded-lg">
                   <ChevronLeft className="w-5 h-5" />
                 </button>
-                <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center text-xs font-bold text-white shadow-lg shadow-indigo-100">
+                <div className="w-10 h-10 rounded-xl bg-brand-700 flex items-center justify-center text-xs font-bold text-white shadow-lg shadow-brand-100">
                   {activeConversation.isBroadcast ? <Building2 className="w-5 h-5" /> : getInitials(getPartner(activeConversation))}
                 </div>
                 <div>
@@ -409,7 +409,7 @@ export default function TeamMessagingTab({ companyId, setError, setSuccess }: Te
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                 <button className="p-2.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all">
+                 <button className="p-2.5 text-gray-400 hover:text-brand-700 hover:bg-brand-50 rounded-xl transition-all">
                    <MoreVertical className="w-5 h-5" />
                  </button>
               </div>
@@ -440,25 +440,31 @@ export default function TeamMessagingTab({ companyId, setError, setSuccess }: Te
                   return (
                     <div key={msg.id} className={`flex flex-col ${isMine ? 'items-end' : 'items-start'}`}>
                       {showSender && (
-                        <p className="text-[9px] font-bold text-indigo-400 uppercase tracking-widest mb-1.5 ml-1">
+                        <p className="text-[9px] font-bold text-brand-400 uppercase tracking-widest mb-1.5 ml-1">
                           {msg.sender?.firstName} {msg.sender?.lastName} • {msg.sender?.role}
                         </p>
                       )}
                       <div className={`max-w-[85%] sm:max-w-[70%] rounded-2xl p-4 shadow-sm relative group ${
                         isMine 
-                          ? 'bg-indigo-600 text-white rounded-br-none' 
+                          ? 'bg-brand-700 text-white rounded-br-none'
                           : 'bg-white border border-gray-100 text-gray-900 rounded-bl-none'
                       }`}>
-                        {msg.mediaUrl ? (
+                        {(msg.mediaPath || msg.mediaUrl) ? (
                           <div className="space-y-2">
+                             {(() => {
+                               const mediaUrl = msg.mediaPath ? mediaUrls[msg.id] : msg.mediaUrl;
+                               if (!mediaUrl) {
+                                 return <p className="text-[11px] font-bold opacity-70">Attachment unavailable</p>;
+                               }
                              {msg.mediaType === 'image' ? (
-                               <img src={msg.mediaUrl} alt="Media" className="rounded-2xl max-h-64 w-full object-cover shadow-inner" />
+                               <img src={mediaUrl} alt="Media" className="rounded-2xl max-h-64 w-full object-cover shadow-inner" />
                              ) : (
-                               <a href={msg.mediaUrl} target="_blank" rel="noreferrer" className="flex items-center gap-3 p-3 bg-gray-50/10 rounded-xl hover:bg-gray-50/20 transition-all border border-white/10">
+                               <a href={mediaUrl} target="_blank" rel="noreferrer" className="flex items-center gap-3 p-3 bg-gray-50/10 rounded-xl hover:bg-gray-50/20 transition-all border border-white/10">
                                  <FileText className="w-5 h-5" />
                                  <span className="text-[11px] font-bold truncate max-w-[150px]">{msg.content || "Attachment"}</span>
                                </a>
                              )}
+                             })()}
                           </div>
                         ) : (
                           <p className="text-[13px] leading-relaxed font-bold tracking-tight">{msg.content}</p>
@@ -476,11 +482,11 @@ export default function TeamMessagingTab({ companyId, setError, setSuccess }: Te
             {/* Input Bar */}
             <div className="p-6 bg-white border-t border-gray-50">
               <form onSubmit={handleSend} className="flex items-end gap-4">
-                <div className="flex-1 bg-gray-50 border border-gray-100 rounded-2xl p-2 flex items-end gap-2 focus-within:bg-white focus-within:ring-2 focus-within:ring-indigo-600 transition-all">
+                <div className="flex-1 bg-gray-50 border border-gray-100 rounded-2xl p-2 flex items-end gap-2 focus-within:bg-white focus-within:ring-2 focus-within:ring-brand-700 transition-all">
                   <button 
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    className="p-3 text-gray-400 hover:text-indigo-600 transition-colors"
+                    className="p-3 text-gray-400 hover:text-brand-700 transition-colors"
                   >
                     {uploading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Paperclip className="w-5 h-5" />}
                   </button>
@@ -503,14 +509,14 @@ export default function TeamMessagingTab({ companyId, setError, setSuccess }: Te
                     placeholder="Type a secure signal..."
                     className="flex-1 bg-transparent border-none outline-none py-3 text-sm font-bold text-gray-900 resize-none max-h-32"
                   />
-                  <button type="button" className="p-3 text-gray-400 hover:text-indigo-600 transition-colors">
+                  <button type="button" className="p-3 text-gray-400 hover:text-brand-700 transition-colors">
                     <Smile className="w-5 h-5" />
                   </button>
                 </div>
                 <button
                   type="submit"
                   disabled={sending || (!newMessage.trim() && !uploading)}
-                  className="p-4 bg-indigo-600 text-white rounded-2xl shadow-xl shadow-indigo-100 hover:bg-indigo-700 active:scale-95 transition-all disabled:opacity-50"
+                  className="p-4 bg-brand-700 text-white rounded-2xl shadow-xl shadow-brand-100 hover:bg-brand-800 active:scale-95 transition-all disabled:opacity-50"
                 >
                   {sending ? <Loader2 className="w-6 h-6 animate-spin" /> : <Send className="w-6 h-6" />}
                 </button>
@@ -519,8 +525,8 @@ export default function TeamMessagingTab({ companyId, setError, setSuccess }: Te
           </>
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center p-12 space-y-6 bg-gray-50/10 text-center">
-            <div className="w-32 h-32 bg-indigo-50 rounded-[3rem] flex items-center justify-center border-2 border-dashed border-indigo-200">
-               <Users className="w-12 h-12 text-indigo-300" />
+            <div className="w-32 h-32 bg-brand-50 rounded-[3rem] flex items-center justify-center border-2 border-dashed border-brand-200">
+               <Users className="w-12 h-12 text-brand-300" />
             </div>
             <div>
               <h3 className="text-xl font-bold text-gray-900 uppercase tracking-tight">Messaging Hub Ready</h3>
@@ -530,7 +536,7 @@ export default function TeamMessagingTab({ companyId, setError, setSuccess }: Te
             </div>
             <button 
               onClick={() => setShowPeopleList(true)}
-              className="px-8 py-3 bg-white border border-gray-100 rounded-2xl text-[11px] font-bold uppercase tracking-widest text-indigo-600 shadow-sm hover:shadow-xl hover:scale-105 transition-all active:scale-95"
+              className="px-8 py-3 bg-white border border-gray-100 rounded-2xl text-[11px] font-bold uppercase tracking-widest text-brand-700 shadow-sm hover:shadow-xl hover:scale-105 transition-all active:scale-95"
             >
               Explore Personnel
             </button>

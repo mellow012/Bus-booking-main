@@ -10,4 +10,4 @@ if (!supabaseAnonKey) {
   throw new Error('Missing SUPABASE_ANON_KEY environment variable');
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const anonSupabase = createClient(supabaseUrl, supabaseAnonKey);

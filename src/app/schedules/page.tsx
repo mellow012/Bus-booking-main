@@ -76,28 +76,12 @@ export default async function SchedulesPage({
     };
   }
 
-  const parseSeatArray = (val: unknown): string[] => {
-    if (Array.isArray(val)) return val.filter((s): s is string => typeof s === 'string');
-    if (typeof val === 'string') {
-      try {
-        const p = JSON.parse(val);
-        if (Array.isArray(p)) return p.filter((s): s is string => typeof s === 'string');
-      } catch { return []; }
-    }
-    return [];
-  };
-
   const schedulesData = await prisma.schedule.findMany({
     where,
     include: {
       route: true,
       bus: { include: { company: true } },
       company: true,
-      bookings: true,
-      bookingSegments: true,
-      reservations: {
-        where: { expiresAt: { gt: new Date() } },
-      },
     },
     orderBy: { departureDateTime: 'asc' },
     take: 150,
@@ -134,22 +118,9 @@ export default async function SchedulesPage({
       const routeInfo = getRouteDistanceAndDuration(route.origin, route.destination);
       const distanceKm = routeInfo.distance;
 
-      // Real-time seat occupancy calculation
-      const staticBookedSeats = parseSeatArray(sch.bookedSeats);
-      const activeBookings = (sch.bookings || []).filter((b: any) => b.bookingStatus !== 'cancelled');
-      const activeSegments = (sch.bookingSegments || []).filter((s: any) => s.bookingStatus !== 'cancelled');
-      const activeReservations = (sch.reservations || []).filter((r: any) => new Date(r.expiresAt) > new Date());
-
-      const allOccupiedSeatsSet = new Set<string>([
-        ...staticBookedSeats,
-        ...activeBookings.flatMap((b: any) => parseSeatArray(b.seatNumbers)),
-        ...activeSegments.flatMap((s: any) => parseSeatArray(s.seatNumbers)),
-        ...activeReservations.flatMap((r: any) => parseSeatArray(r.seatNumbers)),
-      ]);
-
       const isUnpartnered = company.isPartner === false || company.bookingEnabled === false;
       const totalSeats = isUnpartnered ? 56 : (bus.capacity || 40);
-      const actualAvailableSeats = isUnpartnered ? 56 : Math.max(0, totalSeats - allOccupiedSeatsSet.size);
+      const actualAvailableSeats = isUnpartnered ? 56 : sch.availableSeats;
 
       return {
         id: sch.id,
