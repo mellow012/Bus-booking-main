@@ -83,26 +83,26 @@ const ScannerModal: FC<ScannerModalProps> = ({ isOpen, onClose, onScan }) => {
           </div>
         ) : (
           <div className="space-y-4">
-            <div className="relative aspect-square w-full max-w-[320px] mx-auto bg-black rounded-3xl overflow-hidden border-4 border-indigo-600/20 shadow-2xl">
+            <div className="relative aspect-square w-full max-w-[320px] mx-auto bg-black rounded-3xl overflow-hidden border-4 border-brand-700/20 shadow-2xl">
               <div id="reader" className="w-full h-full"></div>
               
               {/* Custom Viewfinder Overlay */}
               <div className="absolute inset-0 pointer-events-none border-[40px] border-black/40">
-                <div className="w-full h-full border-2 border-indigo-500 rounded-lg relative">
-                   <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-indigo-500 -mt-1 -ml-1"></div>
-                   <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-indigo-500 -mt-1 -mr-1"></div>
-                   <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-indigo-500 -mb-1 -ml-1"></div>
-                   <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-indigo-500 -mb-1 -mr-1"></div>
+                <div className="w-full h-full border-2 border-brand-500 rounded-lg relative">
+                   <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-brand-500 -mt-1 -ml-1"></div>
+                   <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-brand-500 -mt-1 -mr-1"></div>
+                   <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-brand-500 -mb-1 -ml-1"></div>
+                   <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-brand-500 -mb-1 -mr-1"></div>
                    
                    {/* Scanning Line Animation */}
-                   <div className="absolute inset-x-0 h-1 bg-indigo-500/50 shadow-[0_0_15px_rgba(99,102,241,0.5)] animate-scan-line" />
+                   <div className="absolute inset-x-0 h-1 bg-brand-500/50 shadow-[0_0_15px_rgba(0,90,91,0.5)] animate-scan-line" />
                 </div>
               </div>
             </div>
             
             <div className="text-center space-y-1">
               <p className="text-gray-900 font-bold text-base flex items-center justify-center gap-2">
-                <Camera className="w-4 h-4 text-indigo-600" /> Center the QR code
+                <Camera className="w-4 h-4 text-brand-700" /> Center the QR code
               </p>
               <p className="text-gray-500 text-xs font-medium">Ticket will be scanned automatically</p>
             </div>

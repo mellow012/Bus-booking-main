@@ -56,14 +56,14 @@ const TripControlPanel: FC<TripControlPanelProps> = ({
 
   if (tripStatus === 'scheduled') {
     return (
-      <div className="bg-gradient-to-br from-blue-50 via-indigo-50 to-blue-50 border border-blue-200 rounded-2xl p-4 sm:p-5 shadow-sm">
+      <div className="bg-gradient-to-br from-brand-50 via-white to-brand-50 border border-brand-200 rounded-2xl p-4 sm:p-5 shadow-sm">
         <div className="flex items-center gap-3 mb-4">
-          <div className="w-11 h-11 rounded-xl bg-blue-600 flex items-center justify-center shadow-lg shadow-blue-200">
+          <div className="w-11 h-11 rounded-xl bg-brand-700 flex items-center justify-center shadow-lg shadow-brand-200">
             <Navigation className="w-5 h-5 text-white" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="font-bold text-blue-900 text-base">Trip not started</p>
-            <p className="text-sm text-blue-700 truncate">{trip.departureLocation} → {trip.arrivalLocation}</p>
+            <p className="font-bold text-brand-900 text-base">Trip not started</p>
+            <p className="text-sm text-brand-700 truncate">{trip.departureLocation} → {trip.arrivalLocation}</p>
           </div>
           <button 
             onClick={() => setShowDelayInput(!showDelayInput)} 
@@ -112,7 +112,7 @@ const TripControlPanel: FC<TripControlPanelProps> = ({
         </div>
 
         <Button 
-          className="w-full bg-blue-600 hover:bg-blue-700 text-white conductor-action-btn text-base font-bold rounded-xl shadow-lg shadow-blue-200"
+          className="w-full bg-brand-700 hover:bg-brand-800 text-white conductor-action-btn text-base font-bold rounded-xl shadow-lg shadow-brand-200"
           onClick={() => handleAction(onStartTrip)} disabled={loading}
         >
           {loading ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : <PlayCircle className="w-5 h-5 mr-2" />}
@@ -209,23 +209,23 @@ const TripControlPanel: FC<TripControlPanelProps> = ({
 
   if (tripStatus === 'arrived') {
     return (
-      <div className="bg-gradient-to-br from-indigo-50 via-blue-50 to-indigo-50 border border-indigo-200 rounded-2xl p-4 sm:p-5 shadow-sm">
+      <div className="bg-gradient-to-br from-brand-50 via-white to-brand-50 border border-brand-200 rounded-2xl p-4 sm:p-5 shadow-sm">
         <div className="flex items-center gap-3 mb-4">
-          <div className="w-11 h-11 rounded-xl bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-200">
+          <div className="w-11 h-11 rounded-xl bg-brand-700 flex items-center justify-center shadow-lg shadow-brand-200">
             <MapPin className="w-5 h-5 text-white" />
           </div>
           <div className="flex-1">
-            <p className="font-bold text-indigo-900 text-base">Arrived at Stop</p>
-            <p className="text-sm text-indigo-700 font-medium">Station: <strong>{currentStop?.name}</strong></p>
+            <p className="font-bold text-brand-900 text-base">Arrived at Stop</p>
+            <p className="text-sm text-brand-700 font-medium">Station: <strong>{currentStop?.name}</strong></p>
           </div>
         </div>
 
-        <p className="text-sm text-gray-600 mb-4 bg-indigo-50 rounded-xl p-3 border border-indigo-100">
+        <p className="text-sm text-gray-600 mb-4 bg-brand-50 rounded-xl p-3 border border-brand-100">
           Passengers are disembarking/boarding. Open boarding when ready to check new tickets.
         </p>
 
         <Button
-          className="w-full conductor-action-btn text-base font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-lg shadow-indigo-200"
+          className="w-full conductor-action-btn text-base font-bold text-white bg-brand-700 hover:bg-brand-800 rounded-xl shadow-lg shadow-brand-200"
           onClick={() => handleAction(onOpenBoarding)} disabled={loading}
         >
           {loading ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : <Users className="w-5 h-5 mr-2" />}
@@ -237,16 +237,16 @@ const TripControlPanel: FC<TripControlPanelProps> = ({
 
   if (tripStatus === 'in_transit') {
     return (
-      <div className="bg-gradient-to-br from-blue-50 via-cyan-50 to-blue-50 border border-blue-200 rounded-2xl p-4 sm:p-5 shadow-sm">
+      <div className="bg-gradient-to-br from-brand-50 via-white to-brand-50 border border-brand-200 rounded-2xl p-4 sm:p-5 shadow-sm">
         <div className="flex items-center gap-3 mb-4">
-          <div className="w-11 h-11 rounded-xl bg-blue-600 flex items-center justify-center shadow-lg shadow-blue-200">
+          <div className="w-11 h-11 rounded-xl bg-brand-700 flex items-center justify-center shadow-lg shadow-brand-200">
             <BusIcon className="w-5 h-5 text-white" />
           </div>
           <div className="flex-1">
-            <p className="font-bold text-blue-900 text-base flex items-center gap-2">
+            <p className="font-bold text-brand-900 text-base flex items-center gap-2">
               🚌 In Transit
             </p>
-            <p className="text-sm text-blue-700">Heading to: <strong>{nextStop?.name ?? trip.arrivalLocation}</strong></p>
+            <p className="text-sm text-brand-700">Heading to: <strong>{nextStop?.name ?? trip.arrivalLocation}</strong></p>
           </div>
         </div>
 
@@ -256,7 +256,7 @@ const TripControlPanel: FC<TripControlPanelProps> = ({
           className={`w-full mt-4 conductor-action-btn text-base font-bold text-white rounded-xl shadow-lg ${
             isLastStop || !nextStop 
               ? 'bg-green-700 hover:bg-green-800 shadow-green-200' 
-              : 'bg-blue-600 hover:bg-blue-700 shadow-blue-200'
+              : 'bg-brand-700 hover:bg-brand-800 shadow-brand-200'
           }`}
           onClick={() => handleAction(onArriveAtNext)} disabled={loading || !nextStop}
         >

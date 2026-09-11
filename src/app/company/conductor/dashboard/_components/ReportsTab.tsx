@@ -26,8 +26,8 @@ export default function ReportsTab({
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in duration-500">
-      <div className="bg-white rounded-[32px] border shadow-sm overflow-hidden border-indigo-100">
-         <div className="bg-indigo-600 p-8 text-white relative overflow-hidden">
+      <div className="bg-white rounded-[32px] border shadow-sm overflow-hidden border-brand-100">
+         <div className="bg-brand-700 p-8 text-white relative overflow-hidden">
             <div className="absolute top-0 right-0 p-12 opacity-10">
                <FileText className="w-32 h-32 rotate-12" />
             </div>
@@ -41,7 +41,7 @@ export default function ReportsTab({
          <div className="p-8 space-y-8">
             <section>
                <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                  <Activity className="w-4 h-4 text-indigo-500" /> Trip Activity
+                  <Activity className="w-4 h-4 text-brand-700" /> Trip Activity
                </h4>
                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100">
@@ -92,7 +92,7 @@ export default function ReportsTab({
                {selectedTrip.tripStatus !== 'completed' && (
                   <Button 
                     onClick={() => handleUpdateTripStatus('completed')}
-                    className="flex-1 h-14 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-2xl shadow-xl shadow-indigo-100"
+                    className="flex-1 h-14 bg-brand-700 hover:bg-brand-800 text-white font-bold rounded-2xl shadow-xl shadow-brand-100"
                   >
                      <CheckCircle className="w-5 h-5 mr-2" /> End Trip & Finalize
                   </Button>

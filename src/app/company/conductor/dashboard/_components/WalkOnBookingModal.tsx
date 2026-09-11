@@ -53,6 +53,10 @@ const WalkOnBookingModal: FC<WalkOnBookingModalProps> = ({
     amountPaid: String(trip?.price || ''), originStopId: '', destinationStopId: '',
   });
   const [errors, setErrors] = useState<Partial<Record<keyof WalkOnFormData, string>>>({});
+  const [occupiedSeats, setOccupiedSeats] = useState<string[]>([]);
+  const [reservedSeats, setReservedSeats] = useState<string[]>([]);
+  const [occupancyLoading, setOccupancyLoading] = useState(false);
+  const [occupancyError, setOccupancyError] = useState('');
 
   const boardingStop = stopSequence[currentStopIndex];
   const remainingStops = stopSequence.slice(currentStopIndex + 1);
@@ -69,6 +73,44 @@ const WalkOnBookingModal: FC<WalkOnBookingModalProps> = ({
       setErrors({});
     }
   }, [isOpen, trip?.price]);
+
+  useEffect(() => {
+    if (!isOpen || !trip?.id || !form.originStopId || !form.destinationStopId) return;
+
+    const controller = new AbortController();
+    const loadOccupancy = async () => {
+      setOccupancyLoading(true);
+      setOccupancyError('');
+      setOccupiedSeats([]);
+      setReservedSeats([]);
+      try {
+        const params = new URLSearchParams({
+          originStopId: form.originStopId,
+          destinationStopId: form.destinationStopId,
+        });
+        const response = await fetch(
+          `/api/bookings/details/${trip.id}?${params.toString()}`,
+          { signal: controller.signal },
+        );
+        const result = await response.json();
+        if (!response.ok) {
+          throw new Error(result.error || 'Failed to load seat availability');
+        }
+        setOccupiedSeats(Array.isArray(result.schedule?.bookedSeats) ? result.schedule.bookedSeats : []);
+        setReservedSeats(Array.isArray(result.schedule?.reservedSeats) ? result.schedule.reservedSeats : []);
+      } catch (error) {
+        if (error instanceof DOMException && error.name === 'AbortError') return;
+        setOccupiedSeats([]);
+        setReservedSeats([]);
+        setOccupancyError(error instanceof Error ? error.message : 'Failed to load seat availability');
+      } finally {
+        if (!controller.signal.aborted) setOccupancyLoading(false);
+      }
+    };
+
+    loadOccupancy();
+    return () => controller.abort();
+  }, [isOpen, trip?.id, form.originStopId, form.destinationStopId]);
 
   if (!trip || !bus) return null;
 
@@ -124,14 +166,14 @@ const WalkOnBookingModal: FC<WalkOnBookingModalProps> = ({
   const renderProgressBar = () => (
     <div className="space-y-2">
       <div className="flex justify-between text-[11px] font-bold text-gray-500">
-        <span className={currentStepIdx >= 0 ? 'text-blue-600' : ''}>Seat</span>
-        <span className={currentStepIdx >= 1 ? 'text-blue-600' : ''}>Details</span>
-        <span className={currentStepIdx >= 2 ? 'text-blue-600' : ''}>Payment</span>
-        <span className={currentStepIdx >= 3 ? 'text-blue-600' : ''}>Confirm</span>
+        <span className={currentStepIdx >= 0 ? 'text-brand-700' : ''}>Seat</span>
+        <span className={currentStepIdx >= 1 ? 'text-brand-700' : ''}>Details</span>
+        <span className={currentStepIdx >= 2 ? 'text-brand-700' : ''}>Payment</span>
+        <span className={currentStepIdx >= 3 ? 'text-brand-700' : ''}>Confirm</span>
       </div>
       <div className="w-full bg-gray-200 rounded-full h-2">
         <div 
-          className="bg-blue-600 h-2 rounded-full transition-all duration-500"
+          className="bg-brand-700 h-2 rounded-full transition-all duration-500"
           style={{ width: `${((currentStepIdx + 1) / 4) * 100}%` }}
         />
       </div>
@@ -139,21 +181,21 @@ const WalkOnBookingModal: FC<WalkOnBookingModalProps> = ({
   );
 
   const renderTripInfo = () => (
-    <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 space-y-1.5">
-      <div className="flex items-center gap-2 text-blue-800 font-bold text-sm">
+    <div className="bg-brand-50 border border-brand-200 rounded-xl p-3 space-y-1.5">
+      <div className="flex items-center gap-2 text-brand-800 font-bold text-sm">
         <Info className="w-4 h-4" /> Trip Info
       </div>
       <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-sm">
-        <div><p className="text-blue-600 text-[10px] font-bold">From</p>
-          <p className="font-bold text-blue-900 text-xs truncate">{boardingStop?.name || trip.departureLocation || route?.origin || 'Unknown'}</p></div>
-        <div><p className="text-blue-600 text-[10px] font-bold">To</p>
-          <p className="font-bold text-blue-900 text-xs truncate">
+        <div><p className="text-brand-700 text-[10px] font-bold">From</p>
+          <p className="font-bold text-brand-900 text-xs truncate">{boardingStop?.name || trip.departureLocation || route?.origin || 'Unknown'}</p></div>
+        <div><p className="text-brand-700 text-[10px] font-bold">To</p>
+          <p className="font-bold text-brand-900 text-xs truncate">
             {remainingStops.find(s => s.id === form.destinationStopId)?.name || trip.arrivalLocation || route?.destination || 'Unknown'}
           </p></div>
-        <div><p className="text-blue-600 text-[10px] font-bold">Date</p>
-          <p className="font-bold text-blue-900 text-xs">{format(departure, 'EEE, MMM d')}</p></div>
-        <div><p className="text-blue-600 text-[10px] font-bold">Fare</p>
-          <p className="font-black text-blue-900 text-sm">MWK {fareAmount.toLocaleString()}</p></div>
+        <div><p className="text-brand-700 text-[10px] font-bold">Date</p>
+          <p className="font-bold text-brand-900 text-xs">{format(departure, 'EEE, MMM d')}</p></div>
+        <div><p className="text-brand-700 text-[10px] font-bold">Fare</p>
+          <p className="font-black text-brand-900 text-sm">MWK {fareAmount.toLocaleString()}</p></div>
       </div>
     </div>
   );
@@ -161,6 +203,11 @@ const WalkOnBookingModal: FC<WalkOnBookingModalProps> = ({
   const renderSeatStep = () => (
     <div className="space-y-3">
       {renderTripInfo()}
+      {occupancyError && (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          {occupancyError}
+        </div>
+      )}
       <p className="text-sm text-gray-600 font-medium">Tap an available seat:</p>
       <div className="bg-gray-50 rounded-xl border p-3 sm:p-4">
         <div className="flex justify-center mb-3">
@@ -172,22 +219,24 @@ const WalkOnBookingModal: FC<WalkOnBookingModalProps> = ({
           {Array.from({ length: bus.capacity }).map((_, i) => {
             const seatNum = (i + 1).toString();
             const booking = existingBookings.find(b => b.seatNumbers?.includes(seatNum) && b.bookingStatus !== 'cancelled');
-            const isTaken = !!booking;
+            const isTaken = !!occupancyError || occupiedSeats.includes(seatNum) || reservedSeats.includes(seatNum);
+            const isLoading = occupancyLoading && !occupancyError;
             const isSelected = selectedSeat === seatNum;
             let cls = 'aspect-square rounded-xl flex items-center justify-center font-bold text-sm border-2 transition-all min-h-[44px] ';
-            if (isSelected) cls += 'bg-blue-600 border-blue-700 text-white scale-105 shadow-lg';
+            if (isSelected) cls += 'bg-brand-700 border-brand-800 text-white scale-105 shadow-lg';
+            else if (isLoading) cls += 'bg-gray-100 border-gray-200 text-gray-400 cursor-wait animate-pulse';
             else if (isTaken) {
               if (booking?.bookingStatus === 'confirmed') cls += 'bg-green-500 border-green-600 text-white cursor-not-allowed';
               else if (booking?.bookingStatus === 'no-show') cls += 'bg-red-400 border-red-500 text-white cursor-not-allowed';
               else if (booking?.paymentStatus !== 'paid') cls += 'bg-amber-400 border-amber-500 text-white cursor-not-allowed';
-              else cls += 'bg-blue-400 border-blue-500 text-white cursor-not-allowed';
+              else cls += 'bg-brand-400 border-brand-500 text-white cursor-not-allowed';
             } else {
-              cls += 'bg-white border-gray-300 text-gray-700 hover:border-blue-400 hover:bg-blue-50 active:scale-95';
+              cls += 'bg-white border-gray-300 text-gray-700 hover:border-brand-400 hover:bg-brand-50 active:scale-95';
             }
             return (
               <button key={seatNum} className={cls} onClick={() => !isTaken && setSelectedSeat(seatNum)}
-                disabled={isTaken}
-                title={isTaken ? `Seat ${seatNum} — Taken` : `Seat ${seatNum}`}>
+                disabled={isTaken || isLoading}
+                title={isLoading ? `Seat ${seatNum} — Checking availability` : isTaken ? `Seat ${seatNum} — Taken` : `Seat ${seatNum}`}>
                 {seatNum}
               </button>
             );
@@ -196,7 +245,7 @@ const WalkOnBookingModal: FC<WalkOnBookingModalProps> = ({
         <div className="mt-3 flex flex-wrap gap-2 justify-center text-[10px] text-gray-600">
           {[
             { color: 'bg-white border-2 border-gray-300', label: 'Free' },
-            { color: 'bg-blue-600', label: 'Selected' },
+            { color: 'bg-brand-700', label: 'Selected' },
             { color: 'bg-amber-400', label: 'Cash due' },
             { color: 'bg-green-500', label: 'Boarded' },
           ].map(({ color, label }) => (
@@ -207,8 +256,8 @@ const WalkOnBookingModal: FC<WalkOnBookingModalProps> = ({
         </div>
       </div>
       {selectedSeat && (
-        <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-xl px-3 py-2.5 text-sm text-blue-800 font-bold">
-          <CheckCircle className="w-4 h-4 text-blue-600" /> Seat {selectedSeat} selected
+        <div className="flex items-center gap-2 bg-brand-50 border border-brand-200 rounded-xl px-3 py-2.5 text-sm text-brand-800 font-bold">
+          <CheckCircle className="w-4 h-4 text-brand-700" /> Seat {selectedSeat} selected
         </div>
       )}
     </div>
@@ -220,7 +269,7 @@ const WalkOnBookingModal: FC<WalkOnBookingModalProps> = ({
       <div>
         <label className="block text-sm font-bold text-gray-700 mb-1">Destination <span className="text-red-500">*</span></label>
         <select value={form.destinationStopId} onChange={e => setForm({ ...form, destinationStopId: e.target.value })}
-          className={`w-full px-3 py-3 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white ${errors.destinationStopId ? 'border-red-400 bg-red-50' : 'border-gray-300'}`}>
+          className={`w-full px-3 py-3 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white ${errors.destinationStopId ? 'border-red-400 bg-red-50' : 'border-gray-300'}`}>
           <option value="">Select destination…</option>
           {remainingStops.map(stop => <option key={stop.id} value={stop.id}>{stop.name}</option>)}
         </select>
@@ -231,14 +280,14 @@ const WalkOnBookingModal: FC<WalkOnBookingModalProps> = ({
         <div>
           <label className="block text-sm font-bold text-gray-700 mb-1">First Name <span className="text-red-500">*</span></label>
           <input type="text" value={form.firstName} onChange={e => setForm({ ...form, firstName: e.target.value })}
-            className={`w-full px-3 py-3 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.firstName ? 'border-red-400 bg-red-50' : 'border-gray-300'}`}
+            className={`w-full px-3 py-3 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 ${errors.firstName ? 'border-red-400 bg-red-50' : 'border-gray-300'}`}
             placeholder="John" />
           {errors.firstName && <p className="text-xs text-red-600 mt-1">{errors.firstName}</p>}
         </div>
         <div>
           <label className="block text-sm font-bold text-gray-700 mb-1">Last Name <span className="text-red-500">*</span></label>
           <input type="text" value={form.lastName} onChange={e => setForm({ ...form, lastName: e.target.value })}
-            className={`w-full px-3 py-3 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.lastName ? 'border-red-400 bg-red-50' : 'border-gray-300'}`}
+            className={`w-full px-3 py-3 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 ${errors.lastName ? 'border-red-400 bg-red-50' : 'border-gray-300'}`}
             placeholder="Banda" />
           {errors.lastName && <p className="text-xs text-red-600 mt-1">{errors.lastName}</p>}
         </div>
@@ -246,7 +295,7 @@ const WalkOnBookingModal: FC<WalkOnBookingModalProps> = ({
       <div>
         <label className="block text-sm font-bold text-gray-700 mb-1">Phone <span className="text-red-500">*</span></label>
         <input type="tel" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })}
-          className={`w-full px-3 py-3 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.phone ? 'border-red-400 bg-red-50' : 'border-gray-300'}`}
+          className={`w-full px-3 py-3 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 ${errors.phone ? 'border-red-400 bg-red-50' : 'border-gray-300'}`}
           placeholder="+265 999 000 000" />
         {errors.phone && <p className="text-xs text-red-600 mt-1">{errors.phone}</p>}
       </div>
@@ -254,7 +303,7 @@ const WalkOnBookingModal: FC<WalkOnBookingModalProps> = ({
         <div>
           <label className="block text-sm font-bold text-gray-700 mb-1">Sex <span className="text-red-500">*</span></label>
           <select value={form.sex} onChange={e => setForm({ ...form, sex: e.target.value as WalkOnFormData['sex'] })}
-            className={`w-full px-3 py-3 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white ${errors.sex ? 'border-red-400 bg-red-50' : 'border-gray-300'}`}>
+            className={`w-full px-3 py-3 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 bg-white ${errors.sex ? 'border-red-400 bg-red-50' : 'border-gray-300'}`}>
             <option value="">Select…</option>
             <option value="male">Male</option>
             <option value="female">Female</option>
@@ -265,7 +314,7 @@ const WalkOnBookingModal: FC<WalkOnBookingModalProps> = ({
         <div>
           <label className="block text-sm font-bold text-gray-700 mb-1">Age <span className="text-red-500">*</span></label>
           <input type="number" value={form.age} onChange={e => setForm({ ...form, age: e.target.value })}
-            className={`w-full px-3 py-3 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.age ? 'border-red-400 bg-red-50' : 'border-gray-300'}`}
+            className={`w-full px-3 py-3 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 ${errors.age ? 'border-red-400 bg-red-50' : 'border-gray-300'}`}
             placeholder="30" min={1} max={120} />
           {errors.age && <p className="text-xs text-red-600 mt-1">{errors.age}</p>}
         </div>
@@ -277,7 +326,7 @@ const WalkOnBookingModal: FC<WalkOnBookingModalProps> = ({
     <div className="space-y-3">
       {renderTripInfo()}
       <div className="flex items-center gap-3 p-3 bg-gray-50 border rounded-xl">
-        <div className="w-10 h-10 rounded-xl bg-blue-600 text-white font-bold flex items-center justify-center shrink-0">{selectedSeat}</div>
+        <div className="w-10 h-10 rounded-xl bg-brand-700 text-white font-bold flex items-center justify-center shrink-0">{selectedSeat}</div>
         <div className="min-w-0">
           <p className="font-bold text-gray-900 truncate">{form.firstName} {form.lastName}</p>
           <p className="text-xs text-gray-500">{form.phone} · {form.sex} · {form.age}yrs</p>
@@ -289,7 +338,7 @@ const WalkOnBookingModal: FC<WalkOnBookingModalProps> = ({
           <Banknote className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
           <input type="number" value={form.amountPaid}
             onChange={e => { setForm({ ...form, amountPaid: e.target.value }); setErrors({}); }}
-            className={`w-full pl-10 pr-4 py-3.5 border rounded-xl text-xl font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.amountPaid ? 'border-red-400 bg-red-50' : 'border-gray-300'}`}
+            className={`w-full pl-10 pr-4 py-3.5 border rounded-xl text-xl font-bold focus:outline-none focus:ring-2 focus:ring-brand-500 ${errors.amountPaid ? 'border-red-400 bg-red-50' : 'border-gray-300'}`}
             placeholder={String(fareAmount)} min={0} />
         </div>
         {errors.amountPaid && <p className="mt-1.5 text-sm text-red-600 flex items-center gap-1"><AlertCircle className="w-4 h-4" /> {errors.amountPaid}</p>}
@@ -344,7 +393,7 @@ const WalkOnBookingModal: FC<WalkOnBookingModalProps> = ({
             ? <Button variant="outline" className="flex-1 h-12 rounded-xl font-bold" onClick={handleBack} disabled={loading}><ChevronLeft className="w-4 h-4 mr-1" /> Back</Button>
             : <Button variant="outline" className="flex-1 h-12 rounded-xl font-bold" onClick={onClose} disabled={loading}>Cancel</Button>}
           {step !== 'confirm'
-            ? <Button className="flex-1 bg-blue-600 hover:bg-blue-700 text-white h-12 rounded-xl font-bold" onClick={handleNext} disabled={step === 'seat' && !selectedSeat}>
+            ? <Button className="flex-1 bg-brand-700 hover:bg-brand-800 text-white h-12 rounded-xl font-bold" onClick={handleNext} disabled={step === 'seat' && !selectedSeat}>
               Continue <ChevronRight className="w-4 h-4 ml-1" />
             </Button>
             : <Button className="flex-1 bg-green-600 hover:bg-green-700 text-white h-12 rounded-xl font-bold" onClick={handleSubmit} disabled={loading}>

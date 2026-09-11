@@ -39,7 +39,7 @@ export default function DashboardTab({
                <MapPin className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                <h2 className="text-xl font-bold text-gray-900 mb-2">No Trips Today</h2>
                <p className="text-gray-500 text-sm mb-8">You have no trips assigned for today. Contact your operator if this is an error.</p>
-               <Button onClick={() => fetchInitialData(false)} className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl px-8">
+               <Button onClick={() => fetchInitialData(false)} className="bg-brand-700 hover:bg-brand-800 text-white rounded-xl px-8">
                   Refresh Schedule
                </Button>
             </div>
@@ -62,7 +62,7 @@ export default function DashboardTab({
                   <h2 className="text-2xl font-black text-gray-900 tracking-tight">
                      {activeRoute?.origin || bestCandidate.departureLocation} → {activeRoute?.destination || bestCandidate.arrivalLocation}
                   </h2>
-                  <p className={`text-xs font-bold uppercase tracking-widest mt-1 ${isUpcoming ? 'text-amber-500' : 'text-indigo-600'}`}>
+                  <p className={`text-xs font-bold uppercase tracking-widest mt-1 ${isUpcoming ? 'text-amber-500' : 'text-brand-700'}`}>
                      {bestCandidate.tripStatus === 'boarding' ? 'Currently Boarding' :
                         bestCandidate.tripStatus === 'in_transit' ? 'In Transit' : 'Next Trip • Scheduled'}
                   </p>
@@ -91,7 +91,7 @@ export default function DashboardTab({
                            handleUpdateTripStatus('in_transit', { currentStopIndex: 0, currentStopId: '__origin__' });
                         }
                      }}
-                     className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl px-6 h-12 font-bold shadow-lg shadow-indigo-100 animate-pulse"
+                     className="bg-brand-700 hover:bg-brand-800 text-white rounded-xl px-6 h-12 font-bold shadow-lg shadow-brand-100 animate-pulse"
                   >
                      <Navigation className="w-4 h-4 mr-2" /> Depart Origin
                   </Button>
@@ -117,7 +117,7 @@ export default function DashboardTab({
                               }
                            }
                         }}
-                        className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl px-6 h-12 font-bold shadow-lg shadow-indigo-100"
+                        className="bg-brand-700 hover:bg-brand-800 text-white rounded-xl px-6 h-12 font-bold shadow-lg shadow-brand-100"
                      >
                         {((bestCandidate.currentStopIndex || 0) + 1) >= (buildTripStopSequence(bestCandidate, activeRoute).length - 1)
                            ? <><Flag className="w-4 h-4 mr-2" /> Arrive</>
@@ -150,7 +150,7 @@ export default function DashboardTab({
          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="bg-white rounded-[20px] p-6 border border-gray-100 shadow-sm flex flex-col justify-center">
                <p className="text-xs font-semibold text-gray-500 mb-2">Total Passengers</p>
-               <p className="text-3xl font-black text-blue-600">{tripStats.totalPax}</p>
+               <p className="text-3xl font-black text-brand-700">{tripStats.totalPax}</p>
             </div>
             <div className="bg-white rounded-[20px] p-6 border border-gray-100 shadow-sm flex flex-col justify-center">
                <p className="text-xs font-semibold text-gray-500 mb-2">Checked In</p>
@@ -196,12 +196,12 @@ export default function DashboardTab({
                   <div className="relative">
                      <input
                         type="text"
-                        className="w-full h-12 pl-4 pr-12 bg-white border border-gray-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-indigo-600 outline-none placeholder:text-gray-400"
+                        className="w-full h-12 pl-4 pr-12 bg-white border border-gray-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-brand-700 outline-none placeholder:text-gray-400"
                         placeholder="Enter Booking ID or PNR"
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                      />
-                     <button className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-indigo-600">
+                     <button className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-brand-700">
                         <Search className="w-5 h-5" />
                      </button>
                   </div>
@@ -211,7 +211,7 @@ export default function DashboardTab({
             <div className="bg-white rounded-[24px] border border-gray-100 shadow-sm p-6 flex flex-col">
                <div className="flex items-center justify-between mb-6">
                   <h3 className="font-bold text-gray-900 text-lg">Recent Scans</h3>
-                  <button onClick={() => setActiveTab('passengers')} className="text-xs font-bold text-indigo-600">View all</button>
+                  <button onClick={() => setActiveTab('passengers')} className="text-xs font-bold text-brand-700">View all</button>
                </div>
 
                <div className="flex-1 overflow-y-auto space-y-4 max-h-[300px]">

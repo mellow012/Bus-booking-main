@@ -41,7 +41,7 @@ const TripCard: FC<TripCardProps> = ({ trip, bus, route, onClick }) => {
 
   const gradientCls =
     bkt === 'live' ? 'from-green-400 to-emerald-500' :
-      bkt === 'today' ? 'from-blue-400 to-indigo-500' :
+      bkt === 'today' ? 'from-brand-500 to-brand-700' :
         bkt === 'completed' ? 'from-gray-300 to-gray-400' : 'from-slate-400 to-slate-600';
 
   const tsBadgeCls =
@@ -61,14 +61,14 @@ const TripCard: FC<TripCardProps> = ({ trip, bus, route, onClick }) => {
   return (
     <div
       onClick={onClick}
-      className={`group bg-white rounded-2xl shadow-sm border border-gray-100 hover:shadow-xl hover:border-indigo-100 hover:-translate-y-1 active:scale-[0.98] transition-all duration-300 cursor-pointer overflow-hidden flex flex-col ${bkt === 'completed' ? 'opacity-70' : ''}`}
+      className={`group bg-white rounded-2xl shadow-sm border border-gray-100 hover:shadow-xl hover:border-brand-100 hover:-translate-y-1 active:scale-[0.98] transition-all duration-300 cursor-pointer overflow-hidden flex flex-col ${bkt === 'completed' ? 'opacity-70' : ''}`}
     >
       <div className={`h-1.5 w-full bg-gradient-to-r ${gradientCls}`} />
       
       <div className="p-4 sm:p-5 flex-1 flex flex-col">
         <div className="flex items-start justify-between gap-2 mb-4">
           <div className="flex-1 min-w-0">
-            <p className="font-extrabold text-gray-900 text-lg truncate leading-tight group-hover:text-indigo-600 transition-colors">
+            <p className="font-extrabold text-gray-900 text-lg truncate leading-tight group-hover:text-brand-700 transition-colors">
               {trip.departureLocation || route?.origin || 'TBD'} <ArrowRight className="inline w-4 h-4 text-gray-400 mx-0.5" /> {trip.arrivalLocation || route?.destination || 'TBD'}
             </p>
             <p className="text-xs text-gray-500 mt-1.5 flex items-center gap-1.5 font-medium">
@@ -85,7 +85,7 @@ const TripCard: FC<TripCardProps> = ({ trip, bus, route, onClick }) => {
           <div className="flex flex-col">
             <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-0.5">Depart</span>
             <div className="flex items-center gap-1.5">
-              <Clock className="w-3.5 h-3.5 text-indigo-500" />
+              <Clock className="w-3.5 h-3.5 text-brand-700" />
               <span className="font-black text-gray-900 text-lg sm:text-xl leading-none">{format(dep, 'HH:mm')}</span>
             </div>
           </div>
@@ -121,7 +121,7 @@ const TripCard: FC<TripCardProps> = ({ trip, bus, route, onClick }) => {
           <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] sm:text-xs font-bold border ${tsBadgeCls} tracking-wide`}>
             {tsLabel}
           </span>
-          <span className="text-xs sm:text-sm text-indigo-600 font-bold group-hover:translate-x-1 transition-transform flex items-center gap-1">
+          <span className="text-xs sm:text-sm text-brand-700 font-bold group-hover:translate-x-1 transition-transform flex items-center gap-1">
             {(ts === 'boarding' || ts === 'in_transit') ? 'Manage Trip' : 'View Details'} <ArrowRight className="w-4 h-4" />
           </span>
         </div>

@@ -106,7 +106,7 @@ const OperatorProfileTab: React.FC<OperatorProfileTabProps> = ({
 
   const activeRole = (userProfile?.role as string) || 'staff';
   const meta = ROLE_META[activeRole] || DEFAULT_META;
-  const isOperator = activeRole === 'operator';
+  const isOperator = activeRole === 'operator' || activeRole === 'conductor';
   const hasCompany = ['company_admin', 'operator', 'conductor', 'finance'].includes(activeRole);
 
   useEffect(() => {
@@ -117,16 +117,29 @@ const OperatorProfileTab: React.FC<OperatorProfileTabProps> = ({
     }
     const fetchOperatorData = async () => {
       try {
-        const { data: operatorData, error: fetchError } = await (supabase as any)
+        const { data: operatorData, error: operatorError } = await (supabase as any)
           .from('Operator')
-          .select('regionId, region(name)')
+          .select('regionId')
           .or(`id.eq.${userProfile.id},uid.eq.${userProfile.id}`)
           .single();
-        if (!fetchError && operatorData) {
-          setOperatorRegion(operatorData.region?.name || operatorData.regionId || 'Not assigned');
-        } else {
+
+        if (operatorError || !operatorData?.regionId) {
           setOperatorRegion('Not assigned');
+          return;
         }
+
+        const { data: regionData, error: regionError } = await (supabase as any)
+          .from('Region')
+          .select('name')
+          .eq('id', operatorData.regionId)
+          .single();
+
+        if (regionError || !regionData?.name) {
+          setOperatorRegion('Not assigned');
+          return;
+        }
+
+        setOperatorRegion(regionData.name);
       } catch {
         setOperatorRegion('Not assigned');
       } finally {

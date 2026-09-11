@@ -5,7 +5,8 @@ import { Schedule, Bus, Booking, Company } from '@/types';
 import { Flag, Banknote, Users, CheckCircle, CarFront, Timer, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { format } from 'date-fns';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@/utils/supabase/client';
+const supabase = createClient();
 import * as dbActions from '@/lib/actions/db.actions';
 
 interface TripSummaryCardProps {
@@ -100,7 +101,7 @@ const TripSummaryCard: FC<TripSummaryCardProps> = ({ trip, bus, bookings, compan
       <div className="p-4 sm:p-6">
         {loading || !stats ? (
           <div className="flex flex-col items-center justify-center py-8">
-            <Loader2 className="w-8 h-8 text-blue-600 animate-spin mb-4" />
+            <Loader2 className="w-8 h-8 text-brand-700 animate-spin mb-4" />
             <p className="text-gray-500 text-sm">Validating trip manifest...</p>
           </div>
         ) : (
@@ -126,7 +127,7 @@ const TripSummaryCard: FC<TripSummaryCardProps> = ({ trip, bus, bookings, compan
                 <p className="text-xl sm:text-2xl font-black text-gray-900">{stats.totalBoarded} <span className="text-sm font-medium text-gray-500">boarded</span></p>
                 <div className="mt-1.5 flex flex-wrap gap-1.5">
                   <span className="bg-red-100 text-red-700 px-1.5 py-0.5 rounded text-[10px] font-bold">{stats.totalNoShow} No-shows</span>
-                  <span className="bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded text-[10px] font-bold">{stats.walkOns} Walk-ons</span>
+                  <span className="bg-brand-100 text-brand-700 px-1.5 py-0.5 rounded text-[10px] font-bold">{stats.walkOns} Walk-ons</span>
                 </div>
               </div>
             </div>
@@ -167,7 +168,7 @@ const TripSummaryCard: FC<TripSummaryCardProps> = ({ trip, bus, bookings, compan
                   {logs.map((log, i) => (
                     <div key={i} className="flex justify-between items-center bg-gray-50 p-2.5 rounded-lg border border-gray-100">
                       <div className="flex flex-col">
-                        <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">{log.action.replace(/_/g, ' ')}</span>
+                        <span className="text-[10px] font-black text-brand-700 uppercase tracking-widest">{log.action.replace(/_/g, ' ')}</span>
                         <span className="text-xs font-medium text-gray-700">{log.description}</span>
                       </div>
                       <span className="text-[9px] font-bold text-gray-400">{format(new Date(log.createdAt), 'HH:mm')}</span>

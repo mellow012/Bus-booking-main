@@ -9,6 +9,12 @@ import * as dbActions from '@/lib/actions/db.actions';
 import { WalkOnFormData } from '../_components/WalkOnBookingModal';
 import { parseUtcDate } from '@/lib/timezone';
 
+const sendWalkInSms = (reference: string, phone?: string) => {
+  console.info(`[walk-in SMS placeholder] ${reference} -> ${phone || 'no phone provided'}`);
+};
+
+const TRIP_GRACE_PERIOD_MS = 5 * 60 * 60 * 1000;
+
 export function useConductorDashboard() {
   const { user, userProfile, loading: authLoading, signOut } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -28,6 +34,34 @@ export function useConductorDashboard() {
 
   const companyId = userProfile?.companyId;
 
+  const refreshSelectedTrip = useCallback(async () => {
+    if (!selectedTrip) return;
+
+    const { data, error } = await supabase
+      .from('Schedule')
+      .select('*')
+      .eq('id', selectedTrip.id)
+      .maybeSingle();
+
+    if (error || !data) return;
+
+    setSelectedTrip((current) => current?.id === data.id
+      ? {
+          ...current,
+          ...data,
+          departureDateTime: parseUtcDate(data.departureDateTime),
+          arrivalDateTime: parseUtcDate(data.arrivalDateTime),
+        } as Schedule
+      : current);
+  }, [selectedTrip?.id]);
+
+  const refreshTripBookings = useCallback(async () => {
+    if (!selectedTrip || document.visibilityState !== 'visible') return;
+    const res = await dbActions.getBookingsForSchedule(selectedTrip.id);
+    if (res.success && res.data) setTripBookings(res.data as Booking[]);
+    else setTripBookings([]);
+  }, [selectedTrip?.id]);
+
   const fetchInitialData = useCallback(async (isSilent = false) => {
     if (!companyId || !user) return;
     try {
@@ -38,14 +72,6 @@ export function useConductorDashboard() {
         supabase.from('Bus').select('*').eq('companyId', companyId),
         supabase.from('Operator').select('id').eq('companyId', companyId).eq('uid', uid).eq('role', 'conductor').maybeSingle(),
       ]);
-      const myBuses = (allBuses || []).filter(b => {
-        const cIds = b.conductorIds as string[] | undefined;
-        return cIds && Array.isArray(cIds) && cIds.includes(uid);
-      });
-      setBuses(myBuses as Bus[]);
-
-      const myBusIds = myBuses.map(b => b.id);
-
       {
         const startOfToday = new Date();
         startOfToday.setHours(0,0,0,0);
@@ -56,21 +82,48 @@ export function useConductorDashboard() {
             .eq('companyId', companyId)
             .or(`departureDateTime.gte.${startOfToday.toISOString()},tripStatus.in.(boarding,in_transit,arrived)`),
           supabase.from('Route').select('*').eq('companyId', companyId),
-          supabase.from('Company').select('name').eq('id', companyId).single()
+          supabase.from('Company').select('name, logo').eq('id', companyId).single()
         ]);
 
+        const explicitlyAssignedBusIds = new Set(
+          (sData as any[] || [])
+            .filter(t => t.conductorId === conductorRecord?.id)
+            .map(t => t.busId)
+            .filter(Boolean),
+        );
+        const myBuses = (allBuses || []).filter(b => {
+          const cIds = b.conductorIds as string[] | undefined;
+          return (Array.isArray(cIds) && (cIds.includes(uid) || !!conductorRecord?.id && cIds.includes(conductorRecord.id)))
+            || explicitlyAssignedBusIds.has(b.id);
+        });
+        setBuses(myBuses as Bus[]);
+
+        const myBusIds = myBuses.map(b => b.id);
+        const now = Date.now();
         const activeTrips = (sData as any[] || []).filter(t => {
           if (t.conductorId) return t.conductorId === conductorRecord?.id;
           return myBusIds.includes(t.busId);
-        }).filter(t => t.status === 'active' && !t.isArchived)
+        }).filter(t => {
+          if (t.status !== 'active' || t.isArchived || t.tripStatus === 'completed' || t.tripStatus === 'cancelled') {
+            return false;
+          }
+
+          const departure = new Date(t.departureDateTime).getTime();
+          if (departure >= startOfToday.getTime()) return true;
+
+          const arrival = new Date(t.arrivalDateTime).getTime();
+          return Number.isFinite(arrival) && now <= arrival + TRIP_GRACE_PERIOD_MS;
+        })
           .map(t => ({...t, departureDateTime: parseUtcDate(t.departureDateTime), arrivalDateTime: parseUtcDate(t.arrivalDateTime)}));
         
         setTrips(activeTrips as Schedule[]);
         setRoutes(rData as Route[]);
         setCompany(cData as Company);
 
-        if (activeTrips.length > 0 && !selectedTrip && !isSilent) {
-           const now = new Date();
+        if (selectedTrip && !activeTrips.some(trip => trip.id === selectedTrip.id)) {
+           setSelectedTrip(null);
+        } else if (activeTrips.length > 0 && !selectedTrip && !isSilent) {
+           const currentTime = new Date();
            // Prioritize active trips first (any date)
            const currentlyActive = activeTrips.find(t => t.tripStatus === 'boarding' || t.tripStatus === 'in_transit' || t.tripStatus === 'arrived');
            
@@ -78,7 +131,7 @@ export function useConductorDashboard() {
              setSelectedTrip(currentlyActive);
            } else {
              // Then look for upcoming today
-             const todayTrips = activeTrips.filter(t => new Date(t.departureDateTime).toDateString() === now.toDateString());
+             const todayTrips = activeTrips.filter(t => new Date(t.departureDateTime).toDateString() === currentTime.toDateString());
              const nextTrip = todayTrips.filter(t => t.tripStatus === 'scheduled' || !t.tripStatus)
                                        .sort((a,b) => new Date(a.departureDateTime).getTime() - new Date(b.departureDateTime).getTime())[0];
              
@@ -154,10 +207,8 @@ export function useConductorDashboard() {
 
   useEffect(() => {
     const fetchBookings = async () => {
-      if (!selectedTrip || document.visibilityState !== 'visible') return;
-      const res = await dbActions.getBookingsForSchedule(selectedTrip.id);
-      if (res.success && res.data) setTripBookings(res.data as Booking[]);
-      else setTripBookings([]);
+      await refreshTripBookings();
+      await refreshSelectedTrip();
     };
     fetchBookings();
     
@@ -176,7 +227,7 @@ export function useConductorDashboard() {
         document.removeEventListener('visibilitychange', handleVisibility);
       };
     }
-  }, [selectedTrip?.id]);
+  }, [selectedTrip?.id, refreshSelectedTrip, refreshTripBookings]);
 
   const tripStats = useMemo(() => {
     const validBookings = tripBookings.filter(b => b.bookingStatus !== 'cancelled');
@@ -287,7 +338,9 @@ export function useConductorDashboard() {
 
       if (!res.success) throw new Error(res.error);
 
-      setSuccessMessage('Walk-on passenger successfully boarded!');
+      sendWalkInSms(pnr, data.phone);
+      await Promise.all([refreshSelectedTrip(), refreshTripBookings()]);
+      setSuccessMessage(`Walk-on booked: ${pnr}`);
       setTimeout(() => setSuccessMessage(''), 5000);
       return true;
     } catch (err: any) {
@@ -302,20 +355,14 @@ export function useConductorDashboard() {
     const booking = tripBookings.find(b => b.id === decodedText || b.bookingReference === decodedText);
     
     if (booking) {
-      if (booking.bookingStatus === 'confirmed' || booking.bookingStatus === 'completed') {
-        setGlobalError('This ticket has already been scanned and boarded.');
-        return;
-      }
       if (booking.bookingStatus === 'cancelled') {
         setGlobalError('This ticket is cancelled and invalid.');
-        return;
+        return null;
       }
-      
-      await handleMarkBoarded(booking.id, true);
-      setSuccessMessage(`Welcome aboard, ${booking.passengerDetails?.[0]?.name || 'Passenger'}!`);
-      setTimeout(() => setSuccessMessage(''), 5000);
+      return booking;
     } else {
       setGlobalError(`No matching booking found for "${decodedText}" on this trip.`);
+      return null;
     }
   };
 

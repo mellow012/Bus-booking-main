@@ -1,26 +1,26 @@
 'use client';
 
 import React, { useState } from 'react';
-import { LogOut, Settings, X, Menu, LayoutDashboard, MapPin, Users, DollarSign, FileText, User } from 'lucide-react';
+import { LogOut, Settings, X, Menu } from 'lucide-react';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { Button } from '@/components/ui/button';
+import { buildTripStopSequence } from '@/types';
 
 import WalkOnBookingModal, { WalkOnFormData } from './_components/WalkOnBookingModal';
-import { buildTripStopSequence } from '@/types';
 import CashCollectionModal from './_components/CashCollectionModal';
-import PassengerManifest from './_components/PassengerManifest';
 import ScannerModal from './_components/ScannerModal';
 import OperatorProfileTab from '@/components/OperatorProfileTab';
 
 import { TABS, TabType } from './_lib/constants';
 import { useConductorDashboard } from './_hooks/useConductorDashboard';
-import DashboardTab from './_components/DashboardTab';
 import MyTripsTab from './_components/MyTripsTab';
 import PaymentsTab from './_components/PaymentsTab';
-import ReportsTab from './_components/ReportsTab';
+import ConductorHomeTab from './_components/ConductorHomeTab';
+import ConductorBookingsTab from './_components/ConductorBookingsTab';
+import PassengerVerificationModal from './_components/PassengerVerificationModal';
 import * as dbActions from '@/lib/actions/db.actions';
 import DashboardBottomNav from '@/components/DashboardBottomNav';
-import { useNotifications } from '@/contexts/NotificationContext';
+import { NotificationBell, useNotifications } from '@/contexts/NotificationContext';
 
 export default function ConductorDashboard() {
   const {
@@ -38,15 +38,12 @@ export default function ConductorDashboard() {
   const [activeBookingForCash, setActiveBookingForCash] = useState<any | null>(null);
   const [walkOnModalOpen, setWalkOnModalOpen] = useState(false);
   const [scannerModalOpen, setScannerModalOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [scannedBooking, setScannedBooking] = useState<any | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   if (loading || authLoading) {
     return <div className="min-h-screen bg-brand-50/40"><LoadingSpinner className="text-brand-700" fullScreen /></div>;
   }
-
-  const activeRoute = selectedTrip ? routes.find(r => r.id === selectedTrip.routeId) || null : null;
-  const activeBus = selectedTrip ? buses.find(b => b.id === selectedTrip.busId) || null : null;
 
   const handleWalkOnBookingWrapper = async (seatNumber: string, data: any, amount: number) => {
     await handleWalkOnBooking(seatNumber, data, amount);
@@ -55,11 +52,16 @@ export default function ConductorDashboard() {
   const renderContent = () => {
     switch (activeTab) {
       case 'dashboard': return (
-        <DashboardTab
-          selectedTrip={selectedTrip} trips={trips} routes={routes} buses={buses} tripBookings={tripBookings} tripStats={tripStats}
-          setSelectedTrip={setSelectedTrip} handleUpdateTripStatus={handleUpdateTripStatus}
-          setScannerModalOpen={setScannerModalOpen} setWalkOnModalOpen={setWalkOnModalOpen} setActiveTab={setActiveTab}
-          searchQuery={searchQuery} setSearchQuery={setSearchQuery} fetchInitialData={fetchInitialData}
+        <ConductorHomeTab
+          selectedTrip={selectedTrip}
+          routes={routes}
+          buses={buses}
+          bookings={tripBookings}
+          onWalkOn={() => setWalkOnModalOpen(true)}
+          onScan={() => setScannerModalOpen(true)}
+          onRefresh={() => fetchInitialData(false)}
+          onUpdateTripStatus={handleUpdateTripStatus}
+          statusLoading={actionLoadingId === 'trip-status'}
         />
       );
       case 'my-trips': return (
@@ -68,45 +70,25 @@ export default function ConductorDashboard() {
           setSelectedTrip={setSelectedTrip} setActiveTab={setActiveTab}
         />
       );
-      case 'passengers': return selectedTrip ? (
-        <div className="max-w-4xl mx-auto">
-          <PassengerManifest
-            bookings={tripBookings}
-            tripStatus={selectedTrip.tripStatus || 'scheduled'}
-            onOpenCashModal={(b) => { setActiveBookingForCash(b); setCashModalOpen(true); }}
-            onMarkBoarded={handleMarkBoarded}
-            onMarkNoShow={handleMarkNoShow}
-            onMarkAlighted={handleMarkAlighted}
-            currentStopId={selectedTrip.currentStopId}
-            loadingActionId={actionLoadingId}
-          />
-        </div>
-      ) : <DashboardTab
-        selectedTrip={selectedTrip} trips={trips} routes={routes} buses={buses} tripBookings={tripBookings} tripStats={tripStats}
-        setSelectedTrip={setSelectedTrip} handleUpdateTripStatus={handleUpdateTripStatus}
-        setScannerModalOpen={setScannerModalOpen} setWalkOnModalOpen={setWalkOnModalOpen} setActiveTab={setActiveTab}
-        searchQuery={searchQuery} setSearchQuery={setSearchQuery} fetchInitialData={fetchInitialData}
-      />;
-      case 'payments': return <PaymentsTab tripBookings={tripBookings} />;
-      case 'reports': return selectedTrip ? (
-        <ReportsTab
-          selectedTrip={selectedTrip} tripBookings={tripBookings} activeRoute={activeRoute} activeBus={activeBus}
-          handleUpdateTripStatus={handleUpdateTripStatus}
+      case 'passengers': return (
+        <ConductorBookingsTab
+          bookings={tripBookings}
+          selectedTrip={selectedTrip}
+          route={selectedTrip ? routes.find((route) => route.id === selectedTrip.routeId) : null}
+          onScan={() => setScannerModalOpen(true)}
+          onMarkBoarded={async (bookingId) => { await handleMarkBoarded(bookingId, true); }}
+          onMarkAlighted={handleMarkAlighted}
+          loadingActionId={actionLoadingId}
         />
-      ) : null;
-
+      );
+      case 'payments': return <PaymentsTab tripBookings={tripBookings} />;
       case 'profile': return (
         <OperatorProfileTab
           userProfile={userProfile}
+          companyName={company?.name || undefined}
           setError={setGlobalError}
           setSuccess={(msg) => { setGlobalError(''); setSuccessMessage(msg); }}
         />
-      );
-      case 'settings': return (
-        <div className="max-w-4xl mx-auto bg-white p-8 rounded-2xl border shadow-sm text-center">
-          <Settings className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-          <p className="text-gray-500 font-bold">Account and device settings coming soon.</p>
-        </div>
       );
       default: return null;
     }
@@ -167,35 +149,50 @@ export default function ConductorDashboard() {
 
       {/* Main Area */}
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="h-20 lg:h-24 bg-white/95 backdrop-blur-md border-b border-gray-100 sticky top-0 z-30 px-6 lg:px-12 flex items-center justify-between">
-          <div className="flex items-center space-x-4">
+        <header className="h-[60px] bg-white border-b border-gray-100 sticky top-0 z-30 px-4 sm:px-6 flex items-center justify-between">
+          <div className="flex items-center gap-4">
             <button
               onClick={() => setIsMobileMenuOpen(true)}
-              className="lg:hidden p-2.5 hover:bg-gray-50 rounded-xl transition-colors border border-gray-100"
+              className="lg:hidden p-2 -ml-2 text-gray-500 hover:bg-gray-50 rounded-lg"
+              aria-label="Open navigation"
             >
-              <Menu className="w-6 h-6 text-gray-600" />
+              <Menu className="w-5 h-5" />
             </button>
-            <div>
-              <h2 className="text-xl lg:text-2xl font-black text-brand-900 capitalize">{activeTab.replace('-', ' ')}</h2>
-              <p className="text-[10px] lg:text-xs text-gray-400 font-bold uppercase tracking-widest mt-0.5">Real-time Operations Control</p>
+            <div className="flex items-center gap-3">
+              {company?.logo ? (
+                <img
+                  src={company.logo}
+                  alt={`${company.name || 'Company'} logo`}
+                  className="h-9 w-9 rounded-full border border-gray-200 object-cover"
+                />
+              ) : (
+                <div className="flex h-9 w-9 items-center justify-center rounded-full border border-gray-200 bg-brand-100 font-bold text-brand-700">
+                  {company?.name?.[0] || 'C'}
+                </div>
+              )}
+              <h2 className="hidden text-lg font-bold capitalize text-gray-900 sm:block">
+                {activeTab.replace('-', ' ')}
+              </h2>
             </div>
           </div>
 
-          <div className="flex items-center gap-4 lg:gap-6">
+          <div className="flex flex-1 items-center justify-end gap-3 sm:gap-4">
             {selectedTrip && activeTab === 'dashboard' && (
-              <div className="hidden md:flex bg-gray-50 text-gray-700 px-4 py-2 rounded-lg text-[10px] font-bold border border-gray-200 uppercase tracking-widest">
+              <div className="hidden rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-gray-700 md:flex">
                 Trip ID: {selectedTrip.id.substring(0, 8)}
               </div>
             )}
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-brand-50 border border-brand-100 rounded-full flex items-center justify-center font-bold text-brand-700 text-sm">
-                {userProfile?.firstName?.[0] || 'C'}
-              </div>
-              <div className="hidden sm:block">
-                <p className="text-[11px] font-black text-gray-900 uppercase tracking-tight leading-none">{userProfile?.firstName} {userProfile?.lastName}</p>
-                <p className="text-[9px] text-brand-700 font-bold uppercase tracking-widest mt-1">Conductor On Duty</p>
-              </div>
-            </div>
+            {user?.id && <NotificationBell userId={user.id} />}
+            <button
+              type="button"
+              onClick={() => setActiveTab('profile')}
+              className="ml-1 flex h-8 w-8 items-center justify-center rounded-full border border-brand-200 bg-brand-100 shadow-sm transition hover:bg-brand-200"
+              aria-label="Open profile"
+            >
+              <span className="text-sm font-bold uppercase text-brand-700">
+                {userProfile?.firstName?.[0] || user?.email?.[0] || 'C'}
+              </span>
+            </button>
           </div>
         </header>
 
@@ -220,7 +217,7 @@ export default function ConductorDashboard() {
 
       {/* Bottom Nav for Mobile */}
       <DashboardBottomNav
-        tabs={TABS.slice(0, 4).map(t => ({
+        tabs={TABS.map(t => ({
           ...t,
           badge: t.id === 'dashboard' ? unreadCount > 0 : false
         }))}
@@ -244,8 +241,32 @@ export default function ConductorDashboard() {
       <ScannerModal
         isOpen={scannerModalOpen}
         onClose={() => setScannerModalOpen(false)}
-        onScan={handleScan}
+        onScan={async (decodedText) => {
+          const booking = await handleScan(decodedText);
+          if (booking) {
+            setScannerModalOpen(false);
+            setScannedBooking(booking);
+          }
+        }}
       />
+      {scannedBooking && (
+        <PassengerVerificationModal
+          booking={scannedBooking}
+          selectedTrip={selectedTrip}
+          route={selectedTrip ? routes.find((route) => route.id === selectedTrip.routeId) : null}
+          onClose={() => setScannedBooking(null)}
+          verifiedByScan
+          onConfirm={async () => {
+            await handleMarkBoarded(scannedBooking.id, true);
+            setScannedBooking(null);
+            setSuccessMessage(`Welcome aboard, ${scannedBooking.passengerDetails?.[0]?.name || 'Passenger'}!`);
+          }}
+          loading={actionLoadingId === scannedBooking.id}
+          confirmLabel="Confirm passenger and board"
+          requirePayment
+          requireVerification
+        />
+      )}
       <CashCollectionModal
         isOpen={cashModalOpen}
         onClose={() => { setCashModalOpen(false); setActiveBookingForCash(null); }}

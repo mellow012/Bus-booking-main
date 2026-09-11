@@ -34,21 +34,24 @@ const DashboardBottomNav: React.FC<DashboardBottomNavProps> = ({
             <button
               key={tab.id}
               onClick={() => onTabChange(tab.id)}
-              className="flex flex-col items-center justify-center flex-1 h-full relative group transition-all"
+              aria-current={isActive ? 'page' : undefined}
+              className={`flex flex-1 flex-col items-center justify-center h-full relative group rounded-2xl transition-colors ${
+                isActive ? 'bg-brand-50/80' : 'hover:bg-gray-50/80'
+              }`}
             >
               <div className={`p-1.5 rounded-xl transition-all duration-300 ${
-                isActive ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200 -translate-y-1' : 'text-gray-400 group-hover:text-gray-600'
+                isActive ? 'bg-brand-100 text-brand-700' : 'text-gray-400 group-hover:text-gray-600'
               }`}>
                 <Icon className="w-5 h-5" />
               </div>
               <span className={`text-[9px] font-bold mt-1 uppercase tracking-widest transition-colors duration-300 ${
-                isActive ? 'text-indigo-600' : 'text-gray-400'
+                isActive ? 'text-brand-700' : 'text-gray-400'
               }`}>
                 {tab.label}
               </span>
               
               {isActive && (
-                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-1 bg-indigo-600 rounded-b-full shadow-[0_1px_4px_rgba(79,70,229,0.4)] animate-in fade-in zoom-in duration-300" />
+                <div className="absolute bottom-1 left-1/2 h-1 w-5 -translate-x-1/2 rounded-full bg-brand-600" />
               )}
 
               {tab.badge && !isActive && (

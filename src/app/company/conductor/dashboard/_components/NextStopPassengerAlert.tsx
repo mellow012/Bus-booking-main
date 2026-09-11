@@ -51,17 +51,17 @@ const NextStopPassengerAlert: FC<NextStopPassengerAlertProps> = ({
   const stopIndex = stopSequence.findIndex(s => s.id === currentStop.id);
 
   return (
-    <div className="rounded-2xl border-2 border-indigo-300 bg-gradient-to-br from-indigo-50 to-blue-50 shadow-md overflow-hidden">
+    <div className="rounded-2xl border-2 border-brand-300 bg-gradient-to-br from-brand-50 to-white shadow-md overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 bg-indigo-600">
+      <div className="flex items-center justify-between px-4 py-3 bg-brand-700">
         <div className="flex items-center gap-2 min-w-0">
-          <div className="w-8 h-8 rounded-lg bg-indigo-500 flex items-center justify-center shrink-0">
+          <div className="w-8 h-8 rounded-lg bg-brand-600 flex items-center justify-center shrink-0">
             <MapPin className="w-4 h-4 text-white" />
           </div>
           <div className="min-w-0">
             <span className="text-white font-bold text-sm block truncate">{currentStop.name}</span>
             {stopIndex >= 0 && (
-              <span className="text-indigo-200 text-[11px]">
+              <span className="text-brand-100 text-[11px]">
                 Stop {stopIndex + 1} of {stopSequence.length}
               </span>
             )}
@@ -73,16 +73,16 @@ const NextStopPassengerAlert: FC<NextStopPassengerAlertProps> = ({
               href={`https://maps.google.com/?q=${gpsCoords.lat},${gpsCoords.lng}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-1 text-xs text-indigo-100 hover:text-white px-2 py-1.5 rounded-lg bg-indigo-500/50"
+              className="flex items-center gap-1 text-xs text-brand-100 hover:text-white px-2 py-1.5 rounded-lg bg-brand-600/50"
             >
               <Navigation className="w-3.5 h-3.5 animate-pulse" />
               <span className="hidden sm:inline">GPS</span>
             </a>
           )}
-          <button onClick={() => setExpanded(e => !e)} className="w-8 h-8 flex items-center justify-center rounded-lg text-indigo-200 hover:text-white hover:bg-indigo-500/50 transition-colors">
+          <button onClick={() => setExpanded(e => !e)} className="w-8 h-8 flex items-center justify-center rounded-lg text-brand-100 hover:text-white hover:bg-brand-600/50 transition-colors">
             {expanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
           </button>
-          <button onClick={() => setDismissed(true)} className="w-8 h-8 flex items-center justify-center rounded-lg text-indigo-200 hover:text-white hover:bg-indigo-500/50 transition-colors">
+          <button onClick={() => setDismissed(true)} className="w-8 h-8 flex items-center justify-center rounded-lg text-brand-100 hover:text-white hover:bg-brand-600/50 transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -91,7 +91,7 @@ const NextStopPassengerAlert: FC<NextStopPassengerAlertProps> = ({
       {expanded && (
         <div className="px-4 py-3 space-y-3">
           {!hasActivity && (
-            <p className="text-sm text-indigo-700 text-center py-2">No passengers assigned to alight or board at this stop.</p>
+            <p className="text-sm text-brand-700 text-center py-2">No passengers assigned to alight or board at this stop.</p>
           )}
 
           {gettingOff.length > 0 && (
@@ -154,7 +154,7 @@ const NextStopPassengerAlert: FC<NextStopPassengerAlertProps> = ({
           )}
 
           {gpsCoords && (
-            <div className="flex items-center gap-1.5 text-xs text-indigo-500 pt-1 border-t border-indigo-100">
+            <div className="flex items-center gap-1.5 text-xs text-brand-700 pt-1 border-t border-brand-100">
               <Navigation className="w-3 h-3" />
               <span>{gpsCoords.lat.toFixed(5)}, {gpsCoords.lng.toFixed(5)}</span>
             </div>

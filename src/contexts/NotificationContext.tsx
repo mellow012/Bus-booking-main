@@ -62,6 +62,7 @@ interface NotificationContextType {
 // ─── Context ──────────────────────────────────────────────────────────────────
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
+const NOTIFICATION_POLL_INTERVAL_MS = 30_000;
 
 export const useNotifications = () => {
   const context = useContext(NotificationContext);
@@ -79,13 +80,19 @@ export const NotificationProvider: React.FC<{ children: ReactNode; userId?: stri
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const pollIntervalRef = useRef<number | null>(null);
+  const pollInFlightRef = useRef(false);
+  const notificationSnapshotRef = useRef('');
 
   const fetchNotifications = useCallback(async (force = false) => {
     if (!userId) return;
     if (!force && document.visibilityState !== 'visible') return;
+    if (pollInFlightRef.current) return;
 
+    pollInFlightRef.current = true;
     try {
-      const response = await fetch('/api/notifications/list?userId=' + userId);
+      const response = await fetch('/api/notifications/list?userId=' + encodeURIComponent(userId), {
+        cache: 'no-store',
+      });
 
       if (response.status === 401 || response.status === 403) {
         return;
@@ -94,13 +101,19 @@ export const NotificationProvider: React.FC<{ children: ReactNode; userId?: stri
       if (!response.ok) throw new Error(`Failed to fetch: ${response.status}`);
 
       const { data } = await response.json();
-      setNotifications(data || []);
+      const nextNotifications = data || [];
+      const nextSnapshot = JSON.stringify(nextNotifications);
+      if (nextSnapshot !== notificationSnapshotRef.current) {
+        notificationSnapshotRef.current = nextSnapshot;
+        setNotifications(nextNotifications);
+      }
       setError(null);
     } catch (err: any) {
       // Log network errors or other unexpected issues
       console.error('[NotificationProvider] Polling error:', err);
       setError(err.message);
     } finally {
+      pollInFlightRef.current = false;
       setIsLoading(false);
     }
   }, [userId]);
@@ -108,6 +121,7 @@ export const NotificationProvider: React.FC<{ children: ReactNode; userId?: stri
   useEffect(() => {
     if (!userId) {
       setNotifications([]);
+      notificationSnapshotRef.current = '';
       setIsLoading(false);
       setError(null);
       return;
@@ -117,6 +131,10 @@ export const NotificationProvider: React.FC<{ children: ReactNode; userId?: stri
 
     // Initial load
     fetchNotifications(true);
+
+    pollIntervalRef.current = window.setInterval(() => {
+      fetchNotifications();
+    }, NOTIFICATION_POLL_INTERVAL_MS);
 
     // Set up Supabase Realtime to keep notification state fresh.
     const supabase = createClient();
@@ -202,6 +220,10 @@ export const NotificationProvider: React.FC<{ children: ReactNode; userId?: stri
     registerPushSubscription();
 
     return () => {
+      if (pollIntervalRef.current !== null) {
+        window.clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
       supabase.removeChannel(channel);
       document.removeEventListener('visibilitychange', handleVisibility);
     };

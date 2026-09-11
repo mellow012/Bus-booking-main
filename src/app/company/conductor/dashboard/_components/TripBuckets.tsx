@@ -13,9 +13,9 @@ const FILTER_CFG: Record<TripBucketFilter, {
   label: string; icon: React.ReactNode;
   activeCls: string; inactiveCls: string; pillCls: string;
 }> = {
-  all: { label: 'All Active', icon: <LayoutGrid className="w-4 h-4" />, activeCls: 'bg-indigo-600 text-white shadow-md border-indigo-600', inactiveCls: 'bg-white text-gray-600 hover:bg-gray-50 border-gray-200', pillCls: 'bg-indigo-500 text-white' },
+  all: { label: 'All Active', icon: <LayoutGrid className="w-4 h-4" />, activeCls: 'bg-brand-700 text-white shadow-md border-brand-700', inactiveCls: 'bg-white text-gray-600 hover:bg-brand-50 border-gray-200', pillCls: 'bg-brand-600 text-white' },
   live: { label: 'Live Now', icon: <Radio className="w-4 h-4" />, activeCls: 'bg-green-600 text-white shadow-md border-green-600', inactiveCls: 'bg-white text-gray-600 hover:bg-green-50 border-gray-200', pillCls: 'bg-green-500 text-white' },
-  today: { label: 'Today', icon: <Flame className="w-4 h-4" />, activeCls: 'bg-blue-600 text-white shadow-md border-blue-600', inactiveCls: 'bg-white text-gray-600 hover:bg-blue-50 border-gray-200', pillCls: 'bg-blue-500 text-white' },
+  today: { label: 'Today', icon: <Flame className="w-4 h-4" />, activeCls: 'bg-brand-700 text-white shadow-md border-brand-700', inactiveCls: 'bg-white text-gray-600 hover:bg-brand-50 border-gray-200', pillCls: 'bg-brand-600 text-white' },
   week: { label: 'This Week', icon: <CalendarClock className="w-4 h-4" />, activeCls: 'bg-slate-700 text-white shadow-md border-slate-700', inactiveCls: 'bg-white text-gray-600 hover:bg-slate-50 border-gray-200', pillCls: 'bg-slate-600 text-white' },
   completed: { label: 'Completed', icon: <CheckCircle className="w-4 h-4" />, activeCls: 'bg-gray-600 text-white shadow-md border-gray-600', inactiveCls: 'bg-white text-gray-500 hover:bg-gray-50 border-gray-200', pillCls: 'bg-gray-500 text-white' },
 };
@@ -58,7 +58,7 @@ const TripBuckets: FC<TripBucketsProps> = ({ trips, buses, routes, onSelect }) =
     return (
       <section>
         <h2 className="text-xl sm:text-2xl font-bold mb-4 flex items-center gap-2">
-          <Calendar className="w-6 h-6 text-blue-600" /> Your Trips
+          <Calendar className="w-6 h-6 text-brand-700" /> Your Trips
         </h2>
         <div className="bg-white rounded-2xl p-8 sm:p-10 text-center border shadow-sm">
           <Calendar className="w-14 h-14 text-gray-300 mx-auto mb-4" />
@@ -73,7 +73,7 @@ const TripBuckets: FC<TripBucketsProps> = ({ trips, buses, routes, onSelect }) =
     <section>
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-xl sm:text-2xl font-bold flex items-center gap-2">
-          <Calendar className="w-6 h-6 text-blue-600" /> Your Trips
+          <Calendar className="w-6 h-6 text-brand-700" /> Your Trips
         </h2>
         <span className="text-sm text-gray-500 font-medium bg-gray-100 px-3 py-1 rounded-full">{counts.all} active</span>
       </div>

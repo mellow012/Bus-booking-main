@@ -55,7 +55,7 @@ const CashCollectionModal: FC<CashCollectionModalProps> = ({
       <div className="space-y-4">
         {/* Passenger Info */}
         <div className="flex items-center gap-3 p-3 sm:p-4 bg-slate-50 rounded-xl border border-slate-200">
-          <div className="w-12 h-12 rounded-xl bg-blue-600 flex items-center justify-center text-white font-bold text-lg shrink-0">
+          <div className="w-12 h-12 rounded-xl bg-brand-700 flex items-center justify-center text-white font-bold text-lg shrink-0">
             {booking.seatNumbers?.[0] || '?'}
           </div>
           <div className="flex-1 min-w-0">
@@ -131,7 +131,7 @@ const CashCollectionModal: FC<CashCollectionModalProps> = ({
         </div>
 
         {/* Info */}
-        <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-sm text-blue-800">
+        <div className="bg-brand-50 border border-brand-200 rounded-xl p-3 text-sm text-brand-800">
           <p className="font-bold mb-0.5">After collecting payment:</p>
           <p>The <strong>Boarded</strong> and <strong>No-Show</strong> buttons will unlock.</p>
         </div>
