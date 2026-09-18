@@ -36,7 +36,10 @@ export async function getAuthUserFromRequest(request: NextRequest): Promise<Auth
         if (meta && meta.userId) {
           try {
             const profile: any = await prisma.user.findUnique({ where: { id: meta.userId }, select: ({ id: true, role: true, companyId: true, firstName: true, lastName: true, email: true, sessionVersion: true } as any) });
-            if (profile && (meta.session_version ?? null) === (profile.sessionVersion ?? null)) {
+            const sessionRole = normalizeRole(meta.role);
+            const profileRole = normalizeRole(profile?.role);
+            const versionMatches = (meta.session_version ?? null) === (profile?.sessionVersion ?? null);
+            if (profile && meta.session_version != null && versionMatches) {
               return {
                 id: profile.id,
                 email: profile.email ?? undefined,
@@ -47,7 +50,8 @@ export async function getAuthUserFromRequest(request: NextRequest): Promise<Auth
                 lastName: profile.lastName ?? undefined,
               };
             }
-            // If session versions mismatch, fall through to Supabase verification
+            // Legacy cookies have no version, so validate them through Supabase below.
+            if (profile && meta.session_version != null && (!versionMatches || sessionRole !== profileRole)) return null;
           } catch (err) {
             await logger.logError('auth', 'Failed to validate session cookie against DB', err);
           }
@@ -84,8 +88,17 @@ export async function getAuthUserFromRequest(request: NextRequest): Promise<Auth
           { uid: authUser.id }
         ]
       },
-      select: { id: true, role: true, companyId: true, firstName: true, lastName: true, email: true }
+      select: { id: true, role: true, companyId: true, firstName: true, lastName: true, email: true, sessionVersion: true }
     });
+
+    const cookie = request?.cookies?.get(COOKIE_NAME)?.value;
+    const meta = cookie ? await parseSessionCookieValue(cookie) : null;
+    if (meta && meta.userId === authUser.id && profile) {
+      const sessionRole = normalizeRole(meta.role);
+      const profileRole = normalizeRole(profile.role);
+      const versionMatches = (meta.session_version ?? null) === (profile.sessionVersion ?? null);
+      if (meta.session_version != null && (!(versionMatches && sessionRole === profileRole))) return null;
+    }
 
     return {
       // Return the Database ID as the primary identifier for consistent lookups

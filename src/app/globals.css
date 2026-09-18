@@ -134,6 +134,140 @@
   --sidebar-ring: oklch(0.556 0 0);
 }
 
+/* Super-admin brand skin: visual tokens only; dashboard behavior stays in TSX. */
+.admin-dashboard {
+  --admin-brand: #005A5B;
+  --admin-brand-hover: #007B7C;
+  --admin-brand-soft: #E6F4F4;
+  --admin-coral: #E8604C;
+  --admin-coral-hover: #D04F3C;
+  --admin-success: #10B981;
+  --admin-warning: #F59E0B;
+  --admin-error: #EF4444;
+  --admin-info: #3B82F6;
+  font-family: var(--font-dm-sans), ui-sans-serif, system-ui, sans-serif;
+}
+
+.admin-dashboard h1,
+.admin-dashboard h2,
+.admin-dashboard h3,
+.admin-dashboard h4,
+.admin-dashboard h5,
+.admin-dashboard h6 {
+  font-family: var(--font-jakarta), ui-sans-serif, system-ui, sans-serif;
+}
+
+.admin-dashboard .bg-indigo-50,
+.admin-dashboard .bg-indigo-100,
+.admin-dashboard .bg-indigo-200,
+.admin-dashboard .bg-indigo-600,
+.admin-dashboard .bg-indigo-700,
+.admin-dashboard .bg-indigo-900,
+.admin-dashboard .bg-violet-50,
+.admin-dashboard .bg-purple-50,
+.admin-dashboard .bg-blue-50,
+.admin-dashboard .bg-sky-50,
+.admin-dashboard .bg-brand-50,
+.admin-dashboard .bg-brand-100,
+.admin-dashboard .bg-brand-700,
+.admin-dashboard .bg-brand-800,
+.admin-dashboard .bg-brand-900 {
+  background-color: var(--admin-brand) !important;
+}
+
+.admin-dashboard .bg-indigo-50,
+.admin-dashboard .bg-indigo-100,
+.admin-dashboard .bg-violet-50,
+.admin-dashboard .bg-purple-50,
+.admin-dashboard .bg-blue-50,
+.admin-dashboard .bg-sky-50,
+.admin-dashboard .bg-brand-50,
+.admin-dashboard .bg-brand-100 {
+  background-color: var(--admin-brand-soft) !important;
+}
+
+.admin-dashboard .hover\:bg-indigo-700:hover,
+.admin-dashboard .hover\:bg-indigo-600:hover,
+.admin-dashboard .hover\:bg-green-700:hover,
+.admin-dashboard .hover\:bg-brand-700:hover {
+  background-color: var(--admin-brand-hover) !important;
+}
+
+.admin-dashboard .text-indigo-600,
+.admin-dashboard .text-indigo-700,
+.admin-dashboard .text-indigo-900,
+.admin-dashboard .text-violet-600,
+.admin-dashboard .text-purple-600,
+.admin-dashboard .text-blue-600,
+.admin-dashboard .text-sky-600,
+.admin-dashboard .text-brand-700,
+.admin-dashboard .text-brand-800,
+.admin-dashboard .text-brand-900 {
+  color: var(--admin-brand) !important;
+}
+
+.admin-dashboard .border-indigo-100,
+.admin-dashboard .border-indigo-200,
+.admin-dashboard .border-violet-100,
+.admin-dashboard .border-purple-100,
+.admin-dashboard .border-blue-100,
+.admin-dashboard .border-sky-100,
+.admin-dashboard .border-brand-100,
+.admin-dashboard .border-brand-200 {
+  border-color: rgba(0, 90, 91, 0.14) !important;
+}
+
+.admin-dashboard .bg-green-600,
+.admin-dashboard .bg-emerald-600,
+.admin-dashboard button.bg-indigo-600,
+.admin-dashboard button.bg-green-600 {
+  background-color: var(--admin-coral) !important;
+  color: #fff !important;
+  font-weight: 700;
+}
+
+.admin-dashboard .hover\:bg-green-700:hover,
+.admin-dashboard button.bg-indigo-600:hover,
+.admin-dashboard button.bg-green-600:hover {
+  background-color: var(--admin-coral-hover) !important;
+}
+
+.admin-dashboard .bg-emerald-50,
+.admin-dashboard .text-emerald-600,
+.admin-dashboard .text-emerald-700 {
+  color: var(--admin-success) !important;
+}
+
+.admin-dashboard .bg-amber-50,
+.admin-dashboard .text-amber-600,
+.admin-dashboard .text-amber-700 {
+  color: var(--admin-warning) !important;
+}
+
+.admin-dashboard .text-red-500,
+.admin-dashboard .text-red-600,
+.admin-dashboard .text-red-700 { color: var(--admin-error) !important; }
+
+.admin-dashboard .shadow-indigo-100,
+.admin-dashboard .shadow-indigo-200,
+.admin-dashboard .shadow-violet-100,
+.admin-dashboard .shadow-purple-100 {
+  box-shadow: 0 12px 30px rgba(0, 90, 91, 0.12) !important;
+}
+
+.admin-dashboard .focus\:ring-indigo-500:focus,
+.admin-dashboard .focus\:ring-brand-500:focus {
+  --tw-ring-color: rgba(0, 90, 91, 0.35) !important;
+}
+
+.admin-dashboard .rounded-sm { border-radius: 4px; }
+.admin-dashboard .rounded-md { border-radius: 6px; }
+.admin-dashboard .rounded-lg { border-radius: 10px; }
+.admin-dashboard .rounded-xl,
+.admin-dashboard .rounded-2xl,
+.admin-dashboard .rounded-3xl { border-radius: 14px; }
+.admin-dashboard .rounded-full { border-radius: 10px; }
+
 .scrollbar-hide {
   -ms-overflow-style: none;
   scrollbar-width: none;
@@ -261,4 +395,4 @@
 .delay-400 { animation-delay: 0.4s; }
 
 .scrollbar-none { -ms-overflow-style: none; scrollbar-width: none; }
-.scrollbar-none::-webkit-scrollbar { display: none; }
+.scrollbar-none::-webkit-scrollbar { display: none; }

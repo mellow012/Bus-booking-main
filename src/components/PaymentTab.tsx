@@ -24,7 +24,6 @@ const supabase = createClient();
 
 interface PaymentsTabProps {
   company: Company;
-  paymentSettings: any;
   bookings: Booking[];
   buses?: Bus[];
   setError: (msg: string) => void;
@@ -118,7 +117,6 @@ function KineticStatCard({ title, value, icon: Icon, iconBg, iconColor, subtitle
 
 const PaymentsTab: React.FC<PaymentsTabProps> = ({
   company,
-  paymentSettings,
   bookings,
   buses = [],
   setError,

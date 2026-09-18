@@ -61,10 +61,16 @@ export async function POST(request: NextRequest) {
 
     const ids = toArchive.map((s) => s.id);
 
-    const { count } = await prisma.chatterSchedule.updateMany({
-      where: { id: { in: ids } },
-      data: { isArchived: true, archivedAt: new Date() },
-    });
+    const [ { count } ] = await prisma.$transaction([
+      prisma.chatterSchedule.updateMany({
+        where: { id: { in: ids } },
+        data: { isArchived: true, archivedAt: new Date() },
+      }),
+      prisma.payment.updateMany({
+        where: { booking: { chatterScheduleId: { in: ids } } },
+        data: { isArchived: true },
+      })
+    ]);
 
     return NextResponse.json({
       success: true,

@@ -59,7 +59,6 @@ export async function GET(
             isPartner: true,
             bookingEnabled: true,
             returnTripDiscountPercent: true,
-            paymentSettings: true,
           },
         },
       },

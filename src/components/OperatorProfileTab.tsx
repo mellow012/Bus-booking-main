@@ -26,16 +26,16 @@ interface EditData {
 }
 
 const ROLE_META: Record<string, { label: string; color: string; bg: string; gradient: string }> = {
-  superadmin:           { label: 'Super Admin',           color: 'text-purple-700', bg: 'bg-purple-100',  gradient: 'from-purple-600 to-indigo-600' },
-  chief_of_growth:      { label: 'Chief of Growth',       color: 'text-emerald-700', bg: 'bg-emerald-100', gradient: 'from-emerald-500 to-teal-600' },
-  chief_of_operations:  { label: 'Chief of Operations',   color: 'text-blue-700',   bg: 'bg-blue-100',    gradient: 'from-blue-600 to-cyan-600' },
+  superadmin:           { label: 'Super Admin',           color: 'text-brand-700', bg: 'bg-brand-100',  gradient: 'from-brand-700 to-brand-800' },
+  chief_of_growth:      { label: 'Chief of Growth',       color: 'text-brand-700', bg: 'bg-brand-100',  gradient: 'from-brand-600 to-brand-800' },
+  chief_of_operations:  { label: 'Chief of Operations',   color: 'text-brand-700', bg: 'bg-brand-100',  gradient: 'from-brand-700 to-brand-900' },
   company_admin:        { label: 'Company Admin',          color: 'text-brand-700', bg: 'bg-brand-100',  gradient: 'from-brand-700 to-brand-800' },
   operator:             { label: 'Operator',               color: 'text-brand-700', bg: 'bg-brand-100',  gradient: 'from-brand-600 to-brand-800' },
   conductor:            { label: 'Conductor',              color: 'text-brand-700', bg: 'bg-brand-100',  gradient: 'from-brand-500 to-brand-700' },
-  finance:              { label: 'Finance Manager',        color: 'text-green-700',  bg: 'bg-green-100',   gradient: 'from-green-600 to-emerald-600' },
+  finance:              { label: 'Finance Manager',        color: 'text-brand-700', bg: 'bg-brand-100',  gradient: 'from-brand-600 to-brand-800' },
 };
 
-const DEFAULT_META = { label: 'Staff', color: 'text-gray-700', bg: 'bg-gray-100', gradient: 'from-gray-600 to-slate-600' };
+const DEFAULT_META = { label: 'Staff', color: 'text-brand-700', bg: 'bg-brand-100', gradient: 'from-brand-700 to-brand-800' };
 
 const getPermissionsByRole = (role: string) => {
   switch (role) {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import * as dbActions from '@/lib/actions/db.actions';
@@ -31,10 +31,15 @@ export default function useAdminDashboard() {
     setLoadingStates(prev => ({ ...prev, [key]: value }));
   }, []);
 
+  const roleRef = useRef<string | undefined>(userProfile?.role);
+
   useEffect(() => {
     if (!user) return;
     if (!userProfile) return;
     if (userProfile.role !== 'superadmin') { router.push('/'); return; }
+
+    if (roleRef.current === userProfile.role && refreshCount === 0) return;
+    roleRef.current = userProfile.role;
 
     setLoadingState('initializing', true);
 
@@ -78,7 +83,7 @@ export default function useAdminDashboard() {
 
     fetchDashboardData();
     fetchPromotions();
-  }, [user, userProfile, refreshCount, router, setLoadingState]);
+  }, [user, userProfile?.role, refreshCount, router, setLoadingState]);
 
   return {
     companies, setCompanies,

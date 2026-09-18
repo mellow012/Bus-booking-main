@@ -8,6 +8,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Company, Schedule, Route, Bus, Booking, Operator } from '@/types';
 import { parseUtcDate } from '@/lib/timezone';
 import { bookingMatchesSchedule } from '@/lib/booking-utils';
+import { autoArchiveCompanySchedules } from '@/lib/actions/schedule.actions';
 
 export function useOperatorDashboard() {
   const { user, userProfile, loading: authLoading, signOut } = useAuth();
@@ -131,13 +132,12 @@ export function useOperatorDashboard() {
       }
 
       // 2. Auto-archive completed/finished trips after 3 hours on the company side.
-      const archiveCutoff = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString();
-      await supabase.from('Schedule')
-        .update({ isArchived: true })
-        .eq('companyId', companyId)
-        .eq('isArchived', false)
-        .not('tripCompletedAt', 'is', null)
-        .lt('tripCompletedAt', archiveCutoff);
+      const archiveCutoff = new Date(Date.now() - 3 * 60 * 60 * 1000);
+      try {
+        await autoArchiveCompanySchedules(companyId, archiveCutoff);
+      } catch (e) {
+        console.error('Failed to auto-archive schedules via server action:', e);
+      }
 
       // 3. Fetch schedules scoped to these routes
       let schedulesList: Schedule[] = [];
@@ -234,7 +234,7 @@ export function useOperatorDashboard() {
 
   useEffect(() => {
     if (authLoading) return;
-    if (!user || (userProfile?.role !== 'operator' && userProfile?.role !== 'company_admin')) {
+    if (!user || (!['operator', 'company_admin', 'superadmin'].includes(userProfile?.role || ''))) {
       router.push('/login');
       return;
     }

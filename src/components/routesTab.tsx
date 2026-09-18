@@ -63,7 +63,7 @@ const BusPicker: FC<BusPickerProps> = ({ buses, selectedIds, onChange }) => {
       <div className="flex items-center justify-between mb-3">
         <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest">Assigned Fleet</label>
         {selectedIds.length > 0 && (
-          <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest">
+          <span className="text-[10px] font-bold text-brand-700 uppercase tracking-widest">
             {selectedIds.length} bus{selectedIds.length > 1 ? "es" : ""} · {totalCapacity} seats
           </span>
         )}
@@ -75,10 +75,10 @@ const BusPicker: FC<BusPickerProps> = ({ buses, selectedIds, onChange }) => {
             <label
               key={bus.id}
               className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border cursor-pointer transition-all ${
-                checked ? "bg-indigo-50 border-indigo-200" : "bg-gray-50 border-gray-100"
+                checked ? "bg-brand-50 border-brand-200" : "bg-gray-50 border-gray-100"
               }`}
             >
-              <input type="checkbox" checked={checked} onChange={() => toggle(bus.id)} className="accent-indigo-600" />
+              <input type="checkbox" checked={checked} onChange={() => toggle(bus.id)} className="accent-brand-700" />
               <span className="flex-1 text-[11px] font-bold text-gray-700 truncate">{bus.licensePlate}</span>
               <span className="text-[9px] font-bold text-gray-400 uppercase whitespace-nowrap">
                 {bus.busType} · {bus.capacity} seats{bus.status !== "active" ? ` · ${bus.status}` : ""}
@@ -224,7 +224,7 @@ const RoutesTab: FC<RoutesTabProps> = ({ routes, setRoutes, companyId, setError,
       {/* Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
         {[
-          { label: "Active Corridors", value: stats.active, icon: Navigation, bg: "bg-indigo-50", color: "text-indigo-600" },
+          { label: "Active Corridors", value: stats.active, icon: Navigation, bg: "bg-brand-50", color: "text-brand-700" },
           { label: "Total Network", value: stats.total, icon: Map, bg: "bg-emerald-50", color: "text-emerald-600" },
           { label: "Transit Points", value: stats.totalStops, icon: MapPin, bg: "bg-amber-50", color: "text-amber-600" },
           { label: "Avg Yield", value: `MWK ${stats.avgPrice.toLocaleString()}`, icon: CreditCard, bg: "bg-rose-50", color: "text-rose-600" },
@@ -249,12 +249,12 @@ const RoutesTab: FC<RoutesTabProps> = ({ routes, setRoutes, companyId, setError,
               placeholder="Search origin, destination, or corridors..."
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              className="w-full pl-11 pr-4 py-3 sm:py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-indigo-600 outline-none text-[13px] font-bold text-gray-700"
+              className="w-full pl-11 pr-4 py-3 sm:py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-brand-700 outline-none text-[13px] font-bold text-gray-700"
             />
           </div>
           <button
             onClick={() => setShowAddModal(true)}
-            className="w-full lg:w-auto bg-indigo-600 text-white px-8 py-4 rounded-2xl text-[11px] font-bold uppercase tracking-widest shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95 flex items-center justify-center gap-2"
+            className="w-full lg:w-auto bg-brand-700 text-white px-8 py-4 rounded-2xl text-[11px] font-bold uppercase tracking-widest shadow-xl shadow-brand-100 hover:bg-brand-800 transition-all active:scale-95 flex items-center justify-center gap-2"
           >
             <Plus className="w-4 h-4" /> Add Corridor
           </button>
@@ -287,12 +287,12 @@ const RoutesTab: FC<RoutesTabProps> = ({ routes, setRoutes, companyId, setError,
               <div className="p-6 sm:p-8 flex-1 flex flex-col">
                 <div className="mb-8">
                   <div className="flex items-center gap-3 mb-1">
-                    <div className="w-1.5 h-1.5 rounded-full bg-indigo-600" />
-                    <p className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest">
+                    <div className="w-1.5 h-1.5 rounded-full bg-brand-700" />
+                    <p className="text-[10px] font-bold text-brand-700 uppercase tracking-widest">
                       {regions.find(r => r.id === route.regionId)?.name || "Unassigned Branch"}
                     </p>
                   </div>
-                  <h3 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight uppercase leading-tight group-hover:text-indigo-600 transition-colors">
+                  <h3 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight uppercase leading-tight group-hover:text-brand-700 transition-colors">
                     {route.origin} <span className="text-gray-300 mx-1">→</span> {route.destination}
                   </h3>
                   {route.name && <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">{route.name}</p>}
@@ -344,7 +344,7 @@ const RoutesTab: FC<RoutesTabProps> = ({ routes, setRoutes, companyId, setError,
                       setEditRoute(route);
                       setShowEditModal(true);
                     }}
-                    className="flex-1 flex items-center justify-center gap-2 px-4 py-3.5 bg-gray-50 text-gray-700 hover:bg-indigo-600 hover:text-white rounded-2xl transition-all text-[10px] font-bold uppercase tracking-widest border border-gray-100"
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-3.5 bg-gray-50 text-gray-700 hover:bg-brand-700 hover:text-white rounded-2xl transition-all text-[10px] font-bold uppercase tracking-widest border border-gray-100"
                   >
                     <Edit3 className="w-4 h-4" /> Manage
                   </button>
@@ -370,7 +370,7 @@ const RoutesTab: FC<RoutesTabProps> = ({ routes, setRoutes, companyId, setError,
               type="text"
               value={newRoute.name}
               onChange={e => setNewRoute({ ...newRoute, name: e.target.value.slice(0, 50) })}
-              className="w-full px-4 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-indigo-600 outline-none text-sm font-bold"
+              className="w-full px-4 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-brand-700 outline-none text-sm font-bold"
               placeholder="e.g., Lilongwe Express"
               required
             />
@@ -386,7 +386,7 @@ const RoutesTab: FC<RoutesTabProps> = ({ routes, setRoutes, companyId, setError,
                     const region = regions.find(r => r.id === e.target.value);
                     setNewRoute({ ...newRoute, regionId: region?.id, origin: region?.name || "" });
                   }}
-                  className="w-full px-4 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-indigo-600 outline-none text-sm font-bold appearance-none"
+                  className="w-full px-4 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-brand-700 outline-none text-sm font-bold appearance-none"
                   required
                 >
                   <option value="" disabled>
@@ -404,7 +404,7 @@ const RoutesTab: FC<RoutesTabProps> = ({ routes, setRoutes, companyId, setError,
                     type="text"
                     value={newRoute.origin}
                     onChange={e => setNewRoute({ ...newRoute, origin: e.target.value })}
-                    className="w-full px-4 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-indigo-600 outline-none text-sm font-bold"
+                    className="w-full px-4 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-brand-700 outline-none text-sm font-bold"
                     placeholder="e.g., Lilongwe"
                     required
                   />
@@ -418,7 +418,7 @@ const RoutesTab: FC<RoutesTabProps> = ({ routes, setRoutes, companyId, setError,
                 type="text"
                 value={newRoute.destination}
                 onChange={e => setNewRoute({ ...newRoute, destination: e.target.value })}
-                className="w-full px-4 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-indigo-600 outline-none text-sm font-bold"
+                className="w-full px-4 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-brand-700 outline-none text-sm font-bold"
                 placeholder="e.g., Blantyre"
                 required
               />
@@ -434,7 +434,7 @@ const RoutesTab: FC<RoutesTabProps> = ({ routes, setRoutes, companyId, setError,
                 step="0.1"
                 value={newRoute.distance}
                 onChange={e => setNewRoute({ ...newRoute, distance: parseFloat(e.target.value) || 0 })}
-                className="w-full px-4 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-indigo-600 outline-none text-sm font-bold"
+                className="w-full px-4 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-brand-700 outline-none text-sm font-bold"
                 placeholder="e.g., 320"
                 required
               />
@@ -446,7 +446,7 @@ const RoutesTab: FC<RoutesTabProps> = ({ routes, setRoutes, companyId, setError,
                 min="0"
                 value={newRoute.duration}
                 onChange={e => setNewRoute({ ...newRoute, duration: parseInt(e.target.value) || 0 })}
-                className="w-full px-4 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-indigo-600 outline-none text-sm font-bold"
+                className="w-full px-4 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-brand-700 outline-none text-sm font-bold"
                 placeholder="e.g., 270"
                 required
               />
@@ -461,7 +461,7 @@ const RoutesTab: FC<RoutesTabProps> = ({ routes, setRoutes, companyId, setError,
                 min="0"
                 value={newRoute.baseFare}
                 onChange={e => setNewRoute({ ...newRoute, baseFare: parseInt(e.target.value) || 0 })}
-                className="w-full px-4 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-indigo-600 outline-none text-sm font-bold"
+                className="w-full px-4 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-brand-700 outline-none text-sm font-bold"
                 required
               />
             </div>
@@ -473,7 +473,7 @@ const RoutesTab: FC<RoutesTabProps> = ({ routes, setRoutes, companyId, setError,
                 step="0.01"
                 value={newRoute.pricePerKm ?? ""}
                 onChange={e => setNewRoute({ ...newRoute, pricePerKm: e.target.value ? parseFloat(e.target.value) : undefined })}
-                className="w-full px-4 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-indigo-600 outline-none text-sm font-bold"
+                className="w-full px-4 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-brand-700 outline-none text-sm font-bold"
                 placeholder="Used to price intermediate stops"
               />
             </div>
@@ -494,7 +494,7 @@ const RoutesTab: FC<RoutesTabProps> = ({ routes, setRoutes, companyId, setError,
             <button
               type="submit"
               disabled={actionLoading}
-              className="bg-indigo-600 text-white px-8 py-4 rounded-2xl text-[11px] font-bold uppercase tracking-widest shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95 flex items-center justify-center gap-2"
+              className="bg-brand-700 text-white px-8 py-4 rounded-2xl text-[11px] font-bold uppercase tracking-widest shadow-xl shadow-brand-100 hover:bg-brand-800 transition-all active:scale-95 flex items-center justify-center gap-2"
             >
               {actionLoading ? "Initializing..." : "Confirm Corridor"}
             </button>
@@ -511,7 +511,7 @@ const RoutesTab: FC<RoutesTabProps> = ({ routes, setRoutes, companyId, setError,
               type="text"
               value={editRoute?.name || ""}
               onChange={e => setEditRoute(prev => (prev ? { ...prev, name: e.target.value } : null))}
-              className="w-full px-4 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-indigo-600 outline-none text-sm font-bold"
+              className="w-full px-4 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-brand-700 outline-none text-sm font-bold"
               required
             />
           </div>
@@ -526,7 +526,7 @@ const RoutesTab: FC<RoutesTabProps> = ({ routes, setRoutes, companyId, setError,
                     const region = regions.find(r => r.id === e.target.value);
                     setEditRoute(prev => (prev ? { ...prev, regionId: region?.id, origin: region?.name || prev.origin } : null));
                   }}
-                  className="w-full px-4 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-indigo-600 outline-none text-sm font-bold appearance-none"
+                  className="w-full px-4 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-brand-700 outline-none text-sm font-bold appearance-none"
                   required
                 >
                   <option value="" disabled>
@@ -546,7 +546,7 @@ const RoutesTab: FC<RoutesTabProps> = ({ routes, setRoutes, companyId, setError,
                   type="text"
                   value={editRoute?.origin || ""}
                   onChange={e => setEditRoute(prev => (prev ? { ...prev, origin: e.target.value } : null))}
-                  className="w-full px-4 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-indigo-600 outline-none text-sm font-bold"
+                  className="w-full px-4 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-brand-700 outline-none text-sm font-bold"
                   required
                 />
               )}
@@ -557,7 +557,7 @@ const RoutesTab: FC<RoutesTabProps> = ({ routes, setRoutes, companyId, setError,
                 type="text"
                 value={editRoute?.destination || ""}
                 onChange={e => setEditRoute(prev => (prev ? { ...prev, destination: e.target.value } : null))}
-                className="w-full px-4 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-indigo-600 outline-none text-sm font-bold"
+                className="w-full px-4 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-brand-700 outline-none text-sm font-bold"
                 required
               />
             </div>
@@ -572,7 +572,7 @@ const RoutesTab: FC<RoutesTabProps> = ({ routes, setRoutes, companyId, setError,
                 step="0.1"
                 value={editRoute?.distance || 0}
                 onChange={e => setEditRoute(prev => (prev ? { ...prev, distance: parseFloat(e.target.value) || 0 } : null))}
-                className="w-full px-4 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-indigo-600 outline-none text-sm font-bold"
+                className="w-full px-4 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-brand-700 outline-none text-sm font-bold"
                 required
               />
             </div>
@@ -583,7 +583,7 @@ const RoutesTab: FC<RoutesTabProps> = ({ routes, setRoutes, companyId, setError,
                 min="0"
                 value={editRoute?.duration || 0}
                 onChange={e => setEditRoute(prev => (prev ? { ...prev, duration: parseInt(e.target.value) || 0 } : null))}
-                className="w-full px-4 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-indigo-600 outline-none text-sm font-bold"
+                className="w-full px-4 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-brand-700 outline-none text-sm font-bold"
                 required
               />
             </div>
@@ -592,7 +592,7 @@ const RoutesTab: FC<RoutesTabProps> = ({ routes, setRoutes, companyId, setError,
               <select
                 value={editRoute?.status || "active"}
                 onChange={e => setEditRoute(prev => (prev ? { ...prev, status: e.target.value as "active" | "inactive" } : null))}
-                className="w-full px-4 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-indigo-600 outline-none text-sm font-bold appearance-none"
+                className="w-full px-4 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-brand-700 outline-none text-sm font-bold appearance-none"
                 required
               >
                 <option value="active">Active</option>
@@ -609,7 +609,7 @@ const RoutesTab: FC<RoutesTabProps> = ({ routes, setRoutes, companyId, setError,
                 min="0"
                 value={editRoute?.baseFare || 0}
                 onChange={e => setEditRoute(prev => (prev ? { ...prev, baseFare: parseInt(e.target.value) || 0 } : null))}
-                className="w-full px-4 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-indigo-600 outline-none text-sm font-bold"
+                className="w-full px-4 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-brand-700 outline-none text-sm font-bold"
                 required
               />
             </div>
@@ -621,7 +621,7 @@ const RoutesTab: FC<RoutesTabProps> = ({ routes, setRoutes, companyId, setError,
                 step="0.01"
                 value={editRoute?.pricePerKm ?? ""}
                 onChange={e => setEditRoute(prev => (prev ? { ...prev, pricePerKm: e.target.value ? parseFloat(e.target.value) : undefined } : null))}
-                className="w-full px-4 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-indigo-600 outline-none text-sm font-bold"
+                className="w-full px-4 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-brand-700 outline-none text-sm font-bold"
                 placeholder="Used to price intermediate stops"
               />
             </div>
@@ -646,7 +646,7 @@ const RoutesTab: FC<RoutesTabProps> = ({ routes, setRoutes, companyId, setError,
             <button
               type="submit"
               disabled={actionLoading}
-              className="bg-indigo-600 text-white px-8 py-4 rounded-2xl text-[11px] font-bold uppercase tracking-widest shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95"
+              className="bg-brand-700 text-white px-8 py-4 rounded-2xl text-[11px] font-bold uppercase tracking-widest shadow-xl shadow-brand-100 hover:bg-brand-800 transition-all active:scale-95"
             >
               {actionLoading ? "Syncing..." : "Update Network"}
             </button>

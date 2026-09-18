@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import * as dbActions from '@/lib/actions/db.actions';
@@ -19,6 +19,9 @@ import {
   X,
   Search,
   SortAsc,
+  ChevronDown,
+  Shield,
+  LogOut,
   SortDesc,
   Eye,
   BarChart3,
@@ -30,6 +33,7 @@ import {
   Download,
   Phone,
   Mail,
+  MessageSquare,
   CreditCard,
   Smartphone,
   Wifi,
@@ -50,10 +54,10 @@ import {
 } from 'lucide-react';
 import Image from 'next/image';
 import AlertMessage from '@/components/AlertMessage';
-import SettingsTab from '@/components/SettingsTab';
 import AdminPayments from '@/components/AdminPayments';
 import { Company, UserProfile, Booking, Schedule, Route, Bus, OperatorProfile, ConductorProfile, Promotion, AuditLog, AuditAction } from '@/types/index';
 import TabButton from '@/components/tabButton';
+import CreateCompanyModal from '@/components/modals/CreateCompanyModal';
 import DashboardBottomNav from "@/components/DashboardBottomNav";
 import AdminSidebar from '@/components/AdminSidebar';
 import { NotificationBell } from '@/contexts/NotificationContext';
@@ -62,25 +66,34 @@ import { NotificationBell } from '@/contexts/NotificationContext';
 // ─── Small UI components & constants restored for composability ───────────
 const KineticStatCard: React.FC<{
   title: string; value: string | number; icon: any; iconBg: string; iconColor: string; badge?: { text: string; className: string }; subtitle?: string;
-}> = ({ title, value, icon: Icon, iconBg, iconColor, badge, subtitle }) => (
-  <div className="bg-white rounded-xl shadow-[0_2px_10px_-4px_rgba(0,0,0,0.1)] p-5 relative overflow-hidden flex flex-col justify-between min-h-[140px] border border-gray-100 transition-all hover:shadow-md group">
-    <div className="flex justify-between items-start mb-2">
-      <div className={`p-2 rounded-lg ${iconBg} group-hover:scale-110 transition-transform`}>
-        <Icon className={`w-5 h-5 ${iconColor}`} />
+  onClick?: () => void; tooltipTitle?: string;
+}> = ({ title, value, icon: Icon, iconBg, iconColor, badge, subtitle, onClick, tooltipTitle }) => {
+  const Wrapper = onClick ? 'button' : 'div';
+  return (
+    <Wrapper
+      {...(onClick ? { onClick, type: 'button' as const, title: tooltipTitle } : {})}
+      className={`bg-white rounded-xl shadow-[0_2px_10px_-4px_rgba(0,0,0,0.1)] p-5 relative overflow-hidden flex flex-col justify-between min-h-[140px] border border-gray-100 transition-all hover:shadow-md group text-left w-full${
+        onClick ? ' cursor-pointer hover:border-indigo-200 hover:ring-2 hover:ring-indigo-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400' : ''
+      }`}
+    >
+      <div className="flex justify-between items-start mb-2">
+        <div className={`p-2 rounded-lg ${iconBg} group-hover:scale-110 transition-transform`}>
+          <Icon className={`w-5 h-5 ${iconColor}`} />
+        </div>
+        {badge && (
+          <span className={`text-[10px] font-bold px-2 py-0.5 rounded shadow-sm ${badge.className}`}>
+            {badge.text}
+          </span>
+        )}
       </div>
-      {badge && (
-        <span className={`text-[10px] font-bold px-2 py-0.5 rounded shadow-sm ${badge.className}`}>
-          {badge.text}
-        </span>
-      )}
-    </div>
-    <div className="mt-auto">
-      <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1">{title}</p>
-      <p className="text-2xl font-extrabold text-gray-900 leading-none">{value}</p>
-      {subtitle && <p className="text-xs text-gray-400 mt-1.5 font-medium">{subtitle}</p>}
-    </div>
-  </div>
-);
+      <div className="mt-auto">
+        <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1">{title}</p>
+        <p className="text-2xl font-extrabold text-gray-900 leading-none">{value}</p>
+        {subtitle && <p className="text-xs text-gray-400 mt-1.5 font-medium">{subtitle}</p>}
+      </div>
+    </Wrapper>
+  );
+};
 
 const StatusBadge: React.FC<{ status: string; type?: 'booking' | 'company' }> = ({ status, type = 'company' }) => {
   const lower = status?.toLowerCase() || 'unknown';
@@ -88,6 +101,7 @@ const StatusBadge: React.FC<{ status: string; type?: 'booking' | 'company' }> = 
   let Icon: React.FC<{ className?: string }> = AlertCircle;
 
   if (type === 'company') {
+    if (lower === 'unclaimed') { color = 'bg-slate-100 text-slate-700 border-slate-200'; Icon = AlertCircle; }
     if (lower === 'active') { color = 'bg-green-100 text-green-800 border-green-200'; Icon = CheckCircle; }
     if (lower === 'pending') { color = 'bg-yellow-100 text-yellow-800 border-yellow-200'; Icon = Clock; }
     if (lower === 'inactive') { color = 'bg-red-100 text-red-800 border-red-200'; Icon = Ban; }
@@ -111,13 +125,24 @@ const StatusBadge: React.FC<{ status: string; type?: 'booking' | 'company' }> = 
 type StatusFilter = 'all' | 'active' | 'inactive' | 'pending';
 type SortBy = 'name' | 'createdAt' | 'status' | 'email';
 type SortOrder = 'asc' | 'desc';
-type TabType = 'overview' | 'companies' | 'users' | 'payments' | 'audit' | 'health' | 'profile' | 'bookings' | 'routes' | 'schedules' | 'promotions' | 'coo';
+type TabType = 'overview' | 'companies' | 'users' | 'payments' | 'audit' | 'health' | 'profile' | 'bookings' | 'routes' | 'schedules' | 'promotions';
 
 interface AlertState { type: 'error' | 'success' | 'warning' | 'info'; message: string; id: string; }
 interface FormErrors { name?: string; email?: string; contact?: string; adminPhone?: string; adminFirstName?: string; adminLastName?: string; }
 interface LoadingStates { companies: boolean; bookings: boolean; promotions: boolean; creating: boolean; updating: boolean; deleting: boolean; initializing: boolean; }
 
-interface DashboardStats { totalCompanies: number; activeCompanies: number; pendingCompanies: number; inactiveCompanies: number; totalRevenue: number; monthlyRevenue: number; totalBookings: number; monthlyBookings: number; monthlyGrowth: number; revenueGrowth: number; }
+interface DashboardStats {
+  totalCompanies: number;
+  activeCompanies: number;
+  pendingCompanies: number;
+  inactiveCompanies: number;
+  companyStatusCounts?: { active: number; pending: number; inactive: number; claimed: number; total: number };
+  totalRevenue: number;
+  monthlyRevenue: number;
+  totalBookings: number;
+  monthlyBookings: number;
+  bookingPaymentCounts: { paid: number; pending: number; failed: number; paidRevenue: number };
+}
 
 interface HealthStatus { status: 'ok' | 'degraded' | 'unhealthy'; checks: Record<string, 'ok' | 'degraded' | 'error'>; timestamp: string; }
 
@@ -126,14 +151,32 @@ interface CreateCompanyRequest { name: string; email: string; contact: string; s
 const COMPANIES_PER_PAGE = 10;
 const BOOKINGS_PER_PAGE = 10;
 const USERS_PER_PAGE = 12;
-const MONTHLY_BOOKING_MULTIPLIER = 0.3;
-const DEFAULT_GROWTH_RATES = { monthly: 12.5, revenue: 18.2 } as const;
+
+const isLiveRoute = (route: Route) => route.status === 'active' && route.isActive;
+const isLiveSchedule = (schedule: Schedule) =>
+  schedule.status === 'active' && schedule.isActive && !schedule.isArchived && !schedule.isCompleted && !schedule.completed;
 
 const STATUS_CONFIG = {
   active: { color: 'bg-green-100 text-green-800 border-green-200', icon: CheckCircle },
   pending: { color: 'bg-yellow-100 text-yellow-800 border-yellow-200', icon: Clock },
   inactive: { color: 'bg-red-100 text-red-800 border-red-200', icon: Ban },
 } as const;
+
+const STATUS_STYLES = {
+  active: { bg: 'bg-green-100', text: 'text-green-800', icon: <CheckCircle className="w-3 h-3" /> },
+  pending: { bg: 'bg-yellow-100', text: 'text-yellow-800', icon: <Clock className="w-3 h-3" /> },
+  inactive: { bg: 'bg-red-100', text: 'text-red-800', icon: <Ban className="w-3 h-3" /> },
+} as const;
+
+const convertTimestamp = (value: Date | string | number | { toDate?: () => Date }): Date | null => {
+  if (value instanceof Date) return value;
+  if (typeof value === 'object' && value !== null && typeof value.toDate === 'function') return value.toDate();
+  const date = new Date(value as string | number);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const validateEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+const validatePhone = (value: string) => /^\+?[\d\s()-]{7,20}$/.test(value);
 
 
 const formatDate = (date: Date | string | number | undefined | null): string => {
@@ -144,6 +187,8 @@ const formatDate = (date: Date | string | number | undefined | null): string => 
     year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
   }).format(d);
 };
+
+const fmt = (date: Date | string | number | undefined | null) => formatDate(date);
 
 const debounce = <T extends (...args: unknown[]) => void>(func: T, wait: number) => {
   let timeout: NodeJS.Timeout;
@@ -224,10 +269,27 @@ const BookingsTab: React.FC<{
   };
 
   if (loading) return (
-    <div className="flex items-center justify-center py-12">
-      <div className="text-center">
-        <Loader2 className="w-12 h-12 text-blue-600 animate-spin mx-auto mb-4" />
-        <p className="text-gray-600">Loading bookings...</p>
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row gap-4">
+        <div className="h-11 flex-1 bg-gray-100 rounded-xl animate-pulse" />
+        <div className="h-11 w-32 bg-gray-100 rounded-xl animate-pulse" />
+      </div>
+
+      <div className="space-y-3">
+        {[1, 2, 3, 4, 5].map((row) => (
+          <div key={row} className="bg-white border border-gray-200 rounded-2xl p-4 shadow-sm animate-pulse">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="space-y-2 flex-1">
+                <div className="h-4 w-28 bg-gray-200 rounded" />
+                <div className="h-3 w-48 bg-gray-100 rounded" />
+              </div>
+              <div className="flex gap-2">
+                <div className="h-8 w-16 bg-gray-100 rounded-lg" />
+                <div className="h-8 w-20 bg-gray-100 rounded-lg" />
+              </div>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -355,7 +417,7 @@ const COOTab: React.FC<{ setActiveTab: (t: TabType) => void }> = ({ setActiveTab
           <p className="text-[10px] text-gray-400 mt-1">Overview and cross-company operational controls.</p>
         </div>
         <div className="flex gap-2">
-          <button onClick={() => setActiveTab('bookings')} className="rounded-2xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white">Manage Bookings</button>
+          <button onClick={() => setActiveTab('bookings')} className="rounded-2xl bg-brand-700 px-4 py-2 text-xs font-semibold text-white">Manage Bookings</button>
           <button onClick={() => setActiveTab('schedules')} className="rounded-2xl border border-gray-200 px-4 py-2 text-xs font-semibold text-gray-700">Manage Schedules</button>
         </div>
       </div>
@@ -511,7 +573,7 @@ const PromotionsTab: React.FC<{
           <h3 className="text-lg font-bold text-gray-900">Platform Promotions</h3>
           <p className="text-xs text-gray-500 uppercase tracking-widest font-bold">Manage system-wide discount codes</p>
         </div>
-        <button onClick={handleAdd} className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-indigo-700 transition-colors shadow-lg">
+        <button onClick={handleAdd} className="flex items-center gap-2 bg-brand-700 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-brand-800 transition-colors shadow-lg">
           <Plus className="w-4 h-4" /> Create Promotion
         </button>
       </div>
@@ -662,7 +724,7 @@ const PromotionsTab: React.FC<{
               <button onClick={() => setIsModalOpen(false)} className="px-6 py-2.5 text-xs font-black uppercase tracking-widest text-gray-500 hover:text-gray-700 transition-colors">
                 Cancel
               </button>
-              <button onClick={handleSave} disabled={isSaving} className="bg-indigo-600 text-white px-8 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all disabled:opacity-50 flex items-center gap-2">
+              <button onClick={handleSave} disabled={isSaving} className="bg-brand-700 text-white px-8 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest shadow-lg shadow-brand-100 hover:bg-brand-800 transition-all disabled:opacity-50 flex items-center gap-2">
                 {isSaving && <Loader2 className="w-4 h-4 animate-spin" />}
                 {editingPromotion?.id ? 'Update Promotion' : 'Create Promotion'}
               </button>
@@ -674,184 +736,6 @@ const PromotionsTab: React.FC<{
   );
 };
 
-const PaymentSettingsModal: React.FC<{
-  company: Company;
-  onClose: () => void;
-  onSaved: (updated: Company) => void;
-  showAlert: (type: 'success' | 'error' | 'info' | 'warning', msg: string) => void;
-}> = ({ company, onClose, onSaved, showAlert }) => {
-  const ps = company.paymentSettings ?? {};
-
-  const [paychanguEnabled, setPaychanguEnabled] = useState<boolean>(ps.paychanguEnabled ?? false);
-  const [paychanguReceiveNumber, setPaychanguReceiveNumber] = useState<string>(ps.paychanguReceiveNumber ?? '');
-  const [paychanguPublicKey, setPaychanguPublicKey] = useState<string>(ps.paychanguPublicKey ?? '');
-
-  const [saving, setSaving] = useState(false);
-  const [errors, setErrors] = useState<Record<string, string>>({});
-
-  const validate = (): boolean => {
-    const e: Record<string, string> = {};
-    if (paychanguEnabled) {
-      if (!paychanguReceiveNumber.trim())
-        e.receiveNumber = 'Receive number is required when PayChangu is enabled';
-      else if (!/^\+?[\d\s\-]{7,15}$/.test(paychanguReceiveNumber))
-        e.receiveNumber = 'Enter a valid phone number';
-      if (paychanguPublicKey.trim() && !paychanguPublicKey.startsWith('pub-'))
-        e.publicKey = 'Public key should start with pub-';
-    }
-
-    setErrors(e);
-    return Object.keys(e).length === 0;
-  };
-
-  const handleSave = async () => {
-    if (!validate()) return;
-    setSaving(true);
-    try {
-      const updated: Company['paymentSettings'] = Object.fromEntries(
-        Object.entries({
-          paychanguEnabled,
-          paychanguReceiveNumber: paychanguReceiveNumber.trim() || null,
-          paychanguPublicKey: paychanguPublicKey.trim() || null,
-        }).filter(([, v]) => v !== undefined)
-      ) as Company['paymentSettings'];
-
-      const result = await dbActions.updateCompany(company.id, {
-        paymentSettings: updated,
-        updatedAt: new Date(),
-      });
-      if (!result.success) throw new Error(result.error);
-
-      onSaved({ ...company, paymentSettings: updated });
-      showAlert('success', `Payment settings saved for ${company.name}`);
-      onClose();
-    } catch (e: unknown) {
-      showAlert('error', `Failed to save: ${(e as any).message}`);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-
-
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl">
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center">
-              <CreditCard className="w-5 h-5 text-indigo-600" />
-            </div>
-            <div>
-              <h3 className="text-base font-semibold text-gray-900">Payment Settings</h3>
-              <p className="text-xs text-gray-500 truncate max-w-[200px]">{company.name}</p>
-            </div>
-          </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-100">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        <div className="px-6 py-5 space-y-6">
-
-          {/* ── PayChangu ── */}
-          <section>
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-emerald-500 flex items-center justify-center font-black text-white text-sm">P</div>
-                <span className="font-semibold text-gray-900">PayChangu</span>
-              </div>
-              <button type="button" onClick={() => setPaychanguEnabled(v => !v)}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${paychanguEnabled ? 'bg-emerald-500' : 'bg-gray-300'}`}>
-                <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${paychanguEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
-              </button>
-            </div>
-
-            <div className={`space-y-3 transition-opacity ${paychanguEnabled ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
-              {/* Receive number */}
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">
-                  Receive Number <span className="text-gray-400 font-normal">(mobile money number)</span>
-                </label>
-                <input type="tel" value={paychanguReceiveNumber}
-                  onChange={e => setPaychanguReceiveNumber(e.target.value)}
-                  placeholder="+265 99X XXX XXX"
-                  className={`w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent ${errors.receiveNumber ? 'border-red-400' : 'border-gray-300'}`} />
-                {errors.receiveNumber && <p className="text-red-500 text-xs mt-1">{errors.receiveNumber}</p>}
-              </div>
-
-              {/* Public key */}
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">
-                  Public Key <span className="text-gray-400 font-normal">(pub-... optional)</span>
-                </label>
-                <input type="text" value={paychanguPublicKey}
-                  onChange={e => setPaychanguPublicKey(e.target.value)}
-                  placeholder="pub-xxxxxxxxxxxxxxxx"
-                  className={`w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent ${errors.publicKey ? 'border-red-400' : 'border-gray-300'}`} />
-                {errors.publicKey && <p className="text-red-500 text-xs mt-1">{errors.publicKey}</p>}
-              </div>
-            </div>
-
-            {/* Status pill */}
-            <div className="mt-3 flex items-center gap-2">
-              {paychanguEnabled && paychanguReceiveNumber
-                ? <><Wifi className="w-3.5 h-3.5 text-emerald-500" /><span className="text-xs text-emerald-700 font-medium">Active — {paychanguReceiveNumber}</span></>
-                : <><WifiOff className="w-3.5 h-3.5 text-gray-400" /><span className="text-xs text-gray-400">Not configured</span></>}
-            </div>
-          </section>
-
-
-        </div>
-
-        {/* Footer */}
-        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t bg-gray-50 rounded-b-2xl">
-          <button onClick={onClose} className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-white transition-colors">
-            Cancel
-          </button>
-          <button onClick={handleSave} disabled={saving}
-            className="flex items-center gap-2 px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors font-medium">
-            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-            Save Settings
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// ── helpers ───────────────────────────────────────────────────────────────────
-const fmt = (d: unknown): string => {
-  if (!d) return '—';
-  const date = convertTimestamp(d);
-  if (!date) return '—';
-  return new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'short', day: 'numeric' }).format(date);
-};
-
-// ── Small helpers ──────────────────────────────────────────────────────────
-const convertTimestamp = (v: unknown): Date | null => {
-  if (v === null || v === undefined) return null;
-  if (v instanceof Date) return v;
-  if (typeof v === 'number') return new Date(v);
-  if (typeof v === 'string') {
-    const parsed = Date.parse(v);
-    if (isNaN(parsed)) return null;
-    return new Date(parsed);
-  }
-  return null;
-};
-
-const validateEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-const validatePhone = (phone: string) => /^\+?[0-9\s-]{7,15}$/.test(phone);
-
-const STATUS_STYLES: Record<string, { bg: string; text: string; icon: React.ReactNode }> = {
-  active: { bg: 'bg-emerald-50 border-emerald-200', text: 'text-emerald-700', icon: <CheckCircle className="w-3.5 h-3.5" /> },
-  pending: { bg: 'bg-amber-50 border-amber-200', text: 'text-amber-700', icon: <Clock className="w-3.5 h-3.5" /> },
-  inactive: { bg: 'bg-red-50 border-red-200', text: 'text-red-700', icon: <Ban className="w-3.5 h-3.5" /> },
-};
-
-// ── sub-components ────────────────────────────────────────────────────────────
 const StatPill: React.FC<{ icon: React.ReactNode; label: string; value: number | string; color: string }> = ({
   icon, label, value, color,
 }) => (
@@ -879,15 +763,69 @@ interface ProfileTabProps {
   routes: Route[];
   buses?: Bus[];
   operators?: (OperatorProfile | ConductorProfile)[];
-  openPaymentSettingsModal: (company: Company) => void;
+  selectedCompanyId: string | null;
   onStatusChange: (companyId: string, status: Company['status']) => void;
+  onDelete: (companyId: string) => void;
 }
 
 const ProfileTab: React.FC<ProfileTabProps> = ({
-  companies, bookings, schedules, routes, buses = [], operators = [], openPaymentSettingsModal, onStatusChange,
+  companies, bookings, schedules, routes, buses = [], operators = [], selectedCompanyId, onStatusChange, onDelete,
 }) => {
   const [selected, setSelected] = useState<Company | null>(null);
   const [search, setSearch] = useState('');
+  const [expandedKpi, setExpandedKpi] = useState<'bookings' | 'buses' | 'operators' | 'routes' | null>(null);
+  const [kpiPage, setKpiPage] = useState(1);
+
+  const ITEMS_PER_PAGE = 5;
+
+  const handleKpiToggle = (kpi: 'bookings' | 'buses' | 'operators' | 'routes') => {
+    if (expandedKpi === kpi) {
+      setExpandedKpi(null);
+    } else {
+      setExpandedKpi(kpi);
+      setKpiPage(1);
+    }
+  };
+
+  const renderPagination = (total: number) => {
+    if (total <= ITEMS_PER_PAGE) return null;
+    const totalPages = Math.ceil(total / ITEMS_PER_PAGE);
+    return (
+      <div className="flex justify-between items-center pt-2 mt-2 border-t border-gray-100">
+        <button 
+          disabled={kpiPage === 1} 
+          onClick={() => setKpiPage(p => Math.max(1, p - 1))}
+          className="px-3 py-1.5 text-xs font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg disabled:opacity-50 transition-colors"
+        >
+          Previous
+        </button>
+        <span className="text-xs text-gray-500 font-medium">Page {kpiPage} of {totalPages}</span>
+        <button 
+          disabled={kpiPage >= totalPages} 
+          onClick={() => setKpiPage(p => p + 1)}
+          className="px-3 py-1.5 text-xs font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg disabled:opacity-50 transition-colors"
+        >
+          Next
+        </button>
+      </div>
+    );
+  };
+
+  useEffect(() => {
+    if (!selectedCompanyId) {
+      setSelected(null);
+      return;
+    }
+
+    const company = companies.find(item => item.id === selectedCompanyId) ?? null;
+    setSelected(company);
+  }, [companies, selectedCompanyId]);
+
+  useEffect(() => {
+    if (!selected) return;
+    const updated = companies.find(company => company.id === selected.id);
+    if (updated && updated !== selected) setSelected(updated);
+  }, [companies, selected]);
 
   const filtered = useMemo(() =>
     companies.filter(c =>
@@ -918,15 +856,6 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
     const activeRoutes = companyRoutes.filter(r => r.status === 'active').length;
     const activeBuses = companyBuses.filter(b => b.status === 'active').length;
 
-    const recentBookings = companyBookings
-      .slice()
-      .sort((a, b) => {
-        const at = a.createdAt instanceof Date ? a.createdAt.getTime() : 0;
-        const bt = b.createdAt instanceof Date ? b.createdAt.getTime() : 0;
-        return bt - at;
-      })
-      .slice(0, 5);
-
     return {
       totalRevenue, totalBookings: companyBookings.length,
       confirmedBookings, pendingBookings, cancelledBookings, completedBookings,
@@ -934,11 +863,10 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
       totalRoutes: companyRoutes.length, activeRoutes,
       totalBuses: companyBuses.length, activeBuses,
       totalOperators: companyOperators.length,
-      recentBookings,
-      companyRoutes: companyRoutes.slice(0, 5),
-      companyBuses: companyBuses.slice(0, 4),
-      companyOperators: companyOperators.slice(0, 5),
-      ps: selected.paymentSettings,
+      companyRoutes,
+      companyBuses,
+      companyOperators,
+      confirmedBookingsList: companyBookings.filter(b => b.bookingStatus === 'confirmed'),
     };
   }, [selected, bookings, schedules, routes, buses, operators]);
 
@@ -1043,156 +971,197 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
               </div>
 
               <div className="flex flex-wrap gap-2">
-                <div className="flex items-center bg-gray-50 border border-gray-100 rounded-xl p-1 shadow-sm">
-                  {(['active', 'pending', 'inactive'] as Company['status'][]).map((status) => {
-                    const isSelected = selected.status === status;
-                    const style = isSelected ? STATUS_STYLES[status] : null;
-                    const label = status === 'inactive' ? 'Pause' : status;
-
-                    return (
-                      <button
-                        key={status}
-                        onClick={() => onStatusChange(selected.id, status)}
-                        className={`flex items-center gap-1.5 px-4 py-1.5 text-[11px] font-black uppercase tracking-wider rounded-lg transition-all ${isSelected
-                          ? `${style?.bg} ${style?.text} shadow-sm`
-                          : 'text-gray-400 hover:text-gray-600 hover:bg-white'
-                          }`}
-                      >
-                        <span className="capitalize">{label}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-                <button
-                  onClick={() => openPaymentSettingsModal(selected)}
-                  className="flex items-center gap-1.5 px-4 py-2 text-[11px] font-black uppercase tracking-wider text-indigo-600 border-2 border-indigo-100 bg-white rounded-xl hover:bg-indigo-50 hover:border-indigo-200 transition-all shadow-sm">
-                  <CreditCard className="w-4 h-4" /> Gateway Config
+                {selected.status === 'active' && (
+                  <button type="button" onClick={() => onStatusChange(selected.id, 'inactive')}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 text-[11px] font-black uppercase tracking-wider rounded-xl border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100">
+                    <Ban className="w-3.5 h-3.5" /> Deactivate
+                  </button>
+                )}
+                {selected.status === 'inactive' && (
+                  <button type="button" onClick={() => onStatusChange(selected.id, 'active')}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 text-[11px] font-black uppercase tracking-wider rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100">
+                    <CheckCircle className="w-3.5 h-3.5" /> Reactivate
+                  </button>
+                )}
+                <button type="button" onClick={() => onDelete(selected.id)}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 text-[11px] font-black uppercase tracking-wider rounded-xl border border-red-200 bg-red-50 text-red-700 hover:bg-red-100">
+                  <Trash className="w-3.5 h-3.5" /> Delete
                 </button>
               </div>
             </div>
 
             {/* ── Key Performance Indicators ── */}
             {stats && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <KineticStatCard
-                  title="Total Revenue"
-                  value={`MWK ${stats.totalRevenue.toLocaleString()}`}
-                  icon={DollarSign}
-                  iconBg="bg-blue-50" iconColor="text-blue-600"
-                  subtitle={`${stats.confirmedBookings} confirmed bookings`}
-                />
-                <KineticStatCard
-                  title="Fleet Status"
-                  value={stats.activeBuses}
-                  icon={BusIcon}
-                  iconBg="bg-green-50" iconColor="text-green-600"
-                  subtitle={`${stats.totalBuses} registered buses`}
-                />
-                <KineticStatCard
-                  title="Team Strength"
-                  value={stats.totalOperators}
-                  icon={User2}
-                  iconBg="bg-indigo-50" iconColor="text-indigo-600"
-                  subtitle="Active operators/conductors"
-                />
-                <KineticStatCard
-                  title="Connectivity"
-                  value={stats.activeRoutes}
-                  icon={MapPin}
-                  iconBg="bg-purple-50" iconColor="text-purple-600"
-                  subtitle={`${stats.totalRoutes} route networks`}
-                />
-              </div>
-            )}
-
-            {/* ── Subscription / Billing ── */}
-            <div className="bg-indigo-900 rounded-2xl p-6 text-white shadow-xl shadow-indigo-100 overflow-hidden relative">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16 blur-3xl opacity-50" />
-              <div className="relative flex flex-col md:flex-row md:items-center justify-between gap-6">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-md">
-                    <TrendingUp className="w-6 h-6 text-white" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h3 className="text-lg font-bold">Enterprise Plan</h3>
-                      <span className="px-2 py-0.5 bg-white/20 rounded text-[10px] font-black uppercase tracking-widest">Active</span>
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <KineticStatCard
+                    title="Confirmed booking value"
+                    value={`MWK ${stats.totalRevenue.toLocaleString()}`}
+                    icon={DollarSign}
+                    iconBg="bg-blue-50" iconColor="text-blue-600"
+                    subtitle={`${stats.confirmedBookings} confirmed bookings`}
+                    onClick={() => handleKpiToggle('bookings')}
+                    tooltipTitle="View confirmed bookings"
+                  />
+                  <KineticStatCard
+                    title="Fleet Status"
+                    value={stats.activeBuses}
+                    icon={BusIcon}
+                    iconBg="bg-green-50" iconColor="text-green-600"
+                    subtitle={`${stats.totalBuses} registered buses`}
+                    onClick={() => handleKpiToggle('buses')}
+                    tooltipTitle="View fleet status"
+                  />
+                  <KineticStatCard
+                    title="Team Strength"
+                    value={stats.totalOperators}
+                    icon={User2}
+                    iconBg="bg-indigo-50" iconColor="text-indigo-600"
+                    subtitle="Active operators/conductors"
+                    onClick={() => handleKpiToggle('operators')}
+                    tooltipTitle="View team members"
+                  />
+                  <KineticStatCard
+                    title="Connectivity"
+                    value={stats.activeRoutes}
+                    icon={MapPin}
+                    iconBg="bg-purple-50" iconColor="text-purple-600"
+                    subtitle={`${stats.totalRoutes} route networks`}
+                    onClick={() => handleKpiToggle('routes')}
+                    tooltipTitle="View connectivity"
+                  />
+                </div>
+                
+                {/* ── KPI Detail Panel ── */}
+                {expandedKpi && (
+                  <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 mt-4 animate-in fade-in slide-in-from-top-2 duration-200">
+                    <div className="flex justify-between items-center mb-4">
+                      <SectionHeading 
+                        icon={
+                          expandedKpi === 'bookings' ? <DollarSign className="w-5 h-5" /> : 
+                          expandedKpi === 'buses' ? <BusIcon className="w-5 h-5" /> : 
+                          expandedKpi === 'operators' ? <User2 className="w-5 h-5" /> : 
+                          <MapPin className="w-5 h-5" />
+                        } 
+                        label={
+                          expandedKpi === 'bookings' ? 'Confirmed Bookings' : 
+                          expandedKpi === 'buses' ? 'Fleet Status' : 
+                          expandedKpi === 'operators' ? 'Team Strength' : 
+                          'Connectivity'
+                        } 
+                      />
+                      <button onClick={() => setExpandedKpi(null)} className="text-gray-400 hover:text-gray-600">
+                        <X className="w-5 h-5" />
+                      </button>
                     </div>
-                    <p className="text-white/60 text-sm">Next billing cycle starts May 1st, 2026</p>
-                  </div>
-                </div>
-                <div className="flex gap-2">
-                  <button className="px-5 py-2.5 bg-white text-indigo-900 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-gray-100 transition-colors shadow-lg">
-                    Change Plan
-                  </button>
-                  <button className="px-5 py-2.5 bg-white/10 hover:bg-white/20 border border-white/20 rounded-xl text-xs font-black uppercase tracking-widest transition-colors backdrop-blur-md">
-                    View Invoices
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* ── Detailed Breakdown ── */}
-            {stats && (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Bookings Analysis */}
-                <div className="bg-white rounded-2xl shadow-[0_2px_10px_-4px_rgba(0,0,0,0.1)] border border-gray-100 p-6">
-                  <SectionHeading icon={<Activity className="w-5 h-5" />} label="Booking Fulfillment" />
-                  <div className="space-y-4 mt-4">
-                    {[
-                      { label: 'Confirmed (Paid)', value: stats.confirmedBookings, color: 'bg-indigo-600' },
-                      { label: 'In Progress (Pending)', value: stats.pendingBookings, color: 'bg-amber-400' },
-                      { label: 'Completed Trips', value: stats.completedBookings, color: 'bg-emerald-500' },
-                      { label: 'Failed / Cancelled', value: stats.cancelledBookings, color: 'bg-red-400' },
-                    ].map(item => {
-                      const pct = stats.totalBookings > 0 ? Math.round((item.value / stats.totalBookings) * 100) : 0;
-                      return (
-                        <div key={item.label}>
-                          <div className="flex justify-between items-end mb-1.5">
-                            <span className="text-[11px] font-bold text-gray-400 uppercase tracking-widest leading-none">{item.label}</span>
-                            <span className="text-sm font-black text-gray-900 leading-none">{item.value} <span className="text-[10px] font-bold text-gray-400 uppercase ml-1">({pct}%)</span></span>
-                          </div>
-                          <div className="h-1.5 bg-gray-50 rounded-full overflow-hidden">
-                            <div className={`h-full ${item.color} rounded-full transition-all`} style={{ width: `${pct}%` }} />
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Regional Activity */}
-                <div className="bg-white rounded-2xl shadow-[0_2px_10px_-4px_rgba(0,0,0,0.1)] border border-gray-100 p-6">
-                  <SectionHeading icon={<MapPin className="w-5 h-5" />} label="Recent Operations" />
-                  <div className="mt-4 space-y-3">
-                    {stats.recentBookings.length > 0 ? stats.recentBookings.map(b => (
-                      <div key={b.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors border border-gray-100">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center font-mono text-[10px] font-black text-indigo-600 border border-gray-100">
-                            {b.bookingReference?.substring(0, 2) || 'BK'}
-                          </div>
-                          <div>
-                            <p className="text-xs font-black text-gray-900 leading-none mb-1">{b.bookingReference || b.id.substring(0, 8)}</p>
-                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{fmt(b.createdAt)}</p>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-xs font-black text-gray-900 leading-none mb-1">MWK {b.totalAmount?.toLocaleString()}</p>
-                          <span className={`text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded ${b.bookingStatus === 'confirmed' ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-600'}`}>
-                            {b.bookingStatus}
-                          </span>
-                        </div>
+                    
+                    {expandedKpi === 'bookings' && (
+                      <div className="space-y-2">
+                        {stats.confirmedBookingsList.length === 0 ? (
+                          <p className="text-sm text-gray-500 italic">No confirmed bookings found.</p>
+                        ) : (
+                          <>
+                            {stats.confirmedBookingsList.slice((kpiPage - 1) * ITEMS_PER_PAGE, kpiPage * ITEMS_PER_PAGE).map(b => (
+                              <div key={b.id} className="flex items-center justify-between rounded-xl bg-gray-50 p-3">
+                                <div className="min-w-0">
+                                  <p className="text-sm font-medium text-gray-900 truncate">{b.passengerDetails?.[0]?.name || 'Anonymous'}</p>
+                                  <p className="text-xs text-gray-400">{new Date(b.createdAt).toLocaleDateString()}</p>
+                                </div>
+                                <span className="text-sm font-bold text-gray-900">MWK {b.totalAmount?.toLocaleString() || 0}</span>
+                              </div>
+                            ))}
+                            {renderPagination(stats.confirmedBookingsList.length)}
+                          </>
+                        )}
                       </div>
-                    )) : (
-                      <div className="h-40 flex flex-col items-center justify-center text-center opacity-40">
-                        <Layers className="w-8 h-8 mb-2" />
-                        <p className="text-xs font-bold uppercase tracking-widest">No Recent Data</p>
+                    )}
+                    
+                    {expandedKpi === 'buses' && (
+                      <div className="space-y-2">
+                        {stats.companyBuses.length === 0 ? (
+                          <p className="text-sm text-gray-500 italic">No registered buses found.</p>
+                        ) : (
+                          <>
+                            {stats.companyBuses.slice((kpiPage - 1) * ITEMS_PER_PAGE, kpiPage * ITEMS_PER_PAGE).map(b => (
+                              <div key={b.id} className="flex items-center justify-between rounded-xl bg-gray-50 p-3">
+                                <div className="min-w-0">
+                                  <p className="text-sm font-medium text-gray-900 truncate">{b.licensePlate}</p>
+                                  <p className="text-xs text-gray-400">{b.capacity} seats</p>
+                                </div>
+                                <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest ${b.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-600'}`}>{b.status}</span>
+                              </div>
+                            ))}
+                            {renderPagination(stats.companyBuses.length)}
+                          </>
+                        )}
+                      </div>
+                    )}
+
+                    {expandedKpi === 'operators' && (
+                      <div className="space-y-2">
+                        {stats.companyOperators.length === 0 ? (
+                          <p className="text-sm text-gray-500 italic">No team members found.</p>
+                        ) : (
+                          <>
+                            {stats.companyOperators.slice((kpiPage - 1) * ITEMS_PER_PAGE, kpiPage * ITEMS_PER_PAGE).map(o => (
+                              <div key={o.id} className="flex items-center justify-between rounded-xl bg-gray-50 p-3">
+                                <div className="min-w-0">
+                                  <p className="text-sm font-medium text-gray-900 truncate">{o.firstName} {o.lastName}</p>
+                                  <p className="text-xs text-gray-400 capitalize">{o.role.replace('_', ' ')}</p>
+                                </div>
+                                <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest ${o.isActive ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-200 text-gray-600'}`}>{o.isActive ? 'active' : 'inactive'}</span>
+                              </div>
+                            ))}
+                            {renderPagination(stats.companyOperators.length)}
+                          </>
+                        )}
+                      </div>
+                    )}
+
+                    {expandedKpi === 'routes' && (
+                      <div className="space-y-2">
+                        {stats.companyRoutes.length === 0 ? (
+                          <p className="text-sm text-gray-500 italic">No routes found.</p>
+                        ) : (
+                          <>
+                            {stats.companyRoutes.slice((kpiPage - 1) * ITEMS_PER_PAGE, kpiPage * ITEMS_PER_PAGE).map(r => (
+                              <div key={r.id} className="flex items-center justify-between rounded-xl bg-gray-50 p-3">
+                                <div className="min-w-0">
+                                  <p className="text-sm font-medium text-gray-900 truncate">{r.origin} → {r.destination}</p>
+                                  <p className="text-xs text-gray-400">MWK {r.baseFare.toLocaleString()}</p>
+                                </div>
+                                <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest ${r.status === 'active' ? 'bg-purple-100 text-purple-700' : 'bg-gray-200 text-gray-600'}`}>{r.status}</span>
+                              </div>
+                            ))}
+                            {renderPagination(stats.companyRoutes.length)}
+                          </>
+                        )}
                       </div>
                     )}
                   </div>
-                </div>
-              </div>
+                )}
+              </>
             )}
+
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+              <SectionHeading icon={<Mail className="w-5 h-5" />} label="Contact Information" />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+                {[
+                  { label: 'Email', value: selected.email, icon: <Mail className="w-4 h-4" /> },
+                  { label: 'Phone', value: selected.phone || selected.contact, icon: <Phone className="w-4 h-4" /> },
+                  { label: 'Address', value: selected.address, icon: <MapPin className="w-4 h-4" /> },
+                  { label: 'WhatsApp', value: (selected.contactSettings as any)?.whatsapp, icon: <MessageSquare className="w-4 h-4" /> },
+                ].map(field => (
+                  <div key={field.label} className="flex items-center gap-3 rounded-xl bg-gray-50 p-3">
+                    <span className="text-gray-500">{field.icon}</span>
+                    <div className="min-w-0">
+                      <p className="text-xs text-gray-400">{field.label}</p>
+                      <p className={`text-sm font-medium truncate ${field.value ? 'text-gray-900' : 'text-gray-400 italic'}`}>{field.value || 'Not provided'}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
 
           </div>
         )}
@@ -1210,6 +1179,7 @@ export default function SuperAdminDashboard() {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [schedules, setSchedules] = useState<Schedule[]>([]);
+  const [schedulesTodayCount, setSchedulesTodayCount] = useState<number>(0);
   const [routes, setRoutes] = useState<Route[]>([]);
   const [buses, setBuses] = useState<Bus[]>([]);
   const [operators, setOperators] = useState<(OperatorProfile | ConductorProfile)[]>([]);
@@ -1217,10 +1187,24 @@ export default function SuperAdminDashboard() {
   const [stats, setStats] = useState<DashboardStats>({
     totalCompanies: 0, activeCompanies: 0, pendingCompanies: 0, inactiveCompanies: 0,
     totalRevenue: 0, monthlyRevenue: 0, totalBookings: 0, monthlyBookings: 0,
-    monthlyGrowth: 0, revenueGrowth: 0,
+    bookingPaymentCounts: { paid: 0, pending: 0, failed: 0, paidRevenue: 0 },
   });
 
   const [refreshCount, setRefreshCount] = useState(0);
+  const [isDashboardsOpen, setIsDashboardsOpen] = useState(false);
+  const dashboardsRef = useRef<HTMLDivElement>(null);
+
+  // Close Dashboards dropdown on outside click
+  useEffect(() => {
+    if (!isDashboardsOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dashboardsRef.current && !dashboardsRef.current.contains(e.target as Node)) {
+        setIsDashboardsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isDashboardsOpen]);
 
   const [loadingStates, setLoadingStates] = useState<LoadingStates>({
     companies: true, bookings: true, promotions: true, creating: false, updating: false, deleting: false, initializing: true,
@@ -1230,7 +1214,8 @@ export default function SuperAdminDashboard() {
   const [formErrors, setFormErrors] = useState<FormErrors>({});
 
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [companyStatusFilter, setCompanyStatusFilter] = useState<'all' | 'active' | 'pending' | 'inactive'>('all');
+  const [claimedOnly, setClaimedOnly] = useState(false);
   const [sortBy, setSortBy] = useState<SortBy>('createdAt');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
   const [currentPage, setCurrentPage] = useState(1);
@@ -1239,7 +1224,6 @@ export default function SuperAdminDashboard() {
   const [modals, setModals] = useState({
     add: false, edit: false, view: false, delete: null as string | null,
   });
-  const [paymentModalCompany, setPaymentModalCompany] = useState<Company | null>(null);
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
   const [selectedPaymentCompany, setSelectedPaymentCompany] = useState<Company | null>(null);
   const [paymentCompanyQuery, setPaymentCompanyQuery] = useState('');
@@ -1267,8 +1251,6 @@ export default function SuperAdminDashboard() {
 
   // ── Unified Payment System State ───────────────────────────────────────────
   // Master PayChangu Configuration
-  const [paychanguPublicKey, setPaychanguPublicKey] = useState<string>('');
-  const [paychanguSecretKey, setPaychanguSecretKey] = useState<string>('');
   const [paymentEnvironment, setPaymentEnvironment] = useState<'test' | 'live'>('test');
   const [paymentConfigSaving, setPaymentConfigSaving] = useState(false);
   const [paymentConfigErrors, setPaymentConfigErrors] = useState<Record<string, string>>({});
@@ -1283,6 +1265,8 @@ export default function SuperAdminDashboard() {
   const [transactionsLoading, setTransactionsLoading] = useState(false);
   const [transactionFilter, setTransactionFilter] = useState<'all' | 'successful' | 'failed' | 'pending'>('all');
   const [transactionCompanyFilter, setTransactionCompanyFilter] = useState<string>('');
+  const [showArchivedPayments, setShowArchivedPayments] = useState(false);
+  const [showUnlinkedPayments, setShowUnlinkedPayments] = useState(false);
   const [transactionPage, setTransactionPage] = useState(1);
 
   // System Notification Preferences
@@ -1317,15 +1301,16 @@ export default function SuperAdminDashboard() {
   const [usersList, setUsersList] = useState<any[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
   const [userSearchTerm, setUserSearchTerm] = useState('');
+  const [userRoleGroupFilter, setUserRoleGroupFilter] = useState<'all' | 'company' | 'platform' | 'customer'>('all');
   const [usersPage, setUsersPage] = useState(1);
   const [selectedUser, setSelectedUser] = useState<any | null>(null);
   const [selectedUserRole, setSelectedUserRole] = useState<string>('');
   const [userModalOpen, setUserModalOpen] = useState(false);
   const [roleUpdating, setRoleUpdating] = useState(false);
 
-  const ROLE_OPTIONS = ['superadmin','chief_of_growth','chief_of_operations','finance','company_admin','operator','conductor','customer'];
+  const ROLE_OPTIONS = ['super_admin','chief_of_growth','chief_of_operations','finance','company_admin','operator','conductor','customer'];
   const ROLE_LABELS: Record<string,string> = {
-    superadmin: 'Super Admin', chief_of_growth: 'Chief of Growth', chief_of_operations: 'Chief of Operations',
+    super_admin: 'Super Admin', chief_of_growth: 'Chief of Growth', chief_of_operations: 'Chief of Operations',
     finance: 'Finance', company_admin: 'Company Admin', operator: 'Operator', conductor: 'Conductor', customer: 'Customer'
   };
 
@@ -1360,11 +1345,6 @@ export default function SuperAdminDashboard() {
   };
 
   useEffect(() => { fetchTransactions(); }, []);
-
-  const updateCompanySettings = useCallback((company: Company) => {
-    setCompanies(prev => prev.map(c => c.id === company.id ? company : c));
-    setSelectedPaymentCompany(company);
-  }, []);
 
   const fetchAuditLogs = useCallback(async () => {
     setAuditLoading(true);
@@ -1583,16 +1563,20 @@ export default function SuperAdminDashboard() {
   );
 
   const companyPaymentStats = useMemo(() => {
-    const stats: Record<string, { revenue: number; pending: number; failed: number; bookings: number }> = {};
-    companies.forEach(c => { stats[c.id] = { revenue: 0, pending: 0, failed: 0, bookings: 0 }; });
+    const stats: Record<string, { revenue: number; paid: number; pending: number; failed: number }> = {};
+    companies.forEach(c => { stats[c.id] = { revenue: 0, paid: 0, pending: 0, failed: 0 }; });
     bookings.forEach(b => {
       const companyStats = stats[b.companyId as string];
       if (!companyStats) return;
-      companyStats.revenue += (b as any).totalAmount || 0;
-      companyStats.bookings += 1;
       const normalized = ((b as any).paymentStatus || '').toLowerCase();
-      if (['pending', 'unpaid'].includes(normalized)) companyStats.pending += 1;
-      if (['failed', 'cancelled'].includes(normalized)) companyStats.failed += 1;
+      if (normalized === 'paid' || normalized === 'successful' || normalized === 'success') {
+        companyStats.revenue += b.totalAmount || 0;
+        companyStats.paid += 1;
+      } else if (['pending', 'unpaid', 'initiated'].includes(normalized)) {
+        companyStats.pending += 1;
+      } else if (['failed', 'cancelled'].includes(normalized)) {
+        companyStats.failed += 1;
+      }
     });
     return stats;
   }, [companies, bookings]);
@@ -1627,64 +1611,49 @@ export default function SuperAdminDashboard() {
   }, [paymentCompanyQuery]);
 
   const paymentSummary = useMemo(() => {
-    const totalCompanies = companies.length;
-    const enabledCompanies = companies.filter(c => c.paymentSettings?.paychanguEnabled).length;
-    const fullyConfiguredCompanies = companies.filter(c => c.paymentSettings?.paychanguEnabled && c.paymentSettings?.paychanguPublicKey && c.paymentSettings?.paychanguSecretKeyEnc).length;
-    const incompleteConfigs = enabledCompanies - fullyConfiguredCompanies;
-    const totalRevenue = bookings.reduce((sum, b) => sum + (b.totalAmount || 0), 0);
-    const failedPayments = bookings.filter(b => ['failed', 'cancelled'].includes((b.paymentStatus || '').toLowerCase())).length;
-    const pendingPayments = bookings.filter(b => ['pending', 'unpaid'].includes((b.paymentStatus || '').toLowerCase())).length;
+    const bookingPaymentCounts = stats.bookingPaymentCounts || { paid: 0, pending: 0, failed: 0, paidRevenue: 0 };
     return {
-      totalCompanies,
-      enabledCompanies,
-      fullyConfiguredCompanies,
-      incompleteConfigs,
-      totalRevenue,
-      failedPayments,
-      pendingPayments,
+      totalCompanies: companies.length,
+      totalRevenue: bookingPaymentCounts.paidRevenue,
+      paidPayments: bookingPaymentCounts.paid,
+      failedPayments: bookingPaymentCounts.failed,
+      pendingPayments: bookingPaymentCounts.pending,
     };
-  }, [companies, bookings]);
-
-  // ── Commission Calculation Helpers ────────────────────────────────────────
-  const calculateCommissionSplit = (totalAmount: number) => {
-    const platformFeePercent = 100 - paychanguFeePercent - companyFeePercent;
-    return {
-      total: totalAmount,
-      paychanguFee: (totalAmount * paychanguFeePercent) / 100,
-      companyEarnings: (totalAmount * companyFeePercent) / 100,
-      platformEarnings: (totalAmount * platformFeePercent) / 100,
-      paychanguPercent: paychanguFeePercent,
-      companyPercent: companyFeePercent,
-      platformPercent: platformFeePercent,
-    };
-  };
+  }, [companies.length, stats.bookingPaymentCounts]);
 
   // ── Real Transaction Data ─────────────────────────────────────────────────
   const realTransactions = useMemo(() => {
     return transactions.map((payment) => {
       const booking = payment.booking;
       const amount = payment.amount || 0;
-      const split = calculateCommissionSplit(amount);
+      const rawStatus = (payment.status || 'pending').toLowerCase();
+      const status = ['successful', 'success', 'paid'].includes(rawStatus)
+        ? 'successful'
+        : ['failed', 'cancelled'].includes(rawStatus) ? 'failed' : 'pending';
       return {
-        id: payment.paychanguRef || payment.id,
-        bookingId: booking?.id || 'Unknown',
-        companyId: booking?.companyId || 'Unknown',
-        companyName: booking?.company?.name || 'Unknown',
+        id: payment.id,
+        txRef: payment.txRef || 'No transaction reference',
+        provider: payment.provider || 'Unknown provider',
+        bookingId: booking?.id || 'No booking record',
+        companyId: booking?.companyId || 'unlinked',
+        companyName: booking ? (booking.company?.name || 'Unlinked company') : 'No booking record',
         amount: amount,
-        status: (payment.status || 'pending').toLowerCase() as 'successful' | 'failed' | 'pending',
+        status: status as 'successful' | 'failed' | 'pending',
         date: payment.createdAt,
-        split,
+        isArchived: !!payment.isArchived,
       };
     });
-  }, [transactions, calculateCommissionSplit]);
+  }, [transactions]);
 
   const filteredTransactions = useMemo(() => {
     return realTransactions.filter(t => {
       const statusMatch = transactionFilter === 'all' || t.status === transactionFilter;
       const companyMatch = !transactionCompanyFilter || t.companyId === transactionCompanyFilter;
-      return statusMatch && companyMatch;
+      const archiveMatch = showArchivedPayments || !t.isArchived;
+      const unlinkedMatch = showUnlinkedPayments || t.companyId !== 'unlinked';
+      return statusMatch && companyMatch && archiveMatch && unlinkedMatch;
     });
-  }, [realTransactions, transactionFilter, transactionCompanyFilter]);
+  }, [realTransactions, transactionFilter, transactionCompanyFilter, showArchivedPayments, showUnlinkedPayments]);
 
   const transactionPagination = useMemo(() => {
     const totalItems = filteredTransactions.length;
@@ -1708,20 +1677,24 @@ export default function SuperAdminDashboard() {
     const failed = realTransactions.filter(t => t.status === 'failed').length;
     const pending = realTransactions.filter(t => t.status === 'pending').length;
     const totalProcessed = realTransactions.reduce((sum, t) => sum + t.amount, 0);
-    const totalPaychanguFees = realTransactions.reduce((sum, t) => sum + t.split.paychanguFee, 0);
-    const totalCompanyEarnings = realTransactions.reduce((sum, t) => sum + t.split.companyEarnings, 0);
-    const totalPlatformEarnings = realTransactions.reduce((sum, t) => sum + t.split.platformEarnings, 0);
-
     return {
       successful,
       failed,
       pending,
       totalProcessed,
-      totalPaychanguFees,
-      totalCompanyEarnings,
-      totalPlatformEarnings,
     };
   }, [realTransactions]);
+
+  const selectedCompanyTransactionStats = useMemo(() => {
+    const scopedTransactions = selectedPaymentCompany
+      ? realTransactions.filter(t => t.companyId === selectedPaymentCompany.id)
+      : [];
+    return {
+      paid: scopedTransactions.filter(t => t.status === 'successful').length,
+      pending: scopedTransactions.filter(t => t.status === 'pending').length,
+      failed: scopedTransactions.filter(t => t.status === 'failed').length,
+    };
+  }, [realTransactions, selectedPaymentCompany]);
 
   const handleRoleChange = async (id: string, newRole: string) => {
     const previous = usersList;
@@ -1746,10 +1719,34 @@ export default function SuperAdminDashboard() {
     }
   };
 
+  const setupStatusBadge = (isComplete?: boolean) => isComplete
+    ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+    : 'bg-gray-100 text-gray-600 border border-gray-200';
+
+  const userRoleGroupCounts = useMemo(() => {
+    const companyRoles = new Set(['company_admin', 'operator', 'conductor']);
+    const platformRoles = new Set(['super_admin', 'chief_of_growth', 'chief_of_operations', 'finance']);
+
+    return {
+      company: usersList.filter(user => companyRoles.has(user.role)).length,
+      platform: usersList.filter(user => platformRoles.has(user.role)).length,
+      customer: usersList.filter(user => user.role === 'customer').length,
+      total: usersList.length,
+    };
+  }, [usersList]);
+
   const filteredUsers = useMemo(() => {
     const query = userSearchTerm.trim();
-    if (!query) return usersList;
     return usersList.filter(user => {
+      const matchesRoleGroup = userRoleGroupFilter === 'all'
+        || (userRoleGroupFilter === 'company' && ['company_admin', 'operator', 'conductor'].includes(user.role))
+        || (userRoleGroupFilter === 'platform' && ['super_admin', 'chief_of_growth', 'chief_of_operations', 'finance'].includes(user.role))
+        || (userRoleGroupFilter === 'customer' && user.role === 'customer');
+
+      if (!matchesRoleGroup) return false;
+
+      if (!query) return true;
+
       const rawText = [
         `${user.firstName || ''} ${user.lastName || ''}`,
         user.email,
@@ -1759,7 +1756,7 @@ export default function SuperAdminDashboard() {
       ].filter(Boolean).join(' ');
       return fuzzyMatch(rawText, query);
     });
-  }, [usersList, userSearchTerm]);
+  }, [usersList, userSearchTerm, userRoleGroupFilter]);
 
   const usersPagination = useMemo(() => {
     const totalItems = filteredUsers.length;
@@ -1824,29 +1821,6 @@ export default function SuperAdminDashboard() {
     setLoadingStates(prev => ({ ...prev, [key]: value }));
   }, []);
 
-  // ── Stats ──────────────────────────────────────────────────────────────────
-  const calculateStats = useCallback((companyList: Company[], bookingList: Booking[]) => {
-    try {
-      const totalRevenue = bookingList.reduce((sum, b) =>
-        b.bookingStatus !== 'cancelled' ? sum + (b.totalAmount || 0) : sum, 0);
-      setStats({
-        totalCompanies: companyList.length,
-        activeCompanies: companyList.filter(c => c.status === 'active').length,
-        pendingCompanies: companyList.filter(c => c.status === 'pending').length,
-        inactiveCompanies: companyList.filter(c => c.status === 'inactive').length,
-        totalRevenue,
-        monthlyRevenue: totalRevenue * MONTHLY_BOOKING_MULTIPLIER,
-        totalBookings: bookingList.length,
-        monthlyBookings: Math.floor(bookingList.length * MONTHLY_BOOKING_MULTIPLIER),
-        monthlyGrowth: DEFAULT_GROWTH_RATES.monthly,
-        revenueGrowth: DEFAULT_GROWTH_RATES.revenue,
-      });
-    } catch (e) {
-      console.error('Error calculating stats:', e);
-      showAlert('error', 'Failed to calculate dashboard statistics');
-    }
-  }, [showAlert]);
-
   // ── Data fetching ──────────────────────────────────────────────────────────
   useEffect(() => {
     if (authLoading) return;
@@ -1858,7 +1832,10 @@ export default function SuperAdminDashboard() {
 
     const fetchDashboardData = async () => {
       try {
-        const res = await fetch('/api/admin/data', { credentials: 'same-origin' });
+        const res = await fetch('/api/admin/data', {
+          credentials: 'same-origin',
+          cache: 'no-store',
+        });
         if (!res.ok) {
           const body = await res.text().catch(() => 'Unable to read response');
           throw new Error(`Failed to fetch dashboard data: ${res.status} ${body}`);
@@ -1868,6 +1845,7 @@ export default function SuperAdminDashboard() {
         setCompanies(data.companies);
         setBookings(data.bookings);
         setSchedules(data.schedules);
+        setSchedulesTodayCount(data.schedulesTodayCount ?? 0);
         setRoutes(data.routes);
         setBuses(data.buses);
         setOperators(data.operators);
@@ -1899,8 +1877,6 @@ export default function SuperAdminDashboard() {
     fetchDashboardData();
     fetchPromotions();
   }, [user, userProfile, authLoading, router, showAlert, setLoadingState, refreshCount]);
-
-  useEffect(() => { calculateStats(companies, bookings); }, [companies, bookings, calculateStats]);
 
   // ── Company CRUD ───────────────────────────────────────────────────────────
   const handleCreateCompany = async () => {
@@ -1987,11 +1963,7 @@ export default function SuperAdminDashboard() {
   const handleToggleBooking = async (company: Company) => {
     const newBookingState = !company.bookingEnabled;
     try {
-      const result = await dbActions.updateCompany(company.id, { 
-        bookingEnabled: newBookingState,
-        isPartner: newBookingState,
-        updatedAt: new Date() 
-      });
+      const result = await dbActions.updateCompanyBookingMode(company.id, newBookingState);
       if (!result.success) throw new Error(result.error);
       setCompanies(prev => prev.map(c => c.id === company.id ? { ...c, bookingEnabled: newBookingState, isPartner: newBookingState } : c));
       showAlert('success', `${company.name} booking is now ${newBookingState ? 'ENABLED (Online Booking Active)' : 'DISABLED (Schedule Only)'}`);
@@ -2025,20 +1997,25 @@ export default function SuperAdminDashboard() {
     resetForm();
   }, [resetForm]);
 
-  // ── Placeholder for payment settings modal (wire up your own) ─────────────
-  const openPaymentSettingsModal = useCallback((company: Company) => {
-    setPaymentModalCompany(company);
-  }, []);
-
   // ── Search / filter / sort ─────────────────────────────────────────────────
   const debouncedResetPage = useMemo(() => debounce(() => setCurrentPage(1), 300), []);
+
+  const companyStatusCounts = useMemo(() => ({
+    active: companies.filter(c => c.status === 'active').length,
+    pending: companies.filter(c => c.status === 'pending').length,
+    inactive: companies.filter(c => c.status === 'inactive').length,
+    claimed: companies.filter(c => Boolean(c.isPartner)).length,
+    total: companies.length,
+  }), [companies]);
 
   const filteredAndSortedCompanies = useMemo(() => {
     return companies
       .filter(c => {
         const sl = searchTerm.toLowerCase();
-        return (!searchTerm || c.name.toLowerCase().includes(sl) || c.email.toLowerCase().includes(sl))
-          && (statusFilter === 'all' || c.status === statusFilter);
+        const matchesSearch = !searchTerm || c.name.toLowerCase().includes(sl) || c.email.toLowerCase().includes(sl);
+        const matchesStatus = companyStatusFilter === 'all' || c.status === companyStatusFilter;
+        const matchesClaimed = !claimedOnly || Boolean(c.isPartner);
+        return matchesSearch && matchesStatus && matchesClaimed;
       })
       .sort((a, b) => {
         let av: any = (a[sortBy as keyof Company] as any) ?? '';
@@ -2052,7 +2029,7 @@ export default function SuperAdminDashboard() {
         }
         return av < bv ? (sortOrder === 'asc' ? -1 : 1) : av > bv ? (sortOrder === 'asc' ? 1 : -1) : 0;
       });
-  }, [companies, searchTerm, statusFilter, sortBy, sortOrder]);
+  }, [companies, searchTerm, companyStatusFilter, claimedOnly, sortBy, sortOrder]);
 
   const paginationData = useMemo(() => {
     const totalItems = filteredAndSortedCompanies.length;
@@ -2069,9 +2046,15 @@ export default function SuperAdminDashboard() {
     };
   }, [filteredAndSortedCompanies, currentPage]);
 
-  useEffect(() => { setCurrentPage(1); }, [statusFilter, sortBy, sortOrder]);
+  useEffect(() => { setCurrentPage(1); }, [companyStatusFilter, claimedOnly, searchTerm, sortBy, sortOrder]);
 
   // ── Status helpers ─────────────────────────────────────────────────────────
+  const toggleCompanyStatusFilter = (status: 'active' | 'pending' | 'inactive') => {
+    setCompanyStatusFilter(prev => prev === status ? 'all' : status);
+  };
+
+  const toggleClaimedFilter = () => setClaimedOnly(prev => !prev);
+
   const getStatusIcon = useCallback((status?: string) => {
     const cfg = status ? STATUS_CONFIG[status as keyof typeof STATUS_CONFIG] : null;
     const IconComponent: React.FC<{ className?: string }> = cfg?.icon ?? AlertCircle;
@@ -2107,20 +2090,77 @@ export default function SuperAdminDashboard() {
       ['Total Revenue', `MWK ${stats.totalRevenue.toLocaleString()}`],
       ['Total Bookings', stats.totalBookings.toString()],
       ['Monthly Bookings', stats.monthlyBookings.toString()],
-      ['Monthly Growth', `${stats.monthlyGrowth}%`],
-      ['Revenue Growth', `${stats.revenueGrowth}%`],
-      ['Active Routes', routes.length.toString()],
-      ['Active Schedules', schedules.length.toString()],
+      ['Active Routes', routes.filter(isLiveRoute).length.toString()],
+      ['Active Schedules', schedules.filter(isLiveSchedule).length.toString()],
     ].map(r => r.join(',')), 'Metric,Value', 'dashboard-stats.csv');
     showAlert('success', 'Stats exported!');
   };
 
   // ── Loading / auth guards ──────────────────────────────────────────────────
   if (authLoading || loadingStates.initializing) return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-      <div className="text-center">
-        <Loader2 className="w-12 h-12 text-blue-600 animate-spin mx-auto mb-4" />
-        <p className="text-gray-600">{authLoading ? 'Authenticating...' : 'Loading Dashboard...'}</p>
+    <div className="min-h-screen bg-gray-50 flex">
+      <div className="hidden lg:flex w-72 flex-col bg-white border-r border-gray-200">
+        <div className="h-16 flex items-center px-6 border-b border-gray-100">
+          <div className="h-8 w-8 bg-gray-200 rounded-lg animate-pulse" />
+          <div className="h-6 w-32 bg-gray-200 rounded-md animate-pulse ml-3" />
+        </div>
+        <div className="p-4 space-y-2 flex-1">
+          {[1, 2, 3, 4, 5, 6].map(i => (
+            <div key={i} className="h-11 bg-gray-100 rounded-lg animate-pulse flex items-center px-4 gap-3">
+              <div className="h-5 w-5 bg-gray-200 rounded animate-pulse" />
+              <div className="h-4 w-24 bg-gray-200 rounded animate-pulse" />
+            </div>
+          ))}
+        </div>
+        <div className="p-4 border-t border-gray-100">
+          <div className="h-12 bg-gray-100 rounded-xl animate-pulse" />
+        </div>
+      </div>
+
+      <div className="flex-1 flex flex-col min-w-0">
+        <header className="sticky top-0 z-20 bg-white/80 backdrop-blur-md border-b border-gray-200">
+          <div className="h-16 px-4 sm:px-6 lg:px-8 flex items-center justify-between">
+            <div className="h-6 w-40 bg-gray-200 rounded-md animate-pulse hidden sm:block" />
+            <div className="flex items-center gap-4">
+              <div className="h-10 w-48 bg-gray-100 rounded-full animate-pulse hidden md:block" />
+              <div className="h-10 w-10 bg-gray-200 rounded-full animate-pulse" />
+              <div className="h-10 w-10 bg-gray-200 rounded-full animate-pulse" />
+            </div>
+          </div>
+          <div className="px-4 sm:px-6 lg:px-8 border-t border-gray-100 bg-white">
+            <div className="flex gap-6 h-12 items-center">
+              <div className="h-5 w-20 bg-gray-200 rounded animate-pulse" />
+              <div className="h-5 w-24 bg-gray-200 rounded animate-pulse" />
+              <div className="h-5 w-16 bg-gray-200 rounded animate-pulse" />
+            </div>
+          </div>
+        </header>
+
+        <main className="flex-1 p-4 sm:p-6 lg:p-8">
+          <div className="max-w-7xl mx-auto space-y-6">
+            <div className="flex justify-between items-center">
+              <div className="h-8 w-48 bg-gray-200 rounded-lg animate-pulse" />
+              <div className="h-10 w-32 bg-brand-100 rounded-lg animate-pulse" />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm space-y-3">
+                  <div className="h-5 w-10 bg-gray-200 rounded-lg animate-pulse mb-4" />
+                  <div className="h-4 bg-gray-200 rounded w-24 animate-pulse" />
+                  <div className="h-8 bg-gray-300 rounded w-20 animate-pulse" />
+                </div>
+              ))}
+            </div>
+
+            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 space-y-4">
+              <div className="h-6 w-40 bg-gray-200 rounded animate-pulse mb-6" />
+              {[1, 2, 3, 4, 5].map(i => (
+                <div key={i} className="h-16 bg-gray-50 rounded-xl border border-gray-100 animate-pulse" />
+              ))}
+            </div>
+          </div>
+        </main>
       </div>
     </div>
   );
@@ -2137,27 +2177,34 @@ export default function SuperAdminDashboard() {
   );
 
   // ── Render ─────────────────────────────────────────────────────────────────
+  const handleTabChange = (nextTab: TabType) => {
+    if (nextTab !== 'profile') {
+      setSelectedCompany(null);
+    }
+    setActiveTab(nextTab);
+  };
+
   const SidebarItem = ({ id, label, icon: Icon }: { id: TabType; label: string; icon: any }) => {
     const isActive = activeTab === id;
     return (
       <button
-        onClick={() => setActiveTab(id)}
-        className={`w-full flex items-center group transition-all duration-200 relative rounded-xl h-11 px-4 space-x-3 mb-1 ${isActive ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'
+        onClick={() => handleTabChange(id)}
+        className={`w-full flex items-center group transition-all duration-200 relative rounded-xl h-11 px-4 space-x-3 mb-1 ${isActive ? 'bg-brand-700 text-white shadow-md shadow-brand-200' : 'text-gray-500 hover:bg-brand-50 hover:text-brand-700'
           }`}
       >
-        <Icon className={`w-5 h-5 flex-shrink-0 ${isActive ? 'text-white' : 'group-hover:text-indigo-600 text-gray-400'}`} />
+        <Icon className={`w-5 h-5 flex-shrink-0 ${isActive ? 'text-white' : 'group-hover:text-brand-700 text-gray-400'}`} />
         <span className="text-[13px] font-bold flex-1 text-left truncate">{label}</span>
       </button>
     );
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
+    <div className="admin-dashboard min-h-screen bg-gray-50 flex">
       {isMobileOpen && (
         <div className="fixed inset-0 bg-black/40 z-40 lg:hidden backdrop-blur-sm" onClick={() => setIsMobileOpen(false)} />
       )}
       {/* Sidebar */}
-      <AdminSidebar activeTab={String(activeTab)} setActiveTab={(t: string) => setActiveTab(t as TabType)} isMobileOpen={isMobileOpen} setIsMobileOpen={setIsMobileOpen} userProfile={userProfile} signOut={signOut} />
+      <AdminSidebar activeTab={String(activeTab)} setActiveTab={(t: string) => handleTabChange(t as TabType)} isMobileOpen={isMobileOpen} setIsMobileOpen={setIsMobileOpen} userProfile={userProfile} signOut={signOut} />
 
       <div className="flex-1 flex flex-col min-w-0">
         {/* Header */}
@@ -2173,12 +2220,63 @@ export default function SuperAdminDashboard() {
               <h2 className="text-[16px] font-bold text-gray-900 tracking-tight capitalize sm:hidden">
                 {activeTab}
               </h2>
-              <p className="text-[11px] text-gray-400 font-bold uppercase tracking-widest leading-none mt-1 hidden sm:block">
-                Final Production Release v1.0
-              </p>
             </div>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3 sm:gap-4">
+            {/* Dashboards Dropdown */}
+            <div className="relative" ref={dashboardsRef}>
+              <button
+                onClick={() => setIsDashboardsOpen(prev => !prev)}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold transition-all duration-200 ${
+                  isDashboardsOpen
+                    ? 'bg-brand-700 text-white shadow-md shadow-brand-200'
+                    : 'text-gray-600 hover:bg-brand-50 hover:text-brand-700'
+                }`}
+                title="Switch Dashboards"
+              >
+                <Layers className="w-4 h-4" />
+                <span className="hidden sm:inline">Dashboards</span>
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isDashboardsOpen ? 'rotate-180' : ''}`} />
+              </button>
+              {isDashboardsOpen && (
+                <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-2xl shadow-xl border border-gray-100 py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+                  <p className="px-4 py-1.5 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Role Dashboards</p>
+                  <button
+                    onClick={() => { setIsDashboardsOpen(false); router.push('/admin/chief-of-growth'); }}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-brand-50 hover:text-brand-700 transition-colors"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center">
+                      <TrendingUp className="w-4 h-4 text-emerald-600" />
+                    </div>
+                    <div className="text-left">
+                      <p className="font-semibold text-[13px]">Chief of Growth</p>
+                      <p className="text-[10px] text-gray-400">User growth & acquisition</p>
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => { setIsDashboardsOpen(false); router.push('/admin/chief-of-operations'); }}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-brand-50 hover:text-brand-700 transition-colors"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center">
+                      <BusIcon className="w-4 h-4 text-blue-600" />
+                    </div>
+                    <div className="text-left">
+                      <p className="font-semibold text-[13px]">Chief of Operations</p>
+                      <p className="text-[10px] text-gray-400">Routes, buses & schedules</p>
+                    </div>
+                  </button>
+                  <div className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-300 cursor-not-allowed">
+                    <div className="w-8 h-8 rounded-lg bg-gray-50 flex items-center justify-center">
+                      <DollarSign className="w-4 h-4 text-gray-300" />
+                    </div>
+                    <div className="text-left">
+                      <p className="font-semibold text-[13px]">Finance</p>
+                      <p className="text-[10px] text-gray-300">Coming soon</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
             {userProfile?.id && (
               <NotificationBell userId={userProfile.id} className="relative" />
             )}
@@ -2186,15 +2284,16 @@ export default function SuperAdminDashboard() {
               <RefreshCw className={`w-4 h-4 ${loadingStates.initializing ? 'animate-spin' : ''}`} />
             </button>
             <div className="h-8 w-[1px] bg-gray-100" />
-            <div className="flex items-center gap-3 pl-2">
-              <div className="text-right">
-                <p className="text-[12px] font-bold text-gray-900 leading-none">System Live</p>
-                <p className="text-[10px] text-green-500 font-bold uppercase mt-1">All Systems Nominal</p>
+            <button
+              type="button"
+              onClick={() => router.push('/profile')}
+              className="flex items-center gap-3 pl-2 py-1.5 pr-1 rounded-xl hover:bg-gray-50 transition-colors duration-200"
+              aria-label="Open profile"
+            >
+              <div className="w-9 h-9 bg-brand-100 rounded-full flex items-center justify-center text-brand-700 font-bold text-xs ring-4 ring-brand-50/50">
+                {userProfile?.firstName?.[0] || userProfile?.email?.[0] || 'A'}
               </div>
-              <div className="w-9 h-9 bg-indigo-50 rounded-full flex items-center justify-center text-indigo-600 font-bold text-xs ring-4 ring-indigo-50/50">
-                {userProfile?.firstName?.[0] || 'A'}
-              </div>
-            </div>
+            </button>
           </div>
         </header>
 
@@ -2212,65 +2311,76 @@ export default function SuperAdminDashboard() {
             {/* ── OVERVIEW ── */}
             {activeTab === 'overview' && (
               <div className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                  <KineticStatCard title="Total Companies" value={stats.totalCompanies} icon={Building2} iconBg="bg-blue-50" iconColor="text-blue-600" />
-                  <KineticStatCard title="Total Revenue" value={`MWK ${stats.totalRevenue.toLocaleString()}`} icon={DollarSign} iconBg="bg-emerald-50" iconColor="text-emerald-600" subtitle={`MWK ${stats.monthlyRevenue.toLocaleString()} this month`} />
-                  <KineticStatCard title="Total Bookings" value={stats.totalBookings} icon={List} iconBg="bg-indigo-50" iconColor="text-indigo-600" badge={{ text: `${stats.monthlyGrowth}% UP`, className: 'bg-green-100 text-green-700' }} />
-                  <KineticStatCard title="Active Routes" value={routes.length} icon={MapIcon} iconBg="bg-violet-50" iconColor="text-violet-600" />
-                  <KineticStatCard title="Active Companies" value={stats.activeCompanies} icon={CheckCircle} iconBg="bg-green-50" iconColor="text-green-600" />
-                  <KineticStatCard title="Pending Review" value={stats.pendingCompanies} icon={Clock} iconBg="bg-amber-50" iconColor="text-amber-600" badge={stats.pendingCompanies > 0 ? { text: 'ACTION', className: 'bg-amber-100 text-amber-700' } : undefined} />
-                  <KineticStatCard title="Schedules Live" value={schedules.length} icon={Calendar} iconBg="bg-sky-50" iconColor="text-sky-600" />
-                  <KineticStatCard title="Revenue Growth" value={`${stats.revenueGrowth}%`} icon={TrendingUp} iconBg="bg-rose-50" iconColor="text-rose-600" />
+                <div className="flex justify-end">
+                  <button
+                    onClick={() => openModal('add')}
+                    className="inline-flex items-center gap-2 bg-brand-700 text-white px-4 py-2.5 rounded-xl hover:bg-brand-800 transition-all text-sm font-black uppercase tracking-wider shadow-lg shadow-brand-100"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Add Company
+                  </button>
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {/* Recent Activity / System Integrity */}
-                  <div className="bg-white rounded-xl shadow-[0_2px_10px_-4px_rgba(0,0,0,0.1)] border border-gray-100 p-6">
-                    <h3 className="text-base font-bold text-gray-900 mb-4 flex items-center gap-2">
-                      <Activity className="w-5 h-5 text-indigo-600" /> System Activity Summary
-                    </h3>
-                    <div className="space-y-4">
-                      {[
-                        { label: 'Active Subscriptions', value: stats.activeCompanies, total: stats.totalCompanies, color: 'bg-indigo-600' },
-                        { label: 'Booking Fulfillment', value: stats.totalBookings - stats.pendingCompanies, total: stats.totalBookings, color: 'bg-emerald-500' },
-                        { label: 'Platform Uptime', value: 99.9, total: 100, color: 'bg-blue-500' },
-                      ].map(item => (
-                        <div key={item.label}>
-                          <div className="flex justify-between text-xs font-bold mb-1.5">
-                            <span className="text-gray-500 uppercase tracking-wider">{item.label}</span>
-                            <span className="text-gray-900">{item.value} / {item.total}</span>
-                          </div>
-                          <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                            <div className={`h-full ${item.color} rounded-full transition-all`} style={{ width: `${(item.value / item.total) * 100}%` }} />
-                          </div>
-                        </div>
-                      ))}
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-6">
+                  <KineticStatCard title="Total Companies" value={stats.totalCompanies} icon={Building2} iconBg="bg-blue-50" iconColor="text-blue-600" />
+                  <KineticStatCard title="Confirmed booking value" value={`MWK ${stats.totalRevenue.toLocaleString()}`} icon={DollarSign} iconBg="bg-emerald-50" iconColor="text-emerald-600" />
+                  <KineticStatCard title="Total Bookings" value={stats.totalBookings} icon={List} iconBg="bg-indigo-50" iconColor="text-indigo-600" />
+                  <KineticStatCard title="Active Routes" value={routes.filter(isLiveRoute).length} icon={MapIcon} iconBg="bg-violet-50" iconColor="text-violet-600" />
+                  <KineticStatCard
+                    title="Schedules Today"
+                    value={schedulesTodayCount}
+                    icon={Calendar}
+                    iconBg="bg-sky-50"
+                    iconColor="text-sky-600"
+                  />
+                </div>
+
+                <div className="bg-white rounded-xl shadow-[0_2px_10px_-4px_rgba(0,0,0,0.1)] border border-gray-100 overflow-hidden">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-6 py-5 border-b border-gray-100">
+                    <div>
+                      <h3 className="text-lg font-bold text-gray-900">Latest Companies</h3>
+                      <p className="text-sm text-gray-500">Most recently added partner companies</p>
                     </div>
+                    <button
+                      onClick={() => handleTabChange('companies')}
+                      className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs font-bold text-gray-700 hover:bg-gray-100 transition-colors"
+                    >
+                      View all
+                    </button>
                   </div>
 
-                  {/* Quick Actions */}
-                  <div className="bg-white rounded-xl shadow-[0_2px_10px_-4px_rgba(0,0,0,0.1)] border border-gray-100 p-6 flex flex-col">
-                    <h3 className="text-base font-bold text-gray-900 mb-4 flex items-center gap-2">
-                      <Plus className="w-5 h-5 text-indigo-600" /> Administrative Actions
-                    </h3>
-                    <div className="grid grid-cols-2 gap-3 flex-1">
-                      <button onClick={() => openModal('add')} className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl bg-indigo-50/50 hover:bg-indigo-50 border border-indigo-100 border-dashed transition-all group">
-                        <Building2 className="w-6 h-6 text-indigo-600 group-hover:scale-110 transition-transform" />
-                        <span className="text-xs font-bold text-indigo-900">Add Company</span>
-                      </button>
-                      <button onClick={exportStatsData} className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl bg-emerald-50/50 hover:bg-emerald-50 border border-emerald-100 border-dashed transition-all group">
-                        <Download className="w-6 h-6 text-emerald-600 group-hover:scale-110 transition-transform" />
-                        <span className="text-xs font-bold text-emerald-900">Export Stats</span>
-                      </button>
-                      <button onClick={() => setActiveTab('companies')} className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl bg-amber-50/50 hover:bg-amber-50 border border-amber-100 border-dashed transition-all group">
-                        <UserCheck className="w-6 h-6 text-amber-600 group-hover:scale-110 transition-transform" />
-                        <span className="text-xs font-bold text-amber-900">Audit Companies</span>
-                      </button>
-                      <button onClick={() => setActiveTab('users')} className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl bg-violet-50/50 hover:bg-violet-50 border border-violet-100 border-dashed transition-all group">
-                        <User2 className="w-6 h-6 text-violet-600 group-hover:scale-110 transition-transform" />
-                        <span className="text-xs font-bold text-violet-900">Role & Access</span>
-                      </button>
-                    </div>
+                  <div className="divide-y divide-gray-100">
+                    {companies.slice(0, 5).map((company) => {
+                      const latestCompanyBadgeStatus = company.isPartner === false && company.bookingEnabled === false
+                        ? 'Unclaimed'
+                        : company.status || 'pending';
+
+                      return (
+                        <button
+                          key={company.id}
+                          type="button"
+                          onClick={() => { setSelectedCompany(company); setActiveTab('profile'); }}
+                          className="w-full flex items-center justify-between gap-4 px-6 py-4 text-left hover:bg-gray-50 transition-colors"
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="h-11 w-11 bg-brand-50 rounded-xl flex items-center justify-center text-brand-700 ring-1 ring-brand-100">
+                              <Building2 className="w-5 h-5" />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-sm font-bold text-gray-900 truncate">{company.name}</p>
+                              <p className="text-xs text-gray-500 truncate">{company.email || 'No email provided'}</p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-4 shrink-0">
+                            <StatusBadge status={latestCompanyBadgeStatus} type="company" />
+                            <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">
+                              {company.createdAt ? formatDate(company.createdAt) : 'New'}
+                            </span>
+                          </div>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               </div>
@@ -2279,32 +2389,66 @@ export default function SuperAdminDashboard() {
             {/* ── COMPANIES ── */}
             {activeTab === 'companies' && (
               <div className="space-y-6">
-                {/* Filters */}
+                {/* ── Status Stat Cards Row ── */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full">
+                  {[
+                    { key: 'active', label: 'Active', count: companyStatusCounts.active, selected: companyStatusFilter === 'active' },
+                    { key: 'claimed', label: 'Claimed', count: `${companyStatusCounts.claimed} of ${companyStatusCounts.total}`, selected: claimedOnly },
+                    { key: 'pending', label: 'Pending', count: companyStatusCounts.pending, selected: companyStatusFilter === 'pending' },
+                    { key: 'inactive', label: 'Inactive', count: companyStatusCounts.inactive, selected: companyStatusFilter === 'inactive' },
+                  ].map(card => {
+                    const isSelected = card.selected;
+                    const onClick = card.key === 'claimed'
+                      ? toggleClaimedFilter
+                      : () => toggleCompanyStatusFilter(card.key as 'active' | 'pending' | 'inactive');
+
+                    return (
+                      <button
+                        key={card.key}
+                        type="button"
+                        onClick={onClick}
+                        className={`w-full rounded-2xl border px-4 py-3 text-left transition-all ${isSelected
+                          ? 'border-brand-200 bg-brand-50 text-brand-700 shadow-sm shadow-brand-100'
+                          : 'border-gray-200 bg-white text-gray-700 hover:border-brand-200 hover:bg-brand-50/40'}`}
+                      >
+                        <div className="text-[10px] font-black uppercase tracking-[0.18em] text-gray-400">{card.label}</div>
+                        <div className="mt-2 text-xl font-black leading-none">{card.count}</div>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* ── Search & Actions Row ── */}
                 <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
                   <div className="relative w-full sm:max-w-xs">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
-                    <input type="text" placeholder="Search companies..." value={searchTerm}
+                    <input
+                      type="text"
+                      placeholder="Search companies..."
+                      value={searchTerm}
                       onChange={e => { setSearchTerm(e.target.value); debouncedResetPage(); }}
-                      className="w-full pl-10 pr-4 py-2 bg-gray-50 border-none rounded-xl text-sm focus:ring-2 focus:ring-indigo-500" />
+                      className="w-full pl-10 pr-4 py-2 bg-gray-50 border-none rounded-xl text-sm focus:ring-2 focus:ring-indigo-500"
+                    />
                   </div>
-                  <div className="flex gap-2 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0">
-                    <select value={statusFilter} onChange={e => setStatusFilter(e.target.value as StatusFilter)}
-                      className="bg-white border-gray-200 rounded-xl px-3 py-2 text-sm font-bold text-gray-600 focus:ring-2 focus:ring-indigo-500 min-w-[120px]">
-                      <option value="all">All Status</option>
-                      <option value="active">Active</option>
-                      <option value="pending">Pending</option>
-                      <option value="inactive">Inactive</option>
-                    </select>
-                    <button onClick={() => setSortOrder(p => p === 'asc' ? 'desc' : 'asc')}
-                      className="p-2.5 bg-white border border-gray-100 rounded-xl hover:bg-gray-50 transition-colors shadow-sm">
+
+                  <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                    <button
+                      onClick={() => setSortOrder(p => p === 'asc' ? 'desc' : 'asc')}
+                      className="p-2.5 bg-white border border-gray-100 rounded-xl hover:bg-gray-50 transition-colors shadow-sm"
+                      title={sortOrder === 'asc' ? 'Sort descending' : 'Sort ascending'}
+                    >
                       {sortOrder === 'asc' ? <SortAsc className="w-4 h-4 text-gray-600" /> : <SortDesc className="w-4 h-4 text-gray-600" />}
                     </button>
-                    <button onClick={exportCompaniesData}
-                      className="flex items-center gap-2 bg-emerald-50 text-emerald-700 px-4 py-2 rounded-xl hover:bg-emerald-100 transition-colors text-sm font-black uppercase tracking-wider">
+                    <button
+                      onClick={exportCompaniesData}
+                      className="flex items-center gap-2 bg-emerald-50 text-emerald-700 px-4 py-2 rounded-xl hover:bg-emerald-100 transition-colors text-sm font-black uppercase tracking-wider"
+                    >
                       <Download className="w-4 h-4" /> Export
                     </button>
-                    <button onClick={() => openModal('add')}
-                      className="flex items-center gap-2 bg-indigo-900 text-white px-5 py-2 rounded-xl hover:bg-indigo-800 transition-all text-sm font-black uppercase tracking-wider shadow-lg shadow-indigo-100">
+                    <button
+                      onClick={() => openModal('add')}
+                      className="flex items-center gap-2 bg-indigo-900 text-white px-5 py-2 rounded-xl hover:bg-indigo-800 transition-all text-sm font-black uppercase tracking-wider shadow-lg shadow-indigo-100"
+                    >
                       <Plus className="w-4 h-4" /> Add Company
                     </button>
                   </div>
@@ -2380,9 +2524,6 @@ export default function SuperAdminDashboard() {
                                     <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-widest bg-amber-50 text-amber-700 border border-amber-100">
                                       {company.planType || 'BASIC'}
                                     </span>
-                                    {company.paymentSettings?.paychanguEnabled && (
-                                      <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" title="Gateway Online" />
-                                    )}
                                   </div>
                                 </td>
                                 <td className="px-6 py-4">
@@ -2441,16 +2582,6 @@ export default function SuperAdminDashboard() {
                     <p className="text-[10px] text-gray-400 mt-1">Search, assign platform roles, and review access.</p>
                   </div>
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                    <div className="relative w-full sm:w-[320px]">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
-                      <input
-                        type="text"
-                        placeholder="Search users, email, role, company..."
-                        value={userSearchTerm}
-                        onChange={e => { setUserSearchTerm(e.target.value); setUsersPage(1); }}
-                        className="w-full pl-10 pr-4 py-2 rounded-2xl border border-gray-200 bg-gray-50 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-200"
-                      />
-                    </div>
                     <button
                       type="button"
                       onClick={refreshUsers}
@@ -2461,22 +2592,62 @@ export default function SuperAdminDashboard() {
                   </div>
                 </div>
 
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {[
+                    { key: 'company', label: 'Company roles', count: userRoleGroupCounts.company, selected: userRoleGroupFilter === 'company' },
+                    { key: 'platform', label: 'Platform roles', count: userRoleGroupCounts.platform, selected: userRoleGroupFilter === 'platform' },
+                    { key: 'customer', label: 'Customer', count: userRoleGroupCounts.customer, selected: userRoleGroupFilter === 'customer' },
+                  ].map(card => {
+                    const isSelected = !!card.selected;
+                    const handleClick = () => {
+                      setUserRoleGroupFilter(prev => prev === card.key ? 'all' : card.key as 'company' | 'platform' | 'customer');
+                      setUsersPage(1);
+                    };
+
+                    return (
+                      <button
+                        key={card.key}
+                        type="button"
+                        onClick={handleClick}
+                        className={`rounded-2xl border px-4 py-3 text-left transition-all ${isSelected
+                          ? 'border-brand-200 bg-brand-50 text-brand-700 shadow-sm shadow-brand-100'
+                          : 'border-gray-200 bg-white text-gray-700 hover:border-brand-200 hover:bg-brand-50/40'}`}
+                      >
+                        <div className="text-[10px] font-black uppercase tracking-[0.18em] text-gray-400">{card.label}</div>
+                        <div className="mt-2 text-xl font-black leading-none">{card.count}</div>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="relative w-full sm:w-[320px]">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                  <input
+                    type="text"
+                    placeholder="Search users, email, role, company..."
+                    value={userSearchTerm}
+                    onChange={e => { setUserSearchTerm(e.target.value); setUsersPage(1); }}
+                    className="w-full pl-10 pr-4 py-2 rounded-2xl border border-gray-200 bg-gray-50 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                  />
+                </div>
+
                 <div className="bg-white rounded-2xl border shadow-sm overflow-hidden">
                   <div className="overflow-x-auto">
-                    <table className="w-full min-w-[720px] text-left text-sm">
+                    <table className="w-full min-w-[820px] text-left text-sm">
                       <thead className="bg-gray-50 border-b">
                         <tr>
                           <th className="px-4 py-3 text-xs font-black text-gray-400 uppercase tracking-wider">Name</th>
                           <th className="px-4 py-3 text-xs font-black text-gray-400 uppercase tracking-wider">Email</th>
                           <th className="px-4 py-3 text-xs font-black text-gray-400 uppercase tracking-wider">Role</th>
                           <th className="px-4 py-3 text-xs font-black text-gray-400 uppercase tracking-wider">Company</th>
+                          <th className="px-4 py-3 text-xs font-black text-gray-400 uppercase tracking-wider">Setup</th>
                           <th className="px-4 py-3 text-xs font-black text-gray-400 uppercase tracking-wider">Actions</th>
                         </tr>
                       </thead>
                       <tbody>
                         {filteredUsers.length === 0 && !usersLoading ? (
                           <tr>
-                            <td colSpan={5} className="py-16 text-center text-gray-400">No users match your search.</td>
+                            <td colSpan={6} className="py-16 text-center text-gray-400">No users match your search.</td>
                           </tr>
                         ) : (
                           usersPagination.currentUsers.map(u => (
@@ -2491,6 +2662,11 @@ export default function SuperAdminDashboard() {
                                 </span>
                               </td>
                               <td className="px-4 py-4 text-gray-500">{u.companyName || u.company?.name || '—'}</td>
+                              <td className="px-4 py-4">
+                                <span className={`inline-flex items-center px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider ${setupStatusBadge(u.setupCompleted)}`}>
+                                  {u.setupCompleted ? 'Complete' : 'Incomplete'}
+                                </span>
+                              </td>
                               <td className="px-4 py-4">
                                 <button
                                   type="button"
@@ -2558,6 +2734,12 @@ export default function SuperAdminDashboard() {
                             <p className="mt-2 text-sm text-gray-900">{selectedUser.companyName || selectedUser.company?.name || '—'}</p>
                           </div>
                           <div>
+                            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Setup complete</p>
+                            <span className={`mt-2 inline-flex items-center px-3 py-1 rounded-full text-xs font-black uppercase tracking-wide border ${setupStatusBadge(selectedUser.setupCompleted)}`}>
+                              {selectedUser.setupCompleted ? 'Complete' : 'Incomplete'}
+                            </span>
+                          </div>
+                          <div>
                             <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Current role</p>
                             <span className="mt-2 inline-flex items-center px-3 py-1 rounded-full bg-indigo-50 text-indigo-700 text-xs font-black uppercase tracking-wide border border-indigo-100">
                               {ROLE_LABELS[selectedUser.role] || selectedUser.role}
@@ -2597,30 +2779,49 @@ export default function SuperAdminDashboard() {
               <div className="space-y-6">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
-                    <h3 className="text-xl font-black text-gray-900">Payments & System Settings</h3>
-                    <p className="text-[10px] text-gray-400 mt-1">Review gateway health, connected companies, and configure payment settings per partner.</p>
+                    <h3 className="text-xl font-black text-gray-900">Payments</h3>
+                    <p className="text-[10px] text-gray-400 mt-1">Platform-wide PayChangu payment activity and gross paid revenue.</p>
                   </div>
                   {selectedPaymentCompany ? (
-                    <button type="button" onClick={() => setSelectedPaymentCompany(null)}
+                    <button type="button" onClick={() => {
+                      setSelectedPaymentCompany(null);
+                      setTransactionCompanyFilter('');
+                      setTransactionPage(1);
+                    }}
                       className="rounded-2xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition">
                       Back to payment summary
                     </button>
                   ) : null}
                 </div>
 
-                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                  <StatPill icon={<CreditCard className="w-4 h-4 text-white" />} label="Companies linked" value={paymentSummary.totalCompanies} color="bg-slate-100 text-slate-700" />
-                  <StatPill icon={<Wifi className="w-4 h-4 text-white" />} label="Gateways active" value={`${paymentSummary.enabledCompanies}`} color="bg-emerald-100 text-emerald-700" />
-                  <StatPill icon={<Zap className="w-4 h-4 text-white" />} label="Fully configured" value={`${paymentSummary.fullyConfiguredCompanies}`} color="bg-indigo-100 text-indigo-700" />
-                  <StatPill icon={<AlertCircle className="w-4 h-4 text-white" />} label="Pending / failed" value={`${paymentSummary.pendingPayments} / ${paymentSummary.failedPayments}`} color="bg-amber-100 text-amber-700" />
-                </div>
+                {!selectedPaymentCompany && (
+                  <>
+                    <p className="text-xs font-black uppercase tracking-widest text-gray-400">Booking payment state · all bookings</p>
+                    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                      <StatPill icon={<DollarSign className="w-4 h-4 text-white" />} label="Gross paid revenue" value={`MWK ${paymentSummary.totalRevenue.toLocaleString()}`} color="bg-emerald-100 text-emerald-700" />
+                      <StatPill icon={<CheckCircle className="w-4 h-4 text-white" />} label="Paid bookings" value={paymentSummary.paidPayments} color="bg-blue-100 text-blue-700" />
+                      <StatPill icon={<Clock className="w-4 h-4 text-white" />} label="Pending payments" value={paymentSummary.pendingPayments} color="bg-amber-100 text-amber-700" />
+                      <StatPill icon={<AlertCircle className="w-4 h-4 text-white" />} label="Failed payments" value={paymentSummary.failedPayments} color="bg-red-100 text-red-700" />
+                    </div>
+
+                    <div className="rounded-3xl border border-blue-100 bg-blue-50 p-5">
+                      <div className="flex items-start gap-3">
+                        <Activity className="mt-0.5 h-5 w-5 shrink-0 text-blue-700" />
+                        <div>
+                          <p className="text-sm font-bold text-blue-900">Gateway signal: {transactionsLoading ? 'Loading' : 'Observed'}</p>
+                          <p className="mt-1 text-xs text-blue-800">Log-derived operational signal from the existing PayChangu payment and security logging paths. This is not a persisted gateway health table.</p>
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
 
                 {!selectedPaymentCompany ? (
                   <div className="space-y-5">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <div>
-                        <h4 className="text-sm font-semibold text-gray-900">Connected companies</h4>
-                        <p className="text-[10px] text-gray-400">Manage payment settings for each company on the platform.</p>
+                        <h4 className="text-sm font-semibold text-gray-900">Company payment activity</h4>
+                        <p className="text-[10px] text-gray-400">Gross paid revenue and payment-status counts from Booking records.</p>
                       </div>
                       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                         <div className="relative w-full sm:w-80">
@@ -2641,15 +2842,14 @@ export default function SuperAdminDashboard() {
                           <thead className="bg-gray-50">
                             <tr>
                               <th className="px-5 py-4 font-black uppercase tracking-wider text-gray-400">Company</th>
-                              <th className="px-5 py-4 font-black uppercase tracking-wider text-gray-400">Gateway</th>
-                              <th className="px-5 py-4 font-black uppercase tracking-wider text-gray-400">Configured</th>
-                              <th className="px-5 py-4 font-black uppercase tracking-wider text-gray-400">Revenue</th>
+                              <th className="px-5 py-4 font-black uppercase tracking-wider text-gray-400">Gross paid revenue</th>
+                              <th className="px-5 py-4 font-black uppercase tracking-wider text-gray-400">Paid / pending / failed</th>
                               <th className="px-5 py-4 font-black uppercase tracking-wider text-gray-400">Actions</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-gray-100">
                             {paymentCompanyPagination.currentCompanies.map(company => {
-                              const stats = companyPaymentStats[company.id] ?? { revenue: 0, pending: 0, failed: 0, bookings: 0 };
+                              const stats = companyPaymentStats[company.id] ?? { revenue: 0, paid: 0, pending: 0, failed: 0 };
                               return (
                                 <tr key={company.id} className="hover:bg-gray-50 transition-colors">
                                   <td className="px-5 py-4">
@@ -2657,27 +2857,20 @@ export default function SuperAdminDashboard() {
                                     <div className="text-xs text-gray-400">{company.email || 'No email'}</div>
                                   </td>
                                   <td className="px-5 py-4">
-                                    {company.paymentSettings?.paychanguEnabled ? (
-                                      <span className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-semibold text-emerald-700">Enabled</span>
-                                    ) : (
-                                      <span className="inline-flex items-center gap-2 rounded-full bg-gray-100 px-3 py-1 text-[11px] font-semibold text-gray-600">Disabled</span>
-                                    )}
-                                  </td>
-                                  <td className="px-5 py-4">
-                                    {company.paymentSettings?.paychanguPublicKey ? (
-                                      <span className="inline-flex items-center gap-2 rounded-full bg-slate-50 px-3 py-1 text-[11px] font-semibold text-slate-700">Yes</span>
-                                    ) : (
-                                      <span className="inline-flex items-center gap-2 rounded-full bg-amber-50 px-3 py-1 text-[11px] font-semibold text-amber-700">Incomplete</span>
-                                    )}
-                                  </td>
-                                  <td className="px-5 py-4">
                                     <div className="text-sm font-semibold text-gray-900">MWK {stats.revenue.toLocaleString()}</div>
-                                    <div className="text-xs text-gray-400">{stats.bookings} bookings</div>
+                                    <div className="text-xs text-gray-400">{stats.paid} paid bookings</div>
+                                  </td>
+                                  <td className="px-5 py-4 text-xs font-semibold text-gray-700">
+                                    {stats.paid} / {stats.pending} / {stats.failed}
                                   </td>
                                   <td className="px-5 py-4">
-                                    <button type="button" onClick={() => setSelectedPaymentCompany(company)}
+                                    <button type="button" onClick={() => {
+                                      setSelectedPaymentCompany(company);
+                                      setTransactionCompanyFilter(company.id);
+                                      setTransactionPage(1);
+                                    }}
                                       className="rounded-2xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-700 transition">
-                                      Manage
+                                      View details
                                     </button>
                                   </td>
                                 </tr>
@@ -2704,21 +2897,159 @@ export default function SuperAdminDashboard() {
                         </div>
                       </div>
                     </div>
+
+                    <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between px-5 py-4 border-b border-gray-100 gap-4">
+                        <div>
+                          <h4 className="text-sm font-semibold text-gray-900">Recent transactions</h4>
+                          <p className="text-[10px] text-gray-400">Payment records from the existing admin payments API.</p>
+                        </div>
+                        <div className="flex flex-col items-end gap-2">
+                          <span className="text-xs text-gray-400">{transactionStats.successful} paid / {transactionStats.pending} pending / {transactionStats.failed} failed</span>
+                          <div className="flex items-center gap-4 text-xs font-medium text-gray-600">
+                            <label className="flex items-center gap-1.5 cursor-pointer">
+                              <input type="checkbox" checked={showArchivedPayments} onChange={(e) => setShowArchivedPayments(e.target.checked)} className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
+                              Show Archived
+                            </label>
+                            <label className="flex items-center gap-1.5 cursor-pointer">
+                              <input type="checkbox" checked={showUnlinkedPayments} onChange={(e) => setShowUnlinkedPayments(e.target.checked)} className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
+                              Show Unlinked (Test)
+                            </label>
+                          </div>
+                        </div>
+                      </div>
+                      {transactionsLoading ? (
+                        <div className="px-5 py-8 text-center text-sm text-gray-500">Loading transactions...</div>
+                      ) : transactionPagination.currentTransactions.length === 0 ? (
+                        <div className="px-5 py-8 text-center text-sm text-gray-500">No payment transactions found.</div>
+                      ) : (
+                        <div className="overflow-x-auto">
+                          <table className="min-w-full text-left text-sm">
+                            <thead className="bg-gray-50">
+                              <tr>
+                                <th className="px-5 py-3 font-black uppercase tracking-wider text-gray-400">Reference</th>
+                                <th className="px-5 py-3 font-black uppercase tracking-wider text-gray-400">Company</th>
+                                <th className="px-5 py-3 font-black uppercase tracking-wider text-gray-400">Provider</th>
+                                <th className="px-5 py-3 font-black uppercase tracking-wider text-gray-400">Amount</th>
+                                <th className="px-5 py-3 font-black uppercase tracking-wider text-gray-400">Status</th>
+                                <th className="px-5 py-3 font-black uppercase tracking-wider text-gray-400">Date</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                              {transactionPagination.currentTransactions.map(transaction => (
+                                <tr key={transaction.id} className="hover:bg-gray-50 transition-colors">
+                                  <td className="px-5 py-3 font-mono text-xs text-gray-700">{transaction.txRef}</td>
+                                  <td className="px-5 py-3 text-sm text-gray-900">{transaction.companyName}</td>
+                                  <td className="px-5 py-3 text-xs text-gray-600">{transaction.provider}</td>
+                                  <td className="px-5 py-3 text-sm font-semibold text-gray-900">MWK {transaction.amount.toLocaleString()}</td>
+                                  <td className="px-5 py-3"><StatusBadge status={transaction.status} type="booking" /></td>
+                                  <td className="px-5 py-3 text-xs text-gray-500">{formatDate(transaction.date)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                      {transactionPagination.totalPages > 1 ? (
+                        <div className="flex items-center justify-between px-5 py-3 border-t border-gray-100 text-xs text-gray-500">
+                          <span>Showing {transactionPagination.startIndex}-{transactionPagination.endIndex} of {transactionPagination.totalItems}</span>
+                          <div className="flex items-center gap-2">
+                            <button type="button" onClick={() => setTransactionPage(prev => Math.max(1, prev - 1))} disabled={transactionPagination.currentPage <= 1} className="rounded-xl border border-gray-200 px-3 py-1.5 disabled:opacity-50">Previous</button>
+                            <button type="button" onClick={() => setTransactionPage(prev => Math.min(transactionPagination.totalPages, prev + 1))} disabled={transactionPagination.currentPage >= transactionPagination.totalPages} className="rounded-xl border border-gray-200 px-3 py-1.5 disabled:opacity-50">Next</button>
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
                   </div>
                 ) : (
                   <div className="space-y-5">
-                    <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6">
-                      <p className="text-sm font-semibold text-gray-900">Edit payment settings for {selectedPaymentCompany.name}</p>
-                      <p className="text-xs text-gray-400 mt-1">Changes here update the company’s PayChangu integration and keep the platform settings in sync.</p>
-                    </div>
-                    <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6">
-                      <SettingsTab
-                        company={selectedPaymentCompany}
-                        setCompany={updateCompanySettings as any}
-                        setError={msg => showAlert('error', msg)}
-                        setSuccess={msg => showAlert('success', msg)}
-                      />
-                    </div>
+                    {(() => {
+                      const companyStats = companyPaymentStats[selectedPaymentCompany.id] ?? { revenue: 0, paid: 0, pending: 0, failed: 0 };
+                      return (
+                        <>
+                          <div>
+                            <h4 className="text-sm font-semibold text-gray-900">Payment snapshot · {selectedPaymentCompany.name}</h4>
+                            <p className="text-[10px] text-gray-400 mt-1">Read-only company scope. Booking payment-state metrics and the matching transaction records are shown below.</p>
+                          </div>
+                          <p className="text-xs font-black uppercase tracking-widest text-gray-400">Booking payment state · {selectedPaymentCompany.name}</p>
+                          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                            <StatPill icon={<DollarSign className="w-4 h-4 text-white" />} label="Gross paid revenue" value={`MWK ${companyStats.revenue.toLocaleString()}`} color="bg-emerald-100 text-emerald-700" />
+                            <StatPill icon={<CheckCircle className="w-4 h-4 text-white" />} label="Paid bookings" value={companyStats.paid} color="bg-blue-100 text-blue-700" />
+                            <StatPill icon={<Clock className="w-4 h-4 text-white" />} label="Pending payments" value={companyStats.pending} color="bg-amber-100 text-amber-700" />
+                            <StatPill icon={<AlertCircle className="w-4 h-4 text-white" />} label="Failed payments" value={companyStats.failed} color="bg-red-100 text-red-700" />
+                          </div>
+                          <div className="rounded-3xl border border-blue-100 bg-blue-50 p-5">
+                            <div className="flex items-start gap-3">
+                              <Activity className="mt-0.5 h-5 w-5 shrink-0 text-blue-700" />
+                              <div>
+                                <p className="text-sm font-bold text-blue-900">Gateway signal: {transactionsLoading ? 'Loading' : 'Observed'}</p>
+                                <p className="mt-1 text-xs text-blue-800">Log-derived operational signal from the existing PayChangu payment and security logging paths. This is not a persisted gateway health table.</p>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between px-5 py-4 border-b border-gray-100 gap-4">
+                              <div>
+                                <h4 className="text-sm font-semibold text-gray-900">Transactions · {selectedPaymentCompany.name}</h4>
+                                <p className="text-[10px] text-gray-400">Existing admin payment records filtered by companyId.</p>
+                              </div>
+                              <div className="flex flex-col items-end gap-2">
+                                <span className="text-xs text-gray-400">{selectedCompanyTransactionStats.paid} paid / {selectedCompanyTransactionStats.pending} pending / {selectedCompanyTransactionStats.failed} failed</span>
+                                <div className="flex items-center gap-4 text-xs font-medium text-gray-600">
+                                  <label className="flex items-center gap-1.5 cursor-pointer">
+                                    <input type="checkbox" checked={showArchivedPayments} onChange={(e) => setShowArchivedPayments(e.target.checked)} className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
+                                    Show Archived
+                                  </label>
+                                  <label className="flex items-center gap-1.5 cursor-pointer">
+                                    <input type="checkbox" checked={showUnlinkedPayments} onChange={(e) => setShowUnlinkedPayments(e.target.checked)} className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
+                                    Show Unlinked (Test)
+                                  </label>
+                                </div>
+                              </div>
+                            </div>
+                            {transactionsLoading ? (
+                              <div className="px-5 py-8 text-center text-sm text-gray-500">Loading transactions...</div>
+                            ) : transactionPagination.currentTransactions.length === 0 ? (
+                              <div className="px-5 py-8 text-center text-sm text-gray-500">No payment transactions found for this company.</div>
+                            ) : (
+                              <div className="overflow-x-auto">
+                                <table className="min-w-full text-left text-sm">
+                                  <thead className="bg-gray-50">
+                                    <tr>
+                                      <th className="px-5 py-3 font-black uppercase tracking-wider text-gray-400">Reference</th>
+                                      <th className="px-5 py-3 font-black uppercase tracking-wider text-gray-400">Provider</th>
+                                      <th className="px-5 py-3 font-black uppercase tracking-wider text-gray-400">Amount</th>
+                                      <th className="px-5 py-3 font-black uppercase tracking-wider text-gray-400">Status</th>
+                                      <th className="px-5 py-3 font-black uppercase tracking-wider text-gray-400">Date</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-gray-100">
+                                    {transactionPagination.currentTransactions.map(transaction => (
+                                      <tr key={transaction.id} className="hover:bg-gray-50 transition-colors">
+                                        <td className="px-5 py-3 font-mono text-xs text-gray-700">{transaction.txRef}</td>
+                                        <td className="px-5 py-3 text-xs text-gray-600">{transaction.provider}</td>
+                                        <td className="px-5 py-3 text-sm font-semibold text-gray-900">MWK {transaction.amount.toLocaleString()}</td>
+                                        <td className="px-5 py-3"><StatusBadge status={transaction.status} type="booking" /></td>
+                                        <td className="px-5 py-3 text-xs text-gray-500">{formatDate(transaction.date)}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            )}
+                            {transactionPagination.totalPages > 1 ? (
+                              <div className="flex items-center justify-between px-5 py-3 border-t border-gray-100 text-xs text-gray-500">
+                                <span>Showing {transactionPagination.startIndex}-{transactionPagination.endIndex} of {transactionPagination.totalItems}</span>
+                                <div className="flex items-center gap-2">
+                                  <button type="button" onClick={() => setTransactionPage(prev => Math.max(1, prev - 1))} disabled={transactionPagination.currentPage <= 1} className="rounded-xl border border-gray-200 px-3 py-1.5 disabled:opacity-50">Previous</button>
+                                  <button type="button" onClick={() => setTransactionPage(prev => Math.min(transactionPagination.totalPages, prev + 1))} disabled={transactionPagination.currentPage >= transactionPagination.totalPages} className="rounded-xl border border-gray-200 px-3 py-1.5 disabled:opacity-50">Next</button>
+                                </div>
+                              </div>
+                            ) : null}
+                          </div>
+                        </>
+                      );
+                    })()}
                   </div>
                 )}
               </div>
@@ -2946,8 +3277,12 @@ export default function SuperAdminDashboard() {
                 routes={routes}
                 buses={buses}
                 operators={operators}
-                openPaymentSettingsModal={openPaymentSettingsModal}
+                selectedCompanyId={selectedCompany?.id ?? null}
                 onStatusChange={handleStatusChange}
+                onDelete={(companyId) => {
+                  const company = companies.find(c => c.id === companyId);
+                  if (company) openModal('delete', company);
+                }}
               />
             )}
 
@@ -3163,62 +3498,19 @@ export default function SuperAdminDashboard() {
                 setSuccess={m => showAlert('success', m)}
               />
             )}
-            {activeTab === 'coo' && (
-              <div className="space-y-6">
-                <COOTab setActiveTab={(t) => setActiveTab(t as TabType)} />
-              </div>
-            )}
+
           </div>
         </main>
 
         {/* ── MODALS ── */}
 
         {/* Add Company */}
-        {modals.add && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto">
-              <div className="flex justify-between items-center border-b pb-4 mb-4">
-                <h3 className="text-lg font-semibold">Add New Company</h3>
-                <button onClick={() => closeModal('add')} className="text-gray-400 hover:text-gray-600"><X className="w-6 h-6" /></button>
-              </div>
-              <div className="space-y-4">
-                {([
-                  { id: 'name', label: 'Company Name', type: 'text', key: 'name', err: formErrors.name },
-                  { id: 'email', label: 'Admin Email', type: 'email', key: 'email', err: formErrors.email },
-                  { id: 'adminFirstName', label: 'Admin First Name', type: 'text', key: 'adminFirstName', err: undefined },
-                  { id: 'adminLastName', label: 'Admin Last Name', type: 'text', key: 'adminLastName', err: undefined },
-                  { id: 'adminPhone', label: 'Admin Phone (opt.)', type: 'tel', key: 'adminPhone', err: formErrors.adminPhone },
-                  { id: 'contact', label: 'Contact Phone', type: 'tel', key: 'contact', err: formErrors.contact },
-                ] as const).map(({ id, label, type, key, err }) => (
-                  <div key={id}>
-                    <label htmlFor={`add-${id}`} className="block text-sm font-medium text-gray-700">{label}</label>
-                    <input type={type} id={`add-${id}`} value={(formData as unknown as Record<string, unknown>)[key] as string ?? ''}
-                      onChange={e => setFormData(p => ({ ...p, [key]: e.target.value }))}
-                      className={`mt-1 block w-full border rounded-md p-2 ${err ? 'border-red-500' : 'border-gray-300'}`} />
-                    {err && <p className="text-red-500 text-xs mt-1">{err}</p>}
-                  </div>
-                ))}
-                <div>
-                  <label htmlFor="add-status" className="block text-sm font-medium text-gray-700">Status</label>
-                  <select id="add-status" value={formData.status} onChange={e => setFormData(p => ({ ...p, status: e.target.value as Company['status'] }))}
-                    className="mt-1 block w-full border border-gray-300 rounded-md p-2">
-                    <option value="pending">Pending</option>
-                    <option value="active">Active</option>
-                    <option value="inactive">Inactive</option>
-                  </select>
-                </div>
-              </div>
-              <div className="mt-6 flex justify-end gap-4">
-                <button onClick={() => closeModal('add')} className="px-4 py-2 border rounded-lg hover:bg-gray-50">Cancel</button>
-                <button onClick={handleCreateCompany} disabled={loadingStates.creating}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-blue-300 flex items-center gap-2">
-                  {loadingStates.creating && <Loader2 className="w-4 h-4 animate-spin" />} Create
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
+        <CreateCompanyModal 
+          isOpen={modals.add} 
+          onClose={() => closeModal('add')}
+          onSuccess={(msg) => { showAlert('success', msg); setRefreshCount(r => r + 1); }}
+          onError={(msg) => showAlert('error', msg)}
+        />
         {/* Edit Company */}
         {modals.edit && selectedCompany && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
@@ -3337,18 +3629,6 @@ export default function SuperAdminDashboard() {
           </div>
         )}
 
-        {/* ── Payment Settings Modal ── */}
-        {paymentModalCompany && user && (
-          <PaymentSettingsModal
-            company={paymentModalCompany}
-            onClose={() => setPaymentModalCompany(null)}
-            onSaved={updated => {
-              setCompanies(prev => prev.map(c => c.id === updated.id ? updated : c));
-              setPaymentModalCompany(null);
-            }}
-            showAlert={showAlert}
-          />
-        )}
         {/* Mobile Bottom Nav */}
         <DashboardBottomNav
           activeTab={activeTab}
@@ -3363,9 +3643,7 @@ export default function SuperAdminDashboard() {
               { id: 'users', label: 'Users', icon: User2 },
               { id: 'payments', label: 'Pay', icon: CreditCard },
             ];
-            if (userProfile && (userProfile.role === 'chief_of_operations' || userProfile.role === 'superadmin')) {
-              base.push({ id: 'coo', label: 'Ops', icon: BusIcon });
-            }
+
             return base;
           })()}
         />

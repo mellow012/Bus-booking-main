@@ -12,7 +12,7 @@ const ToggleChip: FC<ToggleChipProps> = ({ label, isActive, onClick }) => {
       type="button"
       onClick={onClick}
       className={`px-3 py-1 rounded-full text-sm font-medium transition-colors whitespace-nowrap
-        ${isActive ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-800 hover:bg-gray-200'}
+        ${isActive ? 'bg-brand-700 text-white' : 'bg-gray-100 text-gray-800 hover:bg-gray-200'}
       `}
     >
       {label}

@@ -18,6 +18,8 @@ import Breadcrumbs from '@/components/coo/Breadcrumbs';
 import useFilterStore from '@/lib/stores/filterStore';
 import Fuse from 'fuse.js';
 import { NotificationBell } from '@/contexts/NotificationContext';
+import CreateCompanyModal from '@/components/modals/CreateCompanyModal';
+import { PlusCircle } from 'lucide-react';
 
 
 type Tab = 'overview' | 'regions' | 'routes' | 'schedules' | 'buses' | 'bookings' | 'payments';
@@ -50,6 +52,7 @@ function ChiefOfOperationsPageContent() {
   const router = useRouter();
   const { userProfile } = useAuth();
   const [loading, setLoading] = useState(false);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [stats, setStats] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<Tab>('overview');
   const [dataLoading, setDataLoading] = useState(false);
@@ -259,7 +262,13 @@ function ChiefOfOperationsPageContent() {
           {userProfile?.id && (
             <NotificationBell userId={userProfile.id} className="relative" />
           )}
-          <div className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-100 rounded-full text-sm font-semibold text-indigo-700">
+          <button
+            onClick={() => setIsCreateModalOpen(true)}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-brand-700 hover:bg-brand-800 text-white rounded-lg text-sm font-semibold transition-colors"
+          >
+            <PlusCircle className="w-4 h-4" /> Add Company
+          </button>
+          <div className="inline-flex items-center gap-2 px-4 py-2 bg-brand-100 rounded-full text-sm font-semibold text-brand-700">
             <BusIcon className="w-5 h-5" /> Operational Hub
           </div>
         </div>
@@ -268,9 +277,9 @@ function ChiefOfOperationsPageContent() {
       {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: 'Total Bookings', value: stats?.bookingAgg?._count?.id ?? '—', color: 'text-blue-600' },
+          { label: 'Total Bookings', value: stats?.bookingAgg?._count?.id ?? '—', color: 'text-brand-700' },
           { label: 'Booking Value', value: `MWK ${stats?.bookingAgg?._sum?.totalAmount?.toLocaleString() ?? '—'}`, color: 'text-emerald-600' },
-          { label: 'Total Payments', value: stats?.paymentAgg?._count?.id ?? '—', color: 'text-purple-600' },
+          { label: 'Total Payments', value: stats?.paymentAgg?._count?.id ?? '—', color: 'text-coral-600' },
           { label: 'Payment Value', value: `MWK ${stats?.paymentAgg?._sum?.amount?.toLocaleString() ?? '—'}`, color: 'text-orange-600' },
         ].map((card, i) => (
           <div key={i} className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm hover:shadow-md transition-shadow">
@@ -294,14 +303,14 @@ function ChiefOfOperationsPageContent() {
                 onClick={() => { setActiveTab(tab); setPage(1); }}
                 className={`relative px-4 py-2 rounded-xl font-bold text-sm transition-all ${
                   activeTab === tab
-                    ? 'bg-indigo-600 text-white shadow-md'
+                    ? 'bg-brand-700 text-white shadow-md'
                     : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
                 }`}
               >
                 {tab.charAt(0).toUpperCase() + tab.slice(1)}
                 {badge > 0 && (
                   <span className={`absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] flex items-center justify-center rounded-full text-[10px] font-black px-1 ${
-                    activeTab === tab ? 'bg-white text-indigo-600' : 'bg-red-500 text-white'
+                    activeTab === tab ? 'bg-white text-brand-700' : 'bg-red-500 text-white'
                   } animate-pulse shadow`}>
                     {badge > 99 ? '99+' : badge}
                   </span>
@@ -358,7 +367,7 @@ function ChiefOfOperationsPageContent() {
                   placeholder={`Search ${activeTab}...`}
                   value={searchQuery}
                   onChange={(e) => { setSearchQuery(e.target.value); setPage(1); }}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-400 focus:border-transparent"
                 />
               </div>
 
@@ -367,7 +376,7 @@ function ChiefOfOperationsPageContent() {
                 <select
                   value={filterStatus}
                   onChange={(e) => { setFilterStatus(e.target.value); setPage(1); }}
-                  className="px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm font-medium"
+                  className="px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-400 text-sm font-medium"
                 >
                   <option value="all">All Status</option>
                   {activeTab === 'bookings' && (
@@ -458,6 +467,14 @@ function ChiefOfOperationsPageContent() {
           )}
         </div>
       </div>
+      
+      <CreateCompanyModal
+
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+        onSuccess={(msg) => { alert(msg); setIsCreateModalOpen(false); /* Optionally trigger a re-fetch of companies if needed */ }}
+        onError={(msg) => alert(msg)}
+      />
     </div>
   );
 }

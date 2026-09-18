@@ -19,7 +19,12 @@ const AUTH_ROUTES = ['/login', '/register'];
 type AppRole = 'superadmin' | 'company_admin' | 'operator' | 'conductor' | 'customer' | 'chief_of_growth' | 'chief_of_operations' | 'finance';
 
 const ROLE_ROUTE_MAP: Array<{ prefix: string; allowed: AppRole[] }> = [
-  { prefix: '/admin',             allowed: ['superadmin', 'chief_of_operations'] },
+  // COO specific admin dashboard
+  { prefix: '/admin/chief-of-operations', allowed: ['chief_of_operations', 'superadmin'] },
+  // Chief of Growth dashboard
+  { prefix: '/admin/chief-of-growth', allowed: ['chief_of_growth', 'superadmin'] },
+  // General admin dashboard – only superadmin
+  { prefix: '/admin',             allowed: ['superadmin'] },
   { prefix: '/company/admin',     allowed: ['company_admin', 'superadmin'] },
   { prefix: '/company/operator',  allowed: ['operator', 'company_admin', 'superadmin'] },
   { prefix: '/company/conductor', allowed: ['conductor', 'company_admin', 'superadmin'] },
@@ -87,6 +92,22 @@ export async function middleware(request: NextRequest) {
 
   // ── RBAC: Enforce role-based access for authenticated users ───────────────
   if (isAuth && role) {
+    // 💡 Auto-redirect conductors and operators to their correct dashboards
+    if (role === 'conductor' && pathname.startsWith('/company/operator')) {
+      const newUrl = new URL(request.url);
+      newUrl.pathname = pathname.replace('/company/operator', '/company/conductor');
+      const res = NextResponse.redirect(newUrl);
+      supabaseResponse.cookies.getAll().forEach(cookie => res.cookies.set(cookie.name, cookie.value, cookie));
+      return res;
+    }
+    if (role === 'operator' && pathname.startsWith('/company/conductor')) {
+      const newUrl = new URL(request.url);
+      newUrl.pathname = pathname.replace('/company/conductor', '/company/operator');
+      const res = NextResponse.redirect(newUrl);
+      supabaseResponse.cookies.getAll().forEach(cookie => res.cookies.set(cookie.name, cookie.value, cookie));
+      return res;
+    }
+
     const matched = ROLE_ROUTE_MAP.find(entry => pathname.startsWith(entry.prefix));
     if (matched && !matched.allowed.includes(role as AppRole)) {
       logger.logWarning('security', `RBAC blocked: role="${role}" tried to access "${pathname}"`, { metadata: { role, pathname } });

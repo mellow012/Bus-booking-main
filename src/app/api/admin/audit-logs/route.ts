@@ -43,7 +43,25 @@ export async function GET(req: NextRequest) {
       take: limit,
     });
 
-    return NextResponse.json({ success: true, data: logs });
+    const flattenedLogs = logs.map((log) => {
+      const metadata = (log.metadata as Record<string, any> | null) || {};
+      return {
+        ...log,
+        userName: metadata.userName || '',
+        userRole: metadata.userRole || '',
+        resourceType: metadata.resourceType || '',
+        resourceId: metadata.resourceId || '',
+        resourceName: metadata.resourceName || '',
+        changes: metadata.changes || {},
+        ipAddress: metadata.ipAddress || '',
+        userAgent: metadata.userAgent || '',
+        status: metadata.status || '',
+        errorMessage: metadata.errorMessage || '',
+        timestamp: log.createdAt,
+      };
+    });
+
+    return NextResponse.json({ success: true, data: flattenedLogs });
   } catch (error: any) {
     console.error('/api/admin/audit-logs error:', error);
     return NextResponse.json({ error: error.message || 'Failed to fetch audit logs' }, { status: 500 });

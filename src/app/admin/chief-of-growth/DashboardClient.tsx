@@ -53,8 +53,8 @@ interface Props { initialData: any[]; initialMeta: any; stats: Stats; isServerAu
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
 
 const ROLE_META: Record<string, { label: string; color: string }> = {
-  customer:        { label: 'Customer',      color: '#6366f1' },
-  company_admin:   { label: 'Company Admin', color: '#8b5cf6' },
+  customer:        { label: 'Customer',      color: '#005A5B' },
+  company_admin:   { label: 'Company Admin', color: '#007B7C' },
   operator:        { label: 'Operator',      color: '#06b6d4' },
   conductor:       { label: 'Conductor',     color: '#f59e0b' },
   chief_of_growth: { label: 'CoG',           color: '#10b981' },
@@ -92,8 +92,8 @@ function SectionHeader({ title, sub, icon: Icon }: { title: string; sub?: string
   return (
     <div className="flex items-start gap-2.5">
       {Icon && (
-        <div className="w-8 h-8 rounded-xl bg-indigo-50 flex items-center justify-center shrink-0">
-          <Icon className="w-4 h-4 text-indigo-600" />
+        <div className="w-8 h-8 rounded-xl bg-brand-50 flex items-center justify-center shrink-0">
+          <Icon className="w-4 h-4 text-brand-700" />
         </div>
       )}
       <div>
@@ -115,7 +115,7 @@ function ProgressBar({ pct, color }: { pct: number; color: string }) {
 function AlertCard({ type, title, desc }: { type: 'warning' | 'info' | 'success'; title: string; desc: string }) {
   const cfg = {
     warning: { bg: 'bg-amber-50 border-amber-100', icon: AlertTriangle, ic: 'text-amber-500', tc: 'text-amber-800' },
-    info:    { bg: 'bg-blue-50 border-blue-100',   icon: Zap,           ic: 'text-blue-500',  tc: 'text-blue-800'  },
+    info:    { bg: 'bg-brand-50 border-brand-100',  icon: Zap,           ic: 'text-brand-700', tc: 'text-brand-800' },
     success: { bg: 'bg-emerald-50 border-emerald-100', icon: CheckCircle2, ic: 'text-emerald-500', tc: 'text-emerald-800' },
   }[type];
   const Icon = cfg.icon;
@@ -270,7 +270,7 @@ function AddCompanyModal({
         <div className="px-6 py-5 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
           <div>
             <h3 className="text-lg font-black text-slate-900 tracking-tight flex items-center gap-2">
-              <Building2 className="w-5 h-5 text-indigo-600" />
+              <Building2 className="w-5 h-5 text-brand-700" />
               Add New Company
             </h3>
             <p className="text-[11px] font-bold text-slate-400 mt-0.5">Onboard a bus operator & set up admin account</p>
@@ -300,7 +300,7 @@ function AddCompanyModal({
                 if (errors.companyName) setErrors(p => ({ ...p, companyName: '' }));
               }}
               placeholder="e.g. AXA Coach Services"
-              className={`w-full px-4 py-2.5 bg-slate-50 border rounded-xl text-sm font-bold text-slate-900 focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all ${
+              className={`w-full px-4 py-2.5 bg-slate-50 border rounded-xl text-sm font-bold text-slate-900 focus:ring-2 focus:ring-brand-400 focus:bg-white transition-all ${
                 errors.companyName ? 'border-rose-400 bg-rose-50/20' : 'border-slate-100'
               }`}
             />
@@ -319,7 +319,7 @@ function AddCompanyModal({
                 if (errors.companyEmail) setErrors(p => ({ ...p, companyEmail: '' }));
               }}
               placeholder="admin@operator.com"
-              className={`w-full px-4 py-2.5 bg-slate-50 border rounded-xl text-sm font-bold text-slate-900 focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all ${
+              className={`w-full px-4 py-2.5 bg-slate-50 border rounded-xl text-sm font-bold text-slate-900 focus:ring-2 focus:ring-brand-400 focus:bg-white transition-all ${
                 errors.companyEmail ? 'border-rose-400 bg-rose-50/20' : 'border-slate-100'
               }`}
             />
@@ -339,7 +339,7 @@ function AddCompanyModal({
                   if (errors.adminFirstName) setErrors(p => ({ ...p, adminFirstName: '' }));
                 }}
                 placeholder="John"
-                className={`w-full px-4 py-2.5 bg-slate-50 border rounded-xl text-sm font-bold text-slate-900 focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all ${
+                className={`w-full px-4 py-2.5 bg-slate-50 border rounded-xl text-sm font-bold text-slate-900 focus:ring-2 focus:ring-brand-400 focus:bg-white transition-all ${
                   errors.adminFirstName ? 'border-rose-400 bg-rose-50/20' : 'border-slate-100'
                 }`}
               />
@@ -358,7 +358,7 @@ function AddCompanyModal({
                   if (errors.adminLastName) setErrors(p => ({ ...p, adminLastName: '' }));
                 }}
                 placeholder="Phiri"
-                className={`w-full px-4 py-2.5 bg-slate-50 border rounded-xl text-sm font-bold text-slate-900 focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all ${
+                className={`w-full px-4 py-2.5 bg-slate-50 border rounded-xl text-sm font-bold text-slate-900 focus:ring-2 focus:ring-brand-400 focus:bg-white transition-all ${
                   errors.adminLastName ? 'border-rose-400 bg-rose-50/20' : 'border-slate-100'
                 }`}
               />
@@ -378,7 +378,7 @@ function AddCompanyModal({
                 if (errors.adminPhone) setErrors(p => ({ ...p, adminPhone: '' }));
               }}
               placeholder="+265 99X XXX XXX"
-              className={`w-full px-4 py-2.5 bg-slate-50 border rounded-xl text-sm font-bold text-slate-900 focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all ${
+              className={`w-full px-4 py-2.5 bg-slate-50 border rounded-xl text-sm font-bold text-slate-900 focus:ring-2 focus:ring-brand-400 focus:bg-white transition-all ${
                 errors.adminPhone ? 'border-rose-400 bg-rose-50/20' : 'border-slate-100'
               }`}
             />
@@ -396,7 +396,7 @@ function AddCompanyModal({
             <button
               type="submit"
               disabled={isSubmitting}
-              className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all disabled:opacity-50 flex items-center gap-2"
+              className="bg-brand-700 text-white px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest shadow-lg shadow-brand-100 hover:bg-brand-800 transition-all disabled:opacity-50 flex items-center gap-2"
             >
               {isSubmitting ? (
                 <>
@@ -492,7 +492,7 @@ function InnerDashboard({ initialData, initialMeta, stats, isServerAuthorized }:
 
   // Role breakdown for user analytics pie
   const rolePie = useMemo(() => [
-    { name: 'Customers',    value: stats.customerCount,                    color: '#6366f1' },
+    { name: 'Customers',    value: stats.customerCount,                    color: '#005A5B' },
     { name: 'Company Staff',value: stats.crewCount,                        color: '#06b6d4' },
     { name: 'Other',        value: Math.max(0, stats.totalUsers - stats.customerCount - stats.crewCount), color: '#f59e0b' },
   ].filter(d => d.value > 0), [stats]);
@@ -510,7 +510,7 @@ function InnerDashboard({ initialData, initialMeta, stats, isServerAuthorized }:
         </div>
         <button
           onClick={() => setIsAddCompanyModalOpen(true)}
-          className="flex items-center justify-center gap-2 px-4.5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-extrabold transition-all shadow-md shadow-indigo-200 active:scale-95 shrink-0"
+          className="flex items-center justify-center gap-2 px-4.5 py-2.5 bg-brand-700 hover:bg-brand-800 text-white rounded-xl text-xs font-extrabold transition-all shadow-md shadow-brand-200 active:scale-95 shrink-0"
         >
           <Plus className="w-4 h-4" />
           <span>Add New Company</span>
@@ -521,16 +521,16 @@ function InnerDashboard({ initialData, initialMeta, stats, isServerAuthorized }:
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <KpiCard label="Total Users" value={fmtNum(stats.totalUsers)}
           sub={`${stats.customerCount} customers`} icon={Users}
-          accent="#6366f1, #818cf8" active={activeTab === 'users'} onClick={() => setActiveTab('users')} />
+          accent="#005A5B, #007B7C" active={activeTab === 'users'} onClick={() => setActiveTab('users')} />
         <KpiCard label="Engagement" value={`${stats.conversionRate}%`}
           sub="Booking conversion rate" icon={TrendingUp}
           accent="#059669, #34d399" active={activeTab === 'analytics'} onClick={() => setActiveTab('analytics')} />
         <KpiCard label="Partner Companies" value={stats.companyCount}
           sub={`${stats.activeBuses} active buses`} icon={Building2}
-          accent="#7c3aed, #a78bfa" active={activeTab === 'companies'} onClick={() => setActiveTab('companies')} />
+          accent="#007B7C, #4DB8B9" active={activeTab === 'companies'} onClick={() => setActiveTab('companies')} />
         <KpiCard label="Active Routes" value={stats.activeRoutes}
           sub={`${stats.completedTrips} trips done`} icon={Map}
-          accent="#db2777, #f472b6" active={activeTab === 'routes'} onClick={() => setActiveTab('routes')} />
+          accent="#E8604C, #F0724F" active={activeTab === 'routes'} onClick={() => setActiveTab('routes')} />
       </div>
 
       {/* ══ NAVIGATION TABS ══════════════════════════════════════════════════ */}
@@ -544,7 +544,7 @@ function InnerDashboard({ initialData, initialMeta, stats, isServerAuthorized }:
           <button key={t.id} onClick={() => setActiveTab(t.id as TabId)}
             className={`flex items-center gap-2 px-5 py-3 border-b-2 text-xs font-bold transition-all duration-150
               ${activeTab === t.id
-                ? 'border-indigo-600 text-indigo-600'
+                ? 'border-brand-700 text-brand-700'
                 : 'border-transparent text-slate-400 hover:text-slate-600 hover:border-slate-200'
               }`}>
             <t.icon className="w-3.5 h-3.5" />
@@ -568,7 +568,7 @@ function InnerDashboard({ initialData, initialMeta, stats, isServerAuthorized }:
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
                   <input
-                    className="pl-9 pr-4 py-1.5 text-xs bg-slate-50 rounded-xl border border-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-200 placeholder:text-slate-400 w-44"
+                    className="pl-9 pr-4 py-1.5 text-xs bg-slate-50 rounded-xl border border-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-200 placeholder:text-slate-400 w-44"
                     placeholder="Search name or email…"
                     value={query}
                     onChange={e => setQuery(e.target.value)}
@@ -610,7 +610,7 @@ function InnerDashboard({ initialData, initialMeta, stats, isServerAuthorized }:
                     : filteredUsers.length === 0
                       ? <tr><td colSpan={5} className="py-14 text-center text-slate-400 text-xs">No users match your filters</td></tr>
                       : filteredUsers.map((u: any) => (
-                        <tr key={u.id} className="border-b border-slate-50 hover:bg-indigo-50/20 transition-colors">
+                        <tr key={u.id} className="border-b border-slate-50 hover:bg-brand-50/20 transition-colors">
                           <td className="py-3 px-4">
                             <div className="flex items-center gap-2.5">
                               <div className="w-7 h-7 rounded-lg flex items-center justify-center text-white text-xs font-black shrink-0"
@@ -659,9 +659,9 @@ function InnerDashboard({ initialData, initialMeta, stats, isServerAuthorized }:
             <div className="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm space-y-4">
               <SectionHeader title="Acquisition Pulse" sub="New registrations comparison" icon={UserPlus} />
               <div className="grid grid-cols-2 gap-3">
-                <div className="p-3.5 bg-indigo-50 rounded-2xl text-center">
-                  <p className="text-2xl font-black text-indigo-700">+{stats.newUsersThisMonth}</p>
-                  <p className="text-[9px] text-indigo-400 font-black uppercase mt-1">This Month</p>
+                <div className="p-3.5 bg-brand-50 rounded-2xl text-center">
+                  <p className="text-2xl font-black text-brand-700">+{stats.newUsersThisMonth}</p>
+                  <p className="text-[9px] text-brand-400 font-black uppercase mt-1">This Month</p>
                 </div>
                 <div className="p-3.5 bg-slate-50 rounded-2xl text-center">
                   <p className="text-2xl font-black text-slate-600">+{stats.newUsersLastMonth}</p>
@@ -672,9 +672,9 @@ function InnerDashboard({ initialData, initialMeta, stats, isServerAuthorized }:
                 <div>
                   <div className="flex justify-between text-[11px] mb-1">
                     <span className="text-slate-500 font-bold">Customers</span>
-                    <span className="font-black text-indigo-600">{Math.round((stats.customerCount / Math.max(stats.totalUsers, 1)) * 100)}%</span>
+                    <span className="font-black text-brand-700">{Math.round((stats.customerCount / Math.max(stats.totalUsers, 1)) * 100)}%</span>
                   </div>
-                  <ProgressBar pct={(stats.customerCount / Math.max(stats.totalUsers, 1)) * 100} color="#6366f1" />
+                  <ProgressBar pct={(stats.customerCount / Math.max(stats.totalUsers, 1)) * 100} color="#005A5B" />
                 </div>
                 <div>
                   <div className="flex justify-between text-[11px] mb-1">
@@ -716,7 +716,7 @@ function InnerDashboard({ initialData, initialMeta, stats, isServerAuthorized }:
               <SectionHeader title="Fleet Snapshot" sub="Operational assets across all partners" icon={Bus} />
               <div className="grid grid-cols-2 gap-3 mt-4">
                 {[
-                  { label: 'Active Buses',     value: stats.activeBuses,     color: '#6366f1' },
+                  { label: 'Active Buses',     value: stats.activeBuses,     color: '#005A5B' },
                   { label: 'Active Routes',    value: stats.activeRoutes,    color: '#10b981' },
                   { label: 'Live Schedules',   value: stats.activeSchedules, color: '#06b6d4' },
                   { label: 'Trips Completed',  value: stats.completedTrips,  color: '#f59e0b' },
@@ -747,7 +747,7 @@ function InnerDashboard({ initialData, initialMeta, stats, isServerAuthorized }:
               <SectionHeader title="Daily Signups — Last 30 Days" sub="Customer vs staff account registrations" icon={TrendingUp} />
               <div className="flex items-center gap-4 mt-4 mb-1">
                 <span className="flex items-center gap-1.5 text-[11px] text-slate-500 font-bold">
-                  <span className="w-3 h-2 rounded-sm bg-indigo-500 inline-block" /> Customers
+                  <span className="w-3 h-2 rounded-sm bg-brand-700 inline-block" /> Customers
                 </span>
                 <span className="flex items-center gap-1.5 text-[11px] text-slate-500 font-bold">
                   <span className="w-3 h-2 rounded-sm bg-cyan-500 inline-block" /> Staff / Crew
@@ -757,8 +757,8 @@ function InnerDashboard({ initialData, initialMeta, stats, isServerAuthorized }:
                 <AreaChart data={stats.trendData} margin={{ top: 5, right: 5, left: -25, bottom: 0 }}>
                   <defs>
                     <linearGradient id="gCust" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%"  stopColor="#6366f1" stopOpacity={0.25} />
-                      <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                      <stop offset="5%"  stopColor="#005A5B" stopOpacity={0.25} />
+                      <stop offset="95%" stopColor="#005A5B" stopOpacity={0} />
                     </linearGradient>
                     <linearGradient id="gStaff" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%"  stopColor="#06b6d4" stopOpacity={0.25} />
@@ -769,7 +769,7 @@ function InnerDashboard({ initialData, initialMeta, stats, isServerAuthorized }:
                   <XAxis dataKey="date" tickFormatter={fmtAxisDate} tick={{ fontSize: 9, fill: '#94a3b8' }} tickLine={false} axisLine={false} interval={6} />
                   <YAxis tick={{ fontSize: 9, fill: '#94a3b8' }} tickLine={false} axisLine={false} allowDecimals={false} />
                   <Tooltip content={<ChartTooltip />} />
-                  <Area type="monotone" dataKey="customers" name="Customers" stroke="#6366f1" strokeWidth={2.5} fill="url(#gCust)" dot={false} />
+                  <Area type="monotone" dataKey="customers" name="Customers" stroke="#005A5B" strokeWidth={2.5} fill="url(#gCust)" dot={false} />
                   <Area type="monotone" dataKey="staff"     name="Staff"     stroke="#06b6d4" strokeWidth={2.5} fill="url(#gStaff)" dot={false} />
                 </AreaChart>
               </ResponsiveContainer>
@@ -816,7 +816,7 @@ function InnerDashboard({ initialData, initialMeta, stats, isServerAuthorized }:
                   <XAxis dataKey="date" tickFormatter={fmtAxisDate} tick={{ fontSize: 9, fill: '#94a3b8' }} tickLine={false} axisLine={false} interval={6} />
                   <YAxis tick={{ fontSize: 9, fill: '#94a3b8' }} tickLine={false} axisLine={false} allowDecimals={false} />
                   <Tooltip content={<ChartTooltip />} />
-                  <Bar dataKey="users" name="New Signups" fill="#6366f1" radius={[3, 3, 0, 0]} />
+                  <Bar dataKey="users" name="New Signups" fill="#005A5B" radius={[3, 3, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -826,7 +826,7 @@ function InnerDashboard({ initialData, initialMeta, stats, isServerAuthorized }:
               <SectionHeader title="Booking Engagement" sub="Platform booking activity" icon={Activity} />
               <div className="space-y-3 mt-5">
                 {[
-                  { label: 'Total Bookings',   value: stats.totalBookings,     color: '#6366f1' },
+                  { label: 'Total Bookings',   value: stats.totalBookings,     color: '#005A5B' },
                   { label: 'This Month',        value: stats.bookingsThisMonth, color: '#10b981' },
                   { label: 'Confirmed',         value: stats.confirmedBookings, color: '#10b981' },
                   { label: 'Pending Review',    value: stats.pendingBookings,   color: '#f59e0b' },
@@ -921,7 +921,7 @@ function InnerDashboard({ initialData, initialMeta, stats, isServerAuthorized }:
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
                 <input
-                  className="pl-9 pr-4 py-1.5 text-xs bg-slate-50 rounded-xl border border-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-200 placeholder:text-slate-400 w-52"
+                  className="pl-9 pr-4 py-1.5 text-xs bg-slate-50 rounded-xl border border-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-200 placeholder:text-slate-400 w-52"
                   placeholder="Search company name or email…"
                   value={companySearch}
                   onChange={e => { setCompanySearch(e.target.value); setCompanyPage(0); }}
@@ -929,7 +929,7 @@ function InnerDashboard({ initialData, initialMeta, stats, isServerAuthorized }:
               </div>
               <button
                 onClick={() => setIsAddCompanyModalOpen(true)}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm shadow-indigo-200 shrink-0"
+                className="flex items-center gap-1.5 px-3.5 py-1.5 bg-brand-700 hover:bg-brand-800 text-white rounded-xl text-xs font-bold transition-all shadow-sm shadow-brand-200 shrink-0"
               >
                 <Plus className="w-3.5 h-3.5" />
                 <span>Add Company</span>
@@ -952,10 +952,10 @@ function InnerDashboard({ initialData, initialMeta, stats, isServerAuthorized }:
                   <tr><td colSpan={9} className="py-14 text-center text-slate-400">No companies found</td></tr>
                 ) : (
                   paginatedCompanies.map(c => (
-                    <tr key={c.id} className="border-b border-slate-50 hover:bg-indigo-50/20 transition-colors">
+                    <tr key={c.id} className="border-b border-slate-50 hover:bg-brand-50/20 transition-colors">
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-2.5">
-                          <div className="w-7 h-7 rounded-lg bg-indigo-600 flex items-center justify-center text-white text-xs font-black shrink-0">
+                          <div className="w-7 h-7 rounded-lg bg-brand-700 flex items-center justify-center text-white text-xs font-black shrink-0">
                             {c.name[0]?.toUpperCase()}
                           </div>
                           <span className="font-bold text-slate-800 truncate max-w-[120px]">{c.name}</span>
@@ -963,9 +963,9 @@ function InnerDashboard({ initialData, initialMeta, stats, isServerAuthorized }:
                       </td>
                       <td className="py-3 px-4 text-slate-500 max-w-[150px] truncate">{c.email}</td>
                       <td className="py-3 px-4">
-                        <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase bg-violet-50 text-violet-600 capitalize">{c.planType}</span>
+                        <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase bg-brand-50 text-brand-700 capitalize">{c.planType}</span>
                       </td>
-                      <td className="py-3 px-4 font-black text-indigo-600 text-center">{c.bookingsCount}</td>
+                      <td className="py-3 px-4 font-black text-brand-700 text-center">{c.bookingsCount}</td>
                       <td className="py-3 px-4 font-bold text-slate-700 text-center">{c.busesCount}</td>
                       <td className="py-3 px-4 font-bold text-slate-700 text-center">{c.routesCount}</td>
                       <td className="py-3 px-4 font-bold text-slate-700 text-center">{c.operatorsCount}</td>
@@ -994,7 +994,7 @@ function InnerDashboard({ initialData, initialMeta, stats, isServerAuthorized }:
                   <button key={i} onClick={() => setCompanyPage(i)}
                     className={`w-7 h-7 text-xs rounded-lg font-bold transition-all ${
                       companyPage === i
-                        ? 'bg-indigo-600 text-white shadow-sm'
+                        ? 'bg-brand-700 text-white shadow-sm'
                         : 'bg-white border border-slate-200 text-slate-500 hover:bg-slate-50'
                     }`}>
                     {i + 1}
@@ -1035,13 +1035,13 @@ function InnerDashboard({ initialData, initialMeta, stats, isServerAuthorized }:
                   <div key={i} className="grid grid-cols-3 items-center py-4 border-b border-slate-50 last:border-0 px-2 hover:bg-slate-50/50 transition-colors">
                     <div className="col-span-2 flex items-center gap-3">
                       <div className="w-7 h-7 rounded-xl flex items-center justify-center text-white text-xs font-black shrink-0"
-                        style={{ background: ['#6366f1','#8b5cf6','#06b6d4','#10b981','#f59e0b'][i] }}>
+                        style={{ background: ['#005A5B','#007B7C','#009091','#10b981','#E8604C'][i] }}>
                         {i + 1}
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className="text-xs font-bold text-slate-800 truncate">{r.route}</p>
                         <div className="mt-1.5 w-full max-w-[200px]">
-                          <ProgressBar pct={(r.bookings / maxRouteBookings) * 100} color={['#6366f1','#8b5cf6','#06b6d4','#10b981','#f59e0b'][i]} />
+                          <ProgressBar pct={(r.bookings / maxRouteBookings) * 100} color={['#005A5B','#007B7C','#009091','#10b981','#E8604C'][i]} />
                         </div>
                       </div>
                     </div>
@@ -1067,7 +1067,7 @@ function InnerDashboard({ initialData, initialMeta, stats, isServerAuthorized }:
                   <Tooltip formatter={(v: any) => [`${v} bookings`, 'Volume']} contentStyle={{ borderRadius: 12, fontSize: 11 }} />
                   <Bar dataKey="bookings" name="Bookings" radius={[5, 5, 0, 0]}>
                     {stats.topRoutes.map((_, i) => (
-                      <Cell key={i} fill={['#6366f1','#8b5cf6','#06b6d4','#10b981','#f59e0b'][i]} />
+                      <Cell key={i} fill={['#005A5B','#007B7C','#009091','#10b981','#E8604C'][i]} />
                     ))}
                   </Bar>
                 </BarChart>

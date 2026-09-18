@@ -33,7 +33,6 @@ interface Props {
   selectedPaymentCompany: Company | null;
   setSelectedPaymentCompany: (c: Company | null) => void;
   updateCompanySettings: (c: Company) => void;
-  openPaymentSettingsModal: (c: Company) => void;
   showAlert: (type: 'error'|'success'|'info'|'warning', msg: string) => void;
 }
 
@@ -47,7 +46,6 @@ export default function AdminPayments({
   selectedPaymentCompany,
   setSelectedPaymentCompany,
   updateCompanySettings,
-  openPaymentSettingsModal,
   showAlert,
 }: Props) {
   return (
@@ -66,9 +64,9 @@ export default function AdminPayments({
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatPill icon={<CreditCard className="w-4 h-4 text-white" />} label="Companies linked" value={paymentSummary.totalCompanies} color="bg-slate-100 text-slate-700" />
+        <StatPill icon={<CreditCard className="w-4 h-4 text-white" />} label="Companies linked" value={paymentSummary.totalCompanies} color="bg-brand-50 text-brand-700" />
         <StatPill icon={<Wifi className="w-4 h-4 text-white" />} label="Gateways active" value={`${paymentSummary.enabledCompanies}`} color="bg-emerald-100 text-emerald-700" />
-        <StatPill icon={<Zap className="w-4 h-4 text-white" />} label="Fully configured" value={`${paymentSummary.fullyConfiguredCompanies}`} color="bg-indigo-100 text-indigo-700" />
+        <StatPill icon={<Zap className="w-4 h-4 text-white" />} label="Fully configured" value={`${paymentSummary.fullyConfiguredCompanies}`} color="bg-brand-50 text-brand-700" />
         <StatPill icon={<AlertCircle className="w-4 h-4 text-white" />} label="Pending / failed" value={`${paymentSummary.pendingPayments} / ${paymentSummary.failedPayments}`} color="bg-amber-100 text-amber-700" />
       </div>
 
@@ -121,7 +119,6 @@ export default function AdminPayments({
                       <td className="px-5 py-4"><span className="text-xs text-gray-500">{company.status}</span></td>
                       <td className="px-5 py-4">
                         <div className="flex items-center gap-2">
-                          <button onClick={() => openPaymentSettingsModal(company)} className="px-3 py-2 rounded-2xl bg-indigo-50 text-indigo-700 text-xs font-bold">Settings</button>
                           <button onClick={() => setSelectedPaymentCompany(company)} className="px-3 py-2 rounded-2xl border border-gray-200 bg-white text-xs">View</button>
                         </div>
                       </td>

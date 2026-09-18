@@ -3,6 +3,8 @@ import prisma from '@/lib/prisma';
 import { getAdminDashboardStats } from '@/lib/actions/company.actions';
 import { getCurrentUser } from '@/lib/auth-utils';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(req: NextRequest) {
   try {
     const user = await getCurrentUser(req);
@@ -11,8 +13,12 @@ export async function GET(req: NextRequest) {
     }
 
     const stats = await getAdminDashboardStats();
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const todayEnd = new Date();
+    todayEnd.setHours(23, 59, 59, 999);
 
-    const [companies, bookings, schedules, routes, buses, operators] = await Promise.all([
+    const [companies, bookings, schedules, routes, buses, operators, schedulesTodayCount] = await Promise.all([
       prisma.company.findMany({ orderBy: { createdAt: 'desc' } }),
       prisma.booking.findMany({
         take: 100, // Limit for dashboard performance
@@ -27,6 +33,18 @@ export async function GET(req: NextRequest) {
           role: { in: ['operator', 'company_admin', 'conductor'] }
         },
         orderBy: { createdAt: 'desc' }
+      }),
+      prisma.schedule.count({
+        where: {
+          departureDateTime: {
+            gte: todayStart,
+            lte: todayEnd,
+          },
+          status: 'active',
+          isActive: true,
+          isArchived: false,
+          isCompleted: false,
+        }
       })
     ]);
 
@@ -34,12 +52,22 @@ export async function GET(req: NextRequest) {
       success: true,
       data: {
         stats: stats.data,
-        companies,
+        companies: companies.map(company => ({
+          ...company,
+          contact: company.phone,
+        })),
         bookings,
         schedules,
+        schedulesTodayCount,
         routes,
         buses,
         operators
+      }
+    }, {
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+        'Pragma': 'no-cache',
+        'Expires': '0',
       }
     });
   } catch (error: any) {

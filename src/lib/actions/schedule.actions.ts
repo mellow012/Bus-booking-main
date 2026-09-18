@@ -958,3 +958,40 @@ export async function decrementScheduleSeats(id: string) {
     return { success: false, error: (error as Error).message };
   }
 }
+
+export async function autoArchiveCompanySchedules(companyId: string, archiveCutoff: Date) {
+  const authUser = await getCurrentUserFromServer();
+  if (!authUser) return { success: false, error: 'Unauthorized' };
+
+  try {
+    const schedulesToArchive = await prisma.schedule.findMany({
+      where: {
+        companyId,
+        isArchived: false,
+        tripCompletedAt: { not: null, lt: archiveCutoff },
+      },
+      select: { id: true },
+    });
+
+    if (schedulesToArchive.length === 0) return { success: true, count: 0 };
+
+    const ids = schedulesToArchive.map(s => s.id);
+
+    const [ { count } ] = await prisma.$transaction([
+      prisma.schedule.updateMany({
+        where: { id: { in: ids } },
+        data: { isArchived: true },
+      }),
+      prisma.payment.updateMany({
+        where: { booking: { scheduleId: { in: ids } } },
+        data: { isArchived: true },
+      })
+    ]);
+
+    invalidateScheduleCaches();
+    return { success: true, count };
+  } catch (error: any) {
+    console.error('Error auto-archiving schedules:', error);
+    return { success: false, error: error.message };
+  }
+}

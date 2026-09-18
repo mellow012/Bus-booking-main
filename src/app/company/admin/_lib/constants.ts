@@ -89,15 +89,4 @@ export const validateBusData = (data: any): void => {
   if (!BUS_STATUSES.includes(data.status)) throw new Error('Invalid status');
 };
 
-export const getAvailableTabs = (paymentSettings: Company['paymentSettings'] | undefined): TabObject[] => {
-  const base: TabObject[] = [...TABS] as unknown as TabObject[];
-  if (
-    paymentSettings &&
-    Object.keys(paymentSettings).length > 0 &&
-    paymentSettings.paychanguEnabled
-  ) {
-    if (!base.some(t => t.id === 'payments'))
-      base.push({ id: 'payments' as const, label: 'Payments', icon: DollarSign });
-  }
-  return base;
-};
+export const getAvailableTabs = (): TabObject[] => [...TABS] as unknown as TabObject[];

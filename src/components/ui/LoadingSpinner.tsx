@@ -1,4 +1,3 @@
-import Image from 'next/image';
 import { cn } from '@/lib/utils';
 
 interface LoadingSpinnerProps {
@@ -39,17 +38,7 @@ export function LoadingSpinner({
           />
           {/* Subtle pulse background glow */}
           <div className="absolute inset-1 rounded-full bg-brand-50/60 animate-pulse" />
-          {/* Centered TibhukeBus Logo */}
-          <div className={cn('relative z-10 flex items-center justify-center', logoSizes[size])}>
-            <Image
-              src="/tibhukebus_logo_transparent.png"
-              alt="TibhukeBus Logo"
-              width={56}
-              height={56}
-              className="object-contain w-full h-full drop-shadow-sm"
-              priority
-            />
-          </div>
+
         </div>
         {label ? <p className="mt-3 text-sm font-semibold text-gray-600">{label}</p> : null}
       </div>

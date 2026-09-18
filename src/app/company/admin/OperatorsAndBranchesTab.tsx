@@ -106,9 +106,13 @@ export default function OperatorsAndBranchesTab({ dashboard }: OperatorsAndBranc
     return operators.filter(op => op.regionId === selectedBranchId);
   }, [operators, selectedBranchId]);
 
-  const handleViewOperatorDashboard = (operatorId: string) => {
-    setLoadingViewId(operatorId);
-    router.push(`/company/operator/dashboard?operatorId=${encodeURIComponent(operatorId)}`);
+  const handleViewOperatorDashboard = (operator: OperatorRow) => {
+    setLoadingViewId(operator.id);
+    if (operator.role === 'conductor') {
+      router.push(`/company/conductor/dashboard?operatorId=${encodeURIComponent(operator.id)}`);
+    } else {
+      router.push(`/company/operator/dashboard?operatorId=${encodeURIComponent(operator.id)}`);
+    }
   };
 
   const openEditOperatorModal = (operator: OperatorRow) => {
@@ -470,7 +474,7 @@ export default function OperatorsAndBranchesTab({ dashboard }: OperatorsAndBranc
                     <td className="whitespace-nowrap px-4 py-3 text-right sm:px-6 space-x-2">
                       <Button
                         type="button"
-                        onClick={() => handleViewOperatorDashboard(operator.id)}
+                        onClick={() => handleViewOperatorDashboard(operator)}
                         isLoading={loadingViewId === operator.id}
                         disabled={isActionLoading}
                         variant="outline"

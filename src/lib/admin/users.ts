@@ -73,6 +73,12 @@ export async function getAdminUsers(opts: GetAdminUsersOpts) {
         lastName: true,
         role: true,
         companyId: true,
+        company: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
         createdAt: true,
         updatedAt: true,
         setupCompleted: true,

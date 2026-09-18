@@ -8,11 +8,21 @@
 // Load balancers should be configured to probe GET /api/health.
 // Returns 200 when healthy, 503 when a critical dependency is degraded.
 
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { verifyEmailTransporter } from '@/lib/email-service';
 import { prisma } from '@/lib/prisma';
+import { getCurrentUser } from '@/lib/auth-utils';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const user = await getCurrentUser(request);
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  if (!['superadmin', 'super_admin'].includes(user.role ?? '')) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+
   const checks: Record<string, 'ok' | 'degraded' | 'error'> = {};
 
   // ── PostgreSQL/Prisma connectivity ────────────────────────────────────────

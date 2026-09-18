@@ -314,6 +314,24 @@ export default function ProfileClient() {
     [profile?.role, userProfile?.role, user?.user_metadata?.role],
   );
 
+  const dashboardHref = useMemo(() => {
+    switch (effectiveRole) {
+      case 'superadmin':
+      case 'chief_of_operations':
+        return '/admin';
+      case 'chief_of_growth':
+        return '/admin/chief-of-growth';
+      case 'company_admin':
+        return '/company/admin';
+      case 'operator':
+        return '/company/operator/dashboard';
+      case 'conductor':
+        return '/company/conductor/dashboard';
+      default:
+        return '/';
+    }
+  }, [effectiveRole]);
+
   const loadUserPreferences = useCallback(async () => {
     setNotifications(DEFAULT_NOTIFICATIONS);
     setSecurity(DEFAULT_SECURITY);
@@ -754,6 +772,7 @@ export default function ProfileClient() {
             </div>
             <BackButton
               label="Back to Dashboard"
+              href={dashboardHref}
               className="text-gray-500 hover:text-gray-900 font-bold text-sm"
               hideOnMobile={false}
             />

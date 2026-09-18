@@ -4,6 +4,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+  url = env("DATABASE_URL")
 }
 
 model User {
@@ -367,6 +368,7 @@ model Payment {
   txRef             String?
   metadata          Json?
   paychanguResponse Json?
+  isArchived        Boolean  @default(false)
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
   booking           Booking? @relation(fields: [bookingId], references: [id])

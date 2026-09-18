@@ -78,8 +78,7 @@ export function useAdminDashboard(queryClient: QueryClient) {
     };
   }, [bookings, dashboardData.schedules, dashboardData.reports]);
 
-  const paymentSettings = dashboardData.company?.paymentSettings;
-  const availableTabs = useMemo(() => getAvailableTabs(paymentSettings), [paymentSettings]);
+  const availableTabs = useMemo(() => getAvailableTabs(), []);
   const isValidUser = useMemo(() => !!(user && (userProfile?.role === 'company_admin' || userProfile?.role === 'superadmin') && userProfile.companyId), [user, userProfile]);
 
   const fetchCollectionData = useCallback(async (table: string, cId: string): Promise<any[]> => {
@@ -262,7 +261,7 @@ export function useAdminDashboard(queryClient: QueryClient) {
     // realtime/bookings
     bookings, setBookings, realtimeStatus,
     // helpers
-    statistics, paymentSettings, availableTabs, isValidUser,
+    statistics, availableTabs, isValidUser,
     // actions
     fetchInitialData, fetchCollectionData, updateDashboardData, addItem,
     refreshData: fetchInitialData,

@@ -44,22 +44,7 @@
    * Secret keys are stored encrypted (AES-256-GCM) — never plaintext.
    */
   export interface CompanyPaymentSettings {
-    // ── PayChangu (single-merchant mobile money) ───────────────────────────────
-    paychanguEnabled?: boolean;
-    /** Merchant receive number (Airtel/TNM mobile money number) */
-    paychanguReceiveNumber?: string;
-    /** Public key (pub-...) — safe to store plaintext */
-    paychanguPublicKey?: string;
-    /**
-     * AES-256-GCM encrypted secret key (sec-...).
-     * Format: "<iv_hex>:<authTag_hex>:<ciphertext_hex>"
-     * Decrypted server-side only using PAYCHANGU_ENCRYPTION_KEY env var.
-     * Never sent to the browser.
-     */
-    paychanguSecretKeyEnc?: string;
-    paychanguUpdatedAt?: DBDate;
-
-    // ── Stripe (REMOVED) ───────────────────────────────────────────────────────
+    // Retained for unrelated legacy discount/currency metadata.
     returnDiscount?: number;
     currency?: string;
   }
@@ -73,6 +58,7 @@
     ownerId: string;
     contact: string;
 
+    phone?: string;
     address?: string;
     description?: string;
     logo?: string;
@@ -80,6 +66,7 @@
     status: 'active' | 'pending' | 'inactive';
 
     paymentSettings?: CompanyPaymentSettings;
+    contactSettings?: Record<string, unknown>;
 
     operatingHours?: Record<string, OperatingHours>;
     branches?: string[];
@@ -348,6 +335,7 @@
     status: ScheduleStatus;
     isActive: boolean;
     isArchived?: boolean;
+    isCompleted?: boolean;
 
     completed?: boolean;
     completedAt?: Date;

@@ -336,7 +336,7 @@ const Header: React.FC = () => {
                           <BusIcon className="w-4 h-4" /><span>{t('conductorDashboard')}</span>
                         </Link>
                       ) : (isSuperAdmin || isCompanyAdmin || isOperator) && adminRoute ? (
-                        <Link href={adminRoute} onClick={() => setIsUserMenuOpen(false)} className="flex items-center space-x-3 px-4 py-2 text-purple-700 font-medium hover:bg-purple-50 transition-colors duration-200">
+                        <Link href={adminRoute} onClick={() => setIsUserMenuOpen(false)} className="flex items-center space-x-3 px-4 py-2 text-brand-700 font-medium hover:bg-brand-50 transition-colors duration-200">
                           <Shield className="w-4 h-4" /><span>{adminLabel}</span>
                         </Link>
                       ) : null}
@@ -417,7 +417,7 @@ const Header: React.FC = () => {
                     ) : (
                       <>
                         {adminRoute && (
-                          <Link href={adminRoute} onClick={() => setIsMenuOpen(false)} className="flex items-center space-x-3 p-4 bg-purple-50 text-purple-700 rounded-2xl font-bold border border-purple-100">
+                          <Link href={adminRoute} onClick={() => setIsMenuOpen(false)} className="flex items-center space-x-3 p-4 bg-brand-50 text-brand-700 rounded-2xl font-bold border border-brand-100">
                             <Shield className="w-5 h-5" /><span>{adminLabel}</span>
                           </Link>
                         )}

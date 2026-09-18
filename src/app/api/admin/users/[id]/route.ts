@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth-utils';
+import { createAdminClient } from '@/utils/supabase/admin';
 import { prisma } from '@/lib/prisma';
 import { logAudit, logFailedAction } from '@/utils/AuditLogs';
 import { checkAdminLimit } from '@/lib/rateLimit';
@@ -63,12 +64,25 @@ export async function PATCH(req: NextRequest, context: any) {
       return NextResponse.json({ error: 'Access denied: cannot assign this role' }, { status: 403 });
     }
 
+    const isTargetSuper = ['superadmin', 'super_admin'].includes(target.role ?? '');
+    const isNewRoleSuper = ['superadmin', 'super_admin'].includes(newRole);
+    if (isTargetSuper && !isNewRoleSuper) {
+      const superCount = await prisma.user.count({
+        where: { role: { in: ['superadmin', 'super_admin'] } },
+      });
+      if (superCount <= 1) {
+        return NextResponse.json({ error: 'Cannot remove the last remaining super admin account.' }, { status: 409 });
+      }
+    }
+
     // Update role and increment sessionVersion to invalidate cached sessions
     const updated = await prisma.user.update({
       where: { id: target.id },
       data: ( { role: newRole, sessionVersion: { increment: 1 }, updatedAt: new Date() } as any ),
       select: { id: true, email: true, firstName: true, lastName: true, role: true, companyId: true }
     });
+
+    await createAdminClient().auth.admin.signOut(target.id, 'global');
 
     if (body.status || body.regionId !== undefined || body.routeIds) {
       const result = await updateOperatorAssignments(target.id, {
@@ -83,7 +97,7 @@ export async function PATCH(req: NextRequest, context: any) {
 
     try {
       await logAudit({
-        action: 'update_schedule', // reuse action type; consider adding 'update_user_role'
+        action: 'update_user_role',
         userId: user.id,
         userName: `${user.firstName || ''} ${user.lastName || ''}`.trim(),
         userRole: user.role || 'unknown',
@@ -105,7 +119,7 @@ export async function PATCH(req: NextRequest, context: any) {
     try {
       const user = await getCurrentUser(req);
       if (user) {
-        await logFailedAction(user.id, `${user.firstName || ''} ${user.lastName || ''}`.trim(), user.role || '', user.companyId || '', 'update_schedule', 'user', paramsObj?.id, err.message || 'error');
+        await logFailedAction(user.id, `${user.firstName || ''} ${user.lastName || ''}`.trim(), user.role || '', user.companyId || '', 'update_user_role', 'user', paramsObj?.id, err.message || 'error');
       }
     } catch {}
     return NextResponse.json({ error: err.message || 'Failed to update user' }, { status: 500 });

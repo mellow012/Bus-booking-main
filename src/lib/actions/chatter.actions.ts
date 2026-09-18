@@ -582,10 +582,16 @@ export async function hardDeleteChatterSchedule(id: string) {
  */
 export async function archiveChatterSchedule(id: string) {
   try {
-    const updated = await prisma.chatterSchedule.update({
-      where: { id },
-      data: { isArchived: true, archivedAt: new Date() },
-    });
+    const [updated] = await prisma.$transaction([
+      prisma.chatterSchedule.update({
+        where: { id },
+        data: { isArchived: true, archivedAt: new Date() },
+      }),
+      prisma.payment.updateMany({
+        where: { booking: { chatterScheduleId: id } },
+        data: { isArchived: true },
+      })
+    ]);
     revalidatePath('/chatter/my-schedules');
     return { success: true, data: updated };
   } catch (error: any) {

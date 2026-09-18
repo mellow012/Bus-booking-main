@@ -53,14 +53,28 @@ export async function POST(request: NextRequest) {
     const archiveCutoff = new Date(today);
     archiveCutoff.setDate(today.getDate() - ARCHIVE_AFTER_DAYS);
 
-    const { count: archivedCount } = await prisma.schedule.updateMany({
-      where: {
-        isArchived: false,
-        departureDateTime: { lt: archiveCutoff },
-        company: { isPartner: false },
-      },
-      data: { isArchived: true },
-    });
+    const [ { count: archivedCount } ] = await prisma.$transaction([
+      prisma.schedule.updateMany({
+        where: {
+          isArchived: false,
+          departureDateTime: { lt: archiveCutoff },
+          company: { isPartner: false },
+        },
+        data: { isArchived: true },
+      }),
+      prisma.payment.updateMany({
+        where: {
+          booking: {
+            schedule: {
+              isArchived: false,
+              departureDateTime: { lt: archiveCutoff },
+              company: { isPartner: false },
+            }
+          }
+        },
+        data: { isArchived: true },
+      })
+    ]);
     if (archivedCount > 0) invalidateScheduleCaches();
 
     // ──────────────────────────────────────────────────────────────────────────

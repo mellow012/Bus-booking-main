@@ -6,6 +6,7 @@ import { authRateLimiter, getClientIp } from '@/lib/rateLimit';
 import { logger } from '@/lib/logger';
 import { z } from 'zod';
 import { companyNameSchema, emailSchema, phoneSchema } from '@/lib/validationSchemas';
+import { getCurrentUser } from '@/lib/auth-utils';
 
 const createCompanySchema = z.object({
   companyName:    companyNameSchema,
@@ -13,6 +14,9 @@ const createCompanySchema = z.object({
   adminFirstName: z.string().max(50).trim().default(''),
   adminLastName:  z.string().max(50).trim().default(''),
   adminPhone:     z.string().max(20).trim().default(''),
+  companyContact: z.string().max(20).trim().default(''),
+  companyAddress: z.string().max(100).trim().default(''),
+  companyDescription: z.string().max(500).trim().default(''),
 });
 
 interface ApiResponse {
@@ -45,16 +49,30 @@ export async function POST(request: NextRequest): Promise<NextResponse<ApiRespon
       );
     }
 
+    // ─── Authentication & Authorization ──────────────────────────────────────
+    const user = await getCurrentUser(request);
+    if (!user) {
+      return NextResponse.json({ success: false, error: 'Unauthorized', message: '' }, { status: 401 });
+    }
+
+    if (!['superadmin', 'super_admin', 'chief_of_operations'].includes(user.role ?? '')) {
+      await logger.logWarning('security', 'Unauthorized company creation attempt', { ip, metadata: { userId: user.id, role: user.role } });
+      return NextResponse.json({ success: false, error: 'Forbidden', message: '' }, { status: 403 });
+    }
+
     // ─── Validation ──────────────────────────────────────────────────────────
     let companyName: string;
     let companyEmail: string;
     let adminFirstName: string;
     let adminLastName: string;
     let adminPhone: string;
+    let companyContact: string;
+    let companyAddress: string;
+    let companyDescription: string;
 
     try {
       const body = await request.json();
-      ({ companyName, companyEmail, adminFirstName, adminLastName, adminPhone } =
+      ({ companyName, companyEmail, adminFirstName, adminLastName, adminPhone, companyContact, companyAddress, companyDescription } =
         createCompanySchema.parse(body));
     } catch (error: any) {
       if (error instanceof z.ZodError) {

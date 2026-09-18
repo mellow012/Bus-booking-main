@@ -4,6 +4,7 @@ import prisma from '../prisma';
 import { revalidatePath } from 'next/cache';
 import { UserProfile as User } from '@/types';
 import { createClient } from '@/utils/supabase/server';
+import { createAdminClient } from '@/utils/supabase/admin';
 import { getCurrentUserFromServer } from '@/lib/auth-utils';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -285,6 +286,7 @@ export async function updateUser(id: string, data: any) {
         updatedAt: new Date(),
       },
     });
+    if (sanitizedData.role) await createAdminClient().auth.admin.signOut(id, 'global');
     revalidatePath('/company/admin');
     revalidatePath('/company/operator/dashboard');
     return { success: true, data: user as User };
@@ -320,6 +322,7 @@ export async function deleteUser(id: string) {
         updatedAt: new Date(),
       },
     });
+    await createAdminClient().auth.admin.signOut(id, 'global');
     revalidatePath('/company/admin');
     return { success: true };
   } catch (error: unknown) {
@@ -411,6 +414,7 @@ async function setUserRole(
         },
       }),
     ]);
+    await createAdminClient().auth.admin.signOut(targetUser.id, 'global');
 
     revalidatePath('/company/admin');
     return { success: true, data: user };

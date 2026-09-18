@@ -31,12 +31,12 @@ export async function POST(req: NextRequest) {
 
     const allowedUpdateFields = new Set([
       "name",
+      "email",
       "logo",
       "description",
       "phone",
       "address",
       "operatingHours",
-      "paymentSettings",
       "notificationSettings",
       "contactSettings",
       "returnTripDiscountPercent",
@@ -64,16 +64,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Company not found" }, { status: 404 });
     }
 
-    // Merge paymentSettings if provided as partial
-    let finalPaymentSettings = company.paymentSettings;
-    if (updates.paymentSettings) {
-      const existingSettings = (company.paymentSettings as Record<string, any>) || {};
-      finalPaymentSettings = {
-        ...existingSettings,
-        ...(updates.paymentSettings as Record<string, any>),
-      };
-    }
-
     // Merge notificationSettings if provided as partial
     let finalNotificationSettings = company.notificationSettings;
     if (updates.notificationSettings) {
@@ -98,12 +88,12 @@ export async function POST(req: NextRequest) {
       where: { id: companyId },
       data: {
         name:                 updates.name                 ?? undefined,
+        email:                updates.email                ?? undefined,
         logo:                 updates.logo                 ?? undefined,
         description:          updates.description          ?? undefined,
         phone:                updates.phone                ?? undefined,
         address:              updates.address              ?? undefined,
         operatingHours:       updates.operatingHours       ?? undefined,
-        paymentSettings:      finalPaymentSettings         ?? undefined,
         notificationSettings: finalNotificationSettings      ?? undefined,
         contactSettings:      finalContactSettings         ?? undefined,
         returnTripDiscountPercent: updates.returnTripDiscountPercent !== undefined ? parseFloat(String(updates.returnTripDiscountPercent)) : undefined,

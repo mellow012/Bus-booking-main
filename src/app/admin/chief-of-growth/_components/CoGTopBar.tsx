@@ -20,13 +20,13 @@ const UserAvatar = ({ user, userProfile }: { user: any; userProfile: any }) => {
         alt="Profile"
         width={32}
         height={32}
-        className="w-8 h-8 rounded-full object-cover border-2 border-indigo-200"
+        className="w-8 h-8 rounded-full object-cover border-2 border-brand-200"
       />
     );
   }
   const initial = userProfile?.firstName?.[0] || user?.email?.[0] || 'U';
   return (
-    <div className="w-8 h-8 rounded-full bg-gradient-to-r from-indigo-600 to-violet-600 flex items-center justify-center text-white font-semibold text-sm">
+    <div className="w-8 h-8 rounded-full bg-gradient-to-r from-brand-700 to-brand-600 flex items-center justify-center text-white font-semibold text-sm">
       {initial.toUpperCase()}
     </div>
   );
@@ -89,7 +89,7 @@ export default function CoGTopBar() {
               <UserAvatar user={user} userProfile={userProfile} />
               <div className="hidden md:block text-left">
                 <div className="text-xs font-semibold text-slate-900">{displayName}</div>
-                <div className="text-[10px] text-indigo-600 font-bold uppercase tracking-wider">Chief of Growth</div>
+                <div className="text-[10px] text-brand-700 font-bold uppercase tracking-wider">Chief of Growth</div>
               </div>
               <ChevronDown className={`w-3.5 h-3.5 text-slate-500 transition-transform duration-200 ${isUserMenuOpen ? 'rotate-180' : ''}`} />
             </button>

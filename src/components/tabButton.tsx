@@ -16,7 +16,7 @@ const TabButton: FC<TabButtonProps> = ({ id, label, icon: Icon, isActive, onClic
       id={id}
       onClick={onClick}
       className={`flex items-center space-x-2 px-4 py-2 rounded-lg font-medium transition-colors ${
-        isActive ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-50'
+        isActive ? 'bg-brand-700 text-white' : 'text-gray-600 hover:bg-gray-50'
       }`}
     >
       {Icon && <Icon className="w-4 h-4" />}

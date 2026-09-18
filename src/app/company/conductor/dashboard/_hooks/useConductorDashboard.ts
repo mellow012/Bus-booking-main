@@ -149,7 +149,7 @@ export function useConductorDashboard() {
 
   useEffect(() => {
     if (authLoading) return;
-    if (user && userProfile?.role === 'conductor') {
+    if (user && ['conductor', 'company_admin', 'superadmin'].includes(userProfile?.role || '')) {
       fetchInitialData(false);
 
       if (!companyId) return;
@@ -173,6 +173,8 @@ export function useConductorDashboard() {
         supabase.removeChannel(channel);
         document.removeEventListener('visibilitychange', handleVisibility);
       };
+    } else if (user) {
+      setLoading(false); // If role doesn't match, stop loading to avoid hanging, though middleware should catch it.
     }
   }, [user, userProfile, authLoading, companyId, fetchInitialData]);
 
