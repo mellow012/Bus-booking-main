@@ -624,9 +624,19 @@ export default function BookingsTab({ dashboard, defaultScheduleId }: BookingsTa
                               <div className="text-xs text-gray-500 mt-1">Ref: {booking.bookingReference} • Seats: {booking.seatNumbers?.join(', ')}</div>
                             </div>
                           </div>
-                          <div className="text-right">
-                            <span className={`px-2 py-1 rounded-full text-xs font-semibold ${booking.paymentStatus === 'paid' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
-                              {booking.paymentStatus.toUpperCase()}
+                          <div className="text-right flex flex-col items-end gap-1">
+                            <span className={`px-2 py-1 rounded-full text-[10px] uppercase font-bold tracking-wider ${
+                              booking.bookingStatus === 'confirmed' ? 'bg-emerald-100 text-emerald-800' :
+                              booking.bookingStatus === 'pending' ? 'bg-amber-100 text-amber-800' :
+                              booking.bookingStatus === 'completed' ? 'bg-blue-100 text-blue-800' :
+                              'bg-gray-100 text-gray-800'
+                            }`}>
+                              B: {booking.bookingStatus}
+                            </span>
+                            <span className={`px-2 py-1 rounded-full text-[10px] uppercase font-bold tracking-wider ${
+                              booking.paymentStatus === 'paid' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
+                            }`}>
+                              P: {booking.paymentStatus}
                             </span>
                           </div>
                         </div>
