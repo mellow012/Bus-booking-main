@@ -71,7 +71,7 @@ export async function inviteOperator(body: InviteTeamMemberRequest): Promise<Api
     
     const existingUser = users.find(u => u.email === trimmedEmail);
     if (existingUser) {
-      return { success: false, error: 'Email already in use', message: '' };
+      return { success: false, error: 'This email is already associated with an account. Please use a different email or contact the user directly.', message: '' };
     }
 
     // 3. Create Supabase Auth User
@@ -237,7 +237,13 @@ export async function inviteOperator(body: InviteTeamMemberRequest): Promise<Api
     await logger.logError('auth', 'Error inviting team member', error, {
       action: 'invite_team_member_failed',
     });
-    return { success: false, error: error.message || 'Failed to send invite', message: '' };
+    let errorMessage = error.message || 'Failed to send invite';
+    if (errorMessage.includes('User already registered') || errorMessage.includes('already registered')) {
+      errorMessage = 'This email is already associated with an account.';
+    } else if (errorMessage.includes('Unique constraint failed')) {
+      errorMessage = 'A record with this information already exists.';
+    }
+    return { success: false, error: errorMessage, message: '' };
   }
 }
 
