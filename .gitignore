@@ -48,3 +48,7 @@ public/worker-*.js
 scratch/
 tmp_*.js
 BRANDING_GUIDE.md
+
+# Sentry Config File
+.env.sentry-build-plugin
+.sentryclirc
